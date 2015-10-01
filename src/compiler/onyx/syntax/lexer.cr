@@ -1,0 +1,2523 @@
+require "../../crystal/syntax/token"
+require "../../crystal/exception"
+
+struct Char
+  struct Reader
+    def unsafe_decode_char_at(i)
+      return '\0'  if i < 0
+      return '\0'  if i > @string.bytesize
+      decode_char_at(i) do |code_point, width|
+        code_point.chr
+      end
+    end
+  end
+end
+
+module Crystal
+  class OnyxLexer
+    property? doc_enabled
+    property? comments_enabled
+    property? count_whitespace
+
+    def initialize(string)
+      @reader = Char::Reader.new(string)
+      @token = Token.new
+      @line_number = 1
+      @column_number = 1
+      @filename = ""
+      @wants_regex = true
+      @doc_enabled = false
+      @comments_enabled = false
+      @count_whitespace = false
+      @slash_is_regex = true
+      @indent = 0
+    end
+
+    def filename=(filename)
+      @filename = filename
+    end
+
+    def next_token
+      reset_token
+
+      start = cur_pos
+
+      #handle_comment
+
+      reset_regex_flags = true
+
+      case curch
+      when '\0'
+        @token.type = :EOF
+
+      when ' ', '\t'
+        consume_whitespace
+        reset_regex_flags = false
+
+      when '\\'
+        p "backslash"
+
+        # can be:
+        # \idr(args) ->     (def)
+        # \  # opt comm \n    (slash line)
+        # "kjhg" \\n"dfjgdgf" (slash line, for strings - need for sep?)
+
+        nextch
+        p "nextch = " + curch
+        if curch == ' ' || curch == '\t'
+          consume_whitespace
+        end
+        p "cur_c after consume ws = " + curch
+
+        # def ?
+        if idr_start?(curch)
+          p "it's an idr start - we're 'def'"
+          @token.type = :IDENT
+          @token.value = :def #"def"
+
+        else
+          p "skip comments"
+          skip_comment    # *TODO* skip / consume / handle_comment ??
+
+          if curch == '\n'
+            @line_number += 1
+            @column_number = 1
+
+            # *TODO* if token is DELIMITER_START or some do below - else generic slash–line
+
+            @token.passed_backslash_newline = true
+            consume_whitespace
+            reset_regex_flags = false
+          else
+            unknown_token
+          end
+        end
+
+      when '\n'
+        @token.type = :NEWLINE
+        nextch
+        @line_number += 1
+        @column_number = 1
+        reset_regex_flags = false
+        consume_newlines
+
+      when '\r'
+        if nc?('\n')
+          nextch
+          @token.type = :NEWLINE
+          @line_number += 1
+          @column_number = 1
+          consume_newlines
+        else
+          raise "expected '\\n' after '\\r'"
+        end
+
+      when '='
+        case nextch
+        when '='
+          case nextch
+          when '='
+            toktype_then_nextch :"==="
+          else
+            @token.type = :"=="
+          end
+        when '>'
+          toktype_then_nextch :"=>"
+        when '~'
+          toktype_then_nextch :"=~"
+        else
+          @token.type = :"="
+        end
+      when '!'
+        case nextch
+        when '='
+          toktype_then_nextch :"!="
+        else
+          @token.type = :"!"
+        end
+      when '<'
+        case nextch
+        when '='
+          case nextch
+          when '>'
+            toktype_then_nextch :"<=>"
+          else
+            @token.type = :"<="
+          end
+        when '<'
+          case nextch
+          when '='
+            toktype_then_nextch :"<<="
+          when '-'
+            here = StringIO.new(20)
+
+            while true
+              case char = nextch
+              when '\n'
+                @line_number += 1
+                @column_number = 0
+                break
+              when '\\'
+                if peek_nextch == 'n'
+                  nextch
+                  raise "invalid heredoc idrifier"
+                end
+              when ' '
+                case peek_nextch
+                when ' '
+                  nextch
+                when '\n'
+                  nextch
+                  break
+                else
+                  raise "invalid heredoc idrifier"
+                end
+              else
+                here << char
+              end
+            end
+
+            here = here.to_s
+            delimited_pair :heredoc, here, here
+          else
+            @token.type = :"<<"
+          end
+        else
+          @token.type = :"<"
+        end
+      when '>'
+        case nextch
+        when '='
+          toktype_then_nextch :">="
+        when '>'
+          case nextch
+          when '='
+            toktype_then_nextch :">>="
+          else
+            @token.type = :">>"
+          end
+        else
+          @token.type = :">"
+        end
+      when '+'
+        start = cur_pos
+        case nextch
+        when '='
+          toktype_then_nextch :"+="
+        when '0'
+          scan_zero_number(start)
+        when '1', '2', '3', '4', '5', '6', '7', '8', '9'
+          scan_number(start)
+        when '+'
+          raise "postfix increment is not supported, use `exp += 1`"
+        else
+          @token.type = :"+"
+        end
+      when '-'
+        start = cur_pos
+        case nextch
+        when '='
+          toktype_then_nextch :"-="
+        when '>'
+          toktype_then_nextch :"->"
+        when '0'
+          scan_zero_number start, negative: true
+        when '1', '2', '3', '4', '5', '6', '7', '8', '9'
+          scan_number start, negative: true
+        when '-'
+          #p "Got '-'"
+          set_pos start # for handle_comment
+          if !handle_comment
+            raise "postfix decrement is not supported, use `exp -= 1`"
+          end
+          return next_token
+        else
+          @token.type = :"-"
+        end
+      when '*'
+        case nextch
+        when '='
+          toktype_then_nextch :"*="
+        when '*'
+          case nextch
+          when '='
+            toktype_then_nextch :"**="
+          else
+            @token.type = :"**"
+          end
+        else
+          @token.type = :"*"
+        end
+      when '/'
+        line = @line_number
+        column = @column_number
+        char = nextch
+        if char == '='
+          toktype_then_nextch :"/="
+
+        # *TODO* change syntax for regex? `regex = //regex–contents/i`
+        elsif @slash_is_regex
+          @token.type = :DELIMITER_START
+          @token.delimiter_state = Token::DelimiterState.new(:regex, '/', '/', 0)
+
+        elsif char.whitespace? || char == '\0' || char == ';'
+          @token.type = :"/"
+
+        elsif @wants_regex
+          @token.type = :DELIMITER_START
+          @token.delimiter_state = Token::DelimiterState.new(:regex, '/', '/', 0)
+
+        else
+          @token.type = :"/"
+        end
+      when '%'
+        case nextch
+        when '='
+          toktype_then_nextch :"%="
+        when '(', '[', '{', '<'
+          delimited_pair :string, curch, closing_char
+        when 'i'
+          case peek_nextch
+          when '(', '{', '[', '<'
+            start_char = nextch
+            toktype_then_nextch :SYMBOL_ARRAY_START
+            @token.delimiter_state = Token::DelimiterState.new(:symbol_array, start_char, closing_char(start_char), 0)
+          else
+            @token.type = :"%"
+          end
+        when 'r'
+          case nextch
+          when '(', '[', '{', '<'
+            delimited_pair :regex, curch, closing_char
+          else
+            raise "unknown %r char"
+          end
+        when 'x'
+          case nextch
+          when '(', '[', '{', '<'
+            delimited_pair :command, curch, closing_char
+          else
+            raise "unknown %x char"
+          end
+        when 'w'
+          case peek_nextch
+          when '(', '{', '[', '<'
+            start_char = nextch
+            toktype_then_nextch :STRING_ARRAY_START
+            @token.delimiter_state = Token::DelimiterState.new(:string_array, start_char, closing_char(start_char), 0)
+          else
+            @token.type = :"%"
+          end
+        when '}'
+          toktype_then_nextch :"%}"
+        else
+          @token.type = :"%"
+        end
+      when '(' then toktype_then_nextch :"("
+      when ')' then toktype_then_nextch :")"
+      when '{'
+        char = nextch
+        case char
+        when '%'
+          toktype_then_nextch :"{%"
+        when '{'
+          toktype_then_nextch :"{{"
+        else
+          @token.type = :"{"
+        end
+      when '}' then toktype_then_nextch :"}"
+      when '['
+        case nextch
+        when ']'
+          case nextch
+          when '='
+            toktype_then_nextch :"[]="
+          when '?'
+            toktype_then_nextch :"[]?"
+          else
+            @token.type = :"[]"
+          end
+        else
+          @token.type = :"["
+        end
+      when ']' then toktype_then_nextch :"]"
+      when ',' then toktype_then_nextch :","
+      when '?' then toktype_then_nextch :"?"
+      when ';' then
+        reset_regex_flags = false
+        toktype_then_nextch :";"
+      when ':'
+        char = nextch
+        case char
+        when ':'
+          toktype_then_nextch :"::"
+        when '+'
+          symbol_then_nextch "+"
+        when '-'
+          symbol_then_nextch "-"
+        when '*'
+          if nc?('*')
+            symbol_then_nextch "**"
+          else
+            symbol "*"
+          end
+        when '/'
+          symbol_then_nextch "/"
+        when '='
+          case nextch
+          when '='
+            if nc?('=')
+              symbol_then_nextch "==="
+            else
+              symbol "=="
+            end
+          when '~'
+            symbol_then_nextch "=~"
+          else
+            unknown_token
+          end
+        when '!'
+          case nextch
+          when '='
+            symbol_then_nextch "!="
+          when '~'
+            symbol_then_nextch "!~"
+          else
+            symbol "!"
+          end
+        when '<'
+          case nextch
+          when '='
+            if nc?('>')
+              symbol_then_nextch "<=>"
+            else
+              symbol "<="
+            end
+          when '<'
+            symbol_then_nextch "<<"
+          else
+            symbol "<"
+          end
+        when '>'
+          case nextch
+          when '='
+            symbol_then_nextch ">="
+          when '>'
+            symbol_then_nextch ">>"
+          else
+            symbol ">"
+          end
+        when '&'
+          symbol_then_nextch "&"
+        when '|'
+          symbol_then_nextch "|"
+        when '^'
+          symbol_then_nextch "^"
+        when '~'
+          symbol_then_nextch "~"
+        when '%'
+          symbol_then_nextch "%"
+        when '['
+          if nc?(']')
+            case nextch
+            when '='
+              symbol_then_nextch "[]="
+            when '?'
+              symbol_then_nextch "[]?"
+            else
+              symbol "[]"
+            end
+          else
+            unknown_token
+          end
+        when '"'
+          line = @line_number
+          column = @column_number
+          start = cur_pos + 1
+          count = 0
+
+          while true
+            char = nextch
+            case char
+            when '\\'
+              if peek_nextch == '"'
+                nextch
+                count += 1
+              end
+            when '"'
+              break
+            when '\0'
+              raise "unterminated quoted symbol", line, column
+            else
+              count += 1
+            end
+          end
+
+          @token.type = :SYMBOL
+          @token.value = string_range(start)
+
+          nextch
+        else
+          if idr_start?(char)
+            start = cur_pos
+            while idr_part?(nextch)
+              # Nothing to do
+            end
+            if curch == '!' || curch == '?'
+              nextch
+            end
+            @token.type = :SYMBOL
+            @token.value = string_range(start)
+          else
+            @token.type = :":"
+          end
+        end
+      when '~'
+        toktype_then_nextch :"~"
+      when '.'
+        case nextch
+        when '.'
+          case nextch
+          when '.'
+            toktype_then_nextch :"..."
+          else
+            @token.type = :".."
+          end
+        else
+          @token.type = :"."
+        end
+      when '&'
+        case nextch
+        when '&'
+          case nextch
+          when '='
+            toktype_then_nextch :"&&="
+          else
+            @token.type = :"&&"
+          end
+        when '='
+          toktype_then_nextch :"&="
+        else
+          @token.type = :"&"
+        end
+      when '|'
+        case nextch
+        when '|'
+          case nextch
+          when '='
+            toktype_then_nextch :"||="
+          else
+            @token.type = :"||"
+          end
+        when '='
+          toktype_then_nextch :"|="
+        else
+          @token.type = :"|"
+        end
+      when '^'
+        case nextch
+        when '='
+          toktype_then_nextch :"^="
+        else
+          @token.type = :"^"
+        end
+
+      when '\''       # NOT char anymore!
+        toktype_then_nextch :"'"
+
+      when '"', '`'
+        delimiter = curch
+        nextch
+        @token.type = :DELIMITER_START
+        @token.delimiter_state = Token::DelimiterState.new(delimiter == '`' ? :command : :string, delimiter, delimiter, 0)
+      when '0'
+        scan_zero_number(start)
+      when '1', '2', '3', '4', '5', '6', '7', '8', '9'
+        scan_number cur_pos
+      when '@'
+        start = cur_pos
+        case nextch
+        when '['
+          toktype_then_nextch :"@["
+        else
+          class_var = false
+          if curch == '@'
+            class_var = true
+            nextch
+          end
+          if idr_start?(curch)
+            while idr_part?(nextch)
+              # Nothing to do
+            end
+            @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
+            @token.value = string_range(start)
+          else
+            unknown_token
+          end
+        end
+      when '$'
+        start = cur_pos
+        nextch
+        case curch
+        when '~'
+          nextch
+          @token.type = :"$~"
+        when '?'
+          nextch
+          @token.type = :"$?"
+        when .digit?
+          start = cur_pos
+          char = nextch
+          if char == '0'
+            char = nextch
+          else
+            while char.digit?
+              char = nextch
+            end
+            char = nextch if char == '?'
+          end
+          @token.type = :GLOBAL_MATCH_DATA_INDEX
+          @token.value = string_range(start)
+        else
+          if idr_start?(curch)
+            while idr_part?(nextch)
+              # Nothing to do
+            end
+          @token.type = :GLOBAL
+          @token.value = string_range(start)
+          else
+            unknown_token
+          end
+        end
+      when 'a'
+        case nextch
+        when 'b'
+          if nc?('s') && nc?('t') && nc?('r') && nc?('a') && nc?('c') && nc?('t')
+            return check_idr_or_keyword(:abstract, start)
+          end
+        when 'l'
+          if nc?('i') && nc?('a') && nc?('s')
+            return check_idr_or_keyword(:alias, start)
+          end
+        when 's'
+          if peek_nextch == 'm'
+            nextch
+            return check_idr_or_keyword(:asm, start)
+          else
+            return check_idr_or_keyword(:as, start)
+          end
+        end
+        scan_idr(start)
+      when 'b'
+        case nextch
+        when 'e'
+          if nc?('g') && nc?('i') && nc?('n')
+            return check_idr_or_keyword(:begin, start)
+          end
+        when 'r'
+          if nc?('e') && nc?('a') && nc?('k')
+            return check_idr_or_keyword(:break, start)
+          end
+        end
+        scan_idr(start)
+      when 'c'
+        case nextch
+        when 'a'
+          if nc?('s') && nc?('e')
+            return check_idr_or_keyword(:case, start)
+          end
+          scan_idr(start)
+        when 'l'
+          if nc?('a') && nc?('s') && nc?('s')
+            return check_idr_or_keyword(:class, start)
+          end
+          scan_idr(start)
+        when 'o'
+          if nc?('n') && nc?('s') && nc?('t')
+            return check_idr_or_keyword(:const, start)
+          end
+          scan_idr(start)
+        when '"'
+          line = @line_number
+          column = @column_number
+          @token.type = :CHAR
+          case char1 = nextch
+          when '\\'
+            case char2 = nextch
+            when 'b'
+              @token.value = '\b'
+            when 'e'
+              @token.value = '\e'
+            when 'f'
+              @token.value = '\f'
+            when 'n'
+              @token.value = '\n'
+            when 'r'
+              @token.value = '\r'
+            when 't'
+              @token.value = '\t'
+            when 'v'
+              @token.value = '\v'
+            when 'u'
+              value = consume_char_unicode_escape
+              @token.value = value.chr
+            when '0', '1', '2', '3', '4', '5', '6', '7'
+              char_value = consume_octal_escape(char2)
+              @token.value = char_value.chr
+            else
+              @token.value = char2
+            end
+          else
+            @token.value = char1
+          end
+          if nextch != '"'
+            raise "unterminated char literal, use double quotes for strings", line, column
+          end
+          nextch
+
+        else
+          scan_idr(start)
+        end
+      when 'd'
+        case nextch
+        when 'e'
+          if nc?('f')
+            p "Got 'def', check if not idr"
+            return check_idr_or_keyword(:def, start)
+          end
+        when 'o' then return check_idr_or_keyword(:do, start)
+        end
+        scan_idr(start)
+      when 'e'
+        case nextch
+        when 'l'
+          case nextch
+          when 's'
+            case nextch
+            when 'e' then return check_idr_or_keyword(:else, start)
+            when 'i'
+              if nc?('f')
+                return check_idr_or_keyword(:elsif, start)
+              end
+            end
+          end
+        when 'n'
+          case nextch
+          when 'd'
+            return check_idr_or_keyword(:end, start)
+          when 's'
+            if nc?('u') && nc?('r') && nc?('e')
+              return check_idr_or_keyword(:ensure, start)
+            end
+          when 'u'
+            if nc?('m')
+              return check_idr_or_keyword(:enum, start)
+            end
+          end
+        when 'x'
+          if nc?('t') && nc?('e') && nc?('n') && nc?('d')
+            return check_idr_or_keyword(:extend, start)
+          end
+        end
+        scan_idr(start)
+      when 'f'
+        case nextch
+        when 'a'
+          if nc?('l') && nc?('s') && nc?('e')
+            return check_idr_or_keyword(:false, start)
+          end
+        when 'o'
+          if nc?('r')
+            return check_idr_or_keyword(:for, start)
+          end
+        when 'u'
+          if nc?('n')
+            return check_idr_or_keyword(:fun, start)
+          end
+        end
+        scan_idr(start)
+      when 'i'
+        case nextch
+        when 'f'
+          if peek_nextch == 'd'
+            nextch
+            if nc?('e') && nc?('f')
+              return check_idr_or_keyword(:ifdef, start)
+            end
+          else
+            return check_idr_or_keyword(:if, start)
+          end
+        when 'n'
+          if idr_part_or_end?(peek_nextch)
+            case nextch
+            when 'c'
+              if nc?('l') && nc?('u') && nc?('d') && nc?('e')
+                return check_idr_or_keyword(:include, start)
+              end
+            when 's'
+              if nc?('t') && nc?('a') && nc?('n') && nc?('c') && nc?('e') && nc?('_') && nc?('s') && nc?('i') && nc?('z') && nc?('e') && nc?('o') && nc?('f')
+                return check_idr_or_keyword(:instance_sizeof, start)
+              end
+            end
+          else
+            nextch
+            @token.type = :IDENT
+            @token.value = :in
+            return @token
+          end
+        when 's'
+          if nc?('_') && nc?('a') && nc?('?')
+            return check_idr_or_keyword(:is_a?, start)
+          end
+        end
+        scan_idr(start)
+      when 'l'
+        case nextch
+        when 'i'
+          if nc?('b')
+            return check_idr_or_keyword(:lib, start)
+          end
+        end
+        scan_idr(start)
+      when 'm'
+        case nextch
+        when 'a'
+          if nc?('c') && nc?('r') && nc?('o')
+            return check_idr_or_keyword(:macro, start)
+          end
+        when 'o'
+          case nextch
+          when 'd'
+            if nc?('u') && nc?('l') && nc?('e')
+              return check_idr_or_keyword(:module, start)
+            end
+          end
+        end
+        scan_idr(start)
+      when 'n'
+        case nextch
+        when 'e'
+          if nc?('x') && nc?('t')
+            return check_idr_or_keyword(:next, start)
+          end
+        when 'i'
+          case nextch
+          when 'l' then return check_idr_or_keyword(:nil, start)
+          end
+        end
+        scan_idr(start)
+      when 'o'
+        case nextch
+        when 'f'
+            return check_idr_or_keyword(:of, start)
+        when 'u'
+          if nc?('t')
+            return check_idr_or_keyword(:out, start)
+          end
+        end
+        scan_idr(start)
+      when 'p'
+        case nextch
+        when 'o'
+          if nc?('i') && nc?('n') && nc?('t') && nc?('e') && nc?('r') && nc?('o') && nc?('f')
+            return check_idr_or_keyword(:pointerof, start)
+          end
+        when 'r'
+          case nextch
+          when 'i'
+            if nc?('v') && nc?('a') && nc?('t') && nc?('e')
+              return check_idr_or_keyword(:private, start)
+            end
+          when 'o'
+            if nc?('t') && nc?('e') && nc?('c') && nc?('t') && nc?('e') && nc?('d')
+              return check_idr_or_keyword(:protected, start)
+            end
+          end
+        end
+        scan_idr(start)
+      when 'r'
+        case nextch
+        when 'e'
+          case nextch
+          when 's'
+            case nextch
+            when 'c'
+              if nc?('u') && nc?('e')
+                return check_idr_or_keyword(:rescue, start)
+              end
+            when 'p'
+              if nc?('o') && nc?('n') && nc?('d') && nc?('s') && nc?('_') && nc?('t') && nc?('o') && nc?('?')
+                return check_idr_or_keyword(:responds_to?, start)
+              end
+            end
+          when 't'
+            if nc?('u') && nc?('r') && nc?('n')
+              return check_idr_or_keyword(:return, start)
+            end
+          when 'q'
+            if nc?('u') && nc?('i') && nc?('r') && nc?('e')
+              return check_idr_or_keyword(:require, start)
+            end
+          end
+        end
+        scan_idr(start)
+      when 's'
+        case nextch
+        when 'e'
+          if nc?('l') && nc?('f')
+            return check_idr_or_keyword(:self, start)
+          end
+        when 'i'
+          if nc?('z') && nc?('e') && nc?('o') && nc?('f')
+            return check_idr_or_keyword(:sizeof, start)
+          end
+        when 't'
+          if nc?('r') && nc?('u') && nc?('c') && nc?('t')
+            return check_idr_or_keyword(:struct, start)
+          end
+        when 'u'
+          if nc?('p') && nc?('e') && nc?('r')
+            return check_idr_or_keyword(:super, start)
+          end
+        end
+        scan_idr(start)
+      when 't'
+        case nextch
+        when 'h'
+          if nc?('e') && nc?('n')
+            return check_idr_or_keyword(:then, start)
+          end
+        when 'r'
+          if nc?('u') && nc?('e')
+            return check_idr_or_keyword(:true, start)
+          end
+        when 'y'
+          if nc?('p') && nc?('e')
+            if peek_nextch == 'o'
+              nextch
+              if nc?('f')
+                return check_idr_or_keyword(:typeof, start)
+              end
+            else
+              return check_idr_or_keyword(:type, start)
+            end
+          end
+        end
+        scan_idr(start)
+      when 'u'
+        if nc?('n')
+          case nextch
+          when 'i'
+            if nc?('o') && nc?('n')
+              return check_idr_or_keyword(:union, start)
+            end
+          when 'l'
+            if nc?('e') && nc?('s') && nc?('s')
+              return check_idr_or_keyword(:unless, start)
+            end
+          when 't'
+            if nc?('i') && nc?('l')
+              return check_idr_or_keyword(:until, start)
+            end
+          end
+        end
+        scan_idr(start)
+      when 'w'
+        case nextch
+        when 'h'
+          case nextch
+          when 'e'
+            if nc?('n')
+              return check_idr_or_keyword(:when, start)
+            end
+          when 'i'
+            if nc?('l') && nc?('e')
+              return check_idr_or_keyword(:while, start)
+            end
+          end
+        when 'i'
+          if nc?('t') && nc?('h')
+            return check_idr_or_keyword(:with, start)
+          end
+        end
+        scan_idr(start)
+      when 'y'
+        if nc?('i') && nc?('e') && nc?('l') && nc?('d')
+          return check_idr_or_keyword(:yield, start)
+        end
+        scan_idr(start)
+      when '_'
+        case nextch
+        when '_'
+          case nextch
+          when 'D'
+            if nc?('I') && nc?('R') && nc?('_') && nc?('_')
+              if idr_part_or_end?(peek_nextch)
+                scan_idr(start)
+              else
+                nextch
+                @token.type = :__DIR__
+                return @token
+              end
+            end
+          when 'F'
+            if nc?('I') && nc?('L') && nc?('E') && nc?('_') && nc?('_')
+              if idr_part_or_end?(peek_nextch)
+                scan_idr(start)
+              else
+                nextch
+                @token.type = :__FILE__
+                return @token
+              end
+            end
+          when 'L'
+            if nc?('I') && nc?('N') && nc?('E') && nc?('_') && nc?('_')
+              if idr_part_or_end?(peek_nextch)
+                scan_idr(start)
+              else
+                nextch
+                @token.type = :__LINE__
+                return @token
+              end
+            end
+          end
+        else
+          unless idr_part?(curch)
+            @token.type = :UNDERSCORE
+            return @token
+          end
+        end
+
+        scan_idr(start)
+      else
+        if 'A' <= curch <= 'Z'
+          start = cur_pos
+
+          if curch == 'S'
+            if nc?('e') && nc?('l') && nc?('f')
+              return check_idr_or_keyword(:SelfType, start)
+            end
+          end
+
+          while idr_part?(nextch)
+            # Nothing to do
+          end
+          @token.type = :CONST
+          @token.value = string_range(start)
+        elsif ('a' <= curch <= 'z') || curch == '_' || curch == '-' || curch.ord > 0x9F
+          nextch
+          scan_idr(start)
+        else
+          unknown_token
+        end
+      end
+
+      if reset_regex_flags
+        @wants_regex = true
+        @slash_is_regex = false
+      end
+
+      @token
+    end
+
+    def token_end_location
+      @token_end_location ||= Location.new(@line_number, @column_number - 1, @filename)
+    end
+
+    def slash_is_regex!
+      @slash_is_regex = true
+    end
+
+    def slash_is_not_regex!
+      @slash_is_regex = false
+    end
+
+    def handle_comment
+      # Comments to skip or consume?
+      #p "Is it '-'?"
+      return false  if !(curch == '-')
+      #p "Is it 2nd '-'?"
+      return false  if !peek_nextch == '-'
+      #p "Was prev SPC?"
+      prevc = unsafe_char_at(cur_pos - 1)
+      #p "It is '" + prevc + "'"
+      return false  if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We now '-' and ' ' are one byte each...
+      #p "Yep - comment!"
+
+      # possible_comment_start = cur_pos
+      # nextch
+
+      # if nextc_noinc != '-'
+      #   cur_pos= possible_comment_start
+      #   set_pos possible_comment_start
+      #   return false
+      # end
+
+      nextc_noinc
+      start = cur_pos
+      char = nextc_noinc
+
+      # Check #<loc:"file",line,column> pragma comment
+      if char == '<' &&
+            nextc_noinc == 'l' &&
+            nextc_noinc == 'o' &&
+            nextc_noinc == 'c' &&
+            nextc_noinc == ':' &&
+            nextc_noinc == '"'
+        nextc_noinc
+        consume_loc_pragma
+        start = cur_pos
+
+        return true
+
+      else # elsif char == ' ' || char == '|'
+        if @doc_enabled
+          consume_doc
+        elsif @comments_enabled
+          return consume_comment(start)
+        else
+          skip_comment
+        end
+
+        return true
+      end
+    end
+
+    def consume_comment(start_pos)
+      skip_comment
+      @token.type = :COMMENT
+      @token.value = string_range(start_pos)
+      @token
+    end
+
+    def consume_doc
+      char = curch
+      start_pos = cur_pos
+
+      # Ignore first whitespace after comment, like in `# some doc`
+      if char == ' '
+        char = nextch
+        start_pos = cur_pos
+      end
+
+      while char != '\n' && char != '\0'
+        char = nextc_noinc
+      end
+
+      if doc_buffer = @token.doc_buffer
+        doc_buffer << '\n'
+      else
+        @token.doc_buffer = doc_buffer = StringIO.new
+      end
+
+      doc_buffer.write slice_range(start_pos)
+    end
+
+    def skip_comment
+      char = curch
+      while char != '\n' && char != '\0'
+        char = nextc_noinc
+      end
+    end
+
+    def consume_whitespace
+      start_pos = cur_pos
+      @token.type = :SPACE
+      nextch
+      while true
+        case curch
+        when ' ', '\t'
+          nextch
+        when '\\'
+          if nc?('\n')
+            nextch
+            @line_number += 1
+            @column_number = 1
+            @token.passed_backslash_newline = true
+          else
+            unknown_token
+          end
+        else
+          break
+        end
+      end
+      if @count_whitespace
+        @token.value = string_range(start_pos)
+      end
+    end
+
+    def consume_newlines
+      if @count_whitespace
+        return
+      end
+
+      while true
+        case curch
+        when '\n'
+          nextc_noinc
+          @line_number += 1
+          @token.doc_buffer = nil
+        when '\r'
+          if nextc_noinc != '\n'
+            raise "expected '\\n' after '\\r'"
+          end
+          nextc_noinc
+          @line_number += 1
+          @token.doc_buffer = nil
+        else
+          break
+        end
+      end
+    end
+
+    def check_idr_or_keyword(symbol, start)
+      if idr_part_or_end?(peek_nextch)
+        scan_idr(start)
+      else
+        nextch
+        @token.type = :IDENT
+        @token.value = symbol
+        p "Got token IDENT for: " + symbol.to_s + " row:" + @line_number.to_s + " col:" + @column_number.to_s
+      end
+      @token
+    end
+
+    def scan_idr(start)
+      while idr_part?(curch)
+        nextch
+      end
+      case curch
+      when '!', '?'
+        nextch
+      end
+      @token.type = :IDENT
+      @token.value = string_range(start)
+      @token
+    end
+
+    def symbol_then_nextch(value)
+      nextch
+      symbol value
+    end
+
+    def symbol(value)
+      @token.type = :SYMBOL
+      @token.value = value
+    end
+
+    def scan_number(start, negative = false)
+      @token.type = :NUMBER
+
+      has_underscore = false
+      is_integer = true
+      has_suffix = true
+      suffix_size = 0
+
+      while true
+        char = nextch
+        if char.digit?
+          # Nothing to do
+        elsif char == '_'
+          has_underscore = true
+        else
+          break
+        end
+      end
+
+      case curch
+      when '.'
+        if peek_nextch.digit?
+          is_integer = false
+
+          while true
+            char = nextch
+            if char.digit?
+              # Nothing to do
+            elsif char == '_'
+              has_underscore = true
+            else
+              break
+            end
+          end
+
+          if curch == 'e' || curch == 'E'
+            nextch
+
+            if curch == '+' || curch == '-'
+              nextch
+            end
+
+            while true
+              if curch.digit?
+                # Nothing to do
+              elsif curch == '_'
+                has_underscore = true
+              else
+                break
+              end
+              nextch
+            end
+          end
+
+          if curch == 'f' || curch == 'F'
+            suffix_size = consume_float_suffix
+          else
+            @token.number_kind = :f64
+          end
+        else
+          @token.number_kind = :i32
+          has_suffix = false
+        end
+      when 'e', 'E'
+        is_integer = false
+        nextch
+
+        if curch == '+' || curch == '-'
+          nextch
+        end
+
+        while true
+          if curch.digit?
+            # Nothing to do
+          elsif curch == '_'
+            has_underscore = true
+          else
+            break
+          end
+          nextch
+        end
+
+        if curch == 'f' || curch == 'F'
+          suffix_size = consume_float_suffix
+        else
+          @token.number_kind = :f64
+        end
+      when 'f', 'F'
+        is_integer = false
+        suffix_size = consume_float_suffix
+      when 'i'
+        suffix_size = consume_int_suffix
+      when 'u'
+        suffix_size = consume_uint_suffix
+      else
+        has_suffix = false
+        @token.number_kind = :i32
+      end
+
+      end_pos = cur_pos - suffix_size
+
+      string_value = string_range(start, end_pos)
+      string_value = string_value.delete('_') if has_underscore
+
+      if is_integer
+        num_size = string_value.size
+        num_size -= 1 if negative
+
+        if has_suffix
+          check_integer_literal_fits_in_size string_value, num_size, negative, start
+        else
+          deduce_integer_kind string_value, num_size, negative, start
+        end
+      end
+
+      @token.value = string_value
+    end
+
+    macro gen_check_int_fits_in_size(type, method, size)
+      if num_size >= {{size}}
+        int_value = absolute_integer_value(string_value, negative)
+        max = {{type}}::MAX.{{method}}
+        max += 1 if negative
+
+        if int_value > max
+          raise "#{string_value} doesn't fit in an {{type}}", @token, (cur_pos - start)
+        end
+      end
+    end
+
+    macro gen_check_uint_fits_in_size(type, size)
+      if negative
+        raise "Invalid negative value #{string_value} for {{type}}"
+      end
+
+      if num_size >= {{size}}
+        int_value = absolute_integer_value(string_value, negative)
+        if int_value > {{type}}::MAX
+          raise "#{string_value} doesn't fit in an {{type}}", @token, (cur_pos - start)
+        end
+      end
+    end
+
+    def check_integer_literal_fits_in_size(string_value, num_size, negative, start)
+      case @token.number_kind
+      when :i8
+        gen_check_int_fits_in_size Int8, to_u8, 3
+      when :u8
+        gen_check_uint_fits_in_size UInt8, 3
+      when :i16
+        gen_check_int_fits_in_size Int16, to_u16, 5
+      when :u16
+        gen_check_uint_fits_in_size UInt16, 5
+      when :i32
+        gen_check_int_fits_in_size Int32, to_u32, 10
+      when :u32
+        gen_check_uint_fits_in_size UInt32, 10
+      when :i64
+        gen_check_int_fits_in_size Int64, to_u64, 19
+      when :u64
+        if negative
+          raise "Invalid negative value #{string_value} for UInt64"
+        end
+
+        check_value_fits_in_uint64 string_value, num_size, start
+      end
+    end
+
+    def deduce_integer_kind(string_value, num_size, negative, start)
+      check_value_fits_in_uint64 string_value, num_size, start
+
+      if num_size >= 10
+        int_value = absolute_integer_value(string_value, negative)
+
+        int64max = Int64::MAX.to_u64
+        int64max += 1 if negative
+
+        int32max = Int32::MAX.to_u32
+        int32max += 1 if negative
+
+        if int_value > int64max
+          @token.number_kind = :u64
+        elsif int_value > int32max
+          @token.number_kind = :i64
+        end
+      end
+    end
+
+    def absolute_integer_value(string_value, negative)
+      if negative
+        string_value[1 .. -1].to_u64
+      else
+        string_value.to_u64
+      end
+    end
+
+    def check_value_fits_in_uint64(string_value, num_size, start)
+      if num_size > 20
+        raise_value_doesnt_fit_in_uint64 string_value, start
+      end
+
+      if num_size == 20
+        i = 0
+        "18446744073709551615".each_byte do |byte|
+          string_byte = string_value.byte_at(i)
+          if string_byte > byte
+            raise_value_doesnt_fit_in_uint64 string_value, start
+          elsif string_byte < byte
+            break
+          end
+          i += 1
+        end
+      end
+    end
+
+    def raise_value_doesnt_fit_in_uint64(string_value, start)
+      raise "#{string_value} doesn't fit in an UInt64", @token, (cur_pos - start)
+    end
+
+    def scan_zero_number(start, negative = false)
+      case peek_nextch
+      when 'x'
+        scan_hex_number(start, negative)
+      when 'o'
+        scan_octal_number(start, negative)
+      when 'b'
+        scan_bin_number(start, negative)
+      when '.'
+        scan_number(start)
+      when 'i'
+        @token.type = :NUMBER
+        @token.value = "0"
+        nextch
+        consume_int_suffix
+      when 'f'
+        @token.type = :NUMBER
+        @token.value = "0"
+        nextch
+        consume_float_suffix
+      when 'u'
+        @token.type = :NUMBER
+        @token.value = "0"
+        nextch
+        consume_uint_suffix
+      when '_'
+        case peek_nextch
+        when 'i'
+          @token.type = :NUMBER
+          @token.value = "0"
+          nextch
+          consume_int_suffix
+        when 'f'
+          @token.type = :NUMBER
+          @token.value = "0"
+          nextch
+          consume_float_suffix
+        when 'u'
+          @token.type = :NUMBER
+          @token.value = "0"
+          nextch
+          consume_uint_suffix
+        else
+          scan_number(start)
+        end
+      else
+        if nextch.digit?
+          raise "octal constants should be prefixed with 0o"
+        else
+          finish_scan_prefixed_number 0_u64, false, start
+        end
+      end
+    end
+
+    def scan_bin_number(start, negative)
+      nextch
+
+      num = 0_u64
+      while true
+        case nextch
+        when '0'
+          num *= 2
+        when '1'
+          num = num * 2 + 1
+        when '_'
+          # Nothing
+        else
+          break
+        end
+      end
+
+      finish_scan_prefixed_number num, negative, start
+    end
+
+    def scan_octal_number(start, negative)
+      nextch
+
+      num = 0_u64
+
+      while true
+        char = nextch
+        if '0' <= char <= '7'
+          num = num * 8 + (char - '0')
+        elsif char == '_'
+        else
+          break
+        end
+      end
+
+      finish_scan_prefixed_number num, negative, start
+    end
+
+    def scan_hex_number(start, negative = false)
+      nextch
+
+      num = 0_u64
+      while true
+        char = nextch
+        if char == '_'
+        else
+          hex_value = char_to_hex(char) { nil }
+          if hex_value
+            num = num * 16 + hex_value
+          else
+            break
+          end
+        end
+      end
+
+      finish_scan_prefixed_number num, negative, start
+    end
+
+    def finish_scan_prefixed_number(num, negative, start)
+      if negative
+        string_value = (-1 * num.to_i64).to_s
+      else
+        string_value = num.to_s
+      end
+
+      name_size = string_value.size
+      name_size -= 1 if negative
+
+      case curch
+      when 'i'
+        consume_int_suffix
+        check_integer_literal_fits_in_size string_value, name_size, negative, start
+      when 'u'
+        consume_uint_suffix
+        check_integer_literal_fits_in_size string_value, name_size, negative, start
+      else
+        @token.number_kind = :i32
+        deduce_integer_kind string_value, name_size, negative, start
+      end
+
+      first_byte = @reader.string.byte_at(start)
+      if first_byte === '+'
+        string_value = "+#{string_value}"
+      elsif first_byte === '-' && num == 0
+        string_value = "-0"
+      end
+
+      @token.type = :NUMBER
+      @token.value = string_value
+    end
+
+    def consume_int_suffix
+      case nextch
+      when '8'
+        nextch
+        @token.number_kind = :i8
+        2
+      when '1'
+        if nc?('6')
+          nextch
+          @token.number_kind = :i16
+          3
+        else
+          raise "invalid int suffix"
+        end
+      when '3'
+        if nc?('2')
+          nextch
+          @token.number_kind = :i32
+          3
+        else
+          raise "invalid int suffix"
+        end
+      when '6'
+        if nc?('4')
+          nextch
+          @token.number_kind = :i64
+          3
+        else
+          raise "invalid int suffix"
+        end
+      else
+        raise "invalid int suffix"
+      end
+    end
+
+    def consume_uint_suffix
+      case nextch
+      when '8'
+        nextch
+        @token.number_kind = :u8
+        2
+      when '1'
+        if nc?('6')
+          nextch
+          @token.number_kind = :u16
+          3
+        else
+          raise "invalid uint suffix"
+        end
+      when '3'
+        if nc?('2')
+          nextch
+          @token.number_kind = :u32
+          3
+        else
+          raise "invalid uint suffix"
+        end
+      when '6'
+        if nc?('4')
+          nextch
+          @token.number_kind = :u64
+          3
+        else
+          raise "invalid uint suffix"
+        end
+      else
+        raise "invalid uint suffix"
+      end
+    end
+
+    def consume_float_suffix
+      case nextch
+      when '3'
+        if nc?('2')
+          nextch
+          @token.number_kind = :f32
+          3
+        else
+          raise "invalid float suffix"
+        end
+      when '6'
+        if nc?('4')
+          nextch
+          @token.number_kind = :f64
+          3
+        else
+          raise "invalid float suffix"
+        end
+      else
+        raise "invalid float suffix"
+      end
+    end
+
+    def next_string_token(delimiter_state)
+      string_end = delimiter_state.end
+      string_nest = delimiter_state.nest
+      string_open_count = delimiter_state.open_count
+
+      case curch
+      when '\0'
+        raise_unterminated_quoted string_end
+      when string_end
+        nextch
+        if string_open_count == 0
+          @token.type = :DELIMITER_END
+        else
+          @token.type = :STRING
+          @token.value = string_end.to_s
+          @token.delimiter_state = @token.delimiter_state.with_open_count_delta(-1)
+        end
+      when string_nest
+        nextch
+        @token.type = :STRING
+        @token.value = string_nest.to_s
+        @token.delimiter_state = @token.delimiter_state.with_open_count_delta(+1)
+      when '\\'
+        if delimiter_state.kind == :regex
+          char = nextch
+          nextch
+          @token.type = :STRING
+          @token.value = "\\#{char}"
+        else
+          case char = nextch
+          when 'b'
+            string_token_escape_value "\u{8}"
+          when 'n'
+            string_token_escape_value "\n"
+          when 'r'
+            string_token_escape_value "\r"
+          when 't'
+            string_token_escape_value "\t"
+          when 'v'
+            string_token_escape_value "\v"
+          when 'f'
+            string_token_escape_value "\f"
+          when 'e'
+            string_token_escape_value "\e"
+          when 'u'
+            value = consume_string_unicode_escape
+            nextch
+            @token.type = :STRING
+            @token.value = value
+          when '0', '1', '2', '3', '4', '5', '6', '7'
+            char_value = consume_octal_escape(char)
+            nextch
+            @token.type = :STRING
+            @token.value = char_value.chr.to_s
+          when '\n'
+            @line_number += 1
+
+            # Skip until the next non-whitespace char
+            while true
+              char = nextch
+              case char
+              when '\0'
+                raise_unterminated_quoted string_end
+              when '\n'
+                @line_number += 1
+              when .whitespace?
+                # Continue
+              else
+                break
+              end
+            end
+            next_string_token delimiter_state
+          else
+            @token.type = :STRING
+            @token.value = curch.to_s
+            nextch
+          end
+        end
+      when '#'
+        if peek_nextch == '{'
+          nextch
+          nextch
+          @token.type = :INTERPOLATION_START
+        else
+          nextch
+          @token.type = :STRING
+          @token.value = "#"
+        end
+      when '\n'
+        nextch
+        @column_number = 1
+        @line_number += 1
+
+        if delimiter_state.kind == :heredoc
+          string_end = string_end.to_s
+          old_pos    = cur_pos
+          old_column = @column_number
+
+          while curch == ' '
+            nextch
+          end
+
+          if string_end.starts_with?(curch)
+            reached_end = false
+
+            string_end.each_char do |c|
+              unless c == curch
+                reached_end = false
+                break
+              end
+              nextch
+              reached_end = true
+            end
+
+            if reached_end &&
+              (curch == '\n' || curch == '\0')
+              @token.type = :DELIMITER_END
+            else
+              @reader.pos    = old_pos
+              @column_number = old_column
+              next_string_token delimiter_state
+            end
+          else
+            @reader.pos    = old_pos
+            @column_number = old_column
+            @token.type    = :STRING
+            @token.value   = "\n"
+          end
+        else
+          @token.type  = :STRING
+          @token.value = "\n"
+        end
+      else
+        start = cur_pos
+        count = 0
+        while curch != string_end &&
+              curch != string_nest &&
+              curch != '\0' &&
+              curch != '\\' &&
+              curch != '#' &&
+              curch != '\n'
+          nextch
+        end
+
+        @token.type = :STRING
+        @token.value = string_range(start)
+      end
+
+      @token
+    end
+
+    def raise_unterminated_quoted(string_end)
+      msg = case string_end
+            when '`'    then "unterminated command"
+            when '/'    then "unterminated regular expression"
+            when String then "unterminated heredoc"
+            else             "unterminated string literal"
+            end
+      raise msg, @line_number, @column_number
+    end
+
+    def next_macro_token(macro_state, skip_whitespace)
+      nest = macro_state.nest
+      whitespace = macro_state.whitespace
+      delimiter_state = macro_state.delimiter_state
+      beginning_of_line = macro_state.beginning_of_line
+      comment = macro_state.comment
+      yields = false
+
+      if skip_whitespace
+        while curch.whitespace?
+          whitespace = true
+          if curch == '\n'
+            @line_number += 1
+            @column_number = 0
+            beginning_of_line = true
+          end
+          nextch
+        end
+      end
+
+      @token.location = nil
+      @token.line_number = @line_number
+      @token.column_number = @column_number
+
+      start = cur_pos
+
+      if curch == '\0'
+        @token.type = :EOF
+        return @token
+      end
+
+      if curch == '\\' && peek_nextch == '{'
+        beginning_of_line = false
+        nextch
+        start = cur_pos
+        if nc?('%')
+          while (char = nextch).whitespace?
+          end
+
+          case char
+          when 'e'
+            if nc?('n') && nc?('d') && !idr_part_or_end?(peek_nextch)
+              nextch
+              nest -= 1
+            end
+          when 'f'
+            if nc?('o') && nc?('r') && !idr_part_or_end?(peek_nextch)
+              nextch
+              nest += 1
+            end
+          when 'i'
+            if nc?('f') && !idr_part_or_end?(peek_nextch)
+              nextch
+              nest += 1
+            end
+          end
+        end
+
+        @token.type = :MACRO_LITERAL
+        @token.value = string_range(start)
+        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        return @token
+      end
+
+      if curch == '\\' && peek_nextch == '%'
+        beginning_of_line = false
+        nextch
+        nextch
+        @token.type = :MACRO_LITERAL
+        @token.value = "%"
+        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        return @token
+      end
+
+      if curch == '{'
+        case nextch
+        when '{'
+          beginning_of_line = false
+          nextch
+          @token.type = :MACRO_EXPRESSION_START
+          @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+          return @token
+        when '%'
+          beginning_of_line = false
+          nextch
+          @token.type = :MACRO_CONTROL_START
+          @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+          return @token
+        end
+      end
+
+      if comment || (!delimiter_state && curch == '#')
+        comment = true
+        char = curch
+        char = nextch if curch == '#'
+        while true
+          case char
+          when '\n'
+            comment = false
+            beginning_of_line = true
+            whitespace = true
+            nextch
+            @line_number += 1
+            @column_number = 1
+            @token.line_number = @line_number
+            @token.column_number = @column_number
+            break
+          when '{'
+            break
+          when '\0'
+            raise "unterminated macro"
+          end
+          char = nextch
+        end
+        @token.type = :MACRO_LITERAL
+        @token.value = string_range(start)
+        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        return @token
+      end
+
+      if curch == '%' && idr_start?(peek_nextch)
+        char = nextch
+        start = cur_pos
+        while idr_part?(char)
+          char = nextch
+        end
+        @token.type = :MACRO_VAR
+        @token.value = string_range(start)
+        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        return @token
+      end
+
+      if !delimiter_state && curch == 'e' && nc?('n')
+        beginning_of_line = false
+        case nextch
+        when 'd'
+          if whitespace && !idr_part_or_end?(peek_nextch)
+            if nest == 0
+              nextch
+              @token.type = :MACRO_END
+              @token.macro_state = Token::MacroState.default
+              return @token
+            else
+              nest -= 1
+              whitespace = curch.whitespace?
+              nextch
+            end
+          end
+        when 'u'
+          if !delimiter_state && whitespace && nc?('m') && !idr_part_or_end?(nextch)
+            char = curch
+            nest += 1
+            whitespace = true
+          end
+        end
+      end
+
+      char = curch
+
+      until char == '{' || char == '\0' || (char == '\\' && ((peek = peek_nextch) == '{' || peek == '%')) || (whitespace && !delimiter_state && char == 'e')
+        case char
+        when '\n'
+          @line_number += 1
+          @column_number = 0
+          whitespace = true
+          beginning_of_line = true
+        when '\\'
+          char = nextch
+          if delimiter_state
+            if char == '"'
+              char = nextch
+            end
+            whitespace = false
+          else
+            whitespace = false
+          end
+          next
+        when '\'', '"'
+          if delimiter_state
+            delimiter_state = nil if delimiter_state.end == char
+          else
+            delimiter_state = Token::DelimiterState.new(:string, char, char, 0)
+          end
+          whitespace = false
+        when '%'
+          if delimiter_state
+            whitespace = false
+            break if idr_start?(peek_nextch)
+          else
+            case char = peek_nextch
+            when '(', '[', '<', '{'
+              nextch
+              delimiter_state = Token::DelimiterState.new(:string, char, closing_char, 1)
+            else
+              whitespace = false
+              break if idr_start?(char)
+            end
+          end
+        when '#'
+          if delimiter_state
+            whitespace = false
+          else
+            break
+          end
+        else
+          if !delimiter_state && whitespace && char == 'y' && nc?('i') && nc?('e') && nc?('l') && nc?('d') && !idr_part_or_end?(peek_nextch)
+            yields = true
+            char = curch
+            whitespace = true
+            beginning_of_line = false
+          elsif !delimiter_state && whitespace && (keyword = check_macro_opening_keyword(beginning_of_line))
+            char = curch
+
+            if keyword == :macro && char.whitespace?
+              old_pos = @reader.pos
+              if nc?('d') && nc?('e') && nc?('f') && !idr_part_or_end?(peek_nextch)
+                char = nextch
+              else
+                @reader.pos = old_pos
+              end
+            end
+
+            nest += 1 unless keyword == :abstract_def
+            whitespace = true
+            beginning_of_line = false
+          else
+            char = curch
+
+            if delimiter_state
+              case char
+              when delimiter_state.nest
+                delimiter_state = delimiter_state.with_open_count_delta(+1)
+              when delimiter_state.end
+                delimiter_state = delimiter_state.with_open_count_delta(-1)
+                if delimiter_state.open_count == 0
+                  delimiter_state = nil
+                end
+              end
+            end
+
+            # If an assignment comes, we accept if/unless/while/until as nesting
+            if char == '=' && peek_nextch.whitespace?
+              whitespace = false
+              beginning_of_line = true
+            else
+              whitespace = char.whitespace? || char == ';' || char == '(' || char == '[' || char == '{'
+              if beginning_of_line && !whitespace
+                beginning_of_line = false
+              end
+            end
+          end
+        end
+        char = nextch
+      end
+
+      @token.type = :MACRO_LITERAL
+      @token.value = string_range(start)
+      @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+
+      @token
+    end
+
+    def check_macro_opening_keyword(beginning_of_line)
+      case char = curch
+      when 'a'
+        if nc?('b') && nc?('s') && nc?('t') && nc?('r') && nc?('a') && nc?('c') && nc?('t') && nextch.whitespace?
+          case nextch
+          when 'd'
+            nc?('e') && nc?('f') && peek_not_idr_part_or_end_nextch && :abstract_def
+          when 'c'
+            nc?('l') && nc?('a') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :abstract_class
+          when 's'
+            nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && peek_not_idr_part_or_end_nextch && :abstract_struct
+          end
+        end
+      when 'b'
+        nc?('e') && nc?('g') && nc?('i') && nc?('n') && peek_not_idr_part_or_end_nextch && :begin
+      when 'c'
+        (char = nextch) && (
+          (char == 'a' && nc?('s') && nc?('e') && peek_not_idr_part_or_end_nextch && :case) ||
+          (char == 'l' && nc?('a') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :class)
+        )
+      when 'd'
+        (char = nextch) &&
+                ((char == 'o' && peek_not_idr_part_or_end_nextch && :do) ||
+                 (char == 'e' && nc?('f') && peek_not_idr_part_or_end_nextch && :def))
+      when 'f'
+        nc?('u') && nc?('n') && peek_not_idr_part_or_end_nextch && :fun
+      when 'i'
+        beginning_of_line && nc?('f') &&
+          (char = nextch) && (
+            (!idr_part_or_end?(char) && :if) ||
+            (char == 'd' && nc?('e') && nc?('f') && peek_not_idr_part_or_end_nextch && :ifdef)
+          )
+      when 'l'
+        nc?('i') && nc?('b') && peek_not_idr_part_or_end_nextch && :lib
+      when 'm'
+        (char = nextch) && (
+          (char == 'a' && nc?('c') && nc?('r') && nc?('o') && peek_not_idr_part_or_end_nextch && :macro) ||
+          (char == 'o' && nc?('d') && nc?('u') && nc?('l') && nc?('e') && peek_not_idr_part_or_end_nextch && :module)
+        )
+      when 's'
+        nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && !idr_part_or_end?(peek_nextch) && nextch && :struct
+      when 'u'
+        nc?('n') && (char = nextch) && (
+          (char == 'i' && nc?('o') && nc?('n') && peek_not_idr_part_or_end_nextch && :union) ||
+          (beginning_of_line && char == 'l' && nc?('e') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :unless) ||
+          (beginning_of_line && char == 't' && nc?('i') && nc?('l') && peek_not_idr_part_or_end_nextch && :until)
+        )
+      when 'w'
+        beginning_of_line && nc?('h') && nc?('i') && nc?('l') && nc?('e') && peek_not_idr_part_or_end_nextch && :while
+      else
+        false
+      end
+    end
+
+    def consume_octal_escape(char)
+      char_value = char - '0'
+      count = 1
+      while count <= 3 && '0' <= peek_nextch < '8'
+        nextch
+        char_value = char_value * 8 + (curch - '0')
+        count += 1
+      end
+      char_value
+    end
+
+    def consume_char_unicode_escape
+      char = peek_nextch
+      if char == '{'
+        nextch
+        consume_braced_unicode_escape
+      else
+        consume_non_braced_unicode_escape
+      end
+    end
+
+    def consume_string_unicode_escape
+      char = peek_nextch
+      if char == '{'
+        nextch
+        consume_string_unicode_brace_escape
+      else
+        consume_non_braced_unicode_escape.chr.to_s
+      end
+    end
+
+    def consume_string_unicode_brace_escape
+      String.build do |str|
+        while true
+          str << consume_braced_unicode_escape(allow_spaces: true).chr
+          break unless curch == ' '
+        end
+      end
+    end
+
+    def consume_non_braced_unicode_escape
+      codepoint = 0
+      4.times do
+        hex_value = char_to_hex(nextch) { expected_hexacimal_character_in_unicode_escape }
+        codepoint = 16 * codepoint + hex_value
+      end
+      codepoint
+    end
+
+    def consume_braced_unicode_escape(allow_spaces = false)
+      codepoint = 0
+      found_curly = false
+      found_space = false
+      found_digit = false
+      char = '\0'
+
+      6.times do
+        char = nextch
+        case char
+        when '}'
+          found_curly = true
+          break
+        when ' '
+          if allow_spaces
+            found_space = true
+            break
+          else
+            expected_hexacimal_character_in_unicode_escape
+          end
+        else
+          hex_value = char_to_hex(char) { expected_hexacimal_character_in_unicode_escape }
+          codepoint = 16 * codepoint + hex_value
+          found_digit = true
+        end
+      end
+
+      if !found_digit
+        expected_hexacimal_character_in_unicode_escape
+      elsif codepoint > 0x10FFFF
+        raise "invalid unicode codepoint (too large)"
+      end
+
+      unless found_space
+        unless found_curly
+          char = nextch
+        end
+
+        unless char == '}'
+          raise "expected '}' to close unicode escape"
+        end
+      end
+
+      codepoint
+    end
+
+
+    def expected_hexacimal_character_in_unicode_escape
+      raise "expected hexadecimal character in unicode escape"
+    end
+
+    def string_token_escape_value(value)
+      nextch
+      @token.type = :STRING
+      @token.value = value
+    end
+
+    def delimited_pair(kind, string_nest, string_end)
+      nextch
+      @token.type = :DELIMITER_START
+      @token.delimiter_state = Token::DelimiterState.new(kind, string_nest, string_end, 0)
+    end
+
+    def next_string_array_token
+      while true
+        if curch == '\n'
+          nextch
+          @column_number = 1
+          @line_number += 1
+        elsif curch.whitespace?
+          nextch
+        else
+          break
+        end
+      end
+
+      if curch == @token.delimiter_state.end
+        nextch
+        @token.type = :STRING_ARRAY_END
+        return @token
+      end
+
+      start = cur_pos
+      while !curch.whitespace? && curch != '\0' && curch != @token.delimiter_state.end
+        nextch
+      end
+
+      @token.type = :STRING
+      @token.value = string_range(start)
+
+      @token
+    end
+
+    def char_to_hex(char)
+      if '0' <= char <= '9'
+        char - '0'
+      elsif 'a' <= char <= 'f'
+        10 + (char - 'a')
+      elsif 'A' <= char <= 'F'
+        10 + (char - 'A')
+      else
+        yield
+      end
+    end
+
+    def consume_loc_pragma
+      filename_pos = cur_pos
+
+      while true
+        case curch
+        when '"'
+          break
+        when '\0'
+          raise "unexpected end of file in loc pragma"
+        else
+          nextc_noinc
+        end
+      end
+
+      filename = string_range(filename_pos)
+
+      # skip '"'
+      nextch
+
+      unless curch == ','
+        raise "expected ',' in loc pragma after filename"
+      end
+      nextch
+
+      line_number = 0
+      while true
+        case curch
+        when '0' .. '9'
+          line_number = 10 * line_number + (curch - '0').to_i
+        when ','
+          nextch
+          break
+        else
+          raise "expected digit or ',' in loc pragma for line number"
+        end
+        nextch
+      end
+
+      column_number = 0
+      while true
+        case curch
+        when '0' .. '9'
+          column_number = 10 * column_number + (curch - '0').to_i
+        when '>'
+          nextch
+          break
+        else
+          raise "expected digit or '>' in loc pragma for column_number number"
+        end
+        nextch
+      end
+
+      @token.filename = @filename = filename
+      @token.line_number = @line_number = line_number
+      @token.column_number = @column_number = column_number
+    end
+
+    def nextc_noinc
+      @reader.next_char
+    end
+
+    def nextch
+      @column_number += 1
+      nextc_noinc
+    end
+    def next_char # *TODO* alias
+      @column_number += 1
+      nextc_noinc
+    end
+
+    def nc?(char)
+      nextch == char
+    end
+
+    def nextc_check_line
+      @column_number += 1
+      char = nextc_noinc
+      if char == '\n'
+        @line_number += 1
+        @column_number = 1
+      end
+      char
+    end
+
+    def toktype_then_nextch(token_type)
+      nextch
+      @token.type = token_type
+    end
+
+    def reset_token
+      @token.value = nil
+      @token.line_number = @line_number
+      @token.column_number = @column_number
+      @token.filename = @filename
+      @token.location = nil
+      @token.passed_backslash_newline = false
+      @token.doc_buffer = nil unless @token.type == :SPACE || @token.type == :NEWLINE
+      @token_end_location = nil
+    end
+
+    def next_token_skip_space
+      next_token
+      skip_space
+    end
+
+    def next_token_skip_space_or_newline
+      next_token
+      skip_space_or_newline
+    end
+
+    def next_token_skip_statement_end
+      next_token
+      skip_statement_end
+    end
+
+    def curch
+      @reader.current_char
+    end
+    def current_char # *TODO* alias
+      @reader.current_char
+    end
+
+    def peek_nextch
+      @reader.peek_next_char
+    end
+    def peek_next_char # *TODO* alias
+      @reader.peek_next_char
+    end
+
+    def cur_pos()
+      @reader.pos
+    end
+    def current_pos() # *TODO* alias
+      @reader.pos
+    end
+
+    def set_pos(pos)
+      @reader.pos = pos
+    end
+
+    def cur_pos=(pos)
+      @reader.pos = pos
+    end
+    def current_pos=(pos) # *TODO* alias
+      @reader.pos = pos
+    end
+
+    def string
+      @reader.string
+    end
+
+    def string_range(start_pos)
+      string_range(start_pos, cur_pos)
+    end
+
+    def string_range(start_pos, end_pos)
+      @reader.string.byte_slice(start_pos, end_pos - start_pos)
+    end
+
+    def slice_range(start_pos)
+      Slice.new(@reader.string.to_unsafe + start_pos, cur_pos - start_pos)
+    end
+
+    def unsafe_char_at(i)
+      @reader.unsafe_decode_char_at(i)
+    end
+
+    def idr_start?(char)
+      char.alpha? || char == '_' || char.ord > 0x9F
+    end
+
+    def idr_part?(char)
+      idr_start?(char) || char.digit? || char == '-'
+    end
+
+    def idr_part_or_end?(char)
+      idr_part?(char) || char == '?' || char == '!'
+    end
+
+    def peek_not_idr_part_or_end_nextch
+      !idr_part_or_end?(peek_nextch) && nextch
+    end
+
+    def closing_char(char = curch)
+      case char
+      when '<' then '>'
+      when '(' then ')'
+      when '[' then ']'
+      when '{' then '}'
+      else          char
+      end
+    end
+
+    def skip_space
+      while @token.type == :SPACE
+        next_token
+      end
+    end
+
+    def skip_space_or_newline
+      while (@token.type == :SPACE || @token.type == :NEWLINE)
+        next_token
+      end
+    end
+
+    def skip_statement_end
+      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
+        next_token
+      end
+    end
+
+    def unknown_token
+      raise "unknown token: #{curch.inspect}", @line_number, @column_number
+    end
+
+    def raise(message, line_number = @line_number, column_number = @column_number, filename = @filename)
+      ::raise Crystal::SyntaxException.new(message, line_number, column_number, filename)
+    end
+
+    def raise(message, token : Token, size = nil)
+      ::raise Crystal::SyntaxException.new(message, token.line_number, token.column_number, token.filename, size)
+    end
+
+    def raise(message, location : Location)
+      raise message, location.line_number, location.column_number, location.filename
+    end
+  end
+end

@@ -1,4 +1,4 @@
-.PHONY: all spec crystal doc clean
+.PHONY: all spec onyx doc clean
 
 -include Makefile.local # for optional local options e.g. threads
 
@@ -12,13 +12,13 @@ LLVM_CONFIG := $(shell command -v llvm-config-3.6 llvm-config-3.5 llvm-config | 
 LLVM_EXT_DIR = src/llvm/ext
 LLVM_EXT_OBJ = $(LLVM_EXT_DIR)/llvm_ext.o
 
-all: crystal
+all: onyx
 spec: all_spec
 	$(O)/all_spec
 doc:
 	$(BUILD_PATH) ./bin/crystal doc docs/main.cr
 
-crystal: $(O)/crystal
+onyx: $(O)/onyx
 all_spec: $(O)/all_spec
 
 llvm_ext: $(LLVM_EXT_OBJ)
@@ -27,9 +27,9 @@ $(O)/all_spec: $(LLVM_EXT_OBJ) $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
 	$(BUILD_PATH) ./bin/crystal build $(FLAGS) -o $@ spec/all_spec.cr
 
-$(O)/crystal: $(LLVM_EXT_OBJ) $(SOURCES)
+$(O)/onyx: $(LLVM_EXT_OBJ) $(SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) $(EXPORTS) ./bin/crystal build $(FLAGS) -o $@ src/compiler/crystal.cr
+	$(BUILD_PATH) $(EXPORTS) ./bin/crystal build $(FLAGS) -o $@ src/compiler/onyx.cr
 
 $(LLVM_EXT_OBJ): $(LLVM_EXT_DIR)/llvm_ext.cc
 	$(CXX) -c -o $@ $< `$(LLVM_CONFIG) --cxxflags`
