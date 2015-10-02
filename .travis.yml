@@ -12,19 +12,19 @@ matrix:
 before_install: bin/ci prepare_system
 install: bin/ci prepare_build
 script:
-  - bin/ci with_build_env 'make crystal spec doc'
+  - bin/ci with_build_env 'make onyx spec doc'
   - bin/ci with_build_env 'find samples -name "*.cr" | xargs -L 1 ./bin/crystal build --no-codegen'
 branches:
   only:
     - master
     - gh-pages
-notifications:
-  irc:
-    channels:
-      - "irc.freenode.net#crystal-lang"
-    use_notice: true
-    skip_join: true
-    template:
-      - "%{repository_slug}#%{commit} (%{branch} - %{commit_subject}): %{message} %{build_url}"
-  slack:
-    secure: Ng3nTqGWY+9p1pS6yjGqDhmRvdgbIZgTNpMWbO/ngwpCyicmD3jafZkShqqXbULZTJJr3OxIGzi6GHGusT0Ic/Pi9JCM3X3v/xuBruKIR+EnNyPo7IL4ZYAlwnXyJHlCHHDBq0gSHGvGJwsXn6IgZBPRfeIq+CCyQHVPyvc9EHE=
+# notifications:
+#   irc:
+#     channels:
+#       - "irc.freenode.net#crystal-lang"
+#     use_notice: true
+#     skip_join: true
+#     template:
+#       - "%{repository_slug}#%{commit} (%{branch} - %{commit_subject}): %{message} %{build_url}"
+#   slack:
+#     secure: Ng3nTqGWY+9p1pS6yjGqDhmRvdgbIZgTNpMWbO/ngwpCyicmD3jafZkShqqXbULZTJJr3OxIGzi6GHGusT0Ic/Pi9JCM3X3v/xuBruKIR+EnNyPo7IL4ZYAlwnXyJHlCHHDBq0gSHGvGJwsXn6IgZBPRfeIq+CCyQHVPyvc9EHE=

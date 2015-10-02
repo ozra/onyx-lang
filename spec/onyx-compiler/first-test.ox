@@ -38,15 +38,16 @@ def zoo(a, b, c I32) Str ->
 end
 
 reg-ex = /foo ya/i
-"fda".match reg-ex
+m1 = "fda".match reg-ex
+m2 = "fda" =~ reg-ex
 
-\ foo(a, b, c Str) ->
+def foo(a, b, c Str) ->
     Str.new(a + b) + c.to_s
 end
 
 x = foo a, 2, 3
 
-\ qwo(a I32, b ~I32) ->
+def qwo(a I32, b ~I32) ->
 end
 
 def qwo2(a 'I32, b I32~) ->
@@ -58,9 +59,10 @@ end
 def qwo4(a I32; b I32 mut) ->
 end
 
--- a = (a) -> a.to_s
--- b = (a Str) -> a
--- c = (a, b Str, c) -> a.to_s + b + c.to_s
+-- a = (a) -> a.to_s; end
+-- b = (a Str) -> a; end
+-- c = (a, b Str, c) -> a.to_s + b + c.to_s; end
+
 
 -- def booze1(f1 Fn<I32, *, Nil>, f2 Fn<Str, Nil>) ->
 -- end

@@ -52,7 +52,7 @@ AST-rewriter, sharing the heavy bits of type inference, code generation and
 standard-lib / modules.
 
 Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
-Rust, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
+Rust, Nim, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
 integrated, not hodge-podgy!
 
 Why?
@@ -106,11 +106,11 @@ Use "issues" for now. Add RFC's or ideas already if you feel like it!
 Contributing
 ---------
 
-Read the general [Contributing guide](https://github.com/ozra/onyx/blob/master/Contributing.md), and then:
+Read the general [Contributing guide](https://github.com/ozra/onyx-lang/blob/master/Contributing.md), and then:
 The code base follows the same guide lines and style as Crystal - since it
 simplifies features making its way back into Crystal when reasonable.
 
-1. Fork it ( https://github.com/ozra/onyx/fork )
+1. Fork it ( https://github.com/ozra/onyx-lang/fork )
 2. Create your feature branch (git checkout -b my-new-feature)
 3. Commit your changes (git commit -am 'Add some feature')
 4. Push to the branch (git push origin my-new-feature)
