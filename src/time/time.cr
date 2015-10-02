@@ -1,3 +1,12 @@
+lib LibC
+  struct TimeZone
+    tz_minuteswest : Int
+    tz_dsttime     : Int
+  end
+
+  fun gettimeofday(tp : TimeVal*, tzp : TimeZone*) : Int
+end
+
 # The `Time` library allows you to inspect, analyze, calculate, and format time. Here are some examples:
 # 
 # ### Basic Usage
@@ -57,16 +66,6 @@
 #     span       #=> 02:00:00
 #     span.class #=> Time::Span
 #     span.hours #=> 2
-
-lib LibC
-  struct TimeZone
-    tz_minuteswest : Int
-    tz_dsttime     : Int
-  end
-
-  fun gettimeofday(tp : TimeVal*, tzp : TimeZone*) : Int
-end
-
 struct Time
   # *Heavily* inspired by Mono's DateTime class:
   # https://github.com/mono/mono/blob/master/mcs/class/corlib/System/DateTime.cs
@@ -502,7 +501,9 @@ struct Time
   # Time.local_offset_in_minutes #=> -180
   # ```
   def self.local_offset_in_minutes
-    LibC.gettimeofday(nil, out tzp)
+    if LibC.gettimeofday(nil, out tzp) != 0
+      raise Errno.new("gettimeotday")
+    end
     -tzp.tz_minuteswest.to_i32
   end
 
@@ -519,7 +520,9 @@ struct Time
   end
 
   private def self.compute_ticks
-    LibC.gettimeofday(out tp, out tzp)
+    if LibC.gettimeofday(out tp, out tzp) != 0
+      raise Errno.new("gettimeotday")
+    end
     ticks = tp.tv_sec.to_i64 * Span::TicksPerSecond + tp.tv_usec.to_i64 * 10_i64
     ticks += UnixEpoch
     yield ticks, tp, tzp

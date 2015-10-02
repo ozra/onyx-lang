@@ -311,7 +311,7 @@ module Crystal
       var = lookup_instance_var node
       node.bind_to(var)
 
-      if @is_initialize && !@vars.has_key? node.name
+      if @is_initialize && !@vars.has_key?(node.name) && !scope.has_instance_var_initializer?(node.name)
         ivar = scope.lookup_instance_var(node.name)
         ivar.nil_reason ||= NilReason.new(node.name, :used_before_initialized, [node] of ASTNode)
         ivar.bind_to mod.nil_var
@@ -1869,7 +1869,7 @@ module Crystal
           end
           lib_framework = value.value
         else
-          named_arg.raise "unkonwn link argument: '#{named_arg.name}' (valid arguments are 'lib', 'ldflags', 'static' and 'framework')"
+          named_arg.raise "unknown link argument: '#{named_arg.name}' (valid arguments are 'lib', 'ldflags', 'static' and 'framework')"
         end
       end
 
@@ -2703,7 +2703,7 @@ module Crystal
         when "to_f32" then mod.float32
         when "chr" then mod.char
         else
-          raise "Bug: unkown cast operator #{typed_def.name}"
+          raise "Bug: unknown cast operator #{typed_def.name}"
         end
     end
 
@@ -2993,7 +2993,7 @@ module Crystal
         # if an exception was raised then we won't running the code
         # after the ensure clause, so variables don't matter. But if
         # an exception was not raised then all variables were declared
-        # successfuly.
+        # successfully.
         @vars.each do |name, var|
           unless before_body_vars[name]?
             var.nil_if_read = false

@@ -2,6 +2,25 @@ require "spec"
 require "http/client"
 require "http/server"
 
+class TestServer < TCPServer
+  def self.open(host, port, read_time = 0)
+    server = new(host, port)
+    begin
+      spawn do
+        io = server.accept
+        sleep read_time
+        response = HTTP::Response.ok("text/plain", "OK")
+        response.to_io(io)
+        io.flush
+      end
+
+      yield
+    ensure
+      server.close
+    end
+  end
+end
+
 module HTTP
   describe Client do
     {% for method in %w(get post put head delete patch) %}
@@ -22,12 +41,18 @@ module HTTP
     typeof(Client.get(URI.parse("http://www.example.com")))
     typeof(Client.get("http://www.example.com"))
 
-    server = HTTP::Server.new(8081) do |req|
-      sleep 0.5
-      HTTP::Response.ok("text/plain", "OK")
-    end
-    spawn do
-      server.listen
+    it "doesn't read the body if request was HEAD" do
+      resp_get = TestServer.open("localhost", 8080, 0) do
+        client = Client.new("localhost", 8080)
+        break client.get("/")
+      end
+
+      TestServer.open("localhost", 8080, 0) do
+        client = Client.new("localhost", 8080)
+        resp_head = client.head("/")
+        resp_head.headers.should eq(resp_get.headers)
+        resp_head.body.should eq("")
+      end
     end
 
     it "raises if URI is missing scheme" do
@@ -37,22 +62,27 @@ module HTTP
     end
 
     it "tests read_timeout" do
-      client = Client.new("localhost", 8081)
-      client.read_timeout = 1
-      client.get("/")
-
-      expect_raises(IO::Timeout, "read timed out") do
-        client.read_timeout = 0.0001
+      TestServer.open("localhost", 8080, 0) do
+        client = Client.new("localhost", 8080)
+        client.read_timeout = 1.second
         client.get("/")
+      end
+
+      TestServer.open("localhost", 8080, 0.5) do
+        client = Client.new("localhost", 8080)
+        expect_raises(IO::Timeout, "read timed out") do
+          client.read_timeout = 0.001
+          client.get("/?sleep=1")
+        end
       end
     end
 
     it "tests connect_timeout" do
-      client = Client.new("localhost", 8081)
-      client.connect_timeout = 1.second
-      client.get("/")
+      TestServer.open("localhost", 8080, 0) do
+        client = Client.new("localhost", 8080)
+        client.connect_timeout = 0.5
+        client.get("/")
+      end
     end
-
-    server.close
   end
 end

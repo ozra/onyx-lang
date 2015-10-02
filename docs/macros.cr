@@ -479,6 +479,10 @@ module Macros
     def select(&block) : ArrayLiteral
     end
 
+    # Similar to `Enumerable#reject`
+    def reject(&block) : ArrayLiteral
+    end
+
     # Similar to `Array#shuffle`
     def shuffle : ArrayLiteral
     end
@@ -1097,6 +1101,12 @@ module Macros
     # or `@[Packed]` (the name you pass to this method is "Flags" or "Packed"
     # in these cases).
     def has_attribute?(name : StringLiteral | SymbolLiteral) : BoolLiteral
+    end
+
+    # Returns true if this type has a constant. For example `DEFAULT_OPTIONS`
+    # (the name you pass to this method is "DEFAULT_OPTIONS" or :DEFAULT_OPTIONS
+    # in this cases).
+    def has_constant?(name : StringLiteral | SymbolLiteral) : BoolLiteral
     end
 
     # Returns the number of elements in this tuple type or tuple metaclass type.
