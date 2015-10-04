@@ -2,58 +2,68 @@ Onyx - programming language
 =======
 
 ## "tl;dr Summary" ##
-_Enjoy writing an app that runs with trustworthy stability at speeds of C/C++ 
+_Enjoy writing an app that runs with trustworthy stability at speeds of C/C++
 with just the effort of scripting or writing pseudo._
 
-## Long version ##
-* Use scientific findings for aspects of programming linguistics where research is available, in order to obtain:
-    - Highest possible productivity (which according to findings seem to require "enjoying the process")
-    - Most secure functioning possible produced by that effort
-    - Efficient code naturally by the common patterns.
-* Which from current findings, atm, means:
-    - Find out what is done most often - assign shorter notation / operators for that, re-think syntax for traditional constructs that are not used often in practice today.
-    - A terse and clear indent based syntax with voluntary explicit block ends (wysiwyg + safety net).
-    - Statically type-checked, with inheritance, mixins, re-openable types, generics and type vars, but with all types inferred unless explicit annotation wanted or demanded by coder.
-    - OOP-based, with functional-style coding fully possible where applicable (all of code if wished)
-    - Dead simple to call C code by writing bindings to it in Onyx.
-    - Advanced and hygienic templates and macros to avoid boilerplate code.
-    - Compile quickly! (fast turn over).
-    - Informative errors - the aim is for the compiler to be able to figure out as closely as possible what you _likely_ wanted and reduce debugging time.
-    - Compile to efficient fast native code.
-* Further goals:
-    - Full compatibility with Crystal modules - the language semantics core - (any Crystal module can be used seamlessly in the same project) to enlarge the module universe.
-* Usages?:
-    - "Scripting": Because it compiles extremely quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.
-    - System coding: Since binaries achieve speeds nearing (some times beating) C/C++, interfacing with C is dead simple, and hardening/strictening policies are available.
-    - Game coding: As above.
-    - Business systems: As above.
-    - Analytics and math: As above.
-    - Well, anything really, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx)
+## Long Version ##
+* **Use scientific findings** for aspects of programming linguistics where research is available, in order to obtain:
+    - _Highest possible productivity_ (which according to findings seem to require "enjoying the process")
+    - Most _secure functioning_ possible produced by that effort
+    - _Efficient code_ naturally by the common patterns.
+* **Which from current findings and interpretations means**:
+    - _Statically type-checked_, with inheritance, mixins, re-openable types, generics and type vars. _ALL types inferred_ unless explicit annotation wanted or demanded by coder.
+    - A _terse and clear indent based syntax_ with voluntary explicit block ends (wysiwyg + safety net).
+        - Both _alpha-style and symbol-style notation_ offered for many constructs for starters (might change).
+        - _Underscores and dashes_ (`snake_case` and `dash-case`/`lisp-case`) are used interchangeably in identifiers per preference.
+    - Common constructs gets _terser notation_. Syntax for traditional constructs that are not used often in practice today gets demoted.
+    - _OOP-based_, with functional-style coding fully possible where applicable (all of code if wished)
+    - Advanced and hygienic _templates and macros_ to avoid boilerplate code.
+    - _Compile quickly!_ (fast turn over).
+    - _Informative errors_ - the aim is for the compiler to be able to figure out as closely as possible what you _likely_ wanted and reduce debugging time.
+    - Compile to _efficient fast native code_.
+* **Further**:
+    - Dead _simple to call C code_ by writing bindings to it in Onyx.
+    - Full _compatibility with Crystal_ modules - the language semantics core - (any Crystal module can be used seamlessly in the same project) to enlarge the module universe.
 
-Onyx will be considered "design stage"/pre alpha while settling it. Input (RFC's) on the syntax and language in general is **highly welcomed**!
-It's not intended as a competitor to Crystal, but rather a different approach to the same linguistic "core".
-Crystal is a fantastic project and language, but the "stay true to Ruby" keeps
-it from being _the_ next generation language of choice, because of accumulated inconsistencies.
+## Usages? ##
+* _"Scripting"_: Because it compiles quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.
+* _System coding_: Since binaries achieve speeds nearing (some times beating) C/C++, interfacing with C is dead simple, and hardening/strictening policies are available.
+* _Game coding_: As above.
+* _Business systems_: As above.
+* _Analytics and math_: As above.
+* **Well, anything really**, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx)
 
-Crystal is for those who do love the Ruby way.
+## Relation to Crystal ##
+Onyx uses Crystal backend semantics, type inference and code generation, and as
+such it's basically just an alternative syntax / front-end, with some additional
+semantics.
+It's not intended as a competitor to Crystal, but rather a different approach to
+the same linguistic "core". Crystal is a fantastic project and language, the
+gripe for some of us is its "stay true to Ruby" motto, which keeps it from being
+_the_ next generation language of choice, because of accumulated inconsistencies
+hindering free innovation.
+Without the effort of the Crystal team, Onyx wouldn't be on its way _today_ - 
+Onyx would still be one of my countless experimental implementations that come 
+to a halt and are re-iterated again and again (I coded my first _transpiler_ 
+[simple heuristic] to C/C++ in '99-'00, called Cython [_no relation to the project with the same name that
+came eight years later!_]).
 
-Onyx is for those who simply want as productive and secure a language as possible by
-building on scientific studies on computer linguistics (_something strangely
-lacking in the community!!_), all languages created to date, and the common
-patterns and problems faced in today's coding.
-Because of the compatibility goal, some minor trade offs might have to be done, but
-this goal will likely be a bigger pro.
+_**Crystal** is for those who do love the Ruby way._
 
-As such it should be mentioned that the Crystal project is the main effort that
-makes Onyx possible - without it, Onyx would still be one of my countless
-experimental implementations that come to a halt and are re-iterated again and again.
-Thanks to Crystal, Onyx can be implemented as a simple front-end, parser and
-AST-rewriter, sharing the heavy bits of type inference, code generation and
-standard-lib / modules.
+_**Onyx** is for those who simply want a language as fun, productive and secure as
+possible_. The path to this is by building on scientific studies on computer
+linguistics (_something strangely lacking in the community!!_), inspiration from
+other languages created to date, the common patterns and problems faced in
+today's coding - and _that's where **you come in to the picture**_. _Your input is
+what will shape the language._
+Because of Onyx compatibility goal with Crystal, some minor trade offs might 
+have to be done, but the gains of a greater module universe, being a 
+"language family", will likely be a bigger pro.
 
+## Inspiration ##
 Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
 Rust, Nim, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
-integrated, not hodge-podgy!
+in an integrated way.
 
 Why?
 ----
@@ -77,21 +87,18 @@ What does the current syntax draft look like?
 Status
 ------
 
-* The project is in very early experimental alpha "concept design" stage. The
- intention is that it remans in design stage until enough input and consensus
- from different developers to get the language in a "collectively correct
- direction" has been acquired.
-* Consider Onyx a "private repo" for the nearest time being.
+* Onyx will be considered "design stage"/pre alpha while settling it. Input (RFC's) on the syntax and language in general is **highly welcomed**!
+* The intention is that it remains in design stage until enough input and consensus
+ from different developers has been acquired, to get the language in a "collectively correct
+ direction".
+* Getting the syntax settled first, while leaving some semantics unimplemented
+  until "safe" to implement.
 * The "core semantics language" Crystal is in alpha, close to beta.
-* Clarity of error messages if most lacking atm (aside from syntax not being set
-  in stone). That's a project that will be contributed directly into Crystal
-  where possible, else in Onyx only (where applicable).
 
 Installing
 ----------
 
 Instructions to come.
-
 
 Documentation
 ----------
