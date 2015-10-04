@@ -189,13 +189,13 @@ module Crystal
         case nextch
         when '='
           toktype_then_nextch :">="
-        when '>'
-          case nextch
-          when '='
-            toktype_then_nextch :">>="
-          else
-            @token.type = :">>"
-          end
+        # when '>'  # needs to be tracked in parser now - generics or operator
+        #   case nextch
+        #   when '='
+        #     toktype_then_nextch :">>="
+        #   else
+        #     @token.type = :">>"
+        #   end
         else
           @token.type = :">"
         end
@@ -455,7 +455,6 @@ module Crystal
 
           @token.type = :SYMBOL
           @token.value = string_range(start)
-
           nextch
         else
           if idr_start?(char)
@@ -605,6 +604,10 @@ module Crystal
             return check_idr_or_keyword(:asm, start)
           else
             return check_idr_or_keyword(:as, start)
+          end
+        when 'u'
+          if nc?('t') && nc?('o')
+            return check_idr_or_keyword(:auto, start)
           end
         end
         scan_idr(start)
@@ -993,7 +996,8 @@ module Crystal
         if 'A' <= curch <= 'Z'
           start = cur_pos
 
-          if curch == 'S'
+          case curch
+          when 'S'
             if nc?('e') && nc?('l') && nc?('f')
               return check_idr_or_keyword(:SelfType, start)
             end
