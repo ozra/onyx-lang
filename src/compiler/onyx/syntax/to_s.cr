@@ -13,7 +13,7 @@ module Crystal
       # 2. Prettify - render same as source
       # 3. Onyxify - render Onyx
 
-      if true # *TODO*  - is_onyx?
+      if false # *TODO*  - is_onyx?
         visitor = ToOnyxSVisitor.new(io)
         self.accept visitor
       else

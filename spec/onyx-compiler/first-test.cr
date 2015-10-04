@@ -10,8 +10,8 @@ a = 47  #another comment
 # \ foo(a, b, c I32) ->
 #     Str(a + b) + c.to_s
 
-def foo(a, b, c: I32)
-    Str.new(a + b) + c.to_s
+def foo(a, b, c : I32)
+    (a + b).to_s + c.to_s
 end
 
 x = foo a, 2, 3
