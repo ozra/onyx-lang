@@ -42,11 +42,11 @@ the same linguistic "core". Crystal is a fantastic project and language, the
 gripe for some of us is its "stay true to Ruby" motto, which keeps it from being
 _the_ next generation language of choice, because of accumulated inconsistencies
 hindering free innovation.
-Without the effort of the Crystal team, Onyx wouldn't be on its way _today_ - 
-Onyx would still be one of my countless experimental implementations that come 
-to a halt and are re-iterated again and again (I coded my first _transpiler_ 
-[simple heuristic] to C/C++ in '99-'00, called Cython [_no relation to the project with the same name that
-came eight years later!_]).
+Without the effort of the Crystal team, Onyx wouldn't be on its way _today_ -
+Onyx would still be one of my countless experimental implementations that come
+to a halt and are re-iterated again and again (I coded my first _transpiler_
+[simple heuristic] to C/C++ in '99-'00, called Cython [_no relation to the
+project with the same name that came eight years later!_]).
 
 _**Crystal** is for those who do love the Ruby way._
 
@@ -56,8 +56,8 @@ linguistics (_something strangely lacking in the community!!_), inspiration from
 other languages created to date, the common patterns and problems faced in
 today's coding - and _that's where **you come in to the picture**_. _Your input is
 what will shape the language._
-Because of Onyx compatibility goal with Crystal, some minor trade offs might 
-have to be done, but the gains of a greater module universe, being a 
+Because of Onyx compatibility goal with Crystal, some minor trade offs might
+have to be done, but the gains of a greater module universe, being a
 "language family", will likely be a bigger pro.
 
 ## Inspiration ##
