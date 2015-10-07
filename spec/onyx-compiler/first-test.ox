@@ -4,15 +4,7 @@ puts "Let's ROCK"
 
 DEBUG-SEPARATOR = 47
 
-alias Ptr = Pointer
-
-type BoundPtr<T> << Struct
-    start-addr      Pointer<T>
-    addr            Pointer<T>
-end-type
---end
-
-alias Any = (Reference | Value)
+alias Any = Float64
 alias Str = String
 alias I32 = Int32
 alias F64 = Float64
@@ -20,6 +12,15 @@ alias F64 = Float64
 -- type I32 = Int32
 -- type UStr < String   -- "unique" (inherited)
 -- type UI32 < Int32
+
+alias Ptr = Pointer
+
+-- type BoundPtr<T> -- << Value
+--     @start-addr      Ptr<T>
+--     @addr            Ptr<T>
+-- end-type
+-- --end
+
 
 -- first comment
 a = 47  --another comment
@@ -47,7 +48,7 @@ if (a == 48 &&
 
 if true =>
     i = 1
-    while i
+    while i > 0
         i -= 1
         if true => p "hey "; p "ho"     --  'if' expr '=>' expr ";" expr "NEWLINE"
         if false =>
@@ -120,7 +121,8 @@ end
 
 n = 4747 >> 3
 n >>= 1
-p "n = " + $n + " from " + $4747
+p "n = " + n.to_s + " from " + 4747.to_s
+-- p "n = " + $n + " from " + $4747
 
 
 -- -- crystal style `case ref`
