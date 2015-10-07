@@ -3,17 +3,18 @@ require "../../crystal/syntax/parser"
 
 module Crystal
 
-class Token
-    def to_s(io)
-      if @value
-        @type.to_s(io)
-        ":".to_s(io)
-        @value.to_s(io)
-      else
-        @type.to_s(io)
-      end
-    end
-end
+# This to_s is part of code generation - messes shit up!
+# class Token
+#     def to_s(io)
+#       if @value
+#         @type.to_s(io)
+#         ":".to_s(io)
+#         @value.to_s(io)
+#       else
+#         @type.to_s(io)
+#       end
+#     end
+# end
 
 class Scope
   property :name
