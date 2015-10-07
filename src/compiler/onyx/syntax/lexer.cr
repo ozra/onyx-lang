@@ -31,6 +31,10 @@ module Crystal
       @count_whitespace = false
       @slash_is_regex = true
       @indent = 0
+
+      @paren_nest = 0 # *TODO* *TEST*
+
+
     end
 
     def filename=(filename)
@@ -42,9 +46,8 @@ module Crystal
 
       start = cur_pos
 
-      #handle_comment
-
       reset_regex_flags = true
+
 
       case curch
       when '\0'
@@ -55,62 +58,101 @@ module Crystal
         reset_regex_flags = false
 
       when '\\'
-        p "backslash"
+        #p "root level backslash"
 
         # can be:
-        # \idr(args) ->     (def)
-        # \  # opt comm \n    (slash line)
-        # "kjhg" \\n"dfjgdgf" (slash line, for strings - need for sep?)
+        # \\ # optional comment \n  (a "slash-line")
+        # "foo" \\ \n "blargh"      (a "slash-line for strings" - still needed?)
+
+        backed_type = @token.type
 
         nextch
-        p "nextch = " + curch
+        #p "nextch after backslash = " + curch
         if curch == ' ' || curch == '\t'
           consume_whitespace
         end
-        p "cur_c after consume ws = " + curch
+        #p "curch after consume_whitespace = " + curch
 
-        # def ?
-        if idr_start?(curch)
-          p "it's an idr start - we're 'def'"
-          @token.type = :IDENT
-          @token.value = :def #"def"
+        #p "skip comments"
+        skip_comment    # *TODO* skip / consume / handle_comment ??
+
+        #p "curch after skip_comment = " + curch
+        if curch == '\n'
+          @line_number += 1
+          @column_number = 1
+
+          # *TODO* if token is DELIMITER_START or some do below - else generic slash–line
+
+          @token.passed_backslash_newline = true
+          consume_whitespace
+          reset_regex_flags = false
+          @token.type = backed_type
 
         else
-          p "skip comments"
-          skip_comment    # *TODO* skip / consume / handle_comment ??
-
-          if curch == '\n'
-            @line_number += 1
-            @column_number = 1
-
-            # *TODO* if token is DELIMITER_START or some do below - else generic slash–line
-
-            @token.passed_backslash_newline = true
-            consume_whitespace
-            reset_regex_flags = false
-          else
-            unknown_token
-          end
+          unknown_token
         end
 
+
+
+
       when '\n'
-        @token.type = :NEWLINE
         nextch
         @line_number += 1
         @column_number = 1
+
+        # *TODO* change this so that both are allowed - but only _one of them_
+        if curch == '\t'
+          raise "Tabs (\"\\t\"/0x09) are not allowed as indentation character. If you do not agree - go to http://www.github.com/ozra/onyx-lang/issues"
+        end
+        while curch == ' '
+          nextch
+        end
+        #p "Collected pure ' '"
+
+        if curch == '\n'
+          #p "Got a new :NEWLINE - leave to next lap"
+          return next_token
+
+        elsif curch == '-' && peek_nextch == '-'   # a comment
+          # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
+          # ONLY DOC–COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
+          # (ALL COMMENTS INDENT FORMING ATM!)
+          unless @comments_enabled
+            skip_comment
+            return next_token
+          end
+        else
+          gotten_indent = cur_pos - start - 1
+
+          if gotten_indent != @indent  && @paren_nest == 0
+            @token.value = gotten_indent
+            if gotten_indent > @indent
+              @token.type = :INDENT
+              #p "made :INDENT token (" + @token.value.to_s + ")"
+            else
+              @token.type = :DEDENT
+              #p "made :DEDENT token (" + @token.value.to_s + ")"
+            end
+            @token_location = Location.new @line_number, 1, @filename # *TODO* this one doesn't seem to take!
+            @column_number = gotten_indent + 1
+            @indent = gotten_indent
+            return @token
+          end
+        end
+
+        @token.type = :NEWLINE
         reset_regex_flags = false
         consume_newlines
 
       when '\r'
-        if nc?('\n')
-          nextch
-          @token.type = :NEWLINE
-          @line_number += 1
-          @column_number = 1
-          consume_newlines
+        if nc? '\n'
+          return next_token   # We don't repeat our selves for teleprinter archaic linebreak combos
         else
           raise "expected '\\n' after '\\r'"
         end
+
+
+
 
       when '='
         case nextch
@@ -160,7 +202,7 @@ module Crystal
               when '\\'
                 if peek_nextch == 'n'
                   nextch
-                  raise "invalid heredoc idrifier"
+                  raise "invalid heredoc identifier"
                 end
               when ' '
                 case peek_nextch
@@ -170,7 +212,7 @@ module Crystal
                   nextch
                   break
                 else
-                  raise "invalid heredoc idrifier"
+                  raise "invalid heredoc identifier"
                 end
               else
                 here << char
@@ -457,9 +499,9 @@ module Crystal
           @token.value = string_range(start)
           nextch
         else
-          if idr_start?(char)
+          if ident_start?(char)
             start = cur_pos
-            while idr_part?(nextch)
+            while ident_part?(nextch)
               # Nothing to do
             end
             if curch == '!' || curch == '?'
@@ -544,8 +586,8 @@ module Crystal
             class_var = true
             nextch
           end
-          if idr_start?(curch)
-            while idr_part?(nextch)
+          if ident_start?(curch)
+            while ident_part?(nextch)
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
@@ -578,8 +620,8 @@ module Crystal
           @token.type = :GLOBAL_MATCH_DATA_INDEX
           @token.value = string_range(start)
         else
-          if idr_start?(curch)
-            while idr_part?(nextch)
+          if ident_start?(curch)
+            while ident_part?(nextch)
               # Nothing to do
             end
           @token.type = :GLOBAL
@@ -592,54 +634,54 @@ module Crystal
         case nextch
         when 'b'
           if nc?('s') && nc?('t') && nc?('r') && nc?('a') && nc?('c') && nc?('t')
-            return check_idr_or_keyword(:abstract, start)
+            return check_ident_or_keyword(:abstract, start)
           end
         when 'l'
           if nc?('i') && nc?('a') && nc?('s')
-            return check_idr_or_keyword(:alias, start)
+            return check_ident_or_keyword(:alias, start)
           end
         when 's'
           if peek_nextch == 'm'
             nextch
-            return check_idr_or_keyword(:asm, start)
+            return check_ident_or_keyword(:asm, start)
           else
-            return check_idr_or_keyword(:as, start)
+            return check_ident_or_keyword(:as, start)
           end
         when 'u'
           if nc?('t') && nc?('o')
-            return check_idr_or_keyword(:auto, start)
+            return check_ident_or_keyword(:auto, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'b'
         case nextch
         when 'e'
           if nc?('g') && nc?('i') && nc?('n')
-            return check_idr_or_keyword(:begin, start)
+            return check_ident_or_keyword(:begin, start)
           end
         when 'r'
           if nc?('e') && nc?('a') && nc?('k')
-            return check_idr_or_keyword(:break, start)
+            return check_ident_or_keyword(:break, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'c'
         case nextch
         when 'a'
           if nc?('s') && nc?('e')
-            return check_idr_or_keyword(:case, start)
+            return check_ident_or_keyword(:case, start)
           end
-          scan_idr(start)
+          scan_ident(start)
         when 'l'
           if nc?('a') && nc?('s') && nc?('s')
-            return check_idr_or_keyword(:class, start)
+            return check_ident_or_keyword(:class, start)
           end
-          scan_idr(start)
+          scan_ident(start)
         when 'o'
           if nc?('n') && nc?('s') && nc?('t')
-            return check_idr_or_keyword(:const, start)
+            return check_ident_or_keyword(:const, start)
           end
-          scan_idr(start)
+          scan_ident(start)
         when '"'
           line = @line_number
           column = @column_number
@@ -679,87 +721,91 @@ module Crystal
           nextch
 
         else
-          scan_idr(start)
+          scan_ident(start)
         end
       when 'd'
         case nextch
         when 'e'
           if nc?('f')
-            p "Got 'def', check if not idr"
-            return check_idr_or_keyword(:def, start)
+            #p "Got 'def', check if not ident"
+            return check_ident_or_keyword(:def, start)
           end
-        when 'o' then return check_idr_or_keyword(:do, start)
+        when 'o' then return check_ident_or_keyword(:do, start)
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'e'
         case nextch
         when 'l'
           case nextch
           when 's'
             case nextch
-            when 'e' then return check_idr_or_keyword(:else, start)
+            when 'e' then return check_ident_or_keyword(:else, start)
             when 'i'
               if nc?('f')
-                return check_idr_or_keyword(:elsif, start)
+                return check_ident_or_keyword(:elsif, start)
               end
             end
           end
         when 'n'
           case nextch
           when 'd'
-            return check_idr_or_keyword(:end, start)
+
+            # *TODO* verify - "end" needs to be string like the other loosely lexed end–tokens...
+
+            return check_ident_or_keyword("end", start)
+
           when 's'
             if nc?('u') && nc?('r') && nc?('e')
-              return check_idr_or_keyword(:ensure, start)
+              return check_ident_or_keyword(:ensure, start)
             end
           when 'u'
             if nc?('m')
-              return check_idr_or_keyword(:enum, start)
+              return check_ident_or_keyword(:enum, start)
             end
           end
         when 'x'
           if nc?('t') && nc?('e') && nc?('n') && nc?('d')
-            return check_idr_or_keyword(:extend, start)
+            return check_ident_or_keyword(:extend, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'f'
         case nextch
         when 'a'
           if nc?('l') && nc?('s') && nc?('e')
-            return check_idr_or_keyword(:false, start)
+            return check_ident_or_keyword(:false, start)
           end
         when 'o'
           if nc?('r')
-            return check_idr_or_keyword(:for, start)
+            return check_ident_or_keyword(:for, start)
           end
         when 'u'
           if nc?('n')
-            return check_idr_or_keyword(:fun, start)
+            return check_ident_or_keyword(:fun, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'i'
         case nextch
         when 'f'
           if peek_nextch == 'd'
             nextch
             if nc?('e') && nc?('f')
-              return check_idr_or_keyword(:ifdef, start)
+              return check_ident_or_keyword(:ifdef, start)
             end
           else
-            return check_idr_or_keyword(:if, start)
+            return check_ident_or_keyword(:if, start)
           end
         when 'n'
-          if idr_part_or_end?(peek_nextch)
+          if ident_part_or_end?(peek_nextch)
             case nextch
             when 'c'
               if nc?('l') && nc?('u') && nc?('d') && nc?('e')
-                return check_idr_or_keyword(:include, start)
+                return check_ident_or_keyword(:include, start)
               end
             when 's'
               if nc?('t') && nc?('a') && nc?('n') && nc?('c') && nc?('e') && nc?('_') && nc?('s') && nc?('i') && nc?('z') && nc?('e') && nc?('o') && nc?('f')
-                return check_idr_or_keyword(:instance_sizeof, start)
+                return check_ident_or_keyword(:instance_sizeof, start)
               end
             end
           else
@@ -770,74 +816,74 @@ module Crystal
           end
         when 's'
           if nc?('_') && nc?('a') && nc?('?')
-            return check_idr_or_keyword(:is_a?, start)
+            return check_ident_or_keyword(:is_a?, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'l'
         case nextch
         when 'i'
           if nc?('b')
-            return check_idr_or_keyword(:lib, start)
+            return check_ident_or_keyword(:lib, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'm'
         case nextch
         when 'a'
           if nc?('c') && nc?('r') && nc?('o')
-            return check_idr_or_keyword(:macro, start)
+            return check_ident_or_keyword(:macro, start)
           end
         when 'o'
           case nextch
           when 'd'
             if nc?('u') && nc?('l') && nc?('e')
-              return check_idr_or_keyword(:module, start)
+              return check_ident_or_keyword(:module, start)
             end
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'n'
         case nextch
         when 'e'
           if nc?('x') && nc?('t')
-            return check_idr_or_keyword(:next, start)
+            return check_ident_or_keyword(:next, start)
           end
         when 'i'
           case nextch
-          when 'l' then return check_idr_or_keyword(:nil, start)
+          when 'l' then return check_ident_or_keyword(:nil, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'o'
         case nextch
         when 'f'
-            return check_idr_or_keyword(:of, start)
+            return check_ident_or_keyword(:of, start)
         when 'u'
           if nc?('t')
-            return check_idr_or_keyword(:out, start)
+            return check_ident_or_keyword(:out, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'p'
         case nextch
         when 'o'
           if nc?('i') && nc?('n') && nc?('t') && nc?('e') && nc?('r') && nc?('o') && nc?('f')
-            return check_idr_or_keyword(:pointerof, start)
+            return check_ident_or_keyword(:pointerof, start)
           end
         when 'r'
           case nextch
           when 'i'
             if nc?('v') && nc?('a') && nc?('t') && nc?('e')
-              return check_idr_or_keyword(:private, start)
+              return check_ident_or_keyword(:private, start)
             end
           when 'o'
             if nc?('t') && nc?('e') && nc?('c') && nc?('t') && nc?('e') && nc?('d')
-              return check_idr_or_keyword(:protected, start)
+              return check_ident_or_keyword(:protected, start)
             end
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'r'
         case nextch
         when 'e'
@@ -846,117 +892,117 @@ module Crystal
             case nextch
             when 'c'
               if nc?('u') && nc?('e')
-                return check_idr_or_keyword(:rescue, start)
+                return check_ident_or_keyword(:rescue, start)
               end
             when 'p'
               if nc?('o') && nc?('n') && nc?('d') && nc?('s') && nc?('_') && nc?('t') && nc?('o') && nc?('?')
-                return check_idr_or_keyword(:responds_to?, start)
+                return check_ident_or_keyword(:responds_to?, start)
               end
             end
           when 't'
             if nc?('u') && nc?('r') && nc?('n')
-              return check_idr_or_keyword(:return, start)
+              return check_ident_or_keyword(:return, start)
             end
           when 'q'
             if nc?('u') && nc?('i') && nc?('r') && nc?('e')
-              return check_idr_or_keyword(:require, start)
+              return check_ident_or_keyword(:require, start)
             end
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 's'
         case nextch
         when 'e'
           if nc?('l') && nc?('f')
-            return check_idr_or_keyword(:self, start)
+            return check_ident_or_keyword(:self, start)
           end
         when 'i'
           if nc?('z') && nc?('e') && nc?('o') && nc?('f')
-            return check_idr_or_keyword(:sizeof, start)
+            return check_ident_or_keyword(:sizeof, start)
           end
         when 't'
           if nc?('r') && nc?('u') && nc?('c') && nc?('t')
-            return check_idr_or_keyword(:struct, start)
+            return check_ident_or_keyword(:struct, start)
           end
         when 'u'
           if nc?('p') && nc?('e') && nc?('r')
-            return check_idr_or_keyword(:super, start)
+            return check_ident_or_keyword(:super, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 't'
         case nextch
         when 'h'
           if nc?('e') && nc?('n')
-            return check_idr_or_keyword(:then, start)
+            return check_ident_or_keyword(:then, start)
           end
         when 'r'
           if nc?('u') && nc?('e')
-            return check_idr_or_keyword(:true, start)
+            return check_ident_or_keyword(:true, start)
           end
         when 'y'
           if nc?('p') && nc?('e')
             if peek_nextch == 'o'
               nextch
               if nc?('f')
-                return check_idr_or_keyword(:typeof, start)
+                return check_ident_or_keyword(:typeof, start)
               end
             else
-              return check_idr_or_keyword(:type, start)
+              return check_ident_or_keyword(:type, start)
             end
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'u'
         if nc?('n')
           case nextch
           when 'i'
             if nc?('o') && nc?('n')
-              return check_idr_or_keyword(:union, start)
+              return check_ident_or_keyword(:union, start)
             end
           when 'l'
             if nc?('e') && nc?('s') && nc?('s')
-              return check_idr_or_keyword(:unless, start)
+              return check_ident_or_keyword(:unless, start)
             end
           when 't'
             if nc?('i') && nc?('l')
-              return check_idr_or_keyword(:until, start)
+              return check_ident_or_keyword(:until, start)
             end
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'w'
         case nextch
         when 'h'
           case nextch
           when 'e'
             if nc?('n')
-              return check_idr_or_keyword(:when, start)
+              return check_ident_or_keyword(:when, start)
             end
           when 'i'
             if nc?('l') && nc?('e')
-              return check_idr_or_keyword(:while, start)
+              return check_ident_or_keyword(:while, start)
             end
           end
         when 'i'
           if nc?('t') && nc?('h')
-            return check_idr_or_keyword(:with, start)
+            return check_ident_or_keyword(:with, start)
           end
         end
-        scan_idr(start)
+        scan_ident(start)
       when 'y'
         if nc?('i') && nc?('e') && nc?('l') && nc?('d')
-          return check_idr_or_keyword(:yield, start)
+          return check_ident_or_keyword(:yield, start)
         end
-        scan_idr(start)
+        scan_ident(start)
       when '_'
         case nextch
         when '_'
           case nextch
           when 'D'
             if nc?('I') && nc?('R') && nc?('_') && nc?('_')
-              if idr_part_or_end?(peek_nextch)
-                scan_idr(start)
+              if ident_part_or_end?(peek_nextch)
+                scan_ident(start)
               else
                 nextch
                 @token.type = :__DIR__
@@ -965,8 +1011,8 @@ module Crystal
             end
           when 'F'
             if nc?('I') && nc?('L') && nc?('E') && nc?('_') && nc?('_')
-              if idr_part_or_end?(peek_nextch)
-                scan_idr(start)
+              if ident_part_or_end?(peek_nextch)
+                scan_ident(start)
               else
                 nextch
                 @token.type = :__FILE__
@@ -975,8 +1021,8 @@ module Crystal
             end
           when 'L'
             if nc?('I') && nc?('N') && nc?('E') && nc?('_') && nc?('_')
-              if idr_part_or_end?(peek_nextch)
-                scan_idr(start)
+              if ident_part_or_end?(peek_nextch)
+                scan_ident(start)
               else
                 nextch
                 @token.type = :__LINE__
@@ -985,13 +1031,13 @@ module Crystal
             end
           end
         else
-          unless idr_part?(curch)
+          unless ident_part?(curch)
             @token.type = :UNDERSCORE
             return @token
           end
         end
 
-        scan_idr(start)
+        scan_ident(start)
       else
         if 'A' <= curch <= 'Z'
           start = cur_pos
@@ -999,18 +1045,18 @@ module Crystal
           case curch
           when 'S'
             if nc?('e') && nc?('l') && nc?('f')
-              return check_idr_or_keyword(:SelfType, start)
+              return check_ident_or_keyword(:SelfType, start)
             end
           end
 
-          while idr_part?(nextch)
+          while ident_part?(nextch)
             # Nothing to do
           end
           @token.type = :CONST
           @token.value = string_range(start)
         elsif ('a' <= curch <= 'z') || curch == '_' || curch == '-' || curch.ord > 0x9F
           nextch
-          scan_idr(start)
+          scan_ident(start)
         else
           unknown_token
         end
@@ -1045,7 +1091,7 @@ module Crystal
       #p "Was prev SPC?"
       prevc = unsafe_char_at(cur_pos - 1)
       #p "It is '" + prevc + "'"
-      return false  if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We now '-' and ' ' are one byte each...
+      return false  if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
       #p "Yep - comment!"
 
       # possible_comment_start = cur_pos
@@ -1124,16 +1170,25 @@ module Crystal
       end
     end
 
-    def consume_whitespace
-      start_pos = cur_pos
+    def consume_whitespace(start_pos = cur_pos)
+      #p "consume_whitespace"
+
+      #start_pos = cur_pos
       @token.type = :SPACE
       nextch
       while true
         case curch
         when ' ', '\t'
+          #p "consume_whitespace: got ' '|'\\t'"
           nextch
+
+
+
+        # *TODO* verify - REALLY?? Leave it to top level parse??
         when '\\'
+          p "consume_whitespace: got backslash '\\'"
           if nc?('\n')
+            p "consume_whitespace: got '\\n'"
             nextch
             @line_number += 1
             @column_number = 1
@@ -1141,13 +1196,19 @@ module Crystal
           else
             unknown_token
           end
+
         else
+          #p "consume_whitespace: done"
           break
+
         end
       end
       if @count_whitespace
+        #p "consume_whitespace: counts spaces"
         @token.value = string_range(start_pos)
       end
+      #p "consume_whitespace: all done"
+
     end
 
     def consume_newlines
@@ -1174,20 +1235,20 @@ module Crystal
       end
     end
 
-    def check_idr_or_keyword(symbol, start)
-      if idr_part_or_end?(peek_nextch)
-        scan_idr(start)
+    def check_ident_or_keyword(symbol, start)
+      if ident_part_or_end?(peek_nextch)
+        scan_ident(start)
       else
         nextch
         @token.type = :IDENT
         @token.value = symbol
-        p "Got token IDENT for: " + symbol.to_s + " row:" + @line_number.to_s + " col:" + @column_number.to_s
+        #p "Got IDENT '" + symbol.to_s + "' at (" + @line_number.to_s + ":" + @column_number.to_s + ")"
       end
       @token
     end
 
-    def scan_idr(start)
-      while idr_part?(curch)
+    def scan_ident(start)
+      while ident_part?(curch)
         nextch
       end
       case curch
@@ -1868,17 +1929,17 @@ module Crystal
 
           case char
           when 'e'
-            if nc?('n') && nc?('d') && !idr_part_or_end?(peek_nextch)
+            if nc?('n') && nc?('d') && !ident_part_or_end?(peek_nextch)
               nextch
               nest -= 1
             end
           when 'f'
-            if nc?('o') && nc?('r') && !idr_part_or_end?(peek_nextch)
+            if nc?('o') && nc?('r') && !ident_part_or_end?(peek_nextch)
               nextch
               nest += 1
             end
           when 'i'
-            if nc?('f') && !idr_part_or_end?(peek_nextch)
+            if nc?('f') && !ident_part_or_end?(peek_nextch)
               nextch
               nest += 1
             end
@@ -1947,10 +2008,10 @@ module Crystal
         return @token
       end
 
-      if curch == '%' && idr_start?(peek_nextch)
+      if curch == '%' && ident_start?(peek_nextch)
         char = nextch
         start = cur_pos
-        while idr_part?(char)
+        while ident_part?(char)
           char = nextch
         end
         @token.type = :MACRO_VAR
@@ -1963,7 +2024,7 @@ module Crystal
         beginning_of_line = false
         case nextch
         when 'd'
-          if whitespace && !idr_part_or_end?(peek_nextch)
+          if whitespace && !ident_part_or_end?(peek_nextch)
             if nest == 0
               nextch
               @token.type = :MACRO_END
@@ -1976,7 +2037,7 @@ module Crystal
             end
           end
         when 'u'
-          if !delimiter_state && whitespace && nc?('m') && !idr_part_or_end?(nextch)
+          if !delimiter_state && whitespace && nc?('m') && !ident_part_or_end?(nextch)
             char = curch
             nest += 1
             whitespace = true
@@ -2014,7 +2075,7 @@ module Crystal
         when '%'
           if delimiter_state
             whitespace = false
-            break if idr_start?(peek_nextch)
+            break if ident_start?(peek_nextch)
           else
             case char = peek_nextch
             when '(', '[', '<', '{'
@@ -2022,7 +2083,7 @@ module Crystal
               delimiter_state = Token::DelimiterState.new(:string, char, closing_char, 1)
             else
               whitespace = false
-              break if idr_start?(char)
+              break if ident_start?(char)
             end
           end
         when '#'
@@ -2032,7 +2093,7 @@ module Crystal
             break
           end
         else
-          if !delimiter_state && whitespace && char == 'y' && nc?('i') && nc?('e') && nc?('l') && nc?('d') && !idr_part_or_end?(peek_nextch)
+          if !delimiter_state && whitespace && char == 'y' && nc?('i') && nc?('e') && nc?('l') && nc?('d') && !ident_part_or_end?(peek_nextch)
             yields = true
             char = curch
             whitespace = true
@@ -2042,7 +2103,7 @@ module Crystal
 
             if keyword == :macro && char.whitespace?
               old_pos = @reader.pos
-              if nc?('d') && nc?('e') && nc?('f') && !idr_part_or_end?(peek_nextch)
+              if nc?('d') && nc?('e') && nc?('f') && !ident_part_or_end?(peek_nextch)
                 char = nextch
               else
                 @reader.pos = old_pos
@@ -2095,49 +2156,49 @@ module Crystal
         if nc?('b') && nc?('s') && nc?('t') && nc?('r') && nc?('a') && nc?('c') && nc?('t') && nextch.whitespace?
           case nextch
           when 'd'
-            nc?('e') && nc?('f') && peek_not_idr_part_or_end_nextch && :abstract_def
+            nc?('e') && nc?('f') && peek_not_ident_part_or_end_nextch && :abstract_def
           when 'c'
-            nc?('l') && nc?('a') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :abstract_class
+            nc?('l') && nc?('a') && nc?('s') && nc?('s') && peek_not_ident_part_or_end_nextch && :abstract_class
           when 's'
-            nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && peek_not_idr_part_or_end_nextch && :abstract_struct
+            nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && peek_not_ident_part_or_end_nextch && :abstract_struct
           end
         end
       when 'b'
-        nc?('e') && nc?('g') && nc?('i') && nc?('n') && peek_not_idr_part_or_end_nextch && :begin
+        nc?('e') && nc?('g') && nc?('i') && nc?('n') && peek_not_ident_part_or_end_nextch && :begin
       when 'c'
         (char = nextch) && (
-          (char == 'a' && nc?('s') && nc?('e') && peek_not_idr_part_or_end_nextch && :case) ||
-          (char == 'l' && nc?('a') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :class)
+          (char == 'a' && nc?('s') && nc?('e') && peek_not_ident_part_or_end_nextch && :case) ||
+          (char == 'l' && nc?('a') && nc?('s') && nc?('s') && peek_not_ident_part_or_end_nextch && :class)
         )
       when 'd'
         (char = nextch) &&
-                ((char == 'o' && peek_not_idr_part_or_end_nextch && :do) ||
-                 (char == 'e' && nc?('f') && peek_not_idr_part_or_end_nextch && :def))
+                ((char == 'o' && peek_not_ident_part_or_end_nextch && :do) ||
+                 (char == 'e' && nc?('f') && peek_not_ident_part_or_end_nextch && :def))
       when 'f'
-        nc?('u') && nc?('n') && peek_not_idr_part_or_end_nextch && :fun
+        nc?('u') && nc?('n') && peek_not_ident_part_or_end_nextch && :fun
       when 'i'
         beginning_of_line && nc?('f') &&
           (char = nextch) && (
-            (!idr_part_or_end?(char) && :if) ||
-            (char == 'd' && nc?('e') && nc?('f') && peek_not_idr_part_or_end_nextch && :ifdef)
+            (!ident_part_or_end?(char) && :if) ||
+            (char == 'd' && nc?('e') && nc?('f') && peek_not_ident_part_or_end_nextch && :ifdef)
           )
       when 'l'
-        nc?('i') && nc?('b') && peek_not_idr_part_or_end_nextch && :lib
+        nc?('i') && nc?('b') && peek_not_ident_part_or_end_nextch && :lib
       when 'm'
         (char = nextch) && (
-          (char == 'a' && nc?('c') && nc?('r') && nc?('o') && peek_not_idr_part_or_end_nextch && :macro) ||
-          (char == 'o' && nc?('d') && nc?('u') && nc?('l') && nc?('e') && peek_not_idr_part_or_end_nextch && :module)
+          (char == 'a' && nc?('c') && nc?('r') && nc?('o') && peek_not_ident_part_or_end_nextch && :macro) ||
+          (char == 'o' && nc?('d') && nc?('u') && nc?('l') && nc?('e') && peek_not_ident_part_or_end_nextch && :module)
         )
       when 's'
-        nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && !idr_part_or_end?(peek_nextch) && nextch && :struct
+        nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && !ident_part_or_end?(peek_nextch) && nextch && :struct
       when 'u'
         nc?('n') && (char = nextch) && (
-          (char == 'i' && nc?('o') && nc?('n') && peek_not_idr_part_or_end_nextch && :union) ||
-          (beginning_of_line && char == 'l' && nc?('e') && nc?('s') && nc?('s') && peek_not_idr_part_or_end_nextch && :unless) ||
-          (beginning_of_line && char == 't' && nc?('i') && nc?('l') && peek_not_idr_part_or_end_nextch && :until)
+          (char == 'i' && nc?('o') && nc?('n') && peek_not_ident_part_or_end_nextch && :union) ||
+          (beginning_of_line && char == 'l' && nc?('e') && nc?('s') && nc?('s') && peek_not_ident_part_or_end_nextch && :unless) ||
+          (beginning_of_line && char == 't' && nc?('i') && nc?('l') && peek_not_ident_part_or_end_nextch && :until)
         )
       when 'w'
-        beginning_of_line && nc?('h') && nc?('i') && nc?('l') && nc?('e') && peek_not_idr_part_or_end_nextch && :while
+        beginning_of_line && nc?('h') && nc?('i') && nc?('l') && nc?('e') && peek_not_ident_part_or_end_nextch && :while
       else
         false
       end
@@ -2402,9 +2463,19 @@ module Crystal
       skip_space
     end
 
+    def next_token_skip_space_or_indent
+      next_token
+      skip_space_or_indent
+    end
+
     def next_token_skip_space_or_newline
       next_token
       skip_space_or_newline
+    end
+
+    def next_token_skip_space_newline_or_indent
+      next_token
+      skip_space_newline_or_indent
     end
 
     def next_token_skip_statement_end
@@ -2464,20 +2535,20 @@ module Crystal
       @reader.unsafe_decode_char_at(i)
     end
 
-    def idr_start?(char)
+    def ident_start?(char)
       char.alpha? || char == '_' || char.ord > 0x9F
     end
 
-    def idr_part?(char)
-      idr_start?(char) || char.digit? || char == '-'
+    def ident_part?(char)
+      ident_start?(char) || char.digit? || char == '-'
     end
 
-    def idr_part_or_end?(char)
-      idr_part?(char) || char == '?' || char == '!'
+    def ident_part_or_end?(char)
+      ident_part?(char) || char == '?' || char == '!'
     end
 
-    def peek_not_idr_part_or_end_nextch
-      !idr_part_or_end?(peek_nextch) && nextch
+    def peek_not_ident_part_or_end_nextch
+      !ident_part_or_end?(peek_nextch) && nextch
     end
 
     def closing_char(char = curch)
@@ -2496,14 +2567,41 @@ module Crystal
       end
     end
 
+    def skip_space_or_indent
+      while (@token.type == :SPACE || @token.type == :INDENT)
+        next_token
+      end
+    end
+
     def skip_space_or_newline
       while (@token.type == :SPACE || @token.type == :NEWLINE)
         next_token
       end
     end
 
+    def skip_space_newline_semi
+      while (@token.type == :SPACE  || @token.type == :";" || @token.type == :NEWLINE)
+        next_token
+      end
+    end
+
+    def skip_space_newline_or_indent
+      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :INDENT)
+        next_token
+      end
+    end
+
+
+    def skip_space_semi
+      while (@token.type == :SPACE || @token.type == :";")
+        next_token
+      end
+    end
+
     def skip_statement_end
-      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
+      # *TODO* verify
+      while (@token.type == :SPACE || @token.type == :";")
+      #while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
         next_token
       end
     end
