@@ -539,6 +539,7 @@ describe "String" do
 
   describe "split" do
     describe "by char" do
+      assert { "".split(',').should eq([] of String) }
       assert { "foo,bar,,baz,".split(',').should eq(["foo", "bar", "", "baz"]) }
       assert { "foo,bar,,baz".split(',').should eq(["foo", "bar", "", "baz"]) }
       assert { "foo".split(',').should eq(["foo"]) }
@@ -561,6 +562,7 @@ describe "String" do
     end
 
     describe "by string" do
+      assert { "".split(":-").should eq([] of String) }
       assert { "foo:-bar:-:-baz:-".split(":-").should eq(["foo", "bar", "", "baz"]) }
       assert { "foo:-bar:-:-baz".split(":-").should eq(["foo", "bar", "", "baz"]) }
       assert { "foo".split(":-").should eq(["foo"]) }
@@ -573,6 +575,7 @@ describe "String" do
     end
 
     describe "by regex" do
+      assert { "".split(/\n\t/).should eq([] of String) }
       assert { "foo\n\tbar\n\t\n\tbaz".split(/\n\t/).should eq(["foo", "bar", "", "baz"]) }
       assert { "foo\n\tbar\n\t\n\tbaz".split(/(?:\n\t)+/).should eq(["foo", "bar", "baz"]) }
       assert { "foo,bar".split(/,/, 1).should eq(["foo,bar"]) }
@@ -1376,6 +1379,14 @@ describe "String" do
     iter.next.should eq('a')
   end
 
+  it "gets each_char with empty string" do
+    iter = "".each_char
+    iter.next.should be_a(Iterator::Stop)
+
+    iter.rewind
+    iter.next.should be_a(Iterator::Stop)
+  end
+
   it "cycles chars" do
     "abc".each_char.cycle.take(8).join.should eq("abcabcab")
   end
@@ -1530,8 +1541,7 @@ describe "String" do
     "fo\u{0000}".compare("FO", case_insensitive: true).should eq(1)
   end
 
-  # TODO: investigate why the exception raises here isn't captured, must be a bug in the type inference phase
-  pending "raises if String.build negative capacity" do
+  it "raises if String.build negative capacity" do
     expect_raises(ArgumentError, "negative capacity") do
       String.build(-1) { }
     end
