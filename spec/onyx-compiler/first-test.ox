@@ -1,6 +1,8 @@
 
 
-puts "Let's ROCK"
+def say(s) -> puts s
+
+say "Let's ROCK"
 
 DEBUG-SEPARATOR = 47
 
@@ -25,7 +27,7 @@ alias Ptr = Pointer
 -- first comment
 a = 47  --another comment
 char = c"a"
-p "char: " + char.to_s + " (" + typeof(char).to_s + ")"
+say "char: " + char.to_s + " (" + typeof(char).to_s + ")"
 
 --| (NO LONGER) weirdly placed comment
 
@@ -39,35 +41,41 @@ the-str = "kjhgkjh" \
 if (a == 47 &&
     a != 48
 )
-    p "Yeay 47 == 47"
+    say "1"
 
-if (a == 48 &&
+if (a == 48 - 1 &&
     a != 49
 ) =>
-    p "Yeay 48 == 48"
+    say "2"
 
 if true =>
     i = 1
+
+    if (a == 48 - 1 &&
+        a != 49
+    ) =>
+        say "3"
+
     while i > 0
         i -= 1
-        if true => p "hey "; p "ho"     --  'if' expr '=>' expr ";" expr "NEWLINE"
+        if true => say "4 "; say "5"     --  'if' expr '=>' expr ";" expr "NEWLINE"
         if false =>
             -- comment after indent
-            if 47 => p "nup"
-            -- for i in 0..6 => p i.to_s; p "."
-            if 47 => p "nup"
+            if 47 => say "NO"
+            -- for i in 0..6 => p i.to_s; say "."
+            if 47 => say "NO"
         if true
             -- comment after indent
-            if 47 => p "yup"
-            -- for i in 0..6 => p i.to_s; p "."
-            if 47 => p "yup"
+            if 47 => say "6"
+            -- for i in 0..6 => p i.to_s; say "."
+            if 47 => say "7"
 
     end-while -- -while
 end
 -- if (a == 47
 --     && a != 48
 -- )
---     p "Yeay 47 == 47"
+--     say "Yeay 47 == 47"
 
 
 -- \zoo( \
@@ -84,22 +92,60 @@ end
 
 [ab, ac] = [3, 2]
 [aa, ab, ac, ad] = [1, ac, ab, 4]
-p "should be 3: " + ac.to_s
+say "should be 3: " + ac.to_s
 
 DEBUG-SEPARATOR
 
--- #pure#
+-- -#pure -#private
 def zoo(a, b, ...c I32) Str ->  -- #pure#
-    qwo = Str.new(a + b) + c.to_s
+    if true =>
+        i = 1
+
+        if (a == 1 &&
+            a != 2
+        ) =>
+            say "8"
+
+        while i > 0
+            i -= 1
+            if true => say "9 "; say "10"      -- *TODO* THIS ENDLINE IS NOT PARSED AS END!!!!!
+            if false =>
+                -- comment after indent
+                if 47 => say "NO"
+                -- for i in 0..6 => p i.to_s; say "."
+                if 47 => say "NO"
+            else
+                say "11"
+
+            if true
+                -- comment after indent
+                if 47 => say "12"
+                -- for i in 0..6 => p i.to_s; say "."
+
+                if !47 => say "NO" else => say "12"; end; if 1 => say "13"; end;
+
+                if 47 => say "14" else say "NO"; end; if 1 => say "15";
+
+                -- new idea for else syntax when symbolic style:
+
+                -- if !47 => say "nop2" *> say "yup3"; end; if 1 => say "more yup3";
+
+        end
+        -- end-while -- -while
+    end-if
+
+    qwo = (a + b).to_s + c.to_s
     (a + b).to_s + c.to_s + qwo
 end
+
+p zoo 1, 2, 3
 
 reg-ex = /foo (ya)(.*)/i
 m1 = ("asdf foo ya fdsa".match reg-ex)
 m2 = ("fda" =~ reg-ex)
 
-p "m1 = " + m1.to_s
-p "m2 = " + m2.to_s
+say "m1 = " + m1.to_s
+say "m2 = " + m2.to_s
 
 def foo(a, b, c Str) ->
     (a + b).to_s + c
@@ -111,26 +157,26 @@ def qwo(a I32, b ~I32) ->
 end
 
 def qwo2(a 'I32, b I32~) ->
-end
 
 def qwo3(a I32, b mut I32) -> Str
-end
 
 def qwo4(a I32; b I32 mut) ->
 end
 
+qwo2 1, 2
+
 n = 4747 >> 3
 n >>= 1
-p "n = " + n.to_s + " from " + 4747.to_s
--- p "n = " + $n + " from " + $4747
+say "n = " + n.to_s + " from " + 4747.to_s
+-- say "n = " + $n + " from " + $4747
 
 
 -- -- crystal style `case ref`
 -- case n
 -- when 1
---     p "is 1"
+--     say "is 1"
 -- when 2
---     p "is 2"
+--     say "is 2"
 -- else
 --     p n.to_s
 -- end
@@ -138,9 +184,9 @@ p "n = " + n.to_s + " from " + 4747.to_s
 -- -- crystal style `case`
 -- case
 -- when n == 1
---     p "is 1"
+--     say "is 1"
 -- when n == 2
---     p "is 2"
+--     say "is 2"
 -- else
 --     p n.to_s
 -- end
@@ -148,9 +194,9 @@ p "n = " + n.to_s + " from " + 4747.to_s
 -- -- onyx style 1 `case ref`
 -- case n
 --     1
---         p "is 1"
+--         say "is 1"
 --     2 =>
---         p "is 2"
+--         say "is 2"
 --     *
 --         p n.to_s
 -- end=n
@@ -158,50 +204,54 @@ p "n = " + n.to_s + " from " + 4747.to_s
 -- -- onyx style 1 `case`
 -- case
 --     n == 1
---         p "is 1"
+--         say "is 1"
 --     n == 2 =>
---         p "is 2"
+--         say "is 2"
 --     *
 --         p n.to_s
 -- end-case
 
 -- -- onyx style 2 `case ref`
 -- case n
---     1 => p "is 1"
---     2 => p "is 2"
+--     1 => say "is 1"
+--     2 => say "is 2"
 --     * => p n.to_s
 -- end-case"n"
 
 -- -- onyx style 2 `case`
 -- case
---     n == 1  => p "is 1"
---     n == 2  => p "is 2"
+--     n == 1  => say "is 1"
+--     n == 2  => say "is 2"
 --     *       => p n.to_s
 
 
 x = foo a, 2, "3"
 
--- a = (a Any, b Any) -> a.to_s; end
--- b = (a Str, _ I32, b 'Bool; c F64) -> a + " " + x; end
--- p "def lambda c"
--- c = (a ~Int32', b 'Str', c 'Int32~) -> a.to_s + b + c.to_s; end
+a = (a Any, b Any) -> a.to_s; end
+b = (a Str, _ I32, b 'Bool; c F64) ->
+    "{a} {x}" -- t"{a} {x}"
 
--- p b.call "Closured Lambda says", 1, true, 0.47
+say "def lambda c"
+c = (a ~Int32', b 'Str', c 'Int32~) -> a.to_s + b + c.to_s; end
 
+p b.call "Closured Lambda says", 1, true, 0.47
+-- p b "2 Closured Lambda says", 1, true, 0.47
+-- Str "47"
+-- str "47"
 
--- class Fn<T1, T2, T3>
--- end
+p typeof(b)
 
--- def booze1(f1 Fn< I32,Array<*>,Array<Array<Ptr<Int32>>> >, f2 Fn<Str, Nil, Array<Bool>>) ->
--- end
+class Fn<T1, T2, T3>
 
--- p "Array<Array<Ptr<Int32>>>> => " + Array<Array<Ptr<Int32>>>.to_s
+def booze1(f1 Fn< I32,Array<*>,Array<Array<Ptr<Int32>>> >, f2 Fn<Str, Nil, Array<Bool>>) ->
 
--- def booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
--- end
+say "Array<Array<Ptr<Int32>>>> => " + Array<Array<Ptr<Int32>>>.to_s
 
--- def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
--- end
+def booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
+end
+
+def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
+end
 
 
 -- -- a-closure-lambda1 = \[&i,v](a, b) -> do-shit(a, b, @i, @v)
@@ -215,4 +265,4 @@ x = foo a, 2, "3"
 --     foo 47, 42, 13
 -- end
 
-puts "All DOWN AND OUT"
+say "All DOWN AND OUT"
