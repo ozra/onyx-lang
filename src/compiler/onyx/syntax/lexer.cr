@@ -97,6 +97,10 @@ module Crystal
 
       when '\n'
         nextch
+
+        back_line =  @line_number
+        back_col = @column_number
+
         @line_number += 1
         @column_number = 1
 
@@ -111,19 +115,28 @@ module Crystal
 
         if curch == '\n'
           #p "Got a new :NEWLINE - leave to next lap"
-          return next_token
+          ret = next_token
+          ret.line_number = back_line
+          ret.column_number = back_col
+          return ret
 
         elsif curch == '-' && peek_nextch == '-'   # a comment
           # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
           # ONLY DOC–COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
           # (ALL COMMENTS INDENT FORMING ATM!)
           unless @comments_enabled
+            p "comments not enabled, continue"
             skip_comment
-            return next_token
+            ret = next_token
+            ret.line_number = back_line
+            ret.column_number = back_col
+            return ret
           end
         else
           gotten_indent = cur_pos - start - 1
 
+          #p "@paren_nest = #{@paren_nest}"
+          p "gotten indent = #{gotten_indent}, current = #{@indent}"
           if gotten_indent != @indent  && @paren_nest == 0
             @token.value = gotten_indent
             if gotten_indent > @indent
@@ -133,12 +146,19 @@ module Crystal
               @token.type = :DEDENT
               #p "made :DEDENT token (" + @token.value.to_s + ")"
             end
-            @token_location = Location.new @line_number, 1, @filename # *TODO* this one doesn't seem to take!
+            #@token.location = Location.new @line_number, 1, @filename # *TODO* this one doesn't seem to take!
             @column_number = gotten_indent + 1
             @indent = gotten_indent
+
+            @token.line_number = back_line
+            @token.column_number = back_col
+
             return @token
           end
         end
+
+        @token.line_number = back_line
+        @token.column_number = back_col
 
         @token.type = :NEWLINE
         reset_regex_flags = false
@@ -150,6 +170,7 @@ module Crystal
         else
           raise "expected '\\n' after '\\r'"
         end
+
 
 
 
@@ -750,6 +771,9 @@ module Crystal
           case nextch
           when 'd'
 
+            # *TODO* - make all these into symbols! More efficient!
+            # token.type = :end_token, token.value = :end_maddafakk
+
             # *TODO* verify - "end" needs to be string like the other loosely lexed end–tokens...
 
             return check_ident_or_keyword("end", start)
@@ -1068,6 +1092,9 @@ module Crystal
       end
 
       @token
+
+    ensure
+      p "" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s
     end
 
     def token_end_location
@@ -2600,7 +2627,7 @@ module Crystal
 
     def skip_statement_end
       # *TODO* verify
-      while (@token.type == :SPACE || @token.type == :";")
+      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
       #while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
         next_token
       end
