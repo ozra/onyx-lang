@@ -1341,7 +1341,7 @@ class OnyxParser < OnyxLexer
         end
       when :require
         parse_require
-      when :case
+      when :case, :match, :branch
         parse_case
       when :if
         ret = parse_if
@@ -2548,6 +2548,7 @@ class OnyxParser < OnyxLexer
 
     dbg "parse_case"
 
+    # *TODO* depending on (match|branch|case) - the end–token should match
     add_nest :case, @indent, "", true
 
     slash_is_regex!
