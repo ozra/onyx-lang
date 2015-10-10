@@ -143,6 +143,11 @@ USAGE
         options.shift
         types
 
+
+      when "upgrade".starts_with?(tool) # a convenience util for upgrading code to refactor depreceated constructs
+        options.shift
+        stylize :upgrade
+
       when "stylize".starts_with?(tool)
         options.shift
         stylize
@@ -150,6 +155,7 @@ USAGE
       when "onyxify".starts_with?(tool)
         options.shift
         onyxify
+
 
       when "--help" == tool, "-h" == tool
         puts COMMANDS_USAGE
@@ -337,7 +343,10 @@ USAGE
     Crystal.print_types result.original_node
   end
 
-  private def stylize
+  private def stylize(how = :standard_style)
+    if how == :upgrade
+      STDERR.puts "wants to do code upgrade"
+    end
     #config, result = compile_no_codegen "tool types"
     #Crystal.print_types result.original_node
     STDERR.puts "IMPLEMENT ME!"

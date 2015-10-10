@@ -87,13 +87,36 @@ What does the current syntax draft look like?
 Status
 ------
 
-* Onyx will be considered "design stage"/pre alpha while settling it. Input (RFC's) on the syntax and language in general is **highly welcomed**!
-* The intention is that it remains in design stage until enough input and consensus
- from different developers has been acquired, to get the language in a "collectively correct
- direction".
+* Onyx is in "design stage"/alpha while settling it. Input (RFC's) on the syntax
+  and language in general is **highly welcomed**!
+* The intention is that it remains in design stage until enough input and 
+  consensus from different developers has been acquired, to get the language in
+  a "collectively correct direction".
 * Getting the syntax settled first, while leaving some semantics unimplemented
   until "safe" to implement.
 * The "core semantics language" Crystal is in alpha, close to beta.
+
+Roadmap
+-------
+
+* Nail down core syntax and semantic concepts while continually implementing syntax
+* Implement core semantics according to agreed upon
+    - PR as much as is accepted directly to Crystal code base
+* Iron out bugs and do final language tweaks
+* Onyx 1.0
+* Nail down improved concurrency syntax and semantics
+* Implement improved concurrency constructs
+    - PR as much as is accepted directly to Crystal code base
+* Onyx 1.1+
+* Improve low level aspects of language core
+    - PR as much as is accepted directly to Crystal code base:
+    - Tailor made GC for optimal throughput and lowest latency
+    - Tailor made co-routines low level code
+* Onyx 1.2+
+
+### Notes ###
+Since the low level aspects are beneficial and transparent to Crystal as well as
+Onyx, those items are not dependent on the Onyx project.
 
 Installing
 ----------
