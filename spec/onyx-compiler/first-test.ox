@@ -59,7 +59,7 @@ if true =>
     while i > 0
         i -= 1
         say "3.1" if true
-        if true 
+        if true
             say "3.2"
         if true => say "3.3"
         if true do say "3.4"
@@ -139,17 +139,19 @@ def zoo(a, b, ...c I32) Str ->  -- #pure#
             --end-while -- explicit bug to test errors
         end
         -- end-while -- -while
+
     end-if
 
-    qwo = (a + b).to_s + c.to_s
-    (a + b).to_s + c.to_s + qwo
+
+    qwo = "#{(a + b)} #{c.to_s}"
+    (a + b).to_s + " " + c.to_s + " == " + qwo
 end
 
-p zoo 1, 2, 3
+p zoo 1, 2, 47, 42
 
 reg-ex = /foo (ya)(.*)/i
-m1 = ("asdf foo ya fdsa".match reg-ex)
-m2 = ("fda" =~ reg-ex)
+m1 = "asdf foo ya fdsa".match reg-ex
+m2 = "fda" =~ reg-ex
 
 say "m1 = " + m1.to_s
 say "m2 = " + m2.to_s
@@ -165,7 +167,7 @@ end
 
 def qwo2(a 'I32, b I32~) ->
 
-def qwo3(a I32, b mut I32) -> Str
+def qwo3(a I32, b mut I32) Str -> -- Str
 
 def qwo4(a I32; b I32 mut) ->
 end
@@ -178,58 +180,118 @@ say "n = " + n.to_s + " from " + 4747.to_s
 -- say "n = " + $n + " from " + $4747
 
 
--- -- crystal style `case ref`
--- case n
--- when 1
---     say "is 1"
--- when 2
---     say "is 2"
--- else
---     p n.to_s
--- end
+-- crystal style 1 `case ref`
+case n
+when 1, 2
+    say "NOP: is 1|2"
+when 2
+    say "NOP: is 3"
+else
+    say "16:  " + n.to_s
+end
 
--- -- crystal style `case`
--- case
--- when n == 1
---     say "is 1"
--- when n == 2
---     say "is 2"
--- else
---     p n.to_s
--- end
+-- crystal style 1 `case`
+case
+when n == 1
+    say "NOP 1"
+when n == 47, n == 593
+    say "17"
+else
+    say "NOP " + n.to_s
+end
 
--- -- onyx style 1 `case ref`
--- case n
---     1
---         say "is 1"
---     2 =>
---         say "is 2"
---     *
---         p n.to_s
--- end=n
+-- crystal style 1B `case ref`
+case n
+when 1, 2
+    say "NOP: is 1|2"
+when 2
+    say "NOP: is 3"
+else
+    say "17.1:  " + n.to_s
 
--- -- onyx style 1 `case`
--- case
---     n == 1
---         say "is 1"
---     n == 2 =>
---         say "is 2"
---     *
---         p n.to_s
--- end-case
+-- crystal style 1B `case`
+case
+when n == 1
+    say "NOP 1"
+when n == 47, n == 593
+    say "17.2"
+else
+    say "NOP " + n.to_s
 
--- -- onyx style 2 `case ref`
--- case n
---     1 => say "is 1"
---     2 => say "is 2"
---     * => p n.to_s
--- end-case"n"
+-- crystal style 2 `case ref`
+case n
+    when 1, 2
+        say "NOP: is 1|2"
+    when 2
+        say "NOP: is 3"
+    else
+        say "17.3: " + n.to_s
+end
 
--- -- onyx style 2 `case`
--- case
---     n == 1  => say "is 1"
---     n == 2  => say "is 2"
---     *       => p n.to_s
+-- crystal style 2 `case`
+case
+    when n == 1
+        say "NOP 1"
+    when n == 47, n == 593
+        say "17.4"
+    else
+        say "NOP " + n.to_s
+end
+
+-- onyx style 1 `case ref`
+case n
+    593
+        say "18"
+    2 =>
+        say "NO is 2"
+    *
+        say "NO " + n.to_s
+end
+
+-- onyx style 1 `case`
+case
+    n == 1
+        say "NO is 1"
+    n == 593 =>
+        if false
+        else
+            say "19"
+    *
+        say "NO " + n.to_s
+end-case
+
+-- onyx style 2 `case ref`
+case n
+    593
+        say "19.1"
+    2 =>
+        say "NO is 2"
+    *
+        say "NO " + n.to_s
+
+-- onyx style 2 `case`
+case
+    n == 1
+        say "NO is 1"
+    n == 593 =>
+        if false
+        else
+            say "19.2"
+    *
+        say "NO " + n.to_s
+
+-- onyx style 3 `case ref`
+case n
+    1 => say "is 1"
+    2 => say "is 2"
+    * => if false => say "NO" else say "20: " + n.to_s
+end-case
+
+-- onyx style 3 `case`
+case
+    n == 593    => say "21"
+    n == 2      => say "is 2"
+    *           => say n.to_s
 
 
 x = foo a, 2, "3"
@@ -242,6 +304,7 @@ say "def lambda c"
 c = (a ~Int32', b 'Str', c 'Int32~) -> a.to_s + b + c.to_s; end
 
 p b.call "Closured Lambda says", 1, true, 0.47
+-- p b("2 Closured Lambda says", 1, true, 0.47)
 -- p b "2 Closured Lambda says", 1, true, 0.47
 -- Str "47"
 -- str "47"
