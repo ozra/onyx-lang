@@ -770,13 +770,114 @@ module Crystal
         when 'n'
           case nextch
           when 'd'
+            back_end_pos = cur_pos
+            end_token = case nextch
+            when '-', '_', '–'
+              # KVAR:
+              #   cfun cstruct cunion cenum
+              #   ctype
+              # module
+              # struct
+              # lambda
+              # macro
+              # lib union
+              # where
+              # scope scoped contain contained
+              # unless
+              # until loop
 
-            # *TODO* - make all these into symbols! More efficient!
-            # token.type = :end_token, token.value = :end_maddafakk
+              case nextch
+              when 'a'
+                if nc?('p') && nc?('i')
+                  :end_api
+                end
+              when 'b'
+                if nc?('l') && nc?('o') && nc?('c') && nc?('k')
+                  :end_block
+                end
+              when 'c'
+                case nextch
+                when 'a'
+                  case nextch
+                  when 't'
+                    if nc?('c') && nc?('h')
+                      :end_catch
+                    end
+                  when 's'
+                    if nc?('e')
+                      :end_case
+                    end
+                  end
+                when 'l'
+                  if nc?('a') && nc?('s') && nc?('s')
+                    :end_class
+                  end
+                end
+              when 'd'
+                if nc?('e') && nc?('f')
+                  :end_def
+                end
+              when 'e'
+                case nextch
+                when 'a'
+                  if nc?('c') && nc?('h')
+                    :end_each
+                  end
+                when 'n'
+                  if nc?('u') && nc?('m')
+                    :end_enum
+                  end
+                end
+              when 'f'
+                case nextch
+                when 'o'
+                  if nc?('r')
+                    :end_for
+                  end
+                when 'u'
+                  if nc?('n')
+                    :end_fun
+                  end
+                end
+              when 'i'
+                if nc?('f')
+                  if nc?('d') && nc?('e') && nc?('f')
+                    :end_ifdef
+                  else
+                    :end_if
+                  end
+                end
 
-            # *TODO* verify - "end" needs to be string like the other loosely lexed end–tokens...
+              when 't'
+                case nextch
+                when 'r'
+                  if nc?('y')
+                    :end_try
+                  end
+                when 'e'
+                  if nc?('m') && nc?('p') && nc?('l') && nc?('a') && nc?('t') && nc?('e')
+                    :end_template
+                  end
+                when 'y'
+                  if nc?('p') && nc?('e')
+                    :end_type
+                  end
+                end
+              when 'w'
+                if nc?('h') && nc?('i') && nc?('l') && nc?('e')
+                  :end_while
+                end
 
-            return check_ident_or_keyword("end", start)
+              end
+            else
+              set_pos back_end_pos
+              :end
+            end
+
+            if end_token
+              #p "ETOK: " + typeof(end_token).to_s + ", " + end_token.to_s
+              return check_ident_or_token(:END, end_token, start)
+            end
 
           when 's'
             if nc?('u') && nc?('r') && nc?('e')
@@ -1094,7 +1195,7 @@ module Crystal
       @token
 
     ensure
-      p "" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s
+      puts ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s + ")").blue
     end
 
     def token_end_location
@@ -1269,7 +1370,18 @@ module Crystal
         nextch
         @token.type = :IDENT
         @token.value = symbol
-        #p "Got IDENT '" + symbol.to_s + "' at (" + @line_number.to_s + ":" + @column_number.to_s + ")"
+      end
+      @token
+    end
+
+    def check_ident_or_token(type, symbol, start)
+      #p "check_ident_or_token, peek: '" + peek_nextch + "'"
+      if ident_part_or_end?(peek_nextch)
+        scan_ident(start)
+      else
+        nextch
+        @token.type = type
+        @token.value = symbol
       end
       @token
     end
@@ -2500,10 +2612,10 @@ module Crystal
       skip_space_or_newline
     end
 
-    def next_token_skip_space_newline_or_indent
-      next_token
-      skip_space_newline_or_indent
-    end
+    # def next_token_skip_space_newline_or_indent
+    #   next_token
+    #   skip_space_newline_or_indent
+    # end
 
     def next_token_skip_statement_end
       next_token
@@ -2606,29 +2718,27 @@ module Crystal
       end
     end
 
-    def skip_space_newline_semi
-      while (@token.type == :SPACE  || @token.type == :";" || @token.type == :NEWLINE)
-        next_token
-      end
-    end
+    # def skip_space_newline_semi
+    #   while (@token.type == :SPACE  || @token.type == :";" || @token.type == :NEWLINE)
+    #     next_token
+    #   end
+    # end
 
-    def skip_space_newline_or_indent
-      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :INDENT)
-        next_token
-      end
-    end
+    # def skip_space_newline_or_indent
+    #   while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :INDENT)
+    #     next_token
+    #   end
+    # end
 
 
-    def skip_space_semi
-      while (@token.type == :SPACE || @token.type == :";")
-        next_token
-      end
-    end
+    # def skip_space_semi
+    #   while (@token.type == :SPACE || @token.type == :";")
+    #     next_token
+    #   end
+    # end
 
     def skip_statement_end
-      # *TODO* verify
       while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
-      #while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
         next_token
       end
     end

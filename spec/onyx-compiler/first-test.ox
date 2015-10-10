@@ -58,7 +58,14 @@ if true =>
 
     while i > 0
         i -= 1
-        if true => say "4 "; say "5"     --  'if' expr '=>' expr ";" expr "NEWLINE"
+        say "3.1" if true
+        if true 
+            say "3.2"
+        if true => say "3.3"
+        if true do say "3.4"
+        if true => say "4 "; say "5"; if true then say "5.1"
+        if false => say "NO" else do say "5.2a "; say "5.3a"; if true => say "5.4a"
+        if false => else do say "5.2b "; say "5.3b"; if true => say "5.4b"
         if false =>
             -- comment after indent
             if 47 => say "NO"
@@ -129,7 +136,7 @@ def zoo(a, b, ...c I32) Str ->  -- #pure#
                 -- new idea for else syntax when symbolic style:
 
                 -- if !47 => say "nop2" *> say "yup3"; end; if 1 => say "more yup3";
-
+            --end-while -- explicit bug to test errors
         end
         -- end-while -- -while
     end-if
