@@ -239,7 +239,7 @@ case
 end
 
 -- onyx style 1 `case ref`
-case n
+match n
     593
         say "18"
     2 =>
@@ -261,7 +261,7 @@ case
 end-case
 
 -- onyx style 2 `case ref`
-case n
+branch n
     593
         say "19.1"
     2 =>
@@ -288,7 +288,7 @@ case n
 end-case
 
 -- onyx style 3 `case`
-case
+branch
     n == 593    => say "21"
     n == 2      => say "is 2"
     *           => say n.to_s
