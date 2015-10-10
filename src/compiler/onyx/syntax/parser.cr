@@ -191,7 +191,7 @@ class NestingStack
   private def pop_and_status(indent : Int32) : Symbol
     @stack.pop
 
-    if indent <= @stack.last.indent
+    if indent <= last.indent && last.require_end_token == false # *TODO* "no automatic dedent"
       #p @stack.to_s
       :more
     else
@@ -220,10 +220,13 @@ class NestingStack
         return pop_and_status indent
 
       when nest.match_end_token end_token
-        if match_name == ""
+        case
+        when match_name == ""
           return pop_and_status indent
-        elsif nest.name == match_name
+
+        when nest.name == match_name
           return pop_and_status indent
+
         else
 
           # *TODO* start–row+col för nest ska lagras så den kan returneras med error
@@ -292,7 +295,7 @@ class OnyxParser < OnyxLexer
     @def_nest = 0
     @type_nest = 0
 
-    @oneline_nest = 0
+    @one_line_nest = 0
     #@paren_nest = 0 *TODO* *TEST* in lexer now
 
     @block_arg_count = 0
@@ -302,6 +305,7 @@ class OnyxParser < OnyxLexer
     @wants_doc = false
 
     @was_just_blockend = false
+    @significant_newline = false
 
     @unclosed_stack = [] of Unclosed
     @nesting_stack = NestingStack.new
@@ -315,6 +319,49 @@ class OnyxParser < OnyxLexer
   end
 
 
+
+
+  # *TODO* RETHINK THESE GLOBAL PARSING STATES!!!!!
+
+  def skip_statement_end # redefined for parser
+    if @significant_newline
+      while (@token.type == :SPACE || @token.type == :";")
+        next_token
+      end
+    else
+      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
+        next_token
+      end
+    end
+  end
+
+  def skip_space_or_newline
+    if @significant_newline
+      while (@token.type == :SPACE)
+        next_token
+      end
+    else
+      while (@token.type == :SPACE || @token.type == :NEWLINE)
+        next_token
+      end
+    end
+  end
+
+  def unsignify_newline()
+    if @significant_newline && @one_line_nest == 0
+      @significant_newline = false
+    end
+  end
+
+  # # FUUUL LÖSNING!
+  # def next_token
+  #   was_nl = tok?(:NEWLINE)
+  #   super()
+  #   if !was_nl && !tok?(:NEWLINE)
+  #     @was_just_blockend = false
+  #   end
+  #   @token
+  # end
 
 
   def parse
@@ -333,19 +380,6 @@ class OnyxParser < OnyxLexer
   end
 
 
-
-
-  def skip_statement_end # redefined for parser
-    if @oneline_nest > 0
-      while (@token.type == :SPACE || @token.type == :";")
-        next_token
-      end
-    else
-      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
-        next_token
-      end
-    end
-  end
 
 
   def parse_expressions
@@ -388,7 +422,7 @@ class OnyxParser < OnyxLexer
         dbg "parse_expressions() break after is_end_token"
         break
 
-      elsif @oneline_nest > 0 && tok? :NEWLINE
+      elsif @one_line_nest > 0 && tok? :NEWLINE
         dbg "parse_expressions() break after online-nest newline"
         @was_just_blockend = true
         de_nest @indent, :"", ""
@@ -481,9 +515,12 @@ class OnyxParser < OnyxLexer
     #   # *TODO* this is needed for formatting tools using the AST!
     #   next_token_skip_space_or_newline
     # end
+    @was_just_blockend = false  # is for catching the suffix part..
 
     atomic = parse_op_assign
-    #dbg "parse_expression - after atomic - before suffix"
+
+    dbg "parse_expression - after atomic - before suffix - @was_just_blockend = #{@was_just_blockend}"
+
     if @was_just_blockend == false
       parse_expression_suffix atomic, location
     else
@@ -506,7 +543,7 @@ class OnyxParser < OnyxLexer
       case @token.type
       when :SPACE
         next_token
-      when :IDENT
+      when :IDFR
         case @token.value
         when :if
           atomic = parse_expression_suffix(location) { |exp| If.new(exp, atomic) }
@@ -587,24 +624,18 @@ class OnyxParser < OnyxLexer
     doc = @token.doc
     location = @token.location
 
-    # *TODO*
-    # dbg "before maybe_skip_anydents"
-    #    maybe_skip_anydents
-    # dbg "after maybe_skip_anydents"
-
     #atomic = parse_question_colon
     atomic = parse_range
-    #dbg "parse_op_assign after parse_range"
+    dbg "parse_op_assign after parse_range"
 
     while true
-      #maybe_skip_anydents
       mutate_gt_op_to_bigger_op?
 
       case @token.type
       when :SPACE
         next_token
         next
-      when :IDENT
+      when :IDFR
         break if kwd? :then, :do
 
         unexpected_token unless allow_suffix
@@ -774,7 +805,11 @@ class OnyxParser < OnyxLexer
 
   def parse_range
     location = @token.location
+
+    dbg "parse_range before parse_or"
     exp = parse_or
+    dbg "parse_range after parse_or"
+
     while true
       case @token.type
       when :".."
@@ -877,16 +912,17 @@ class OnyxParser < OnyxLexer
 
   parse_operator :pow, :atomic_with_method, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
 
-  AtomicWithMethodCheck = [:IDENT, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&", :"===", :"[]", :"[]=", :"[]?", :"!"]
+  AtomicWithMethodCheck = [:IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&", :"===", :"[]", :"[]=", :"[]?", :"!"]
 
   def parse_atomic_with_method
     location = @token.location
     atomic = parse_atomic
+
     if @was_just_blockend == false
-      #dbg "parse_atomic_with_method -> parse_atomic_method_suffix"
+      dbg "parse_atomic_with_method -> parse_atomic_method_suffix"
       parse_atomic_method_suffix atomic, location
     else
-      #dbg "parse_atomic_with_method -> NO suffix - was blockend before"
+      dbg "parse_atomic_with_method -> NO suffix - was blockend before"
       atomic
     end
   end
@@ -898,7 +934,7 @@ class OnyxParser < OnyxLexer
       case @token.type
       when :SPACE
         next_token
-      when :IDENT
+      when :IDFR
         if @token.keyword?(:as)
           check_void_value atomic, location
 
@@ -909,8 +945,8 @@ class OnyxParser < OnyxLexer
           break
         end
       when :NEWLINE
-        # If oneline nest, this means quits
-        if @oneline_nest != 0
+        # If one_line nest, this means quits
+        if @one_line_nest != 0
           break
         end
         # In these cases we don't want to chain a call
@@ -1016,7 +1052,7 @@ class OnyxParser < OnyxLexer
     elsif @token.value == :responds_to?
       atomic = parse_responds_to(atomic).at(location)
     else
-      name = @token.type == :IDENT ? @token.value.to_s : @token.type.to_s
+      name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
       end_location = token_end_location
 
       @wants_regex = false
@@ -1190,7 +1226,7 @@ class OnyxParser < OnyxLexer
         unexpected_token_in_atomic
       end
     when :"::"
-      parse_ident_or_global_call
+      parse_idfr_or_global_call
 
     #when :"->"
     #  parse_fun_literal
@@ -1254,7 +1290,7 @@ class OnyxParser < OnyxLexer
       node_and_next_token MagicConstant.expand_file_node(@token.location)
     when :__DIR__
       node_and_next_token MagicConstant.expand_dir_node(@token.location)
-    when :IDENT
+    when :IDFR
       case @token.value
       when :begin
         parse_begin
@@ -1274,7 +1310,7 @@ class OnyxParser < OnyxLexer
 
           next_token_skip_space_or_newline
           case @token.type
-          when :IDENT
+          when :IDFR
             case @token.value
             when :def
               parse_def is_abstract: true, doc: doc
@@ -1383,7 +1419,7 @@ class OnyxParser < OnyxLexer
         set_visibility parse_var_or_call
       end
     when :CONST
-      parse_ident_or_literal
+      parse_idfr_or_literal
     when :INSTANCE_VAR
       name = @token.value.to_s
       add_instance_var name
@@ -1412,8 +1448,8 @@ class OnyxParser < OnyxLexer
     #dbg "end of parse_atomic_without_location"
   end
 
-  def parse_ident_or_literal
-    ident = parse_ident
+  def parse_idfr_or_literal
+    ident = parse_idfr
     skip_space
 
     if @token.type == :"{"
@@ -1465,7 +1501,7 @@ class OnyxParser < OnyxLexer
       open("attribute") do
         next_token_skip_space_or_newline
         while @token.type != :")"
-          if @token.type == :IDENT && current_char == ':'
+          if @token.type == :IDFR && current_char == ':'
             named_args = parse_named_args(allow_newline: true)
             check :")"
             break
@@ -1558,7 +1594,7 @@ class OnyxParser < OnyxLexer
 
     end_location = token_end_location
 
-    #check_ident "end"
+    #check_idfr "end"
     #next_token_skip_space
 
     if rescues || a_ensure
@@ -1575,7 +1611,7 @@ class OnyxParser < OnyxLexer
     next_token_skip_space
 
     case @token.type
-    when :IDENT
+    when :IDFR
       name = @token.value.to_s
       add_var name
       next_token_skip_space
@@ -1610,7 +1646,7 @@ class OnyxParser < OnyxLexer
   def parse_rescue_types
     types = [] of ASTNode
     while true
-      types << parse_ident
+      types << parse_idfr
       skip_space
       if @token.type == :"|"
         next_token_skip_space
@@ -1761,7 +1797,7 @@ class OnyxParser < OnyxLexer
     next_token_skip_space_or_newline
     name_column_number = @token.column_number
 
-    name = parse_ident allow_type_vars: false
+    name = parse_idfr allow_type_vars: false
     #skip_space
 
     add_nest :type, @indent, name.to_s, false
@@ -1773,7 +1809,7 @@ class OnyxParser < OnyxLexer
 
     if @token.type == :"<<"
       next_token_skip_space_or_newline
-      superclass = parse_ident
+      superclass = parse_idfr
     end
 
 
@@ -1795,7 +1831,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_class_def - after body"
 
     end_location = body.end_location # token_end_location
-    #check_ident "end"
+    #check_idfr "end"
     #next_token_skip_space
 
     raise "Bug: ClassDef name can only be a Path" unless name.is_a?(Path)
@@ -1849,7 +1885,7 @@ class OnyxParser < OnyxLexer
     next_token_skip_space_or_newline
 
     name_column_number = @token.column_number
-    name = parse_ident allow_type_vars: false
+    name = parse_idfr allow_type_vars: false
     skip_space
 
     type_vars = parse_type_vars
@@ -2041,7 +2077,7 @@ class OnyxParser < OnyxLexer
 
       msg = String.build do |msg|
         msg << "unexpected token '|', proc literals specify their arguments like this: ->("
-        if @token.type == :IDENT
+        if @token.type == :IDFR
           msg << @token.value.to_s << " : Type"
           next_token_skip_space_or_newline
           msg << ", ..." if @token.type == :","
@@ -2062,7 +2098,7 @@ class OnyxParser < OnyxLexer
     if tok? :UNDERSCORE
       name = "tmp_47_"
     else
-      name = check_ident
+      name = check_idfr
     end
     next_token_skip_space_or_newline
 
@@ -2089,12 +2125,12 @@ class OnyxParser < OnyxLexer
     location = @token.location
 
     case @token.type
-    when :IDENT
+    when :IDFR
       name = @token.value.to_s
       next_token_skip_space
       if @token.type == :"."
         next_token_skip_space
-        second_name = check_ident
+        second_name = check_idfr
         if name != "self" && !@scope_stack.cur_has?(name)
           raise "undefined variable '#{name}'", location.line_number, location.column_number
         end
@@ -2103,10 +2139,10 @@ class OnyxParser < OnyxLexer
         next_token_skip_space
       end
     when :CONST
-      obj = parse_ident
+      obj = parse_idfr
       check :"."
       next_token_skip_space
-      name = check_ident
+      name = check_idfr
       next_token_skip_space
     else
       unexpected_token
@@ -2450,7 +2486,7 @@ class OnyxParser < OnyxLexer
   end
 
   def hash_symbol_key?
-    (@token.type == :IDENT || @token.type == :CONST) && current_char == ':' && peek_next_char != ':'
+    (@token.type == :IDFR || @token.type == :CONST) && current_char == ':' && peek_next_char != ':'
   end
 
   def parse_tuple(first_exp, location)
@@ -2510,82 +2546,127 @@ class OnyxParser < OnyxLexer
 
   def parse_case
 
+    dbg "parse_case"
 
-    # *TODO* NEXT EXITING OBJECT!
-
+    add_nest :case, @indent, "", true
 
     slash_is_regex!
-    next_token_skip_space_or_newline
-    unless @token.keyword?(:when)
+    next_token_skip_space
+
+    unless tok?(:NEWLINE, :INDENT, :DEDENT)
       cond = parse_op_assign_no_control
+      @significant_newline = true
       skip_statement_end
     end
+
+    dbg "parse_case - check block start"
+    block_kind = parse_block_start(:case)
+    if block_kind == :NIL_BLOCK
+      raise "Can't have an empty \"case\" expression. What's the point?"
+    end
+
+    free_style = block_kind == :FREE_BLOCK
 
     whens = [] of When
     a_else = nil
 
+    dbg "parse_case - before whens-loop - free_style == #{free_style}"
+
     while true
-      case @token.type
-      when :IDENT
-        case @token.value
-        when :when
+      case
+      when (free_style && tok?(:"*", :else)) || (!free_style && kwd?(:else))
+        add_nest :when, @indent, "", false
+        next_token_skip_space
+
+        if parse_block_start(:else) == :NIL_BLOCK
+          a_else = Expressions.new([Nop.new] of ASTNode)
+        else
+          if whens.size == 0
+            unexpected_token @token.to_s, "expecting when, not catch all"
+          end
           slash_is_regex!
-          next_token_skip_space_or_newline
-          when_conds = [] of ASTNode
-          while true
-            if cond && @token.type == :"."
-              next_token
-              call = parse_var_or_call(force_call: true) as Call
-              call.obj = ImplicitObj.new
-              when_conds << call
-            else
-              when_conds << parse_op_assign_no_control
-            end
-            skip_space
-            if @token.keyword?(:then)
-              next_token_skip_space_or_newline
-              break
-            else
-              slash_is_regex!
-              case @token.type
-              when :","
-                next_token_skip_space_or_newline
-              when :NEWLINE
-                skip_statement_end
-                break
-              when :";"
-                skip_statement_end
-                break
-              else
-                unexpected_token @token.to_s, "expecting ',', ';' or '\n'"
-              end
-            end
+
+          @significant_newline = false
+          #next_token_skip_statement_end
+          a_else = parse_expressions
+          skip_statement_end
+          break
+        end
+
+      # when handle_blockend #      when :END
+      #   if whens.empty?
+      #     unexpected_token @token.to_s, "expecting some branches. No point of an empty case expression."
+      #   end
+      #   next_token
+      #   break
+
+      when (free_style) || (!free_style && kwd?(:when))
+        add_nest :when, @indent, "", false
+        if kwd?(:when)
+          next_token_skip_space
+        end
+
+        slash_is_regex!
+        #next_token_skip_space_or_newline
+        when_conds = [] of ASTNode
+        while true
+          if cond && @token.type == :"."
+            next_token
+            call = parse_var_or_call(force_call: true) as Call
+            call.obj = ImplicitObj.new
+            when_conds << call
+          else
+            when_conds << parse_op_assign_no_control
           end
 
+          dbg "parse_case - parsed when_conds"
+
+          skip_space
+
+          if kwd?(:then, :do)
+            #next_token_skip_space_or_newline
+            break
+          else
+            slash_is_regex!
+            case @token.type
+            when :","
+              next_token_skip_space_or_newline
+            when :INDENT, :"=>"
+              #skip_statement_end
+              break
+            when :";"
+              skip_statement_end
+              break
+            else
+              unexpected_token @token.to_s, "expecting ',', ';' or '\n'"
+            end
+          end
+        end
+
+        if parse_block_start(:when) == :NIL_BLOCK
+          whens << When.new(when_conds, Expressions.new([Nop.new] of ASTNode))
+        else
           slash_is_regex!
+
+          #*TODO* we need some kind of extra flag on 'case' - it shouldn't be
+          # popped when case is (ind case == ind when)
+
           when_body = parse_expressions
           skip_statement_end
           whens << When.new(when_conds, when_body)
-        when :else
-          if whens.size == 0
-            unexpected_token @token.to_s, "expecting when"
-          end
-          slash_is_regex!
-          next_token_skip_statement_end
-          a_else = parse_expressions
-          skip_statement_end
-          check :END
-          next_token
-          break
-          unexpected_token @token.to_s, "expecting when, else or end"
         end
-      when :END
-        if whens.empty?
-          unexpected_token @token.to_s, "expecting when, else or end"
-        end
-        next_token
+
+      when tok? :DEDENT
+        handle_blockend
         break
+
+      when !free_style
+        handle_blockend
+        break
+        #*TODO* when 'WHEN'-mode, this is considered dedent
+
       else
+        # can this happen?
         unexpected_token @token.to_s, "expecting when, else or end"
       end
     end
@@ -2611,7 +2692,7 @@ class OnyxParser < OnyxLexer
       name.end_location = token_end_location
       next_token_skip_space
     else
-      name = parse_ident
+      name = parse_idfr
     end
 
     klass.new name
@@ -2689,7 +2770,7 @@ class OnyxParser < OnyxLexer
     name_line_number = @token.line_number
     name_column_number = @token.column_number
 
-    name = check_ident
+    name = check_idfr
     next_token_skip_space
 
     args = [] of Arg
@@ -2726,7 +2807,7 @@ class OnyxParser < OnyxLexer
         index += 1
       end
       next_token
-    when :IDENT, :"..." # *TODO* verify - was "*"
+    when :IDFR, :"..." # *TODO* verify - was "*"
       while @token.type != :NEWLINE && @token.type != :";"
         extras = parse_arg(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
         if !found_default_value && extras.default_value
@@ -2872,7 +2953,7 @@ class OnyxParser < OnyxLexer
     case @token.type
     when :END
       return nil
-    when :IDENT
+    when :IDFR
       case @token.value
       when :for
         next_token_skip_space
@@ -2880,7 +2961,7 @@ class OnyxParser < OnyxLexer
         vars = [] of Var
 
         while true
-          vars << Var.new(check_ident).at(@token.location)
+          vars << Var.new(check_idfr).at(@token.location)
 
           next_token_skip_space
           if @token.type == :","
@@ -2890,7 +2971,7 @@ class OnyxParser < OnyxLexer
           end
         end
 
-        check_ident :in
+        check_idfr :in
         next_token_skip_space
 
         exp = parse_expression_inside_macro
@@ -2961,7 +3042,7 @@ class OnyxParser < OnyxLexer
         next_token_skip_space
         check :"%}"
       end
-    elsif @token.type == :IDENT
+    elsif @token.type == :IDFR
       case @token.value
       when :else
         next_token_skip_space
@@ -3009,7 +3090,7 @@ class OnyxParser < OnyxLexer
     exp
   end
 
-  DefOrMacroCheck1 = [:IDENT, :CONST, :"<<", :"<", :"<=", :"==", :"===", :"!=", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"~", :"%", :"&", :"|", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
+  DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"===", :"!=", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"~", :"%", :"&", :"|", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
   DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"===", :"!=", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"~", :"%", :"&", :"|", :"^", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
 
   def parse_def_helper(is_abstract = false, is_macro_def = false)
@@ -3051,8 +3132,8 @@ class OnyxParser < OnyxLexer
     end_location = token_end_location
 
     if @token.type == :CONST
-      receiver = parse_ident
-    elsif @token.type == :IDENT
+      receiver = parse_idfr
+    elsif @token.type == :IDFR
       name = @token.value.to_s
       next_token
       if tok?(:"=")
@@ -3080,7 +3161,7 @@ class OnyxParser < OnyxLexer
       end
       next_token_skip_space
 
-      if @token.type == :IDENT
+      if @token.type == :IDFR
         name = @token.value.to_s
         name_column_number = @token.column_number
         next_token
@@ -3413,7 +3494,7 @@ class OnyxParser < OnyxLexer
     # named fields
 
     case @token.type
-    when :IDENT
+    when :IDFR
       arg_name = @token.value.to_s
       uses_arg = false
     when :INSTANCE_VAR
@@ -3482,13 +3563,13 @@ class OnyxParser < OnyxLexer
     else
       dbg "parse_if_after_condition: parse then block"
       a_then = parse_expressions
-      dbg "parse_if_after_condition: after then-block - before skip_statement_end, @oneline_nest = " + @oneline_nest.to_s
+      dbg "parse_if_after_condition: after then-block - before skip_statement_end, @one_line_nest = " + @one_line_nest.to_s
       skip_statement_end
       dbg "parse_if_after_condition: after skip_statement_end"
     end
 
     a_else = nil
-    if @token.type == :IDENT
+    if @token.type == :IDFR
       dbg "parse_if_after_condition: ident - is it else or elsif?"
 
       case @token.value
@@ -3516,7 +3597,7 @@ class OnyxParser < OnyxLexer
 
     # *TODO*
     # if check_end
-    #   check_ident "end"
+    #   check_idfr "end"
     #   next_token_skip_space
     # end
 
@@ -3556,7 +3637,7 @@ class OnyxParser < OnyxLexer
 
 
     a_else = nil
-    if @token.type == :IDENT
+    if @token.type == :IDFR
       case @token.value
       when :else
         next_token_skip_statement_end
@@ -3608,7 +3689,7 @@ class OnyxParser < OnyxLexer
     when :"!"
       next_token_skip_space
       Not.new(parse_flags_atomic)
-    when :IDENT
+    when :IDFR
       str = @token.to_s
       next_token_skip_space
       Var.new(str)
@@ -3753,7 +3834,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space_or_newline
       while @token.type != :"|"
         case @token.type
-        when :IDENT
+        when :IDFR
           arg_name = @token.value.to_s
         when :UNDERSCORE
           arg_name = "_"
@@ -3811,7 +3892,7 @@ class OnyxParser < OnyxLexer
             return parse_call_block_arg(args, true)
           end
 
-          if @token.type == :IDENT && current_char == ':'
+          if @token.type == :IDFR && current_char == ':'
             named_args = parse_named_args(allow_newline: true)
 
             if call_block_arg_follows?
@@ -3873,7 +3954,7 @@ class OnyxParser < OnyxLexer
       end
     when :"{"
       return nil unless allow_curly
-    when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START, :SYMBOL_ARRAY_START, :NUMBER, :IDENT, :SYMBOL, :INSTANCE_VAR, :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX, :REGEX, :"(", :"!", :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE
+    when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START, :SYMBOL_ARRAY_START, :NUMBER, :IDFR, :SYMBOL, :INSTANCE_VAR, :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX, :REGEX, :"(", :"!", :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE
       # Nothing
     when :"..." # *TODO* verify - was :"*"
       if current_char.whitespace?
@@ -3902,7 +3983,7 @@ class OnyxParser < OnyxLexer
         return parse_call_block_arg(args, false)
       end
 
-      if @token.type == :IDENT && current_char == ':'
+      if @token.type == :IDFR && current_char == ':'
         named_args = parse_named_args
 
         if call_block_arg_follows?
@@ -3983,7 +4064,7 @@ class OnyxParser < OnyxLexer
     name = @token.value.to_s
 
     case @token.type
-    when :IDENT
+    when :IDFR
       var = Var.new(name).at(location)
       var_out = Out.new(var).at(location)
       add_var var
@@ -4008,24 +4089,24 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  def parse_ident_or_global_call
+  def parse_idfr_or_global_call
     location = @token.location
     next_token_skip_space_or_newline
 
     case @token.type
-    when :IDENT
+    when :IDFR
       set_visibility parse_var_or_call global: true
     when :CONST
-      parse_ident_after_colons(location, true, true)
+      parse_idfr_after_colons(location, true, true)
     else
       unexpected_token
     end
   end
 
-  def parse_ident(allow_type_vars = true)
+  def parse_idfr(allow_type_vars = true)
     location = @token.location
 
-    dbg "parse_ident"
+    dbg "parse_idfr"
 
     global = false
 
@@ -4038,14 +4119,14 @@ class OnyxParser < OnyxLexer
     end
 
     check :CONST
-    parse_ident_after_colons(location, global, allow_type_vars)
+    parse_idfr_after_colons(location, global, allow_type_vars)
   end
 
-  def parse_ident_after_colons(location, global, allow_type_vars)
+  def parse_idfr_after_colons(location, global, allow_type_vars)
     start_line = location.line_number
     start_column = location.column_number
 
-    dbg "parse_ident_after_colons"
+    dbg "parse_idfr_after_colons"
 
     names = [] of String
     names << @token.value.to_s
@@ -4082,7 +4163,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space
     end
 
-    dbg "eof parse_ident_after_colons"
+    dbg "eof parse_idfr_after_colons"
 
     const
   end
@@ -4288,12 +4369,12 @@ class OnyxParser < OnyxLexer
   def parse_typeunit_with_suffix(allow_primitives) : ASTNode
     dbg "parse_typeunit_with_suffix"
     # *TODO* *TYPE*
-    if @token.keyword? :SelfType
+    if kwd? :SelfType
       dbg "was 'Self'"
       type = Self.new
       next_token_skip_space
 
-    elsif @token.keyword?(:auto) || tok?(:"*")
+    elsif kwd?(:auto) || tok?(:"*")
       dbg "was 'auto'"
       type = Underscore.new       # *TODO* - we want a specific "Auto" node!
       next_token_skip_space
@@ -4337,9 +4418,9 @@ class OnyxParser < OnyxLexer
       type = parse_typeof
 
     else
-      dbg "parse_simple_type, before parse_ident"
-      type = parse_ident
-      dbg "parse_simple_type, after parse_ident"
+      dbg "parse_simple_type, before parse_idfr"
+      type = parse_idfr
+      dbg "parse_simple_type, after parse_idfr"
     end
     skip_space
     dbg "parse_simple_type, after skip_space"
@@ -4372,7 +4453,7 @@ class OnyxParser < OnyxLexer
         next_token_skip_space
       when :"."
         next_token
-        check_ident :type
+        check_idfr :type
         type = Metaclass.new(type)
         next_token_skip_space
       else
@@ -4408,7 +4489,7 @@ class OnyxParser < OnyxLexer
     dbg "next_is_mut_modifier?"
 
     #is_mut = @token.type == :"mut"
-    is_mut = @token.type == :IDENT && @token.value == "mut"
+    is_mut = @token.type == :IDFR && @token.value == "mut"
     is_mut ||= @token.type == :"~"
 
     if is_mut
@@ -4420,7 +4501,7 @@ class OnyxParser < OnyxLexer
   end
 
   def next_is_const_modifier?()
-    is_const = @token.type == :IDENT && @token.value == "const"
+    is_const = @token.type == :IDFR && @token.value == "const"
     #is_const = @token.type == :"const"
     is_const ||= @token.type == :"'"
 
@@ -4598,7 +4679,7 @@ class OnyxParser < OnyxLexer
     scope = parse_op_assign
     @stop_on_yield -= 1
     skip_space
-    check_ident :yield
+    check_idfr :yield
     parse_yield scope, location
   end
 
@@ -4688,7 +4769,7 @@ class OnyxParser < OnyxLexer
     case @token.type
     when :"@["
       parse_attribute
-    when :IDENT
+    when :IDFR
       case @token.value
       when :alias
         parse_alias
@@ -4711,7 +4792,7 @@ class OnyxParser < OnyxLexer
         unexpected_token
       end
     when :CONST
-      ident = parse_ident
+      ident = parse_idfr
       next_token_skip_space
       check :"="
       next_token_skip_space_or_newline
@@ -4743,7 +4824,7 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  IdentOrConst = [:IDENT, :CONST]
+  IdentOrConst = [:IDFR, :CONST]
 
   def parse_fun_def(require_body = false)
     doc = @token.doc
@@ -4751,13 +4832,13 @@ class OnyxParser < OnyxLexer
     push_fresh_scope if require_body
 
     next_token_skip_space_or_newline
-    name = check_ident
+    name = check_idfr
     next_token_skip_space_or_newline
 
     if @token.type == :"="
       next_token_skip_space_or_newline
       case @token.type
-      when :IDENT, :CONST
+      when :IDFR, :CONST
         real_name = @token.value.to_s
         next_token_skip_space_or_newline
       when :DELIMITER_START
@@ -4783,7 +4864,7 @@ class OnyxParser < OnyxLexer
           break
         end
 
-        if @token.type == :IDENT
+        if @token.type == :IDFR
           arg_name = @token.value.to_s
           arg_location = @token.location
 
@@ -4929,7 +5010,7 @@ class OnyxParser < OnyxLexer
 
     while true
       case @token.type
-      when :IDENT
+      when :IDFR
         case @token.value
         when :ifdef
           exps << parse_ifdef(mode: :struct_or_union)
@@ -4964,7 +5045,7 @@ class OnyxParser < OnyxLexer
 
     while @token.type == :","
       next_token_skip_space_or_newline
-      args << Arg.new(check_ident).at(@token.location)
+      args << Arg.new(check_idfr).at(@token.location)
       next_token_skip_space_or_newline
     end
 
@@ -4986,7 +5067,7 @@ class OnyxParser < OnyxLexer
 
     next_token_skip_space_or_newline
 
-    name = parse_ident allow_type_vars: false
+    name = parse_idfr allow_type_vars: false
     skip_space
 
     case @token.type
@@ -5028,7 +5109,7 @@ class OnyxParser < OnyxLexer
         arg.doc = member_doc
 
         members << arg
-      when :IDENT
+      when :IDFR
         visibility = nil
 
         case @token.value
@@ -5080,12 +5161,12 @@ class OnyxParser < OnyxLexer
   end
 
   def kwd?(token : Symbol) : Bool
-    @token.value == token && @token.type == :IDENT
+    @token.value == token && @token.type == :IDFR
   end
 
   def kwd?(* tokens : Symbol) : Bool
     tokens.each do |t|
-      return true if @token.value == t && @token.type == :IDENT
+      return true if @token.value == t && @token.type == :IDFR
     end
     false
   end
@@ -5106,7 +5187,7 @@ class OnyxParser < OnyxLexer
     when :"}", :"]", :"%}", :EOF, :DEDENT #,  :"=>"
       return true
 
-    when :IDENT
+    when :IDFR
       case @token.value
       when :do, :else, :elsif, :when, :rescue, :ensure, :then
         return true
@@ -5217,80 +5298,85 @@ class OnyxParser < OnyxLexer
   end
 
 
+
+
   def parse_block_start(kind: Symbol) : Symbol  #  = :generic
     # *TODO* we don't pass the syntax used, so a stylizer would have to look at
     # the source via "location"
 
-    if (tok?(:"=>") || kwd?(:do, :then) ||
-        (kind == :def && tok?(:"->"))
-    )
-      next_token_skip_space
+    dbg "parse_block_start"
 
-      if tok? :INDENT
-        next_token
-        :BLOCK
-      elsif tok?(:DEDENT, :NEWLINE, :END) || kwd?(:else, :elsif)
-        :NIL_BLOCK
-      else
-        # *TODO* if is_explicit_end_tok? NIL_BLOCK too!
-        @oneline_nest += 1
+
+    if ( tok?(:"=>") || kwd?(:do, :then) || (kind == :def && tok?(:"->")) )
+      dbg "parse_block_start - found explicit_starter"
+      next_token_skip_space
+      explicit_starter = true
+    else
+      explicit_starter = false
+    end
+
+    case
+    when kind == :case
+      if tok?(:NEWLINE)
+        dbg "parse_block_start - :case :NEWLINE"
+        next_token_skip_space
+        if kwd?(:when)
+          :WHEN_BLOCK
+        else
+          raise "Does this happen. Is an error right? *TODO*"
+        end
+
+      elsif tok?(:INDENT)
+        dbg "parse_block_start - :case :INDENT"
+        next_token_skip_space
+        if kwd?(:when)
+          :WHEN_BLOCK
+        else
+          :FREE_BLOCK
+        end
+
+      elsif explicit_starter
+        dbg "parse_block_start - :case explicit_starter"
+        @one_line_nest += 1
+        @significant_newline = true
         :LINE_BLOCK
+
+      else
+        dbg "parse_block_start - :case unknown"
+        raise "unexpected token, expected code-block to start"
+
       end
 
-    elsif kind == :if && tok?(:"?")
+    when kind == :if && tok?(:"?")
+      dbg "parse_block_start - :? -> TERNARY"
       next_token_skip_statement_end
       :TERNARY
 
+    when tok? :INDENT
+      dbg "parse_block_start - :INDENT"
+      next_token
+      unsignify_newline
+      :BLOCK
+
+    when tok?(:DEDENT, :NEWLINE, :END)
+      dbg "parse_block_start - :DEDENT, :NEWLINE, :END"
+      #next_token_skip_space
+      :NIL_BLOCK
+
+    when explicit_starter && kwd?(:else, :elsif)
+      dbg "parse_block_start - explicit_starter + :else|:elsif"
+      :NIL_BLOCK
+
+    when explicit_starter || kind == :else
+      dbg "parse_block_start - explicit_starter + KIND == :else"
+      @one_line_nest += 1
+      @significant_newline = true
+      :LINE_BLOCK
+
     else
-      if tok? :INDENT
-        next_token
-        :BLOCK
-      elsif tok? :NEWLINE
-        :NIL_BLOCK
-      elsif kind == :else
-        :LINE_BLOCK
-      else
-        raise "unexpected token, expected code-block to start"
-      end
-    end
-  end
-
-
-  def is_explicit_end_tok? : Bool
-    tok? :END
-  end
-
-  def add_nest(nest_kind : Symbol, indent : Int32, match_name : String, require_end_token : Bool) : Nil
-    dbg ">> ADD NESTING:   '".white + nest_kind.to_s + "'  at " + indent.to_s
-    @nesting_stack.add nest_kind, indent, match_name, require_end_token
-    dbg @nesting_stack.dbgstack.yellow
-    nil
-  end
-
-  def de_nest(indent : Int32, end_token : Symbol, match_name : String,
-              line = @token.line_number, col = @token.column_number) : Symbol
-
-    tmp_dbg_nest_indent = @nesting_stack.last.indent.to_s
-    tmp_dbg_nest_kind = @nesting_stack.last.nest_kind.to_s
-
-    ret = @nesting_stack.dedent indent, end_token, match_name
-
-    if ret.is_a? String
-      raise ret, line, col
+      raise "unexpected token, expected code-block to start"
     end
 
-    if @oneline_nest > 0
-      @oneline_nest -= 1
-    end
-
-    dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
-    dbg @nesting_stack.dbgstack.red
-
-    ret
-  end
-
-  def current_nest_indent : Int32
-    @nesting_stack.last.indent
   end
 
   def handle_blockend(known_nil_block = false : Bool) : Bool
@@ -5303,7 +5389,7 @@ class OnyxParser < OnyxLexer
       return true
 
 
-    elsif @oneline_nest == 0 # *TODO* this is semi–defunct!!
+    elsif @one_line_nest == 0 # *TODO* this is semi–defunct!!
       if tok?(:DEDENT) || (known_nil_block && tok?(:NEWLINE)) || tok?(:END)
         dbg "handle_blockend - multiline - dedent | nil-blk+nl"
         handle_definite_blockend_
@@ -5322,21 +5408,23 @@ class OnyxParser < OnyxLexer
         return true
       end
 
-      dbg "handle_blockend - try handle_oneline_blockend - oneline_nest = #{@oneline_nest}"
-      if handle_oneline_blockend
+      dbg "handle_blockend - try handle_one_line_blockend - one_line_nest = #{@one_line_nest}"
+      if handle_one_line_blockend
         @was_just_blockend = true
         return true
       end
 
-      dbg "handle_blockend - oneline - no blockend"
+      dbg "handle_blockend - one_line - no blockend"
 
       return false
     end
 
   end
 
+
+
   def handle_transition_tokens
-    dbg "handle_transition_tokens - oneline_nest = #{@oneline_nest}"
+    dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
     if kwd? :else, :elsif, :ensure, :rescue  # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
       #@was_just_blockend = true
       de_nest @indent, :"", ""
@@ -5346,19 +5434,21 @@ class OnyxParser < OnyxLexer
     return false
   end
 
-  def handle_oneline_blockend : Bool
+  def handle_one_line_blockend : Bool
     case
     when tok? :NEWLINE
-      dbg "handle_oneline_blockend NEWLINE"
+      dbg "handle_one_line_blockend NEWLINE"
       handle_definite_blockend_
+      unsignify_newline
       return true
 
     when tok? :DEDENT
-      dbg "handle_oneline_blockend DEDENT"
+      dbg "handle_one_line_blockend DEDENT"
+      unsignify_newline
       return handle_definite_blockend_
 
     when is_explicit_end_tok?
-      dbg "handle_oneline_blockend explicit END-*"
+      dbg "handle_one_line_blockend explicit END-*"
       #handle_definite_blockend_
       indent_level = @indent
       line, col = @token.line_number, @token.column_number
@@ -5367,7 +5457,7 @@ class OnyxParser < OnyxLexer
       return true
 
     else
-      dbg "handle_oneline_blockend - no blockend in sight"
+      dbg "handle_one_line_blockend - no blockend in sight"
       return false
     end
   end
@@ -5383,7 +5473,7 @@ class OnyxParser < OnyxLexer
     indent_level = @indent
 
     if tok?(:NEWLINE, :DEDENT)
-      dbg "handle_definite_blockend_: consumed NEWLINE|DEDENT"
+      dbg "handle_definite_blockend_: consumed NEWLINE|DEDENT - @significant_newline = #{@significant_newline}"
       #last_backed = backup_pos
       next_token_skip_space_or_newline
     end
@@ -5409,7 +5499,7 @@ class OnyxParser < OnyxLexer
       return false
 
     when :"more"
-      dbg "there's apparently MORE NESTINGS to pop, so we REPEAT the dedent-token in queue"
+      dbg "there's apparently MORE NESTINGS to pop, so we REPEAT the dedent-token in queue".magenta
       restore_pos backed
       @token.copy_from @temp_token
       dbg "token after restore"
@@ -5437,7 +5527,7 @@ class OnyxParser < OnyxLexer
       # is there a name–matching?
       if tok? :"="
         next_token
-        match_name = parse_ident.to_s
+        match_name = parse_idfr.to_s
         dbg "parse_explicit_end_statement - got match name '" + match_name + "'"
         next_token_skip_space
 
@@ -5457,6 +5547,45 @@ class OnyxParser < OnyxLexer
       {end_token, match_name}
   end
 
+  def is_explicit_end_tok? : Bool
+    tok? :END
+  end
+
+  def add_nest(nest_kind : Symbol, indent : Int32, match_name : String, require_end_token : Bool) : Nil
+    dbg ">> ADD NESTING:   '".white + nest_kind.to_s + "'  at " + indent.to_s
+    @nesting_stack.add nest_kind, indent, match_name, require_end_token
+    dbg @nesting_stack.dbgstack.yellow
+    nil
+  end
+
+  def de_nest(indent : Int32, end_token : Symbol, match_name : String,
+              line = @token.line_number, col = @token.column_number) : Symbol
+
+    tmp_dbg_nest_indent = @nesting_stack.last.indent.to_s
+    tmp_dbg_nest_kind = @nesting_stack.last.nest_kind.to_s
+
+    ret = @nesting_stack.dedent indent, end_token, match_name
+
+    if ret.is_a? String
+      raise ret, line, col
+    end
+
+    if @one_line_nest > 0
+      @one_line_nest -= 1
+    end
+
+    unsignify_newline
+
+    dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
+    dbg @nesting_stack.dbgstack.red
+
+    ret
+  end
+
+  def current_nest_indent : Int32
+    @nesting_stack.last.indent
+  end
+
 
   def check_void_value(exp, location)
     if exp.is_a?(ControlExpression)
@@ -5465,9 +5594,9 @@ class OnyxParser < OnyxLexer
   end
 
   def check_void_expression_keyword
-    dbg "check_void_expression_keyword"
+    #dbg "check_void_expression_keyword"
     case @token.type
-    when :IDENT
+    when :IDFR
       case @token.value
       when :break, :next, :return
         raise "void value expression", @token, @token.value.to_s.size
@@ -5487,12 +5616,12 @@ class OnyxParser < OnyxLexer
     raise "expecting token '#{value}', not '#{@token.to_s}'", @token unless @token.type == :TOKEN && @token.value == value
   end
 
-  def check_ident(value)
+  def check_idfr(value)
     raise "expecting identifier '#{value}', not '#{@token.to_s}'", @token unless @token.keyword?(value)
   end
 
-  def check_ident
-    check :IDENT
+  def check_idfr
+    check :IDFR
     @token.value.to_s
   end
 
