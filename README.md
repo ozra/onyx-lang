@@ -1,4 +1,4 @@
-Onyx - programming language
+Onyx - a practical, enjoyable, efficient programming language
 =======
 
 ## "tl;dr Summary" ##

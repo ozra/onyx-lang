@@ -27,13 +27,13 @@ alias Ptr = Pointer
 -- first comment
 a = 47  --another comment
 char = c"a"
-say "char: " + char.to_s + " (" + typeof(char).to_s + ")"
+say "char: " + char.to-s + " (" + typeof(char).to-s + ")"
 
 --| (NO LONGER) weirdly placed comment
 
 
 -- \ foo(a, b, c I32) ->
---     Str(a + b) + c.to_s
+--     Str(a + b) + c.to-s
 
 the-str = "kjhgkjh" \
     "dfghdfhgd"
@@ -69,16 +69,16 @@ if true =>
         if false =>
             -- comment after indent
             if 47 => say "NO"
-            -- for i in 0..6 => p i.to_s; say "."
+            -- for i in 0..6 => p i.to-s; say "."
             if 47 => say "NO"
         if true
             -- comment after indent
             if 47 => say "6"
-            -- for i in 0..6 => p i.to_s; say "."
+            -- for i in 0..6 => p i.to-s; say "."
             if 47 => say "7"
 
     end-while -- -while
-end
+end-if
 -- if (a == 47
 --     && a != 48
 -- )
@@ -90,7 +90,7 @@ end
 --     b, \
 --     c I32 \
 -- ) ->
---     Str.new(a + b) + c.to_s
+--     Str.new(a + b) + c.to-s
 -- end
 
 -- def ab=(v)
@@ -99,7 +99,7 @@ end
 
 [ab, ac] = [3, 2]
 [aa, ab, ac, ad] = [1, ac, ab, 4]
-say "should be 3: " + ac.to_s
+say "should be 3: " + ac.to-s
 
 DEBUG-SEPARATOR
 
@@ -119,7 +119,7 @@ def zoo(a, b, ...c I32) Str ->  -- #pure#
             if false =>
                 -- comment after indent
                 if 47 => say "NO"
-                -- for i in 0..6 => p i.to_s; say "."
+                -- for i in 0..6 => p i.to-s; say "."
                 if 47 => say "NO"
             else
                 say "11"
@@ -127,7 +127,7 @@ def zoo(a, b, ...c I32) Str ->  -- #pure#
             if true
                 -- comment after indent
                 if 47 => say "12"
-                -- for i in 0..6 => p i.to_s; say "."
+                -- for i in 0..6 => p i.to-s; say "."
 
                 if !47 => say "NO" else => say "12"; end; if 1 => say "13"; end;
 
@@ -143,8 +143,8 @@ def zoo(a, b, ...c I32) Str ->  -- #pure#
     end-if
 
 
-    qwo = "#{(a + b)} #{c.to_s}"
-    (a + b).to_s + " " + c.to_s + " == " + qwo
+    qwo = "#{(a + b)} #{c.to-s}"
+    (a + b).to-s + " " + c.to-s + " == " + qwo
 end
 
 p zoo 1, 2, 47, 42
@@ -153,11 +153,11 @@ reg-ex = /foo (ya)(.*)/i
 m1 = "asdf foo ya fdsa".match reg-ex
 m2 = "fda" =~ reg-ex
 
-say "m1 = " + m1.to_s
-say "m2 = " + m2.to_s
+say "m1 = " + m1.to-s
+say "m2 = " + m2.to-s
 
 def foo(a, b, c Str) ->
-    (a + b).to_s + c
+    (a + b).to-s + c
 
 end
 
@@ -176,7 +176,7 @@ qwo2 1, 2
 
 n = 4747 >> 3
 n >>= 1
-say "n = " + n.to_s + " from " + 4747.to_s
+say "n = " + n.to-s + " from " + 4747.to-s
 -- say "n = " + $n + " from " + $4747
 
 
@@ -187,7 +187,7 @@ when 1, 2
 when 2
     say "NOP: is 3"
 else
-    say "16:  " + n.to_s
+    say "16:  " + n.to-s
 end
 
 -- crystal style 1 `case`
@@ -197,7 +197,7 @@ when n == 1
 when n == 47, n == 593
     say "17"
 else
-    say "NOP " + n.to_s
+    say "NOP " + n.to-s
 end
 
 -- crystal style 1B `case ref`
@@ -207,7 +207,7 @@ when 1, 2
 when 2
     say "NOP: is 3"
 else
-    say "17.1:  " + n.to_s
+    say "17.1:  " + n.to-s
 
 -- crystal style 1B `case`
 case
@@ -216,7 +216,7 @@ when n == 1
 when n == 47, n == 593
     say "17.2"
 else
-    say "NOP " + n.to_s
+    say "NOP " + n.to-s
 
 -- crystal style 2 `case ref`
 case n
@@ -225,7 +225,7 @@ case n
     when 2
         say "NOP: is 3"
     else
-        say "17.3: " + n.to_s
+        say "17.3: " + n.to-s
 end
 
 -- crystal style 2 `case`
@@ -235,7 +235,7 @@ case
     when n == 47, n == 593
         say "17.4"
     else
-        say "NOP " + n.to_s
+        say "NOP " + n.to-s
 end
 
 -- onyx style 1 `case ref`
@@ -245,19 +245,19 @@ match n
     2 =>
         say "NO is 2"
     *
-        say "NO " + n.to_s
+        say "NO " + n.to-s
 end
 
 -- onyx style 1 `case`
 case
-    n == 1
+    n == 1 =>
         say "NO is 1"
     n == 593 =>
         if false
         else
             say "19"
-    *
-        say "NO " + n.to_s
+    * =>
+        say "NO " + n.to-s
 end-case
 
 -- onyx style 2 `case ref`
@@ -267,7 +267,7 @@ branch n
     2 =>
         say "NO is 2"
     *
-        say "NO " + n.to_s
+        say "NO " + n.to-s
 
 -- onyx style 2 `case`
 case
@@ -278,30 +278,42 @@ case
         else
             say "19.2"
     *
-        say "NO " + n.to_s
+        say "NO " + n.to-s
 
 -- onyx style 3 `case ref`
-case n
+match n
     1 => say "is 1"
     2 => say "is 2"
-    * => if false => say "NO" else say "20: " + n.to_s
+    * => if false => say "NO" else say "20: " + n.to-s
 end-case
 
 -- onyx style 3 `case`
 branch
     n == 593    => say "21"
     n == 2      => say "is 2"
-    *           => say n.to_s
+    *           => say n.to-s
+
+-- onyx style 4 `case ref`
+case n
+    1 do say "is 1"
+    2 then say "is 2"
+    * do if false then say "NO" else say "22: " + n.to-s
+
+-- onyx style 4 `case`
+branch
+    n == 593    then say "23"
+    n == 2      do say "is 2"
+    *           then say n.to-s
 
 
 x = foo a, 2, "3"
 
-a = (a Any, b Any) -> a.to_s; end
+a = (a Any, b Any) -> a.to-s; end
 b = (a Str, _ I32, b 'Bool; c F64) ->
     "{a} {x}" -- t"{a} {x}"
 
 say "def lambda c"
-c = (a ~Int32', b 'Str', c 'Int32~) -> a.to_s + b + c.to_s; end
+c = (a ~Int32', b 'Str', c 'Int32~) -> a.to-s + b + c.to-s
 
 p b.call "Closured Lambda says", 1, true, 0.47
 -- p b("2 Closured Lambda says", 1, true, 0.47)
@@ -315,7 +327,7 @@ class Fn<T1, T2, T3>
 
 def booze1(f1 Fn< I32,Array<*>,Array<Array<Ptr<Int32>>> >, f2 Fn<Str, Nil, Array<Bool>>) ->
 
-say "Array<Array<Ptr<Int32>>>> => " + Array<Array<Ptr<Int32>>>.to_s
+say "Array<Array<Ptr<Int32>>>> => " + Array<Array<Ptr<Int32>>>.to-s
 
 def booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 end
@@ -334,5 +346,39 @@ end
 -- def bar() ->
 --     foo 47, 42, 13
 -- end
+
+
+type Qwa
+
+type Foo << Qwa
+    @foo-a = "" --Str
+    @foo-b = 0 --I32
+
+    fn-a(a, b) -> "a: #{a}, #{b}"
+
+    def fn-b(a Str, b I32) ->
+        "b: #{a}, #{b}"
+
+    fn-c(a, b) ->
+        "c: #{a}, #{b}"
+
+    --fn-d(a Str, b I32) ->
+    fn-d(a, b) ->
+        @foo-a = a
+        @foo-b = b
+        fn-e
+
+    fn-e() -> "e: #{@foo-a}, #{@foo-b}"
+
+end-type    -- NOT MATCHED PROPERLY *TODO*
+
+foo = Foo.new
+say foo.fn-a "24 blargh", 47
+say foo.fn-b "25 blargh", 47
+say foo.fn-c "26 blargh", 47
+say foo.fn-d "27 blargh", 47
+say foo.fn-e
+
+say typeof(foo)
 
 say "All DOWN AND OUT"

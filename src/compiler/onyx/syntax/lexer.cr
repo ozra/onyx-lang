@@ -612,7 +612,7 @@ module Crystal
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
-            @token.value = string_range(start)
+            @token.value = string_range(start).tr("-–", "__")
           else
             unknown_token
           end
@@ -1449,7 +1449,7 @@ module Crystal
         nextch
       end
       @token.type = :IDFR
-      @token.value = string_range(start)
+      @token.value = string_range(start).tr("-–", "__")
       @token
     end
 
