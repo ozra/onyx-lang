@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge"><![endif]-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 1.5.2">
+<meta name="author" content="2015-10-13 13:27:48 CEST">
+<title>Onyx - a practical, enjoyable, efficient programming language</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400">
+<link rel="stylesheet" href="./asciidoctor.css">
+</head>
+<body class="article">
+<div id="header">
+<h1>Onyx - a practical, enjoyable, efficient programming language</h1>
+<div class="details">
+<span id="author" class="author">2015-10-13 13:27:48 CEST</span><br>
+</div>
+<div id="toc" class="toc">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#__tl_dr_summary">"tl;dr Summary"</a></li>
+<li><a href="#_long_version">Long Version</a></li>
+<li><a href="#_what_do_you_mean_with_scientific_approach">What do you mean with scientific approach?</a></li>
+<li><a href="#_usages">Usages?</a></li>
+<li><a href="#_relation_to_crystal">Relation to Crystal</a></li>
+<li><a href="#_inspiration">Inspiration</a></li>
+<li><a href="#_why">Why?</a></li>
+<li><a href="#_what_does_it_look_like_currently">What does it look like currently?</a></li>
+<li><a href="#_status">Status</a></li>
+<li><a href="#_roadmap">Roadmap</a>
+<ul class="sectlevel2">
+<li><a href="#_notes">Notes</a></li>
+</ul>
+</li>
+<li><a href="#_installing">Installing</a></li>
+<li><a href="#_documentation">Documentation</a></li>
+<li><a href="#_community">Community</a></li>
+<li><a href="#_contributing">Contributing</a></li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="__tl_dr_summary">"tl;dr Summary"</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><em>Enjoy writing an app that runs with trustworthy stability at speeds of C/C++
+with just the effort of scripting or writing pseudo.</em></p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_long_version">Long Version</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Use scientific findings</strong> for aspects of programming linguistics where research is available, in order to obtain:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Highest possible productivity</em> (which according to findings seem to require "enjoying the process")</p>
+</li>
+<li>
+<p>Most <em>secure functioning</em> possible produced by that effort</p>
+</li>
+<li>
+<p><em>Efficient code</em> naturally by the common patterns.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Which from current findings and interpretations means</strong>:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>Statically type-checked</em>, with inheritance, mixins, re-openable types, generics and type vars. <em>ALL types inferred</em> unless explicit annotation wanted or demanded by coder.</p>
+</li>
+<li>
+<p>A <em>terse and clear indent based syntax</em> with voluntary explicit block ends (wysiwyg + safety net).</p>
+</li>
+<li>
+<p>Both <em>alpha-style and symbol-style notation</em> offered for many constructs for starters (might change).</p>
+</li>
+<li>
+<p><em>Underscores and dashes</em> (<code>snake_case</code> and <code>dash-case</code>/<code>lisp-case</code>) are used interchangeably in identifiers per preference.</p>
+</li>
+<li>
+<p>Common constructs gets <em>terser notation</em>. Syntax for traditional constructs that are not used often in practice today gets demoted.</p>
+</li>
+<li>
+<p><em>OOP-based</em>, with functional-style coding fully possible where applicable (all of code if wished)</p>
+</li>
+<li>
+<p>Advanced and hygienic <em>templates and macros</em> to avoid boilerplate code.</p>
+</li>
+<li>
+<p><em>Compile quickly!</em> (fast turn over).</p>
+</li>
+<li>
+<p><em>Informative errors</em> - the aim is for the compiler to be able to figure out as closely as possible what you <em>likely</em> wanted and reduce debugging time.</p>
+</li>
+<li>
+<p>Compile to <em>efficient fast native code</em>.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Further</strong>:</p>
+<div class="ulist">
+<ul>
+<li>
+<p>Dead <em>simple to call C code</em> by writing bindings to it in Onyx.</p>
+</li>
+<li>
+<p>Full <em>compatibility with Crystal</em> modules - the language semantics core - (any Crystal module can be used seamlessly in the same project) to enlarge the module universe.</p>
+</li>
+<li>
+<p>During development, we&#8217;ll <em>try</em> to build "upgrade" functionality into the
+compiler to upgrade user code when syntax changes / gets depreceated. That way
+more serious code can be written without worrying about completely rewriting
+it.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_do_you_mean_with_scientific_approach">What do you mean with scientific approach?</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Well, there are very few quantitative, or otherwise, studies. So admittedly the
+statement could be seen a kind of vague.
+What is <em>not</em> meant is "highly theoretical functional lambda theory". What <em>is</em>
+meant is:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Optimize for human parsing - not computers parsing (<em>not</em> lisp syntax uniformity)</p>
+</li>
+<li>
+<p>Human languages has exceptions to rules, so common constructs should get sugar if warranted.</p>
+</li>
+<li>
+<p>A language has to work for several scenarios, be <em>elegantly out of the way when
+prototyping</em>. Be <em>lovingly tough on diciplined code</em> when demanded by coder.</p>
+</li>
+<li>
+<p>A language has to work for a wide range of coders. Any team bigger than one will
+have mixed levels of experience and requirements, while still working on the same code base.</p>
+</li>
+<li>
+<p>Any work should be enjoyable if we&#8217;re smart about being human, so also coding.</p>
+</li>
+<li>
+<p>Not every coder, nor every <em>project</em> suits the same syntactic style. There
+should be variations to suit preferences. For a given project a good style
+guideline should be set by/for teams though. But it should always be up to the
+developers. One (or even two variants) of an "official" Onyx styleguide will
+be developed via discussions. Further, some <em>named styleguides</em> will be
+developed for different scenarios, so that some uniform choices to start off
+from exists - sort of styleguide templates.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_usages">Usages?</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p><em>"Scripting"</em>: Because it compiles quickly and you don&#8217;t <em>need</em> to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.</p>
+</li>
+<li>
+<p><em>System coding</em>: Since binaries achieve speeds nearing (some times beating) C/C++, interfacing with C is dead simple, and hardening/strictening policies are available.</p>
+</li>
+<li>
+<p><em>Game coding</em>: As above.</p>
+</li>
+<li>
+<p><em>Business systems</em>: As above.</p>
+</li>
+<li>
+<p><em>Analytics and math</em>: As above.</p>
+</li>
+<li>
+<p><strong>Well, anything really</strong>, except hard real time applications (where you&#8217;d probably use C - however it is <em>fully possible</em> in Onyx)</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_relation_to_crystal">Relation to Crystal</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Onyx uses Crystal backend semantics, type inference and code generation, and as
+such it&#8217;s basically just an alternative syntax / front-end, with some additional
+semantics.
+It&#8217;s not intended as a competitor to Crystal, but rather a different approach to
+the same linguistic "core". Crystal is a fantastic project and language, the
+gripe for some of us is its "stay true to Ruby" motto, which keeps it from being
+<em>the</em> next generation language of choice, because of accumulated inconsistencies
+hindering free innovation.
+Without the effort of the Crystal team, Onyx wouldn&#8217;t be on its way <em>today</em> -
+Onyx would still be one of my countless experimental implementations that come
+to a halt and are re-iterated again and again (I coded my first <em>transpiler</em>
+[simple heuristic] to C/C++ in '99-'00, called Cython [<em>no relation to the
+project with the same name that came eight years later!</em>]).</p>
+</div>
+<div class="paragraph">
+<p><em><strong>Crystal</strong> is for those who do love the Ruby way.</em></p>
+</div>
+<div class="paragraph">
+<p><em><strong>Onyx</strong> is for those who simply want a language as fun, productive and secure as
+possible</em>. The path to this is by building on scientific studies on computer
+linguistics (<em>something strangely lacking in the community!!</em>), inspiration from
+other languages created to date, the common patterns and problems faced in
+today&#8217;s coding - and <em>that&#8217;s where <strong>you come in to the picture</strong></em>. <em>Your input is
+what will shape the language.</em>
+Because of Onyx compatibility goal with Crystal, some minor trade offs might
+have to be done, but the gains of a greater module universe, being a
+"language family", will likely be a bigger pro.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_inspiration">Inspiration</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
+Rust, Nim, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
+in an integrated way.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_why">Why?</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>You want to write code as fast as pseudo.</p>
+</li>
+<li>
+<p>You want it to compile quickly while developing.</p>
+</li>
+<li>
+<p>You want that code to execute at speeds of C/C++.</p>
+</li>
+<li>
+<p>You want to be able to increase demands and strictness on code <em>when needed</em>.</p>
+</li>
+<li>
+<p>Onyx loves you unconditionally - and so won&#8217;t imprison you; an onyx-to-crystal
+converter is one aim - so that you can opt over to that if you&#8217;d wish to for some
+reason.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_does_it_look_like_currently">What does it look like currently?</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-haskell" data-lang="haskell">-- types inherits Class by default if nothing else specified
+
+type Greeter
+    @greeting-phrase = "Greetings,"
+    -- @greeting-phrase Str = "Greetings," -- a more explicit way
+
+    init() -&gt;
+        -- do nothing - just keep defaults
+
+    init(@greeting-phrase) -&gt;
+        -- do nothing here. Sugar for assigning a member did all we need
+
+    -- above could have been written more verbose; in many different levels.
+    -- def init(greeting-phrase Str) -&gt;
+    --     @greeting-phrase = greeting-phrase
+    -- end-def
+
+    -- define a method that greets someone
+    greet-someone(who-or-what) -&gt;
+        say make-greeting who-or-what
+        -- say(make-greeting(who-or-what)) -- parentheses or juxtaposition calls
+
+    -- a method that constructs the message
+    make-greeting(who-or-what) -&gt;
+        "#{@greeting-phrase} #{who-or-what}"
+    end  -- you can explicitly end code block at will
+
+    -- All on one line works too of course:
+    -- make-greeting(who-or-what) -&gt; "#{@greeting-phrase} #{who-or-what}"
+
+end-type -- you can be even more explicit about end-tokens at will
+
+type HelloWorldishGreeter &lt;&lt; Greeter
+    @greeting-phrase = "Hello"
+end
+
+greeter = HelloWorldishGreeter "Goodbye cruel"
+greeter.greet-someone "World" --  =&gt; "Goodbye cruel World"
+-- greeter.greet_someone "World" -- separator (-|–|_) completely interchangable</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_status">Status</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Onyx is in "design stage"/alpha while settling it. Input (RFC&#8217;s) on the syntax
+and language in general is <strong>highly welcomed</strong>!</p>
+</li>
+<li>
+<p>Currently the basic first syntax ideas are implemented, it only has a few days
+of coding on it yet you see. Several keywords to do the same thing are
+available many times, until agreement on what to keep and what to ditch comes up.</p>
+</li>
+<li>
+<p>Some syntax doesn&#8217;t have semantics yet, until it gets carved deeper in the
+onyx. For example declaring func&#8217;s <code>pure</code>, <code>method</code>, <code>lenient</code>. And mutation/
+immutable modifiers on parameters and variables.</p>
+</li>
+<li>
+<p>Macros and templates syntax has not been worked on at all yet. Semantics are
+in place, thanks to Crystal.</p>
+</li>
+<li>
+<p>The "core semantics language" Crystal is in alpha, close to beta.</p>
+</li>
+<li>
+<p><strong>It will need a few more weeks of coding before it&#8217;s ready for public
+consumption, I think.</strong></p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_roadmap">Roadmap</h2>
+<div class="sectionbody">
+<div class="ulist">
+<ul>
+<li>
+<p>Nail down core syntax and semantic concepts while continually implementing syntax</p>
+</li>
+<li>
+<p>Implement core semantics according to agreed upon</p>
+<div class="ulist">
+<ul>
+<li>
+<p>PR as much as is accepted directly to Crystal code base</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Iron out bugs and do final language tweaks</p>
+</li>
+<li>
+<p>Onyx 1.0</p>
+</li>
+<li>
+<p>Nail down improved concurrency syntax and semantics</p>
+</li>
+<li>
+<p>Implement improved concurrency constructs</p>
+<div class="ulist">
+<ul>
+<li>
+<p>PR as much as is accepted directly to Crystal code base</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Onyx 1.1+</p>
+</li>
+<li>
+<p>Improve low level aspects of language core</p>
+<div class="ulist">
+<ul>
+<li>
+<p>PR as much as is accepted directly to Crystal code base:</p>
+</li>
+<li>
+<p>Tailor made GC for optimal throughput and lowest latency</p>
+</li>
+<li>
+<p>Tailor made co-routines low level code</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Onyx 1.2+</p>
+</li>
+<li>
+<p>Improve low level further by facilitating manual memory managment when wanted</p>
+<div class="ulist">
+<ul>
+<li>
+<p>for some cases, the lifespan of data and structure of code is really
+straight forward. If working with hardcore speed need / low latency code,
+being able to manually allocate and destroy data, thereby keeping the GC
+sleeping, can be very beneficial, while still being able to setup the
+non hot parts of the app utilizing the comfort and safety of GC.</p>
+</li>
+<li>
+<p>in devel mode, the GC will be used behind the scenes still, in order to be
+able to make extra checks that objects are not accessed after their
+official destruction.</p>
+</li>
+<li>
+<p>in release mode you get full on blazing speed.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Onyx 1.3+</p>
+</li>
+</ul>
+</div>
+<div class="sect2">
+<h3 id="_notes">Notes</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Since the low level aspects are beneficial and transparent to Crystal as well as
+Onyx, those items are not dependent on the Onyx project.</p>
+</li>
+<li>
+<p>Roadmap - as everything at this point - is subject to change.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_installing">Installing</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>For the time being:
+- You might want highlighter for sublime, etc: <code>git clone <a href="https://github.com/ozra/sublime-onyx.git" class="bare">https://github.com/ozra/sublime-onyx.git</a></code>
+- Install Crystal (compiler source is in crystal for a forseeable future)
+- clone repo <code>git clone <a href="https://github.com/ozra/onyx-lang.git" class="bare">https://github.com/ozra/onyx-lang.git</a></code>
+- <code>make</code>
+- Run freshly built compiler. which currently looks less then nice, in order to
+  ease the pain of 3rd-party libs, onyx source stdlib. <code>--stats</code> and <code>--verbose</code>
+  can be nice when hacking on it. Change <code>./spec/onyx-compiler/first-test.ox</code> to
+  your application main file to compile your onyx project. Use <code>release</code> command
+  instead of <code>devel</code> to compile with optimizations.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>CRYSTAL_PATH=./src \
+      .build/onyx devel --stats --verbose --link-flags "-L/opt/crystal/embedded/lib" \
+      ./spec/onyx-compiler/first-test.ox</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_documentation">Documentation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To come. For standard library, refer to Crystals docs - the lib is shared.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_community">Community</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Use "issues" for now. Add RFC&#8217;s or ideas already if you feel like it!
+Read the general [Contributing guide](<a href="https://github.com/ozra/onyx-lang/blob/master/Contributing.md" class="bare">https://github.com/ozra/onyx-lang/blob/master/Contributing.md</a>),
+(it&#8217;s very terse, you will get through it!)</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_contributing">Contributing</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Read the general [Contributing guide](<a href="https://github.com/ozra/onyx-lang/blob/master/Contributing.md" class="bare">https://github.com/ozra/onyx-lang/blob/master/Contributing.md</a>),
+(it&#8217;s very terse, you will get through it!) and then:</p>
+</div>
+<div class="paragraph">
+<p>The code base follows the same guide lines and style as Crystal - since it
+simplifies features making its way back into the Crystal project when reasonable.</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Fork it ( <a href="https://github.com/ozra/onyx-lang/fork" class="bare">https://github.com/ozra/onyx-lang/fork</a> )</p>
+</li>
+<li>
+<p>Create your feature branch (git checkout -b my-new-feature)</p>
+</li>
+<li>
+<p>Commit your changes (git commit -am 'Add some feature')</p>
+</li>
+<li>
+<p>Push to the branch (git push origin my-new-feature)</p>
+</li>
+<li>
+<p>Create a new Pull Request</p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2015-10-13 13:27:48 CEST
+</div>
+</div>
+</body>
+</html>

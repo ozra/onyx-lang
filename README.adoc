@@ -1,24 +1,16 @@
-Onyx - a practical, enjoyable, efficient programming language
-=======
+# Onyx - enjoyable, practical, efficient programming
+{docdatetime}
+:toc:
 
-## "tl;dr Summary" ##
+
+## "tl;dr Summary"
+
 _Enjoy writing an app that runs with trustworthy stability at speeds of C/C++
 with just the effort of scripting or writing pseudo._
 
-## Index ##
-- Long Version
-- What do you mean with scientific approach?
-- Usages?
-- Relation to Crystal
-- Inspiration
-- Why?
-- What does it look like currently?
-- Installing
-- Documentation
-- Community
-- Contributing
 
-## Long Version ##
+## Long Version
+
 * **Use scientific findings** for aspects of programming linguistics where research is available, in order to obtain:
     - _Highest possible productivity_ (which according to findings seem to require "enjoying the process")
     - Most _secure functioning_ possible produced by that effort
@@ -42,11 +34,13 @@ with just the effort of scripting or writing pseudo._
     more serious code can be written without worrying about completely rewriting
     it.
 
-## What do you mean with scientific approach? ##
+## What do you mean with scientific approach?
+
 Well, there are very few quantitative, or otherwise, studies. So admittedly the
 statement could be seen a kind of vague.
 What is _not_ meant is "highly theoretical functional lambda theory". What _is_
 meant is:
+
 - Optimize for human parsing - not computers parsing (_not_ lisp syntax uniformity)
 - Human languages has exceptions to rules, so common constructs should get sugar if warranted.
 - A language has to work for several scenarios, be _elegantly out of the way when
@@ -62,15 +56,17 @@ meant is:
   developed for different scenarios, so that some uniform choices to start off
   from exists - sort of styleguide templates.
 
-## Usages? ##
+## Usages?
+
 * _"Scripting"_: Because it compiles quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.
 * _System coding_: Since binaries achieve speeds nearing (some times beating) C/C++, interfacing with C is dead simple, and hardening/strictening policies are available.
 * _Game coding_: As above.
 * _Business systems_: As above.
 * _Analytics and math_: As above.
-* **Well, anything really**, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx)
+* *Well, anything really*, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx)
 
-## Relation to Crystal ##
+## Relation to Crystal
+
 Onyx uses Crystal backend semantics, type inference and code generation, and as
 such it's basically just an alternative syntax / front-end, with some additional
 semantics.
@@ -97,12 +93,12 @@ Because of Onyx compatibility goal with Crystal, some minor trade offs might
 have to be done, but the gains of a greater module universe, being a
 "language family", will likely be a bigger pro.
 
-## Inspiration ##
+## Inspiration
 Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
 Rust, Nim, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
 in an integrated way.
 
-## Why? ##
+## Why?
 
 - You want to write code as fast as pseudo.
 
@@ -116,7 +112,7 @@ in an integrated way.
 converter is one aim - so that you can opt over to that if you'd wish to for some
 reason.
 
-## What does it look like currently? ##
+## What does it look like currently?
 
 ```haskell
 
@@ -163,10 +159,10 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
 ```
 
 
-## Status ##
+## Status
 
 * Onyx is in "design stage"/alpha while settling it. Input (RFC's) on the syntax
-  and language in general is **highly welcomed**!
+  and language in general is *highly welcomed*!
 * Currently the basic first syntax ideas are implemented, it only has a few days
   of coding on it yet you see. Several keywords to do the same thing are
   available many times, until agreement on what to keep and what to ditch comes up.
@@ -179,7 +175,7 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
 * **It will need a few more weeks of coding before it's ready for public
   consumption, I think.**
 
-## Roadmap ##
+## Roadmap
 
 * Nail down core syntax and semantic concepts while continually implementing syntax
 * Implement core semantics according to agreed upon
@@ -196,8 +192,8 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
     - Tailor made co-routines low level code
 * Onyx 1.2+
 * Improve low level further by facilitating manual memory managment when wanted
-    - for many cases, the lifespan of data and structure of code is really
-      straight forward, if working with hardcore speed need / low latency code,
+    - for some cases, the lifespan of data and structure of code is really
+      straight forward. If working with hardcore speed need / low latency code,
       being able to manually allocate and destroy data, thereby keeping the GC
       sleeping, can be very beneficial, while still being able to setup the
       non hot parts of the app utilizing the comfort and safety of GC.
@@ -207,12 +203,12 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
     - in release mode you get full on blazing speed.
 * Onyx 1.3+
 
-### Notes ###
+### Notes
 - Since the low level aspects are beneficial and transparent to Crystal as well as
 Onyx, those items are not dependent on the Onyx project.
 - Roadmap - as everything at this point - is subject to change.
 
-## Installing ##
+## Installing
 
 For the time being:
 - You might want highlighter for sublime, etc: `git clone https://github.com/ozra/sublime-onyx.git`
@@ -230,17 +226,17 @@ CRYSTAL_PATH=./src \
       ./spec/onyx-compiler/first-test.ox
 ```
 
-## Documentation ##
+## Documentation
 
 To come. For standard library, refer to Crystals docs - the lib is shared.
 
-## Community ##
+## Community
 
 Use "issues" for now. Add RFC's or ideas already if you feel like it!
 Read the general [Contributing guide](https://github.com/ozra/onyx-lang/blob/master/Contributing.md),
 (it's very terse, you will get through it!)
 
-## Contributing ##
+## Contributing
 
 Read the general [Contributing guide](https://github.com/ozra/onyx-lang/blob/master/Contributing.md),
 (it's very terse, you will get through it!) and then:

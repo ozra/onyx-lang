@@ -32,7 +32,7 @@ class Crystal::Call
   end
 
   def recalculate
-    dbgx "recalculate def"
+    dbgx "recalculate call"
 
     obj = @obj
     obj_type = obj.type? if obj

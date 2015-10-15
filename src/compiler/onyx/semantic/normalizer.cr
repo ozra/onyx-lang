@@ -14,11 +14,86 @@ module Crystal
   end
 
   class Normalizer < Transformer
-    # def initialize(@program)
-    #   @dead_code = false
-    #   @current_def = nil
-    #   @exp_nest = 0
-    # end
+
+    # Convert For to expr.each*:
+    #
+    # From:
+    #
+    #     for val in list
+    #       p val
+    #     end
+    #
+    #     for val, ix in list
+    #       p val, ", ", ix
+    #     end
+    #
+    # To:
+    #
+    #     list.each do |val]
+    #       p val
+    #     end
+    #
+    #     list.each_with_index do |val, ix]
+    #       p val, ", ", ix
+    #     end
+
+    def transform(node : For) : ASTNode
+      method_name :: String
+
+      #if !(node.stepping && node.stepping != 1)
+        if (v = node.value_id) && (i = node.index_id)
+          method_name = "each_with_index"
+          block_args = [v, i]
+
+        elsif (v = node.value_id)
+          method_name = "each"
+          block_args = [v]
+
+        else
+          method_name = "each_index"
+          block_args = [node.index_id.not_nil!]
+
+        end
+
+        block = Block.new(
+          block_args,
+          node.body.transform(self).at(node.body)
+        )
+
+        result = Call.new(
+          node.iterable.transform(self),
+          method_name,
+          [] of ASTNode,
+          block
+        ).at(node)
+
+        p result.to_s
+        # dump foo.to_s
+
+      #else
+        # *TODO* create a while construct
+        # create it in a block
+
+
+        # if stepping
+        #   if stepping.is_a? NumberLiteral
+        #     if stepping.value.to_i64 > 0
+
+        #     elsif stepping.value.to_i64 < 0
+
+        #     else
+        #       raise "can't have a loop iteration step of 0!"
+        #     end
+        #   else
+        #     dynamic step
+        #   end
+        # else
+
+        # end
+      #end
+      result
+    end
+
 
     # Transform require to its source code.
     # The source code can be a Nop if the file was already required.
@@ -55,8 +130,30 @@ module Crystal
       node.raise "while requiring \"#{node.string}\": #{ex.message}"
     end
 
-    def new_temp_var
-      program.new_temp_var
-    end
   end
 end
+
+
+# @[AlwaysInline]
+# def for_increasing(begin, end, step)
+# end
+
+# @[AlwaysInline]
+# def for_increasing(begin, end)
+# end
+
+# @[AlwaysInline]
+# def for_increasing(begin, end, step)
+# end
+
+# @[AlwaysInline]
+# def for_increasing(begin, end)
+# end
+
+# @[AlwaysInline]
+# def for_runtime_direction(begin, end, step)
+# end
+
+# @[AlwaysInline]
+# def for_runtime_direction(begin, end)
+# end

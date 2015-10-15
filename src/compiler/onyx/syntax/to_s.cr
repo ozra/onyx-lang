@@ -23,6 +23,30 @@ module Crystal
     end
   end
 
+  class  ToSVisitor < Visitor
+    def visit(node : For)
+
+      # *TODO* each|for
+      @str << "for "
+
+      # *TODO* value_id, index_id or both
+
+      # node.vars.each_with_index do |var, i|
+      #   @str << ", " if i > 0
+      #   var.accept self
+      # end
+
+      @str << " in "
+      node.iterable.accept self
+      node.body.accept self
+
+      # *TODO* by|step
+
+      @str << "end"
+      false
+    end
+  end
+
   class ToOnyxSVisitor < Visitor
     def initialize(@str = StringIO.new)
       @indent = 0
@@ -507,6 +531,28 @@ module Crystal
         @str << ", " if i > 0
         value.accept self
       end
+      false
+    end
+
+    def visit(node : For)
+
+      # *TODO* each|for
+      @str << "for "
+
+      # *TODO* value_id, index_id or both
+
+      # node.vars.each_with_index do |var, i|
+      #   @str << ", " if i > 0
+      #   var.accept self
+      # end
+
+      @str << " in "
+      node.iterable.accept self
+      node.body.accept self
+
+      # *TODO* by|step
+
+      @str << "end"
       false
     end
 
