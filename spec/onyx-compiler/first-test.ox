@@ -10,6 +10,8 @@ DEBUG-SEPARATOR = 47
 — alias Any = Float64 — Any just doesn't work having atm - Object disallowed
 
 
+alias Seq = Array
+alias Map = Hash
 alias Tag = Symbol
 alias Str = String
 alias I8  = Int8
@@ -41,7 +43,7 @@ else
     alias StdReal   = F64
 end
 
-alias Nat           = StdUInt     — *TODO* Nat should have changes to methods. It's supposed to be positive only, and shifts etc. will be done with unsigned version
+alias Nat           = StdInt     — *TODO* Nat should have changes to methods. It's supposed to be positive only, and shifts etc. will be done with unsigned version
 alias Pos           = StdInt
 alias Offs          = StdInt
 alias Size          = StdInt
@@ -75,6 +77,10 @@ say "char: " + char.to-s + " (" + typeof(char).to-s + ")"
 
 the-str = "kjhgkjh" \
     "dfghdfhgd"
+
+— how about (though that's the range-exclusive operator):
+— the-str = "kjhgkjh" ...
+—     "dfghdfhgd"
 
 if (a == 47 &&
     a != 48
@@ -143,7 +149,7 @@ DEBUG-SEPARATOR
 
 — -#pure -#private
 def zoo(a, b, ...c I32) Str ->  — #pure#
-    if true =>
+    if true:
         i = 1
 
         if (a == 1 &&
@@ -579,21 +585,19 @@ say "declare a Foo type"
 
 
 type Foo[S1] << Bar
-    Self.my-foo = 47
+    Self.my-foo Int64 = 47i64
+    Self.some-other-foo 'I32 = 42
+    Self.yet-a-foo = 42
+    Self.more-foo '= 42
+    Type.RedFoo = 5
+    Type.GreenFoo = 7
 
-    — static
-    — Type
-    Self
-        some-other-foo = 42
-
-        set-foo(v) -> Self.my-foo = v
-
-        RedFoo = 5
-        GreenFoo = 7
-    end-Self
+    Class.set-foo(v) ->
+        Self.my-foo = v
 
     foo-a Str = ""
     foo-b I32 = 0
+    @foo-c I32 = 0
 
     say "Hey in Foo"
 

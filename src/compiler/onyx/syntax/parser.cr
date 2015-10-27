@@ -2092,8 +2092,7 @@ class OnyxParser < OnyxLexer
 
     add_nest :type, indent_level, name.to_s, false
 
-    *TODO* add scope??? yes?
-
+    # *TODO* add scope???
 
     type_vars = parse_type_vars
     skip_space
@@ -2120,71 +2119,140 @@ class OnyxParser < OnyxLexer
 
 
       until handle_nest_end  #tok?(:END)
+        p "in parse_type_def body loop: #{@token}"
+
+
+        # BEST TO IMPLEMENT FULL PARSE FOR EACH ROOT–CONSTRUCT OF TYPEDEF!
+
+        # *TODO*
+        # :public     - pub 
+        # :private    - rel | fam
+        # :protected  - mine
+
+
         case @token.type
+        when :IDFR
+          case @token.value
+          when :mixin
+            check_not_inside_def("can't include inside def") do
+              parse_include
+            end
+
+          when :extend
+            check_not_inside_def("can't extend inside def") do
+              parse_extend
+            end
+
+          when :template
+            # *TODO*
+            check_not_inside_def("can't define macro inside def") do
+              parse_macro # *TODO* parse_tpl_macro
+            end
+
+          when :macro
+            # *TODO*
+            check_not_inside_def("can't define macro inside def") do
+              parse_macro # *TODO* parse_run_macro
+            end
+
+          when :ifdef
+            parse_ifdef
+
+          else
+            parse_intype_def_var_or_const on_self: false
+          end
+
         when :CONST
-
-
-          BEST TO IMPLEMENT FULL PARSE FOR EACH ROOT–CONSTRUCT OF TYPEDEF!
-          p–include -> include names...
-          p–mixin -> mixin names...
-          p-variable -> Self.variable, variable, @variable
-          p–const -> Self.Const, Const, ?
-          p–method -> Self.method()->, method()->
-          p–ifdef -> ifdef–logic
-
-          if const? :Self
+          if const? :Self, :Class, :Type
+            variant = @token.value
             next_token_skip_space
 
             if ! tok? :"."
-              raise "unexpected `Self` in type definition"
+              raise "unexpected `#{variant}` in type definition. Expected following `.`"
             end
+            
+            next_token_skip_space
 
-            case @token.type
-            when :CONST
-              *TODO* add Self to the mix
-              members << parse_op_assign_no_control # parse_idfr_or_literal
+            parse_intype_def_var_or_const on_self: true
 
-            when :CLASS_VAR
-
-            when :IDFR
-              id = @token.value
-              next_token_skip_space
-              if tok
-              members << parse_typedef_classvar_or_methoddef
-
-            end
-
-
-
-
-
-        when :CONST
-          members << parse_op_assign_no_control # parse_idfr_or_literal
-
-        when :INSTANCE_VAR
-          dbg "found instance var"
-          name = @token.value.to_s
-          add_instance_var name
-          ivar = InstanceVar.new(name).at(@token.location)
-          ivar.end_location = token_end_location
-          @wants_regex = false
-          next_token_skip_space
-
-
-          # *TODO* we need to parse this whole thing differently depending on if
-          # "declarative context" or "use context"
-          if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
-            dbg "found type declaration"
-            ivar_type = parse_single_type
-            DeclareVar.new(ivar, ivar_type).at(ivar.location)
           else
-            ivar
+            parse_intype_def_var_or_const on_self: false
+
           end
 
+        when :INSTANCE_VAR
+          parse_intype_var_decl on_self: false
 
         when :CLASS_VAR
-          @wants_regex = false
-          node_and_next_token ClassVar.new(@token.value.to_s)
+          parse_intype_var_decl on_self: true
+
+        end
+
+
+
+
+
+
+        # case @token.type
+        # when :CONST
+
+        #   if const? :Self, :Class, :Type
+        #     next_token_skip_space
+
+        #     if ! tok? :"."
+        #       raise "unexpected `Self` in type definition"
+        #     end
+        #     next_token_skip_space
+
+        #     case @token.type
+        #     when :CONST
+        #       members << parse_op_assign_no_control # parse_idfr_or_literal
+
+        #     when :CLASS_VAR
+
+        #     when :IDFR
+        #       id = @token.value
+        #       next_token_skip_space
+        #       if tok
+        #       members << parse_typedef_classvar_or_methoddef
+        #     end
+
+
+
+
+        # when :CONST
+        #   members << parse_op_assign_no_control # parse_idfr_or_literal
+
+        # when :INSTANCE_VAR
+        #   dbg "found instance var"
+        #   name = @token.value.to_s
+        #   add_instance_var name
+        #   ivar = InstanceVar.new(name).at(@token.location)
+        #   ivar.end_location = token_end_location
+        #   @wants_regex = false
+        #   next_token_skip_space
+
+
+        #   # *TODO* we need to parse this whole thing differently depending on if
+        #   # "declarative context" or "use context"
+        #   if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
+        #     dbg "found type declaration"
+        #     ivar_type = parse_single_type
+        #     DeclareVar.new(ivar, ivar_type).at(ivar.location)
+        #   else
+        #     ivar
+        #   end
+
+
+        # when :CLASS_VAR
+        #   @wants_regex = false
+        #   node_and_next_token ClassVar.new(@token.value.to_s)
+
+
+
+
+        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
 
 
 
@@ -2268,9 +2336,35 @@ class OnyxParser < OnyxLexer
     class_def
   end
 
+  def parse_intype_def_var_or_const(on_self = false)
+    # *TODO* figure out if const|var - else def
+  end
 
+  def parse_intype_var_decl(on_self = false)
+    if tok? :INSTANCE_VAR
+      dbg "is instance var!"
 
+      class_var = ClassVar.new(@token.value.to_s).at(@token.location)
+      next_token_skip_space
 
+      if tok? :"="
+        next_token_skip_space_or_newline
+        value = parse_op_assign
+        class_var = Assign.new(class_var, value).at(class_var)
+      end
+
+      class_var
+
+    else # constant
+      dbg "is constant!"
+
+      # *TODO*
+      fooo_var = ClassVar.new("BAZAA").at(@token.location)
+      # *TODO*
+
+    end
+
+  end
 
 
   def parse_type_vars

@@ -1,11 +1,11 @@
-Onyx - a practical, enjoyable, efficient programming language
-=======
+# Onyx - enjoyable, practical, efficient programming #
 
 ## "tl;dr Summary" ##
 _Enjoy writing an app that runs with trustworthy stability at speeds of C/C++
-with just the effort of scripting or writing pseudo._
+with just the effort of scripting or pseudo._
 
 ## Index ##
+
 - Long Version
 - What do you mean with scientific approach?
 - Usages?
@@ -19,11 +19,11 @@ with just the effort of scripting or writing pseudo._
 - Contributing
 
 ## Long Version ##
-* **Use scientific findings** for aspects of programming linguistics where research is available, in order to obtain:
+- **Use scientific findings** for aspects of programming linguistics where research is available, in order to obtain:
     - _Highest possible productivity_ (which according to findings seem to require "enjoying the process")
     - Most _secure functioning_ possible produced by that effort
     - _Efficient code_ naturally by the common patterns.
-* **Which from current findings and interpretations means**:
+- **Which from current findings and interpretations means**:
     - _Statically type-checked_, with inheritance, mixins, re-openable types, generics and type vars. _ALL types inferred_ unless explicit annotation wanted or demanded by coder.
     - A _terse and clear indent based syntax_ with voluntary explicit block ends (wysiwyg + safety net).
         - Both _alpha-style and symbol-style notation_ offered for many constructs for starters (might change).
@@ -34,7 +34,7 @@ with just the effort of scripting or writing pseudo._
     - _Compile quickly!_ (fast turn over).
     - _Informative errors_ - the aim is for the compiler to be able to figure out as closely as possible what you _likely_ wanted and reduce debugging time.
     - Compile to _efficient fast native code_.
-* **Further**:
+- **Further**:
     - Dead _simple to call C code_ by writing bindings to it in Onyx.
     - Full _compatibility with Crystal_ modules - the language semantics core - (any Crystal module can be used seamlessly in the same project) to enlarge the module universe.
     - During development, we'll _try_ to build "upgrade" functionality into the
@@ -45,22 +45,17 @@ with just the effort of scripting or writing pseudo._
 ## What do you mean with scientific approach? ##
 Well, there are very few quantitative, or otherwise, studies. So admittedly the
 statement could be seen a kind of vague.
-What is _not_ meant is "highly theoretical functional lambda theory". What _is_
+What is _not_ meant is "highly abstract functional lambda theory". What _is_
 meant is:
+
 - Optimize for human parsing - not computers parsing (_not_ lisp syntax uniformity)
 - Human languages has exceptions to rules, so common constructs should get sugar if warranted.
 - A language has to work for several scenarios, be _elegantly out of the way when
   prototyping_. Be _lovingly tough on diciplined code_ when demanded by coder.
-- A language has to work for a wide range of coders. Any team bigger than one will
-  have mixed levels of experience and requirements, while still working on the same code base.
+- A language has to work for a wide range of coders. Any team bigger than one will have mixed levels of experience and requirements, while still working on the same code base.
 - Any work should be enjoyable if we're smart about being human, so also coding.
 - Not every coder, nor every _project_ suits the same syntactic style. There
-  should be variations to suit preferences. For a given project a good style
-  guideline should be set by/for teams though. But it should always be up to the
-  developers. One (or even two variants) of an "official" Onyx styleguide will
-  be developed via discussions. Further, some _named styleguides_ will be
-  developed for different scenarios, so that some uniform choices to start off
-  from exists - sort of styleguide templates.
+  should be variations to suit preferences. For a given project, or even parts of project, a good style guideline should be set by/for teams though. But it should always be up to the developers. One (or even two variants) of an "official" Onyx styleguide will be developed via discussions. Further, some _named styleguides_ will be developed for different scenarios, so that some uniform choices to start off from exists - sort of "styleguide templates".
 
 ## Usages? ##
 * _"Scripting"_: Because it compiles quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.
@@ -71,14 +66,11 @@ meant is:
 * **Well, anything really**, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx)
 
 ## Relation to Crystal ##
-Onyx uses Crystal backend semantics, type inference and code generation, and as
-such it's basically just an alternative syntax / front-end, with some additional
-semantics.
-It's not intended as a competitor to Crystal, but rather a different approach to
-the same linguistic "core". Crystal is a fantastic project and language, the
-gripe for some of us is its "stay true to Ruby" motto, which keeps it from being
-_the_ next generation language of choice, because of accumulated inconsistencies
-hindering free innovation.
+
+Onyx uses Crystal backend semantics, type inference and code generation, and as such it's basically just an alternative syntax / front-end, with some additional semantics.
+
+It's not intended as a competitor to Crystal, but rather a different approach to the same linguistic "core" - a complement. Crystal is a fantastic project and language, the gripe for some of us is its "stay true to Ruby" motto, which keeps it from being _the_ next generation language of choice, because of accumulated inconsistencies hindering free innovation.
+
 Without the effort of the Crystal team, Onyx wouldn't be on its way _today_ -
 Onyx would still be one of my countless experimental implementations that come
 to a halt and are re-iterated again and again (I coded my first _transpiler_
@@ -99,8 +91,7 @@ have to be done, but the gains of a greater module universe, being a
 
 ## Inspiration ##
 Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
-Rust, Nim, LiveScript, Go, Lisp, Python, C++, etc. - only "the best parts",
-in an integrated way.
+Nim, LiveScript, Go, Rust, Lisp, Erlang, Python, C++, etc. - only "the best concepts", in an integrated way.
 
 ## Why? ##
 
@@ -112,9 +103,7 @@ in an integrated way.
 
 - You want to be able to increase demands and strictness on code _when needed_.
 
-- Onyx loves you unconditionally - and so won't imprison you; an onyx-to-crystal
-converter is one aim - so that you can opt over to that if you'd wish to for some
-reason.
+- Onyx loves you unconditionally - and so won't imprison you; an onyx-to-crystal converter is one future aim - so that you can opt over to that if you'd wish to for some reason.
 
 ## What does it look like currently? ##
 
@@ -123,8 +112,8 @@ reason.
 -- types inherits Class by default if nothing else specified
 
 type Greeter
-    @greeting-phrase = "Greetings,"
-    -- @greeting-phrase Str = "Greetings," -- a more explicit way
+    greeting-phrase = "Greetings,"
+    -- greeting-phrase Str = "Greetings," -- a more explicit way
 
     init() ->
         -- do nothing - just keep defaults
@@ -148,7 +137,7 @@ type Greeter
     end  -- you can explicitly end code block at will
 
     -- All on one line works too of course:
-    -- make-greeting(who-or-what) -> "#{@greeting-phrase} #{who-or-what}"
+    -- make-greeting(who-or-what) -> "{{@greeting-phrase}} {{who-or-what}}"
 
 end-type -- you can be even more explicit about end-tokens at will
 
@@ -165,19 +154,12 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
 
 ## Status ##
 
-* Onyx is in "design stage"/alpha while settling it. Input (RFC's) on the syntax
-  and language in general is **highly welcomed**!
-* Currently the basic first syntax ideas are implemented, it only has a few days
-  of coding on it yet you see. Several keywords to do the same thing are
-  available many times, until agreement on what to keep and what to ditch comes up.
-* Some syntax doesn't have semantics yet, until it gets carved deeper in the
-  onyx. For example declaring func's `pure`, `method`, `lenient`. And mutation/
-  immutable modifiers on parameters and variables.
-* Macros and templates syntax has not been worked on at all yet. Semantics are
-  in place, thanks to Crystal.
+* Onyx is in "design stage"/"RFC stage"/alpha while settling it. Input (RFC's) on the syntax and language in general are **highly welcomed**!
+* Currently the basic first syntax ideas are implemented, it only has a few days of coding on it yet you see. Several keywords to do the same thing are available many times, until agreement on what to keep and what to ditch comes up.
+* Some syntax doesn't have semantics yet, until it gets carved deeper in the onyx. For example declaring func's `pure`, `method`, `lenient`. And mutation/immutable modifiers on parameters and variables.
+* Macros and templates syntax has not been worked on at all yet. Semantics are in place, thanks to Crystal.
 * The "core semantics language" Crystal is in alpha, close to beta.
-* **It will need a few more weeks of coding before it's ready for public
-  consumption, I think.**
+* **It will need a few more weeks of coding before it's ready for public consumption, I think.**
 
 ## Roadmap ##
 
@@ -196,34 +178,25 @@ greeter.greet-someone "World" --  => "Goodbye cruel World"
     - Tailor made co-routines low level code
 * Onyx 1.2+
 * Improve low level further by facilitating manual memory managment when wanted
-    - for many cases, the lifespan of data and structure of code is really
-      straight forward, if working with hardcore speed need / low latency code,
-      being able to manually allocate and destroy data, thereby keeping the GC
-      sleeping, can be very beneficial, while still being able to setup the
-      non hot parts of the app utilizing the comfort and safety of GC.
-    - in devel mode, the GC will be used behind the scenes still, in order to be
-      able to make extra checks that objects are not accessed after their
-      official destruction.
+    - for some cases, the lifespan of data and structure of code is really straight forward. If working with hardcore speed need / low latency code, being able to manually allocate and destroy data, thereby keeping the GC sleeping, can be very beneficial, while still being able to setup the non hot parts of the app utilizing the comfort and safety of GC.
+    - in devel mode, the GC will be used behind the scenes still, in order to be able to make extra checks that objects are not accessed after their official destruction.
     - in release mode you get full on blazing speed.
 * Onyx 1.3+
 
 ### Notes ###
-- Since the low level aspects are beneficial and transparent to Crystal as well as
-Onyx, those items are not dependent on the Onyx project.
+
+- Since the low level aspects are beneficial and transparent to Crystal as well as Onyx, those items are not dependent on the Onyx project.
 - Roadmap - as everything at this point - is subject to change.
 
 ## Installing ##
 
 For the time being:
+
 - You might want highlighter for sublime, etc: `git clone https://github.com/ozra/sublime-onyx.git`
-- Install Crystal (compiler source is in crystal for a forseeable future)
+- Install Crystal (compiler source is in crystal for easy sharing)
 - clone repo `git clone https://github.com/ozra/onyx-lang.git`
 - `make`
-- Run freshly built compiler. which currently looks less then nice, in order to
-  ease the pain of 3rd-party libs, onyx source stdlib. `--stats` and `--verbose`
-  can be nice when hacking on it. Change `./spec/onyx-compiler/first-test.ox` to
-  your application main file to compile your onyx project. Use `release` command
-  instead of `devel` to compile with optimizations.
+- Running the freshly built compiler currently looks a mouthful, in order to ease the pain of 3rd-party libs, onyx cornerstone libs ("stdlib"), etc. `--stats` and `--verbose` can be nice when hacking on it. Change `./spec/onyx-compiler/first-test.ox` to your application main file to compile your onyx project. Use `release` command instead of `devel` to compile with optimizations.
 ```
 CRYSTAL_PATH=./src \
       .build/onyx devel --stats --verbose --link-flags "-L/opt/crystal/embedded/lib" \
@@ -232,7 +205,7 @@ CRYSTAL_PATH=./src \
 
 ## Documentation ##
 
-To come. For standard library, refer to Crystals docs - the lib is shared.
+To come, focus right now is on coding the basic functionality. For standard library, refer to Crystals docs - the lib is shared.
 
 ## Community ##
 

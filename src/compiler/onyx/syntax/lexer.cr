@@ -1260,9 +1260,9 @@ module Crystal
           start = cur_pos
 
           case curch
-          when 'S'
-            if nc?('e') && nc?('l') && nc?('f')
-              return check_const_or_token(:Self, start)
+          when 'C'
+            if nc?('l') && nc?('a') && nc?('s') && nc?('s')
+              return check_const_or_token(:Class, start)
             end
           when 'I'
             if nc?('n') && nc?('t')
@@ -1271,6 +1271,14 @@ module Crystal
           when 'R'
             if nc?('e') && nc?('a') && nc?('l')
               return check_const_or_token(:Real, start)
+            end
+          when 'S'
+            if nc?('e') && nc?('l') && nc?('f')
+              return check_const_or_token(:Self, start)
+            end
+          when 'T'
+            if nc?('y') && nc?('p') && nc?('e')
+              return check_const_or_token(:Type, start)
             end
           end
 
