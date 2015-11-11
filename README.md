@@ -19,7 +19,7 @@ with just the effort of scripting or pseudo._
 - Contributing
 
 ## Long Version ##
-- **Use scientific findings** for aspects of programming linguistics where research is available, in order to obtain:
+- **Use scientific findings** for aspects of programming linguistics where research is available - focused on the human interaction and performance - in order to obtain:
     - _Highest possible productivity_ (which according to findings seem to require "enjoying the process")
     - Most _secure functioning_ possible produced by that effort
     - _Efficient code_ naturally by the common patterns.
@@ -43,19 +43,20 @@ with just the effort of scripting or pseudo._
     it.
 
 ## What do you mean with scientific approach? ##
-Well, there are very few quantitative, or otherwise, studies. So admittedly the
-statement could be seen a kind of vague.
-What is _not_ meant is "highly abstract functional lambda theory". What _is_
-meant is:
+Well, there are very few quantitative, or otherwise, studies concerning coding directly. So admittedly the statement could be seen a kind of vague.
+_The focus is on the actual performance of a human being reading and writing code to accomplish a task._
+
+What is _not_ meant is "highly abstract functional lambda theory proofs yada yada".
+
+What _is_ meant is:
 
 - Optimize for human parsing - not computers parsing (_not_ lisp syntax uniformity)
 - Human languages has exceptions to rules, so common constructs should get sugar if warranted.
-- A language has to work for several scenarios, be _elegantly out of the way when
-  prototyping_. Be _lovingly tough on diciplined code_ when demanded by coder.
-- A language has to work for a wide range of coders. Any team bigger than one will have mixed levels of experience and requirements, while still working on the same code base.
 - Any work should be enjoyable if we're smart about being human, so also coding.
-- Not every coder, nor every _project_ suits the same syntactic style. There
-  should be variations to suit preferences. For a given project, or even parts of project, a good style guideline should be set by/for teams though. But it should always be up to the developers. One (or even two variants) of an "official" Onyx styleguide will be developed via discussions. Further, some _named styleguides_ will be developed for different scenarios, so that some uniform choices to start off from exists - sort of "styleguide templates".
+- A language has to work for several scenarios, be _elegantly out of the way when prototyping_. Be _lovingly tough on diciplined code_ when demanded by coder.
+- A language has to work for a wide range of coders. Any team bigger than one will have mixed levels of experience and requirements, while still working on the same code base.
+- A bit of repeat of both above points: Not every coder, nor every _project_ suits the same syntactic style. Variations are needed to express the actual tasks of a certain implementation - DSL'ish requirements. For a given project, or even parts of project, a good style guideline should be set by/for teams. It should always be up to the developers. One (or even two variants) of an "official" Onyx styleguide will be developed via discussions. Further, some _named styleguides_ will be developed for different scenarios, so that some uniform choices to start off from exists - sort of "styleguide templates". Sticking as close as possible to them will of course facilitate collaboration.
+- Some basic syntactic aspects has been shown to be important for all humans _apt to math and coding_ (except females [!], exceptions noted) - and that is spatiality.
 
 ## Usages? ##
 * _"Scripting"_: Because it compiles quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.

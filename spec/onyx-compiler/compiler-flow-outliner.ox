@@ -1,6 +1,6 @@
-require "compiler-flow-mods/mod-one"
-require "compiler-flow-mods/mod-two"
-require "compiler-flow-mods/mod-three-in-cr"
+require "./compiler-flow-mods/mod-one"
+require "./compiler-flow-mods/mod-two"
+require "./compiler-flow-mods/mod-three-in-cr"
 
 enum Color
     Red
@@ -16,4 +16,4 @@ def do-foo(a, b Color) ->
 
 puts "Compiler Flow Outliner"
 
-do-foo 47, Blue
+do-foo 47, Color::Blue

@@ -4,8 +4,8 @@ require "../../crystal/exception"
 struct Char
   struct Reader
     def unsafe_decode_char_at(i)
-      return '\0'  if i < 0
-      return '\0'  if i > @string.bytesize
+      return '\0' if i < 0
+      return '\0' if i > @string.bytesize
       decode_char_at(i) do |code_point, width|
         code_point.chr
       end
@@ -13,11 +13,22 @@ struct Char
   end
 end
 
+ContinuationTokens = [
+  :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :"^", :"**", :"<<",
+  :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&",
+  :"==="
+]
+
 module Crystal
   class OnyxLexer
     property? doc_enabled
     property? comments_enabled
     property? count_whitespace
+    property? wants_raw
+    property? slash_is_regex
+    getter reader
+    getter token
+    getter line_number
 
     def initialize(string)
       @reader = Char::Reader.new(string)
@@ -30,11 +41,14 @@ module Crystal
       @comments_enabled = false
       @count_whitespace = false
       @slash_is_regex = true
+      @wants_raw = false
+
+
       @indent = 0
 
-      @paren_nest = 0 # *TODO* *TEST*
+      @error_stack = [] of Exception  # *TODO*
 
-      @error_stack = [] of Exception
+      @next_token_continuation_state = :AUTO
 
     end
 
@@ -43,41 +57,50 @@ module Crystal
     end
 
     def next_token
+      dbg "next_token() - curch ='#{curch.ord}'"
+      prev_type = @token.type
       reset_token
 
       start = cur_pos
 
       reset_regex_flags = true
 
-
       case curch
       when '\0'
         @token.type = :EOF
-
       when ' ', '\t'
         consume_whitespace
         reset_regex_flags = false
 
+
       when '\\'
-        #p "root level backslash"
+        # p "root level backslash"
 
         # can be:
+        # \\some-pragma             (a "pragma" / "annotation")
         # \\ # optional comment \n  (a "slash-line")
         # "foo" \\ \n "blargh"      (a "slash-line for strings" - still needed?)
 
         backed_type = @token.type
 
         nextch
-        #p "nextch after backslash = " + curch
+        start = cur_pos
+
+        # all pragmas / annotations begin with small cap latin ascii for now
+        if ('a' <= curch <= 'z')
+          return scan_pragma start
+        end
+
+        # p "nextch after backslash = " + curch
         if curch == ' ' || curch == '\t'
           consume_whitespace
         end
-        #p "curch after consume_whitespace = " + curch
+        # p "curch after consume_whitespace = " + curch
 
-        #p "skip comments"
-        skip_comment    # *TODO* skip / consume / handle_comment ??
+        # p "skip comments"
+        skip_comment # *TODO* skip / consume / handle_comment ??
 
-        #p "curch after skip_comment = " + curch
+        # p "curch after skip_comment = " + curch
         if curch == '\n'
           @line_number += 1
           @column_number = 1
@@ -88,40 +111,53 @@ module Crystal
           consume_whitespace
           reset_regex_flags = false
           @token.type = backed_type
-
         else
           unknown_token
         end
 
 
 
-
       when '\n'
+        p "Got into \\n"
         nextch
 
-        back_line =  @line_number
+        back_line = @line_number
         back_col = @column_number
 
         @line_number += 1
         @column_number = 1
 
-        # *TODO* change this so that both are allowed - but only _one of them_
-        if curch == '\t'
-          raise "Tabs (\"\\t\"/0x09) are not allowed as indentation character. If you do not agree - go to http://www.github.com/ozra/onyx-lang/issues"
-        end
-        while curch == ' '
-          nextch
-        end
-        #p "Collected pure ' '"
+        while true
+          indent_start = cur_pos - 1
 
-        if curch == '\n'
-          #p "Got a new :NEWLINE - leave to next lap"
-          ret = next_token
-          ret.line_number = back_line
-          ret.column_number = back_col
-          return ret
+          while curch == ' ' || curch == '\t'  # *TODO* add check so that BOTH don't occur in the same file!
+            nextch
+          end
 
-        elsif (curch == '-' && peek_nextch == '-') || curch == '—'   # a comment
+          if curch == '\n'
+            @line_number += 1
+            @column_number = 1
+            nextch
+
+          else
+            break
+          end
+        end
+
+        # p "Collected pure ' '"
+
+        # if curch == '\n'
+        #   p "Got a new :NEWLINE - do nothing special"
+        #   # newline again = do nothing special - no indent/dedent..
+        # #   #p "Got a new :NEWLINE - recurse to next lap"
+        # #   #ret = next_token
+        # #   # ret.line_number = back_line
+        # #   # ret.column_number = back_col
+        # #   # return ret
+        # #   p "got next newline - now we just handle it like old days"
+
+        if (curch == '-' && peek_nextch == '-') || curch == '—' # a comment
+          p "Got comment"
 
           # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
           # ONLY DOC–COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
@@ -130,28 +166,37 @@ module Crystal
           # *TODO* handle_comment??
 
           unless @comments_enabled
-            p "comments not enabled, continue"
+            # p "comments not enabled, continue"
             skip_comment
             ret = next_token
             ret.line_number = back_line
             ret.column_number = back_col
             return ret
           end
-        else
-          gotten_indent = cur_pos - start - 1
 
-          #p "@paren_nest = #{@paren_nest}"
+        else
+          gotten_indent = cur_pos - indent_start - 1
+
+          is_continuation = @next_token_continuation_state == :CONTINUATION ||
+                                    (@next_token_continuation_state == :AUTO && 
+                                      ContinuationTokens.includes?(prev_type)
+                                    )
+
+          p "is_continuation == #{is_continuation}"
+
           p "gotten indent = #{gotten_indent}, current = #{@indent}"
-          if gotten_indent != @indent  && @paren_nest == 0
+          if gotten_indent != @indent && !is_continuation
             @token.value = gotten_indent
             if gotten_indent > @indent
               @token.type = :INDENT
-              #p "made :INDENT token (" + @token.value.to_s + ")"
+
+              # p "made :INDENT token (" + @token.value.to_s + ")"
             else
               @token.type = :DEDENT
-              #p "made :DEDENT token (" + @token.value.to_s + ")"
+
+              # p "made :DEDENT token (" + @token.value.to_s + ")"
             end
-            #@token.location = Location.new @line_number, 1, @filename # *TODO* this one doesn't seem to take!
+            # @token.location = Location.new @line_number, 1, @filename # *TODO* this one doesn't seem to take!
             @column_number = gotten_indent + 1
             @indent = gotten_indent
 
@@ -169,16 +214,14 @@ module Crystal
         reset_regex_flags = false
         consume_newlines
 
+
       when '\r'
         if nc? '\n'
-          return next_token   # We don't repeat our selves for teleprinter archaic linebreak combos
+          dbg "recurse to next lap"
+          return next_token # We don't repeat our selves for teleprinter archaic linebreak combos
         else
           raise "expected '\\n' after '\\r'"
         end
-
-
-
-
 
       when '='
         case nextch
@@ -217,7 +260,7 @@ module Crystal
           when '='
             toktype_then_nextch :"<<="
           when '-'
-            here = StringIO.new(20)
+            here = MemoryIO.new(20)
 
             while true
               case char = nextch
@@ -246,7 +289,7 @@ module Crystal
             end
 
             here = here.to_s
-            delimited_pair :heredoc, here, here
+            delimited_pair :heredoc, here, here, start
           else
             @token.type = :"<<"
           end
@@ -257,18 +300,20 @@ module Crystal
         case nextch
         when '='
           toktype_then_nextch :">="
-        # when '>'  # needs to be tracked in parser now - generics or operator
-        #   case nextch
-        #   when '='
-        #     toktype_then_nextch :">>="
-        #   else
-        #     @token.type = :">>"
-        #   end
+          # when '>'  # needs to be tracked in parser now - generics or operator
+          #   case nextch
+          #   when '='
+          #     toktype_then_nextch :">>="
+#
+          #   else
+          #     @token.type = :">>"
+#
+          #   end
         else
           @token.type = :">"
         end
       when '+'
-        start = cur_pos
+        @token.start = start
         case nextch
         when '='
           toktype_then_nextch :"+="
@@ -281,8 +326,8 @@ module Crystal
         else
           @token.type = :"+"
         end
-
       when '-'
+        # @token.start = start  *TODO* look over this later addition for comment compat
         start = cur_pos
         case nextch
         when '='
@@ -294,7 +339,7 @@ module Crystal
         when '1', '2', '3', '4', '5', '6', '7', '8', '9'
           scan_number start, negative: true
         when '-'
-          #p "Got '-'"
+          # p "Got '-'"
           set_pos start # for handle_comment
           if (ret = handle_comment) == false
             raise "postfix decrement is not supported, use `exp -= 1`. Comments need a space before '--'"
@@ -306,7 +351,6 @@ module Crystal
         else
           @token.type = :"-"
         end
-
       when '—' # em–dash!
         p "got EMDASH"
         if (ret = handle_comment) == false
@@ -336,19 +380,17 @@ module Crystal
         char = nextch
         if char == '='
           toktype_then_nextch :"/="
-
-        # *TODO* change syntax for regex? `regex = //regex–contents/i`
+          # *TODO* change syntax for regex? `regex = //regex–contents/i`
         elsif @slash_is_regex
           @token.type = :DELIMITER_START
           @token.delimiter_state = Token::DelimiterState.new(:regex, '/', '/', 0)
-
+          @token.raw = "/"
         elsif char.whitespace? || char == '\0' || char == ';'
           @token.type = :"/"
-
         elsif @wants_regex
           @token.type = :DELIMITER_START
           @token.delimiter_state = Token::DelimiterState.new(:regex, '/', '/', 0)
-
+          @token.raw = "/"
         else
           @token.type = :"/"
         end
@@ -357,7 +399,7 @@ module Crystal
         when '='
           toktype_then_nextch :"%="
         when '(', '[', '{', '<'
-          delimited_pair :string, curch, closing_char
+          delimited_pair :string, curch, closing_char, start
         when 'i'
           case peek_nextch
           when '(', '{', '[', '<'
@@ -370,14 +412,14 @@ module Crystal
         when 'r'
           case nextch
           when '(', '[', '{', '<'
-            delimited_pair :regex, curch, closing_char
+            delimited_pair :regex, curch, closing_char, start
           else
             raise "unknown %r char"
           end
         when 'x'
           case nextch
           when '(', '[', '{', '<'
-            delimited_pair :command, curch, closing_char
+            delimited_pair :command, curch, closing_char, start
           else
             raise "unknown %x char"
           end
@@ -425,11 +467,9 @@ module Crystal
       when ']' then toktype_then_nextch :"]"
       when ',' then toktype_then_nextch :","
       when '?' then toktype_then_nextch :"?"
-      when ';' then
+      when ';'
         reset_regex_flags = false
         toktype_then_nextch :";"
-
-
       when ':'
         char = nextch
         case char
@@ -438,16 +478,16 @@ module Crystal
         else
           @token.type = :":"
         end
-
-
       when '~'
         case nextch
         when '>'
           toktype_then_nextch :"~>"
-
+        when '='
+          toktype_then_nextch :"~="
         else
           @token.type = :"~"
         end
+
       when '.'
         case nextch
         when '.'
@@ -457,9 +497,46 @@ module Crystal
           else
             @token.type = :".."
           end
+
+        when '^'
+          if nextch == '.'
+            case nextch
+            when '='
+              toktype_then_nextch :".^.="
+            else
+              @token.type = :".^."
+            end
+          else
+            raise "Was expecting `.^.` ('bitwise xor')"
+          end
+
+        when '|'
+          if nextch == '.'
+            if nextch == '='
+              toktype_then_nextch :".|.="
+            else
+              @token.type = :".|."
+            end
+          else
+            raise "Was expecting `.|.` ('bitwise or')"
+          end
+
+        when '&'
+          if nextch == '.'
+            if nextch == '='
+              toktype_then_nextch :".&.="
+            else
+              @token.type = :".&."
+            end
+          else
+            raise "Was expecting `.&.` ('bitwise and')"
+          end
+
         else
           @token.type = :"."
         end
+
+
       when '&'
         case nextch
         when '&'
@@ -469,11 +546,11 @@ module Crystal
           else
             @token.type = :"&&"
           end
-        when '='
-          toktype_then_nextch :"&="
         else
           @token.type = :"&"
         end
+
+
       when '|'
         case nextch
         when '|'
@@ -483,27 +560,23 @@ module Crystal
           else
             @token.type = :"||"
           end
-        when '='
-          toktype_then_nextch :"|="
         else
           @token.type = :"|"
         end
+
+
       when '^'
-        case nextch
-        when '='
-          toktype_then_nextch :"^="
-        else
-          @token.type = :"^"
-        end
+        toktype_then_nextch = :"^"
 
-      when '\''       # NOT char anymore!
+      when '\'' # NOT char anymore!
         toktype_then_nextch :"'"
-
+        set_token_raw_from_start(start) # *TODO* validate
       when '"', '`'
         delimiter = curch
         nextch
         @token.type = :DELIMITER_START
         @token.delimiter_state = Token::DelimiterState.new(delimiter == '`' ? :command : :string, delimiter, delimiter, 0)
+        set_token_raw_from_start(start)
       when '0'
         scan_zero_number(start)
       when '1', '2', '3', '4', '5', '6', '7', '8', '9'
@@ -513,10 +586,8 @@ module Crystal
         case nextch
         when '['
           toktype_then_nextch :"@["
-
         when ' ', '\n', '!' # callable (function) modifier symbol
           @token.type = :"@"
-
         else
           class_var = false
           if curch == '@'
@@ -533,7 +604,6 @@ module Crystal
             unknown_token
           end
         end
-
       when '#'
         char = nextch
         case char
@@ -642,6 +712,7 @@ module Crystal
           @token.type = :SYMBOL
           @token.value = string_range(start)
           nextch
+          set_token_raw_from_start(start - 2)
         else
           if idfr_start?(char)
             start = cur_pos
@@ -653,11 +724,11 @@ module Crystal
             end
             @token.type = :SYMBOL
             @token.value = string_range(start)
+            set_token_raw_from_start(start - 1)
           else
             @token.type = :"#"
           end
         end
-
       when '$'
         start = cur_pos
         nextch
@@ -686,8 +757,8 @@ module Crystal
             while idfr_part?(nextch)
               # Nothing to do
             end
-          @token.type = :GLOBAL
-          @token.value = string_range(start)
+            @token.type = :GLOBAL
+            @token.value = string_range(start)
           else
             unknown_token
           end
@@ -701,6 +772,10 @@ module Crystal
         when 'l'
           if nc?('i') && nc?('a') && nc?('s')
             return check_idfr_or_keyword(:alias, start)
+          end
+        when 'n'
+          if nc?('d')
+            return check_idfr_or_token(:and, "", start)
           end
         when 's'
           if peek_nextch == 'm'
@@ -790,7 +865,6 @@ module Crystal
             raise "unterminated char literal, use double quotes for strings", line, column
           end
           nextch
-
         else
           scan_idfr(start)
         end
@@ -798,7 +872,7 @@ module Crystal
         case nextch
         when 'e'
           if nc?('f')
-            #p "Got 'def', check if not ident"
+            # p "Got 'def', check if not ident"
             return check_idfr_or_keyword(:def, start)
           end
         when 'o' then return check_idfr_or_keyword(:do, start)
@@ -829,9 +903,10 @@ module Crystal
           case nextch
           when 'd'
             back_end_pos = cur_pos
-            end_token = case nextch
-            when '-', '_', '–'
 
+            end_token =
+            case nextch
+            when '-', '_', '–'
               # KVAR:
               #   cfun cstruct cunion cenum
               #   ctype
@@ -908,11 +983,15 @@ module Crystal
                     :end_if
                   end
                 end
-
               when 't'
                 case nextch
                 when 'r'
-                  if nc?('y')
+                  case nextch
+                  when 'a'
+                    if nc?('i') && nc?('t')
+                      :end_trait
+                    end
+                  when 'y'
                     :end_try
                   end
                 when 'e'
@@ -928,7 +1007,6 @@ module Crystal
                 if nc?('h') && nc?('i') && nc?('l') && nc?('e')
                   :end_while
                 end
-
               end
             else
               set_pos back_end_pos
@@ -936,10 +1014,9 @@ module Crystal
             end
 
             if end_token
-              #p "ETOK: " + typeof(end_token).to_s + ", " + end_token.to_s
+              # p "ETOK: " + typeof(end_token).to_s + ", " + end_token.to_s
               return check_idfr_or_token(:END, end_token, start)
             end
-
           when 's'
             if nc?('u') && nc?('r') && nc?('e')
               return check_idfr_or_keyword(:ensure, start)
@@ -1005,16 +1082,31 @@ module Crystal
             return @token
           end
         when 's'
-          if nc?('_') && nc?('a') && nc?('?')
-            return check_idfr_or_keyword(:is_a?, start)
+          case nextch
+          when '_'
+            if nc?('a') && nc?('?')
+              return check_idfr_or_keyword(:is_a?, start)
+            end
+          when 'n'
+            if nc?('t')
+              return check_idfr_or_token(:isnt, "", start)
+            end
+          else
+            set_pos cur_pos - 1
+            return check_idfr_or_token(:is, "", start)
           end
         end
         scan_idfr(start)
       when 'l'
         case nextch
         when 'i'
-          if nc?('b')
+          case nextch
+          when 'b'
             return check_idfr_or_keyword(:lib, start)
+          when 'k'
+            if nc?('e') && nc?('l') && nc?('y')
+              return check_idfr_or_keyword(:likely, start)
+            end
           end
         end
         scan_idfr(start)
@@ -1030,6 +1122,10 @@ module Crystal
             if nc?('c') && nc?('h')
               return check_idfr_or_keyword(:match, start)
             end
+          end
+        when 'i'
+          if nc?('x') && nc?('i') && nc?('n')
+            return check_idfr_or_keyword(:mixin, start)
           end
         when 'o'
           case nextch
@@ -1050,12 +1146,18 @@ module Crystal
           case nextch
           when 'l' then return check_idfr_or_keyword(:nil, start)
           end
+        when 'o'
+          if nc?('t')
+            return check_idfr_or_token(:not, "", start)
+          end
         end
         scan_idfr(start)
       when 'o'
         case nextch
         when 'f'
-            return check_idfr_or_keyword(:of, start)
+          return check_idfr_or_keyword(:of, start)
+        when 'r'
+          return check_idfr_or_token(:or, "", start)
         when 'u'
           if nc?('t')
             return check_idfr_or_keyword(:out, start)
@@ -1154,8 +1256,15 @@ module Crystal
         when 'o'
           return check_idfr_or_keyword(:to, start)
         when 'r'
-          if nc?('u') && nc?('e')
-            return check_idfr_or_keyword(:true, start)
+          case nextch
+          when 'u'
+            if nc?('e')
+              return check_idfr_or_keyword(:true, start)
+            end
+          when 'a'
+            if nc?('i') && nc?('t')
+              return check_idfr_or_keyword(:trait, start)
+            end
           end
         when 'y'
           if nc?('p') && nc?('e')
@@ -1178,8 +1287,15 @@ module Crystal
               return check_idfr_or_keyword(:union, start)
             end
           when 'l'
-            if nc?('e') && nc?('s') && nc?('s')
-              return check_idfr_or_keyword(:unless, start)
+            case nextch
+            when 'i'
+              if nc?('k') && nc?('e') && nc?('l') && nc?('y')
+                return check_idfr_or_keyword(:unlikely, start)
+              end
+            when 'e'
+              if nc?('s') && nc?('s')
+                return check_idfr_or_keyword(:unless, start)
+              end
             end
           when 't'
             if nc?('i') && nc?('l')
@@ -1303,8 +1419,12 @@ module Crystal
       @token
 
     ensure
+      unless @token.type == :SPACE || @token.type == :NEWLINE
+        @next_token_continuation_state = :AUTO
+      end
       puts ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s + ")").blue
     end
+
 
     def token_end_location
       @token_end_location ||= Location.new(@line_number, @column_number - 1, @filename)
@@ -1321,13 +1441,13 @@ module Crystal
     def handle_comment
       # Comments to skip or consume?
       p "Is it '-'?"
-      return false  if !(curch == '-' || curch == '—')
+      return false if !(curch == '-' || curch == '—')
       p "Is it 2nd '-'?"
-      return false  if !(peek_nextch == '-' || curch == '—')
+      return false if !(peek_nextch == '-' || curch == '—')
       p "Was prev SPC?"
       prevc = unsafe_char_at(cur_pos - 1)
       p "It is '" + prevc + "'"
-      return false  if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
+      return false if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
       p "Yep - comment!"
 
       # possible_comment_start = cur_pos
@@ -1346,17 +1466,16 @@ module Crystal
 
       # Check #<loc:"file",line,column> pragma comment
       if char == '<' &&
-            nextc_noinc == 'l' &&
-            nextc_noinc == 'o' &&
-            nextc_noinc == 'c' &&
-            nextc_noinc == ':' &&
-            nextc_noinc == '"'
+         nextc_noinc == 'l' &&
+         nextc_noinc == 'o' &&
+         nextc_noinc == 'c' &&
+         nextc_noinc == ':' &&
+         nextc_noinc == '"'
         nextc_noinc
         consume_loc_pragma
         start = cur_pos
 
         return true
-
       else # elsif char == ' ' || char == '|'
         if @doc_enabled
           consume_doc
@@ -1394,7 +1513,7 @@ module Crystal
       if doc_buffer = @token.doc_buffer
         doc_buffer << '\n'
       else
-        @token.doc_buffer = doc_buffer = StringIO.new
+        @token.doc_buffer = doc_buffer = MemoryIO.new
       end
 
       doc_buffer.write slice_range(start_pos)
@@ -1408,20 +1527,17 @@ module Crystal
     end
 
     def consume_whitespace(start_pos = cur_pos)
-      #p "consume_whitespace"
+      # p "consume_whitespace"
 
-      #start_pos = cur_pos
+      # start_pos = cur_pos
       @token.type = :SPACE
       nextch
       while true
         case curch
         when ' ', '\t'
-          #p "consume_whitespace: got ' '|'\\t'"
+          # p "consume_whitespace: got ' '|'\\t'"
           nextch
-
-
-
-        # *TODO* verify - REALLY?? Leave it to top level parse??
+          # *TODO* verify - REALLY?? Leave it to top level parse??
         when '\\'
           p "consume_whitespace: got backslash '\\'"
           if nc?('\n')
@@ -1431,20 +1547,18 @@ module Crystal
             @column_number = 1
             @token.passed_backslash_newline = true
           else
-            unknown_token
+            scan_pragma cur_pos - 1
           end
-
         else
-          #p "consume_whitespace: done"
+        # p "consume_whitespace: done"
           break
-
         end
       end
       if @count_whitespace
-        #p "consume_whitespace: counts spaces"
+        # p "consume_whitespace: counts spaces"
         @token.value = string_range(start_pos)
       end
-      #p "consume_whitespace: all done"
+      # p "consume_whitespace: all done"
 
     end
 
@@ -1496,7 +1610,7 @@ module Crystal
     end
 
     def check_idfr_or_token(type, symbol, start)
-      #p "check_idfr_or_token, peek: '" + peek_nextch + "'"
+      # p "check_idfr_or_token, peek: '" + peek_nextch + "'"
       if idfr_part_or_end?(peek_nextch)
         scan_idfr(start)
       else
@@ -1522,6 +1636,12 @@ module Crystal
       @token
     end
 
+    def scan_pragma(start)
+      scan_idfr start, false
+      @token.type = :PRAGMA
+      @token
+    end
+
     def symbol_then_nextch(value)
       nextch
       symbol value
@@ -1530,6 +1650,7 @@ module Crystal
     def symbol(value)
       @token.type = :SYMBOL
       @token.value = value
+      @token.raw = ":#{value}" if @wants_raw
     end
 
     def scan_number(start, negative = false)
@@ -1648,6 +1769,7 @@ module Crystal
       end
 
       @token.value = string_value
+      set_token_raw_from_start(start)
     end
 
     macro gen_check_int_fits_in_size(type, method, size)
@@ -1722,7 +1844,7 @@ module Crystal
 
     def absolute_integer_value(string_value, negative)
       if negative
-        string_value[1 .. -1].to_u64
+        string_value[1..-1].to_u64
       else
         string_value.to_u64
       end
@@ -1766,16 +1888,19 @@ module Crystal
         @token.value = "0"
         nextch
         consume_int_suffix
+        set_token_raw_from_start(start)
       when 'f'
         @token.type = :NUMBER
         @token.value = "0"
         nextch
         consume_float_suffix
+        set_token_raw_from_start(start)
       when 'u'
         @token.type = :NUMBER
         @token.value = "0"
         nextch
         consume_uint_suffix
+        set_token_raw_from_start(start)
       when '_'
         case peek_nextch
         when 'i'
@@ -1783,6 +1908,7 @@ module Crystal
           @token.value = "0"
           nextch
           consume_int_suffix
+          set_token_raw_from_start(start)
         when 'f'
           @token.type = :NUMBER
           @token.value = "0"
@@ -1894,6 +2020,7 @@ module Crystal
 
       @token.type = :NUMBER
       @token.value = string_value
+      set_token_raw_from_start(start)
     end
 
     def consume_int_suffix
@@ -1990,6 +2117,7 @@ module Crystal
     end
 
     def next_string_token(delimiter_state)
+      start = current_pos
       string_end = delimiter_state.end
       string_nest = delimiter_state.nest
       string_open_count = delimiter_state.open_count
@@ -2077,16 +2205,18 @@ module Crystal
           @token.type = :STRING
           @token.value = "{"
         end
-      # when '#'
-      #   if peek_nextch == '{'
-      #     nextch
-      #     nextch
-      #     @token.type = :INTERPOLATION_START
-      #   else
-      #     nextch
-      #     @token.type = :STRING
-      #     @token.value = "#"
-      #   end
+        # when '#'
+        #   if peek_nextch == '{'
+        #     nextch
+        #     nextch
+        #     @token.type = :INTERPOLATION_START
+#
+        #   else
+        #     nextch
+        #     @token.type = :STRING
+        #     @token.value = "#"
+#
+        #   end
       when '\n'
         nextch
         @column_number = 1
@@ -2094,7 +2224,7 @@ module Crystal
 
         if delimiter_state.kind == :heredoc
           string_end = string_end.to_s
-          old_pos    = cur_pos
+          old_pos = cur_pos
           old_column = @column_number
 
           while curch == ' '
@@ -2114,21 +2244,21 @@ module Crystal
             end
 
             if reached_end &&
-              (curch == '\n' || curch == '\0')
+               (curch == '\n' || curch == '\0')
               @token.type = :DELIMITER_END
             else
-              @reader.pos    = old_pos
+              @reader.pos = old_pos
               @column_number = old_column
               next_string_token delimiter_state
             end
           else
-            @reader.pos    = old_pos
+            @reader.pos = old_pos
             @column_number = old_column
-            @token.type    = :STRING
-            @token.value   = "\n"
+            @token.type = :STRING
+            @token.value = "\n"
           end
         else
-          @token.type  = :STRING
+          @token.type = :STRING
           @token.value = "\n"
         end
       else
@@ -2138,9 +2268,9 @@ module Crystal
               curch != string_nest &&
               curch != '\0' &&
               curch != '\\' &&
-              curch != '{' &&
-              # curch != '#' &&
-              curch != '\n'
+              curch != '{' && # curch != '#' &&
+
+ curch != '\n'
           nextch
         end
 
@@ -2441,34 +2571,34 @@ module Crystal
       when 'c'
         (char = nextch) && (
           (char == 'a' && nc?('s') && nc?('e') && peek_not_idfr_part_or_end_nextch && :case) ||
-          (char == 'l' && nc?('a') && nc?('s') && nc?('s') && peek_not_idfr_part_or_end_nextch && :class)
+            (char == 'l' && nc?('a') && nc?('s') && nc?('s') && peek_not_idfr_part_or_end_nextch && :class)
         )
       when 'd'
         (char = nextch) &&
-                ((char == 'o' && peek_not_idfr_part_or_end_nextch && :do) ||
-                 (char == 'e' && nc?('f') && peek_not_idfr_part_or_end_nextch && :def))
+          ((char == 'o' && peek_not_idfr_part_or_end_nextch && :do) ||
+            (char == 'e' && nc?('f') && peek_not_idfr_part_or_end_nextch && :def))
       when 'f'
         nc?('u') && nc?('n') && peek_not_idfr_part_or_end_nextch && :fun
       when 'i'
         beginning_of_line && nc?('f') &&
           (char = nextch) && (
-            (!idfr_part_or_end?(char) && :if) ||
+          (!idfr_part_or_end?(char) && :if) ||
             (char == 'd' && nc?('e') && nc?('f') && peek_not_idfr_part_or_end_nextch && :ifdef)
-          )
+        )
       when 'l'
         nc?('i') && nc?('b') && peek_not_idfr_part_or_end_nextch && :lib
       when 'm'
         (char = nextch) && (
           (char == 'a' && nc?('c') && nc?('r') && nc?('o') && peek_not_idfr_part_or_end_nextch && :macro) ||
-          (char == 'o' && nc?('d') && nc?('u') && nc?('l') && nc?('e') && peek_not_idfr_part_or_end_nextch && :module)
+            (char == 'o' && nc?('d') && nc?('u') && nc?('l') && nc?('e') && peek_not_idfr_part_or_end_nextch && :module)
         )
       when 's'
         nc?('t') && nc?('r') && nc?('u') && nc?('c') && nc?('t') && !idfr_part_or_end?(peek_nextch) && nextch && :struct
       when 'u'
         nc?('n') && (char = nextch) && (
           (char == 'i' && nc?('o') && nc?('n') && peek_not_idfr_part_or_end_nextch && :union) ||
-          (beginning_of_line && char == 'l' && nc?('e') && nc?('s') && nc?('s') && peek_not_idfr_part_or_end_nextch && :unless) ||
-          (beginning_of_line && char == 't' && nc?('i') && nc?('l') && peek_not_idfr_part_or_end_nextch && :until)
+            (beginning_of_line && char == 'l' && nc?('e') && nc?('s') && nc?('s') && peek_not_idfr_part_or_end_nextch && :unless) ||
+            (beginning_of_line && char == 't' && nc?('i') && nc?('l') && peek_not_idfr_part_or_end_nextch && :until)
         )
       when 'w'
         beginning_of_line && nc?('h') && nc?('i') && nc?('l') && nc?('e') && peek_not_idfr_part_or_end_nextch && :while
@@ -2572,7 +2702,6 @@ module Crystal
       codepoint
     end
 
-
     def expected_hexacimal_character_in_unicode_escape
       raise "expected hexadecimal character in unicode escape"
     end
@@ -2583,10 +2712,11 @@ module Crystal
       @token.value = value
     end
 
-    def delimited_pair(kind, string_nest, string_end)
-      nextch
+    def delimited_pair(kind, string_nest, string_end, start)
+      next_char
       @token.type = :DELIMITER_START
       @token.delimiter_state = Token::DelimiterState.new(kind, string_nest, string_end, 0)
+      set_token_raw_from_start(start)
     end
 
     def next_string_array_token
@@ -2658,7 +2788,7 @@ module Crystal
       line_number = 0
       while true
         case curch
-        when '0' .. '9'
+        when '0'..'9'
           line_number = 10 * line_number + (curch - '0').to_i
         when ','
           nextch
@@ -2672,7 +2802,7 @@ module Crystal
       column_number = 0
       while true
         case curch
-        when '0' .. '9'
+        when '0'..'9'
           column_number = 10 * column_number + (curch - '0').to_i
         when '>'
           nextch
@@ -2696,6 +2826,7 @@ module Crystal
       @column_number += 1
       nextc_noinc
     end
+
     def next_char # *TODO* alias
       @column_number += 1
       nextc_noinc
@@ -2759,6 +2890,7 @@ module Crystal
     def curch
       @reader.current_char
     end
+
     def current_char # *TODO* alias
       @reader.current_char
     end
@@ -2766,14 +2898,16 @@ module Crystal
     def peek_nextch
       @reader.peek_next_char
     end
+
     def peek_next_char # *TODO* alias
       @reader.peek_next_char
     end
 
-    def cur_pos()
+    def cur_pos
       @reader.pos
     end
-    def current_pos() # *TODO* alias
+
+    def current_pos # *TODO* alias
       @reader.pos
     end
 
@@ -2784,6 +2918,7 @@ module Crystal
     def cur_pos=(pos)
       @reader.pos = pos
     end
+
     def current_pos=(pos) # *TODO* alias
       @reader.pos = pos
     end
@@ -2855,19 +2990,21 @@ module Crystal
     # def skip_space_newline_semi
     #   while (@token.type == :SPACE  || @token.type == :";" || @token.type == :NEWLINE)
     #     next_token
+#
     #   end
     # end
 
     # def skip_space_newline_or_indent
     #   while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :INDENT)
     #     next_token
+#
     #   end
     # end
-
 
     # def skip_space_semi
     #   while (@token.type == :SPACE || @token.type == :";")
     #     next_token
+#
     #   end
     # end
 
@@ -2879,6 +3016,10 @@ module Crystal
 
     def unknown_token
       raise "unknown token: #{curch.inspect}", @line_number, @column_number
+    end
+
+    def set_token_raw_from_start(start)
+      @token.raw = string_range(start) if @wants_raw
     end
 
     def raise(message, line_number = @line_number, column_number = @column_number, filename = @filename)

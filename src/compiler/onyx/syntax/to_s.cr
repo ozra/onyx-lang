@@ -1,7 +1,6 @@
 require "../../crystal/syntax/to_s"
 
 module Crystal
-
   class ASTNode
     # def inspect(io)
     #   to_s(io)
@@ -23,11 +22,28 @@ module Crystal
     end
   end
 
-  class  ToSVisitor < Visitor
+  class ToSVisitor < Visitor
     def visit(node : For)
 
       # *TODO* each|for
       @str << "for "
+
+      # *TODO* cleanup
+      if node.value_id && node.index_id
+        node.value_id.try &.accept self
+        @str << ", "
+        node.index_id.try &.accept self
+
+      elsif node.value_id
+        node.value_id.try &.accept self
+
+      elsif node.index_id
+        @str << ","
+        node.index_id.try &.accept self
+
+      else
+        # nothing
+      end
 
       # *TODO* value_id, index_id or both
 
@@ -36,9 +52,14 @@ module Crystal
       #   var.accept self
       # end
 
+
+
       @str << " in "
       node.iterable.accept self
-      node.body.accept self
+      newline
+
+      accept_with_indent(node.body)
+      append_indent
 
       # *TODO* by|step
 
@@ -48,7 +69,7 @@ module Crystal
   end
 
   class ToOnyxSVisitor < Visitor
-    def initialize(@str = StringIO.new)
+    def initialize(@str = MemoryIO.new)
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
@@ -310,9 +331,7 @@ module Crystal
 
       @str << "::" if node.global
 
-      case
-
-      # *TODO* org|"."{0}|"["{0}"]" etc.
+      case # *TODO* org|"."{0}|"["{0}"]" etc.
       when node_obj && (node.name == "[]" || node.name == "[]?")
         in_parenthesis(need_parens, node_obj)
 
@@ -328,7 +347,6 @@ module Crystal
         else
           @str << decorate_call(node, "]?")
         end
-
       when node_obj && node.name == "[]="
         in_parenthesis(need_parens, node_obj)
 
@@ -340,11 +358,9 @@ module Crystal
         @str << decorate_call(node, "=")
         @str << " "
         node.args[1].accept self
-
       when node_obj && !is_alpha(node.name) && node.args.size == 0
         @str << decorate_call(node, node.name)
         in_parenthesis(need_parens, node_obj)
-
       when node_obj && !is_alpha(node.name) && node.args.size == 1
         in_parenthesis(need_parens, node_obj)
 
@@ -352,14 +368,13 @@ module Crystal
         @str << decorate_call(node, node.name)
         @str << " "
         node.args[0].accept self
-
       else
         if node_obj
           in_parenthesis(need_parens, node_obj)
           @str << "."
         end
         if node.name.ends_with?('=')
-          @str << decorate_call(node, node.name[0 .. -2])
+          @str << decorate_call(node, node.name[0..-2])
           @str << " = "
           node.args.each_with_index do |arg, i|
             @str << ", " if i > 0
@@ -469,14 +484,13 @@ module Crystal
       @str << '`'
       case exp
       when StringLiteral
-        @str << exp.value.inspect[1 .. -2]
+        @str << exp.value.inspect[1..-2]
       when StringInterpolation
         visit_interpolation exp, &.gsub('`', "\\`")
       end
       @str << '`'
       false
     end
-
 
     def keyword(str)
       str
@@ -535,7 +549,6 @@ module Crystal
     end
 
     def visit(node : For)
-
       # *TODO* each|for
       @str << "for "
 
@@ -644,7 +657,7 @@ module Crystal
       # *TODO* .org_name (name may be mangled from '-' -> '_')
       @str << def_name(node.name)
 
-      #if node.args.size > 0 || node.block_arg
+      # if node.args.size > 0 || node.block_arg
       if true
         @str << "("
         node.args.each_with_index do |arg, i|
@@ -676,7 +689,7 @@ module Crystal
         append_indent
 
         # *TODO* only if there WAS an end originally
-        #@str << keyword("end")
+        # @str << keyword("end")
       end
       false
     end
@@ -808,7 +821,6 @@ module Crystal
       if type = node.type?
         @str << " " # *TODO*: unless mut and mut_word == "~"
         TypeNode.new(type).accept(self)
-
       elsif restriction = node.restriction
         @str << " " # *TODO*: unless mut and mut_word == "~"
         restriction.accept self
@@ -816,14 +828,14 @@ module Crystal
       false
     end
 
-    def visit(node : BlockArg)
-      @str << node.name
-      if a_fun = node.fun
-        @str << " : "
-        a_fun.accept self
-      end
-      false
-    end
+    # def visit(node : BlockArg)
+    #   @str << node.name
+    #   if a_fun = node.fun
+    #     @str << " : "
+    #     a_fun.accept self
+    #   end
+    #   false
+    # end
 
     def visit(node : Fun)
       if inputs = node.inputs
@@ -893,7 +905,7 @@ module Crystal
 
     def visit(node : Union)
       node.types.each_with_index do |ident, i|
-        @str << " | " if  i > 0
+        @str << " | " if i > 0
         ident.accept self
       end
       false

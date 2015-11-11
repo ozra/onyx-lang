@@ -1,19 +1,15 @@
 require "set"
 require "../../crystal/syntax/parser"
-require "colorize"
 
-
+require "../../debug_utils/global_pollution"
+require "../../debug_utils/ast_dump"
 
 def tag_onyx(node : Crystal::ASTNode)
   node.onyx_node = true
   node
 end
 
-struct Char
-  def ord_gt?(v)
-     ord > v
-  end
-end
+
 
 # *TODO* report below error:
 # def tag_onyx(node : Crystal::ASTNode+)
@@ -25,2426 +21,2613 @@ end
 #   node
 # end
 
-class String
-  def quot
-    "\"" + self + "\""
-  end
-  def red
-    self.colorize(:light_red).to_s
-  end
-  def yellow
-    self.colorize(:light_yellow).to_s
-  end
-  def blue
-    self.colorize(:light_blue).to_s
-  end
-  def white
-    self.colorize(:white).to_s
-  end
-  def magenta
-    self.colorize(:light_magenta).to_s
-  end
-  def cyan
-    self.colorize(:light_cyan).to_s
-  end
-end
-
 module Crystal
+  alias TagLiteral = SymbolLiteral
 
-alias TagLiteral = SymbolLiteral
+  # This to_s is part of code generation - messes shit up!
+  # class Token
+  #     def to_s(io)
+  #       if @value
+  #         @type.to_s(io)
+  #         ":".to_s(io)
+  #         @value.to_s(io)
+  #       else
+  #         @type.to_s(io)
+  #       end
+  #     end
+#
+  # end
 
-# This to_s is part of code generation - messes shit up!
-# class Token
-#     def to_s(io)
-#       if @value
-#         @type.to_s(io)
-#         ":".to_s(io)
-#         @value.to_s(io)
-#       else
-#         @type.to_s(io)
-#       end
-#     end
-# end
 
-class Scope
-  property :name
+  class Scope
+    property :name
 
-  def initialize(@vars = Set(String).new)
-  end
+    def initialize(@vars = Set(String).new)
+    end
 
-  def includes?(name)
-    @vars.includes? name
-  end
+    def includes?(name)
+      @vars.includes? name
+    end
 
-  def add(name)
-    @vars.add name
-  end
+    def add(name)
+      @vars.add name
+    end
 
-  def dup()
-    Scope.new @vars
-  end
-end
-
-class ScopeStack
-  @scopes = Array(Scope).new
-  @current_scope = Scope.new # ugly way of avoiding null checks
-
-  def initialize()
-    push_fresh_scope()
-  end
-
-  def cur_has?(name)
-    @scopes.last.includes? name
-  end
-
-  def last()
-    @current_scope
-  end
-
-  def pop_scope()
-    @scopes.pop()
-    @current_scope = @scopes.last
-  end
-
-  def push_scope(scope : Scope)
-    @scopes.push scope
-    @current_scope = scope
-  end
-
-  def push_fresh_scope()
-    push_scope Scope.new
-  end
-
-  def push_scope()
-    push_scope @scopes.last.dup
-  end
-
-  def add_var(name : String)
-    @current_scope.add name
-  end
-
-end
-
-class Nesting
-  property nest_kind
-  property indent
-  property name
-  property require_end_token
-
-  # CURRENTLY _47_ DIFFERENT NESTING CONTROL KEYWORDS (MANY BEING REDUNDANT
-  # BECAUSE OF SYNTAX EXPERIMENT) - that's a lot. But.. they will be reduced by
-  # public opinion.
-  @@nesting_keywords = %w(
-    program
-    module
-    type enum class struct
-    def fun block lambda
-    template macro
-
-    lib api
-    cfun cstruct cunion cenum
-    union ctype calias
-
-    where
-    scope scoped contain contained
-
-    if ifdef unless else
-    elif elsif
-    case when
-
-    while until for each loop
-
-    try rescue catch ensure
-  )
-
-  def self.nesting_keywords
-    @@nesting_keywords
-  end
-
-  def initialize(@nest_kind, @indent, @name, @require_end_token)
-    if ! Nesting.nesting_keywords.includes? @nest_kind.to_s
-      raise "Shit went down - don't know about nesting kind '#{@nest_kind.to_s}'"
+    def dup
+      Scope.new @vars
     end
   end
 
-  def message_expected_end_tokens()
-    case @nest_kind
-    when :program then "EOF"
-    #when :module then "end or end-module"
-    #when :if then "end or end-if"
-    #when :try then "catch, end or end-try"
-    else
-      "\"end\" or \"end-" + @nest_kind.to_s + "\""
+  class ScopeStack
+    @scopes = Array(Scope).new
+    @current_scope = Scope.new # ugly way of avoiding null checks
+
+
+    def initialize
+      push_fresh_scope()
+    end
+
+    def cur_has?(name)
+      @scopes.last.includes? name
+    end
+
+    def last
+      @current_scope
+    end
+
+    def pop_scope
+      @scopes.pop
+      @current_scope = @scopes.last
+    end
+
+    def push_scope(scope : Scope)
+      @scopes.push scope
+      @current_scope = scope
+    end
+
+    def push_fresh_scope
+      push_scope Scope.new
+    end
+
+    def push_scope
+      push_scope @scopes.last.dup
+    end
+
+    def add_var(name : String)
+      @current_scope.add name
     end
   end
 
-  def match_end_token(end_token : Symbol)
-    end_token == :end || end_token.to_s == ("end_" + @nest_kind.to_s)
-  end
-end
 
-class NestingStack
-  @stack :: Array(Nesting)
 
-  def initialize()
-    @stack = [Nesting.new(:program, -1, "", false)]
-  end
+  class Nesting
+    property nest_kind
+    property indent
+    property name
+    property require_end_token
+    @auto_parametrization = false
+    #property auto_parametrization
+    block_params :: Array(Var)?
+    property block_params
+    property location
+    property single_line
 
-  def add(kind, indent, match_name, require_end_token)
-    @stack.push Nesting.new kind, indent, match_name, require_end_token
-  end
+    @@nesting_keywords = %w(
+      program
+      module trait
+      type enum class struct
+      def fun block lambda
+      template macro
+      lib api
+      cfun cstruct cunion cenum
+      union ctype calias
+      where
+      scope scoped contain contained
+      if ifdef unless else
+      elif elsif
+      case when
+      while until for each loop
+      try rescue catch ensure
+    )
 
-  def last
-    @stack.last
-  end
-
-  def size
-    @stack.size
-  end
-
-  def hard_pop(size) : Nil
-    while @stack.size > size
-      @stack.pop
+    def self.nesting_keywords
+      @@nesting_keywords
     end
-    nil
-  end
 
-  private def pop_and_status(indent : Int32, force : Bool) : Symbol
-    @stack.pop
+    def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token)
+      if !Nesting.nesting_keywords.includes? @nest_kind.to_s
+        raise "Shit went down - don't know about nesting kind '#{@nest_kind.to_s}'"
+      end
+    end
 
-    #if indent <= last.indent && (force || !last.require_end_token) # *TODO* "no automatic dedent"
-    if indent <= last.indent && size > 1
-      #p @stack.to_s
-      :more
-    else
-      :done
+    def message_expected_end_tokens
+      case @nest_kind
+      when :program then "EOF"
+        # when :module then "end or end-module"
+        # when :if then "end or end-if"
+        # when :try then "catch, end or end-try"
+      else
+        "\"end\" or \"end-" + @nest_kind.to_s + "\""
+      end
+    end
+
+    def match_end_token(end_token : Symbol)
+      end_token == :end || end_token.to_s == ("end_" + @nest_kind.to_s)
     end
   end
 
-  def dedent(indent : Int32, end_token : Symbol, match_name : String, force = false) : Symbol | String
-    # while true
-    nest = @stack.last
-    if indent < nest.indent
-      p "indents left to match alignment in nesting_stack:"
-      (@stack.size - 1 .. 0).each do |i|
+  class NestingStack
+    @stack :: Array(Nesting)
 
-        p @stack[i].indent
-        # *TODO*
-        # check so that the indent–level EXISTS further up (we don't allow dedent
-        # to an "unspecified level" (in between)
+    def initialize
+      @stack = [Nesting.new(:program, -1, "", Location.new(0, 0, ""), false, false)]
+    end
+
+    def add(kind, indent, match_name, location, single_line, require_end_token)
+      @stack.push Nesting.new kind, indent, match_name, location, single_line, require_end_token
+    end
+
+    def last
+      @stack.last
+    end
+
+    def size
+      @stack.size
+    end
+
+    def hard_pop(size) : Nil
+      while @stack.size > size
+        @stack.pop
+      end
+      nil
+    end
+
+    def in_auto_paramed?
+      @stack.reverse.each do |v|
+        if v.nest_kind == :block
+          return v.block_params != nil
+        end
+        false
       end
 
-      return pop_and_status indent, force
+    end
 
-    elsif nest.indent == indent
-      case
-      when end_token == :""
+    private def pop_and_status(indent : Int32, force : Bool) : Symbol
+      @stack.pop
+
+      # if indent <= last.indent && (force || !last.require_end_token) # *TODO* "no automatic dedent"
+      if indent <= last.indent && size > 1
+        # p @stack.to_s
+        :more
+      else
+        :done
+      end
+    end
+
+    def dedent(indent : Int32, end_token : Symbol, match_name : String, force = false) : Symbol | String
+      # while true
+      nest = @stack.last
+
+      if indent < nest.indent
+        p "indents left to match alignment in nesting_stack:"
+        (@stack.size - 1..0).each do |i|
+          p @stack[i].indent
+
+          # *TODO*
+          # check so that the indent–level EXISTS further up (we don't allow dedent
+          # to an "unspecified level" (in between)
+        end
+
         return pop_and_status indent, force
 
-      when nest.match_end_token end_token
+      elsif nest.indent == indent
         case
-        when match_name == ""
+        when end_token == :""
           return pop_and_status indent, force
 
-        when nest.name == match_name
-          return pop_and_status indent, force
-
-        else
-
+        when nest.match_end_token end_token
+          case
+          when match_name == ""
+            return pop_and_status indent, force
+          when nest.name == match_name
+            return pop_and_status indent, force
+          else
           # *TODO* start–row+col för nest ska lagras så den kan returneras med error
           # så att matching start–part kan visas också (extra hjälp)
 
-          return "explicit end-token \"#{ (end_token.to_s + " " + match_name).strip }\"" \
-                " doesn't match expected" \
-                " \"#{ (nest.message_expected_end_tokens + " " + nest.name).strip }\""
-        end
-
-      else
-
+            return "explicit end-token \"#{(end_token.to_s + " " + match_name).strip}\"" \
+            " doesn't match expected" \
+            " \"#{(nest.message_expected_end_tokens + " " + nest.name).strip}\""
+          end
+        else
         # *TODO* start–row+col för nest ska lagras så den kan returneras med error
         # så att matching start–part kan visas också (extra hjälp)
 
-        return "explicit end-token \"#{ end_token }\"" \
-              " doesn't match expected #{ nest.message_expected_end_tokens }"
+          return "explicit end-token \"#{end_token}\"" \
+          " doesn't match expected #{nest.message_expected_end_tokens}"
+        end
+      else
+        return :"false" # NOTE! SYMBOL :false
       end
-
-    else
-      return :"false"   # NOTE! SYMBOL :false
+      # end
     end
-    # end
-  end
 
-  def dbgstack
-    ret = "NEST-STACK:\n"
-    @stack.each do |v|
-      ret += "'" + v.nest_kind.to_s + "', " + v.indent.to_s + " " + v.name.to_s + "\n"
-    end
-    ret += "\n"
-    ret
-  end
-
-end
-
-
-########     ###    ########   ######  ######## ########
-##     ##   ## ##   ##     ## ##    ## ##       ##     ##
-##     ##  ##   ##  ##     ## ##       ##       ##     ##
-########  ##     ## ########   ######  ######   ########
-##        ######### ##   ##         ## ##       ##   ##
-##        ##     ## ##    ##  ##    ## ##       ##    ##
-##        ##     ## ##     ##  ######  ######## ##     ##
-
-class OnyxParser < OnyxLexer
-  record Unclosed, name, location
-
-  property visibility
-  property def_nest
-  property type_nest
-  getter? wants_doc
-
-  def self.parse(str, scope_stack = ScopeStack.new)
-    new(str, scope_stack).parse
-  end
-
-  def initialize(str, @scope_stack = ScopeStack.new)
-    super(str)
-
-    @last_call_has_parenthesis = true
-    @temp_token = Token.new
-    @calls_super = false
-    @calls_initialize = false
-    @uses_block_arg = false
-    @assigns_special_var = false
-
-    # *TODO* clean these three up - similar chores
-    @def_nest = 0
-    @certain_def_count = 0
-    @def_parsing = 0
-
-    @type_nest = 0
-
-    @one_line_nest = 0
-    #@paren_nest = 0 *TODO* *TEST* in lexer now
-
-    @block_arg_count = 0
-    @in_macro_expression = false
-    @stop_on_yield = 0
-    @inside_c_struct = false
-    @wants_doc = false
-
-    #@prioritize_fun_def = false
-    @last_was_newline_or_dedent = false
-
-    @was_just_nest_end = false
-    @significant_newline = false
-
-    @unclosed_stack = [] of Unclosed
-    @nesting_stack = NestingStack.new
-
-    @magic_int_type_stack = ["StdInt"] of String
-    @magic_real_type_stack = ["StdReal"] of String
-
-    @dbgindent__ = 0
-
-  end
-
-  def wants_doc=(@wants_doc)
-    @doc_enabled = @wants_doc
-  end
-
-
-
-
-  # *TODO* RETHINK THESE GLOBAL PARSING STATES!!!!!
-
-  def skip_tokens(* tokens : Symbol)
-    while tokens.includes?(@token.type)
-      next_token
-    end
-  end
-
-  def skip_statement_end # redefined for parser
-    if @significant_newline
-      while (@token.type == :SPACE || @token.type == :";")
-        next_token
+    def dbgstack
+      ret = "NEST-STACK:\n"
+      @stack.each do |v|
+        ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, #{v.name} @ #{v.location.line_number}:#{v.location.column_number}\n"
       end
-    else
-      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
-        next_token
-      end
+      ret += "\n"
+      ret
     end
   end
 
-  def skip_space_or_newline
-    if @significant_newline
-      while (@token.type == :SPACE)
-        next_token
-      end
-    else
-      while (@token.type == :SPACE || @token.type == :NEWLINE)
-        next_token
-      end
-    end
-  end
 
-  def unsignify_newline()
-    if @significant_newline && @one_line_nest == 0
-      @significant_newline = false
-    end
-  end
+  #     ########    ###  ########   ######  ######  ########
+  #     ##     ##  ## ##   ##   ## ##    ## ##       ##   ##
+  #     ##     ## ##   ##  ##   ## ##       ##       ##   ##
+  #     ######## ##   ## ########   ######  ######  ########
+  #     ##       ######### ##   ##       ## ##      ##   ##
+  #     ##       ##   ## ##  ##  ##     ##  ##      ##  ##
+  #     ##       ##   ## ##   ##  ######   ########  ##   ##
 
-  # # FUUUL LÖSNING!
-  def next_token
-    @last_was_newline_or_dedent = tok?(:NEWLINE, :DEDENT)
-    super()
-    # if !was_nl && !tok?(:NEWLINE)
-    #   @was_just_nest_end = false
-    # end
-    #@token
-  end
+  class OnyxParser < OnyxLexer
+    record Unclosed, name, location
 
+    property visibility
+    property def_nest
+    property type_nest
+    getter? wants_doc
 
-  def parse
-    next_token_skip_statement_end
-
-    expressions = parse_expressions #.tap { check :EOF }
-
-    dbg "parse - after program body parse_expressions"
-
-    check :EOF
-
-    # *TODO* - debugga hela programstrukturen
-    puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
-
-    expressions
-  end
-
-
-
-
-  def parse_expressions
-    dbg "parse_expressions"
-    dbginc
-
-
-    # Nil–blocks should be taken care of BEFORE calling parse_expressions
-
-    if is_end_token   # "stop tokens" - not _nest_end tokens_ - unless explicit
-      raise "Does this happen?"
-      return Nop.new
+    def self.parse(str, scope_stack = ScopeStack.new)
+      new(str, scope_stack).parse
     end
 
-    slash_is_regex!
+    def initialize(str, @scope_stack = ScopeStack.new)
+      super(str)
 
-    exps = [] of ASTNode
+      @last_call_has_parenthesis = true
+      @temp_token = Token.new
+      @calls_super = false
+      @calls_initialize = false
+      @uses_block_cast = false
+      @assigns_special_var = false
 
-    loop do
-      dbg "parse_expressions() >>> LOOP TOP >>>"
+      # *TODO* clean these three up - similar chores
+      @def_nest = 0
+      @certain_def_count = 0
+      @def_parsing = 0
 
-      # *TODO*
-      if tok?(:EOF)
-        break
-      end
+      @type_nest = 0
 
+      @one_line_nest = 0
 
-      exps << parse_expression # parse_multi_assign
+      @block_cast_count = 0
+      @in_macro_expression = false
+      @stop_on_yield = 0
+      @inside_c_struct = false
+      @wants_doc = false
 
-      if handle_nest_end
-        dbg "parse_expressions() break after handle_nest_end"
-        break
+      # @prioritize_fun_def = false
+      @last_was_newline_or_dedent = false
 
-      elsif is_end_token
-        dbg "parse_expressions() break after is_end_token"
-        break
-
-      elsif @one_line_nest > 0 && tok? :NEWLINE
-        dbg "parse_expressions() break after online-nest newline"
-        @was_just_nest_end = true
-        de_nest @indent, :"", ""
-        next_token_skip_statement_end
-        break
-      end
-
-      skip_statement_end
-
-    end
-
-    Expressions.from exps
-
-  ensure
-    puts ""
-    dbgdec
-
-  end
-
-  def parse_expression
-    dbg "parse_expression"
-    #dbginc
-    location = @token.location
-
-    # *TODO* not in AST yet...
-    # if tok? :COMMENT
-    #   # *TODO* this is needed for formatting tools using the AST!
-    #   next_token_skip_space_or_newline
-    # end
-
-    @was_just_nest_end = false  # is for catching the suffix part..
-
-
-    # *TODO* experiment. Use the nest–stack to decide priority instead - right here!
-
-    prioritize_fun_def = @nesting_stack.last.nest_kind == :type && @def_parsing == 0
-    #   @prioritize_fun_def = true
-    # else
-    #   @prioritize_fun_def = false
-    # end
-
-    dbg "@nesting_stack.last.nest_kind = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
-    dbg "#2 @prioritize_fun_def = #{@prioritize_fun_def}, @last_was_newline_or_dedent = #{@last_was_newline_or_dedent}"
-
-    if prioritize_fun_def && @last_was_newline_or_dedent
-      dbg "tries pre-emptive def parse".white
-
-      if ret = try_parse_def
-        return ret as ASTNode
-      end
-
-      dbg "continues regular parse_expression"
-
-    else
-      dbg "regular parse_expression".white
-    end
-
-    atomic = parse_op_assign
-
-    dbg "parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
-
-    if @was_just_nest_end == false
-      parse_expression_suffix atomic, location
-    else
       @was_just_nest_end = false
-      if tok? :SPACE
-        next_token_skip_space
+      @significant_newline = false
+
+      @unclosed_stack = [] of Unclosed
+      @nesting_stack = NestingStack.new
+
+      @magic_int_type_stack = ["StdInt"] of String
+      @magic_real_type_stack = ["StdReal"] of String
+
+      @dbgindent__ = 0
+    end
+
+    def wants_doc=(@wants_doc)
+      @doc_enabled = @wants_doc
+    end
+
+
+
+    # *TODO* RETHINK THESE GLOBAL PARSING STATES!!!!!
+
+    def skip_tokens(*tokens : Symbol)
+      while tokens.includes?(@token.type)
+        next_token
+      end
+    end
+
+    def skip_statement_end # redefined for parser
+      if @significant_newline
+        dbg "skip_statement_end true"
+        while (@token.type == :SPACE || @token.type == :";")
+          next_token
+        end
+      else
+        dbg "skip_statement_end false"
+        while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :";")
+          next_token
+        end
+      end
+    end
+
+    def skip_space_or_newline
+      if @significant_newline
+        dbg "skip_space_or_newline true"
+        while (@token.type == :SPACE)
+          next_token
+        end
+      else
+        dbg "skip_space_or_newline false"
+        while (@token.type == :SPACE || @token.type == :NEWLINE)
+          next_token
+        end
+      end
+    end
+
+    def unsignify_newline
+      if @significant_newline && @one_line_nest == 0
+        @significant_newline = false
+      end
+    end
+
+    # # FUUUL LÖSNING!
+    def next_token
+      @last_was_newline_or_dedent = tok?(:NEWLINE, :DEDENT)
+      super()
+      # if !was_nl && !tok?(:NEWLINE)
+      #   @was_just_nest_end = false
+      # end
+      # @token
+    end
+
+
+
+    def parse
+      next_token_skip_statement_end
+
+      if is_end_token # "stop tokens" - not _nest_end tokens_ - unless explicit
+        dbg "An empty file!?".red
+        expressions = Nop.new
+      else
+        expressions = parse_expressions # .tap { check :EOF }
+      end
+
+      dbg "parse - after program body parse_expressions"
+
+      check :EOF
+
+      # *TODO* - debugga hela programstrukturen
+      puts "\n\n\nAST:\n\n\n"
+      expressions.dump_std
+      puts "\n\n\n"
+
+      puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
+
+      expressions
+    end
+
+    def parse_expressions
+      dbg "parse_expressions"
+      dbginc
+
+      # Nil–blocks should be taken care of BEFORE calling parse_expressions
+
+      # *TODO* continue watching this
+      # happened on time: EMPTY FILE
+      # now added to "top parse"
+
+      if is_end_token # "stop tokens" - not _nest_end tokens_ - unless explicit
+        raise "Does this happen?"
+        return Nop.new
+      end
+
+      slash_is_regex!
+
+      exps = [] of ASTNode
+
+      loop do
+        dbg "parse_expressions() >>> LOOP TOP >>>"
+
+        # *TODO*
+        if tok?(:EOF)
+          break
+        end
+
+        exps << parse_expression # parse_multi_assign
+
+        if handle_nest_end
+          dbg "parse_expressions() break after handle_nest_end"
+          break
+        elsif is_end_token
+          dbg "parse_expressions() break after is_end_token"
+          break
+        elsif @one_line_nest > 0 && tok? :NEWLINE
+          dbg "parse_expressions() break after online-nest newline"
+          @was_just_nest_end = true
+          de_nest @indent, :"", ""
+          next_token_skip_statement_end
+          break
+        end
+
+        skip_statement_end
+      end
+
+      Expressions.from exps
+    ensure
+      puts ""
+      dbgdec
+    end
+
+    def parse_expression
+      dbg "parse_expression"
+      # dbginc
+      location = @token.location
+
+      # *TODO* not in AST yet...
+      # if tok? :COMMENT
+      #   # *TODO* this is needed for formatting tools using the AST!
+      #   next_token_skip_space_or_newline
+      # end
+
+      @was_just_nest_end = false # is for catching the suffix part..
+
+      # *TODO* experiment. Use the nest–stack to decide priority instead - right here!
+
+      prioritize_fun_def = @nesting_stack.last.nest_kind == :type && @def_parsing == 0
+      #   @prioritize_fun_def = true
+      # else
+      #   @prioritize_fun_def = false
+      # end
+
+      dbg "@nesting_stack.last.nest_kind = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
+      dbg "#2 @prioritize_fun_def = #{@prioritize_fun_def}, @last_was_newline_or_dedent = #{@last_was_newline_or_dedent}"
+
+      if prioritize_fun_def && @last_was_newline_or_dedent
+        dbg "tries pre-emptive def parse".white
+
+        if ret = try_parse_def
+          return ret as ASTNode
+        end
+
+        dbg "continues regular parse_expression"
+      else
+        dbg "regular parse_expression".white
+      end
+
+      atomic = parse_op_assign
+
+      dbg "parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
+
+      if @was_just_nest_end == false
+        parse_expression_suffix atomic, location
+      else
+        @was_just_nest_end = false
+        if tok? :SPACE
+          next_token_skip_space
+        end
+        atomic
+      end
+    ensure
+      # dbgdec
+
+    end
+
+    def parse_expression_suffix(atomic, location)
+      # dbg "parse_expression_suffix"
+      # dbginc
+      while true
+        case @token.type
+
+        when :SPACE
+          next_token
+
+        when :IDFR
+          case @token.value
+          when :if
+            atomic = parse_expression_suffix(location) { |exp| If.new(exp, atomic) }
+          when :unless
+            atomic = parse_expression_suffix(location) { |exp| Unless.new(exp, atomic) }
+          when :for
+            raise "suffix `for` is not supported - discuss on IRC or in issues if you disagree", @token
+          when :while
+            raise "suffix `while` is not supported", @token
+          when :until
+            raise "suffix `until` is not supported", @token
+          when :rescue
+            next_token_skip_space
+            rescue_body = parse_expression
+            rescues = [Rescue.new(rescue_body)] of Rescue
+            if atomic.is_a?(Assign)
+              atomic.value = ExceptionHandler.new(atomic.value, rescues).at(location)
+            else
+              atomic = ExceptionHandler.new(atomic, rescues).at(location)
+            end
+          when :ensure
+            next_token_skip_space
+            ensure_body = parse_expression
+            if atomic.is_a?(Assign)
+              atomic.value = ExceptionHandler.new(atomic.value, ensure: ensure_body).at(location)
+            else
+              atomic = ExceptionHandler.new(atomic, ensure: ensure_body).at(location)
+            end
+          when :ifdef
+            next_token_skip_statement_end
+            exp = parse_flags_or
+            atomic = IfDef.new(exp, atomic).at(location)
+          else
+            break
+          end
+
+        when :")", :",", :";", :"%}", :"}}", :NEWLINE, :EOF, :DEDENT
+          # *TODO* skip explicit end token
+          break
+
+        else
+          if is_end_token || tok? :INDENT
+            break
+          else
+            unexpected_token
+          end
+        end
       end
       atomic
+    ensure
+      # dbgdec
     end
 
-  ensure
-    #dbgdec
-
-  end
-
-  def parse_expression_suffix(atomic, location)
-    #dbg "parse_expression_suffix"
-    #dbginc
-    while true
-      case @token.type
-      when :SPACE
-        next_token
-      when :IDFR
-        case @token.value
-        when :if
-          atomic = parse_expression_suffix(location) { |exp| If.new(exp, atomic) }
-        when :unless
-          atomic = parse_expression_suffix(location) { |exp| Unless.new(exp, atomic) }
-        when :for
-          raise "suffix `for` is not supported - discuss on IRC or in issues if you disagree", @token
-        when :while
-          raise "suffix `while` is not supported", @token
-        when :until
-          raise "suffix `until` is not supported", @token
-        when :rescue
-          next_token_skip_space
-          rescue_body = parse_expression
-          rescues = [Rescue.new(rescue_body)] of Rescue
-          if atomic.is_a?(Assign)
-            atomic.value = ExceptionHandler.new(atomic.value, rescues).at(location)
-          else
-            atomic = ExceptionHandler.new(atomic, rescues).at(location)
-          end
-        when :ensure
-          next_token_skip_space
-          ensure_body = parse_expression
-          if atomic.is_a?(Assign)
-            atomic.value = ExceptionHandler.new(atomic.value, ensure: ensure_body).at(location)
-          else
-            atomic = ExceptionHandler.new(atomic, ensure: ensure_body).at(location)
-          end
-        when :ifdef
-          next_token_skip_statement_end
-          exp = parse_flags_or
-          atomic = IfDef.new(exp, atomic).at(location)
-        else
-          break
-        end
-      when :")", :",", :";", :"%}", :"}}", :NEWLINE, :EOF, :DEDENT
-        # *TODO* skip explicit end token
-        break
-      else
-        if is_end_token || tok? :INDENT
-          break
-        else
-          unexpected_token
-        end
-      end
+    def parse_expression_suffix(location)
+      next_token_skip_statement_end
+      exp = parse_op_assign_no_control
+      (yield exp).at(location).at_end(exp)
     end
-    atomic
-  ensure
-    #dbgdec
-  end
 
-  def parse_expression_suffix(location)
-    next_token_skip_statement_end
-    exp = parse_op_assign_no_control
-    (yield exp).at(location).at_end(exp)
-  end
+    def parse_op_assign_no_control(allow_ops = true, allow_suffix = true)
+      check_void_expression_keyword
+      parse_op_assign(allow_ops, allow_suffix)
+    end
 
-  def parse_op_assign_no_control(allow_ops = true, allow_suffix = true)
-    check_void_expression_keyword
-    parse_op_assign(allow_ops, allow_suffix)
-  end
-
-  def mutate_gt_op_to_bigger_op?
-    # Check if we're gonna mutate the token to a "larger one"
-    if tok? :">"
-      if current_char == '>'
-        next_token
-        if current_char == '='
+    def maybe_mutate_gt_op_to_bigger_op
+      # Check if we're gonna mutate the token to a "larger one"
+      if tok? :">"
+        if current_char == '>'
           next_token
-          @token.type = :">>="
-        else
-          @token.type = :">>"
+          if current_char == '='
+            next_token
+            @token.type = :">>="
+          else
+            @token.type = :">>"
+          end
         end
       end
     end
-  end
 
-  def parse_op_assign(allow_ops = true, allow_suffix = true)
-    #dbg "parse_op_assign"
-    doc = @token.doc
-    location = @token.location
+    def parse_op_assign(allow_ops = true, allow_suffix = true)
+      # dbg "parse_op_assign"
+      doc = @token.doc
+      location = @token.location
 
-    #atomic = parse_question_colon
-    atomic = parse_range
-    dbg "parse_op_assign after parse_range"
+      # atomic = parse_question_colon
+      atomic = parse_range
+      dbg "parse_op_assign after parse_range"
 
-    while true
-      mutate_gt_op_to_bigger_op?
+      while true
+        maybe_mutate_gt_op_to_bigger_op
 
-      case @token.type
-      when :SPACE
-        next_token
-        next
-      when :IDFR
-        break if kwd? :then, :do, :by, :step
+        case @token.type
 
-        unexpected_token unless allow_suffix
-        break
-      when :"="
-        slash_is_regex!
+        when :SPACE
+          dbg "parse_op_assign - got SPACE - next!"
+          next_token
+          next
 
-        if atomic.is_a?(Call) && atomic.name == "[]"
-          next_token_skip_space_or_newline
+        when :IDFR
+          break if kwd? :then, :do, :by, :step
 
-          atomic.name = "[]="
-          atomic.name_size = 0
-          atomic.args << parse_op_assign_no_control
-        else
+          unexpected_token unless allow_suffix
+          break
+
+        when :"="
+          slash_is_regex!
+
+          if atomic.is_a?(Call) && atomic.name == "[]"
+            next_token_skip_space_or_newline
+
+            atomic.name = "[]="
+            atomic.name_size = 0
+            atomic.args << parse_op_assign_no_control
+          else
+            break unless can_be_assigned?(atomic)
+
+            if atomic.is_a?(Path) && inside_def?
+              raise "dynamic constant assignment"
+            end
+
+            if atomic.is_a?(Var) && atomic.name == "self"
+              raise "can't change the value of self", location
+            end
+
+            atomic = Var.new(atomic.name) if atomic.is_a?(Call)
+
+            next_token_skip_space_or_newline
+
+            # Constants need a new scope for their value
+            case atomic
+            when Path
+              needs_new_scope = true
+            when InstanceVar
+              needs_new_scope = @def_nest == 0
+            when Var
+              @assigns_special_var = true if atomic.special_var?
+            else
+              needs_new_scope = false
+            end
+
+            push_fresh_scope if needs_new_scope
+            value = parse_op_assign_no_control
+            pop_scope if needs_new_scope
+
+            add_var atomic
+
+            atomic = Assign.new(atomic, value).at(location)
+            atomic.doc = doc
+            atomic
+          end
+
+        when :"+=", :"-=", :"*=", :"/=", :"%=", :".|.=", :".&.=", :"^=", :"**=", :"<<=", :">>=", :"||=", :"&&="
+          # Rewrite 'a += b' as 'a = a + b'
+
+          unexpected_token unless allow_ops
+
           break unless can_be_assigned?(atomic)
 
-          if atomic.is_a?(Path) && inside_def?
-            raise "dynamic constant assignment"
+          if atomic.is_a?(Path)
+            raise "can't reassign to constant"
           end
 
           if atomic.is_a?(Var) && atomic.name == "self"
             raise "can't change the value of self", location
           end
 
-          atomic = Var.new(atomic.name) if atomic.is_a?(Call)
+          if atomic.is_a?(Call) && atomic.name != "[]" && !@scope_stack.cur_has?(atomic.name)
+            raise "'#{@token.type}' before definition of '#{atomic.name}'"
 
-          next_token_skip_space_or_newline
-
-          # Constants need a new scope for their value
-          case atomic
-          when Path
-            needs_new_scope = true
-          when InstanceVar
-            needs_new_scope = @def_nest == 0
-          when Var
-            @assigns_special_var = true if atomic.special_var?
-          else
-            needs_new_scope = false
+            atomic = Var.new(atomic.name)
           end
-
-          push_fresh_scope if needs_new_scope
-          value = parse_op_assign_no_control
-          pop_scope if needs_new_scope
 
           add_var atomic
 
-          atomic = Assign.new(atomic, value).at(location)
-          atomic.doc = doc
-          atomic
-        end
-      when :"+=", :"-=", :"*=", :"/=", :"%=", :"|=", :"&=", :"^=", :"**=", :"<<=", :">>=", :"||=", :"&&="
-        # Rewrite 'a += b' as 'a = a + b'
+          method = @token.type.to_s.byte_slice(0, @token.to_s.bytesize - 1)
+          method_column_number = @token.column_number
 
-        unexpected_token unless allow_ops
+          token_type = @token.type
 
-        break unless can_be_assigned?(atomic)
+          next_token_skip_space_or_newline
 
-        if atomic.is_a?(Path)
-          raise "can't reassign to constant"
-        end
+          value = parse_op_assign_no_control
 
-        if atomic.is_a?(Var) && atomic.name == "self"
-          raise "can't change the value of self", location
-        end
+          if atomic.is_a?(Call) && atomic.name == "[]"
+            obj = atomic.obj
+            atomic_clone = atomic.clone
 
-        if atomic.is_a?(Call) && atomic.name != "[]" && !@scope_stack.cur_has?(atomic.name)
-          raise "'#{@token.type}' before definition of '#{atomic.name}'"
+            case token_type
+            when :"&&="
+              atomic.args.push value
+              assign = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
+              fetch = atomic_clone
+              fetch.name = "[]?"
+              atomic = And.new(fetch, assign).at(location)
+            when :"||="
+              atomic.args.push value
+              assign = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
+              fetch = atomic_clone
+              fetch.name = "[]?"
+              atomic = Or.new(fetch, assign).at(location)
+            else
+              call = tag_onyx Call.new(atomic_clone, method, [value] of ASTNode, name_column_number: method_column_number).at(location)
+              atomic.args.push call
+              atomic = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
+            end
 
-          atomic = Var.new(atomic.name)
-        end
-
-        add_var atomic
-
-        method = @token.type.to_s.byte_slice(0, @token.to_s.bytesize - 1)
-        method_column_number = @token.column_number
-
-        token_type = @token.type
-
-        next_token_skip_space_or_newline
-
-        value = parse_op_assign_no_control
-
-        if atomic.is_a?(Call) && atomic.name == "[]"
-          obj = atomic.obj
-          atomic_clone = atomic.clone
-
-          case token_type
-          when :"&&="
-            atomic.args.push value
-            assign = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
-            fetch = atomic_clone
-            fetch.name = "[]?"
-            atomic = And.new(fetch, assign).at(location)
-          when :"||="
-            atomic.args.push value
-            assign = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
-            fetch = atomic_clone
-            fetch.name = "[]?"
-            atomic = Or.new(fetch, assign).at(location)
           else
-            call = tag_onyx Call.new(atomic_clone, method, [value] of ASTNode, name_column_number: method_column_number).at(location)
-            atomic.args.push call
-            atomic = tag_onyx Call.new(obj, "[]=", atomic.args, name_column_number: method_column_number).at(location)
+            case token_type
+            when :"&&="
+              if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
+                ivars.add atomic.name
+              end
+
+              assign = Assign.new(atomic, value).at(location)
+              atomic = And.new(atomic.clone, assign).at(location)
+            when :"||="
+              if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
+                ivars.add atomic.name
+              end
+
+              assign = Assign.new(atomic, value).at(location)
+              atomic = Or.new(atomic.clone, assign).at(location)
+            else
+              call = tag_onyx Call.new(atomic, method, [value] of ASTNode, name_column_number: method_column_number).at(location)
+              atomic = Assign.new(atomic.clone, call).at(location)
+            end
           end
+
         else
-          case token_type
-          when :"&&="
-            if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-              ivars.add atomic.name
-            end
-
-            assign = Assign.new(atomic, value).at(location)
-            atomic = And.new(atomic.clone, assign).at(location)
-          when :"||="
-            if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-              ivars.add atomic.name
-            end
-
-            assign = Assign.new(atomic, value).at(location)
-            atomic = Or.new(atomic.clone, assign).at(location)
-          else
-            call = tag_onyx Call.new(atomic, method, [value] of ASTNode, name_column_number: method_column_number).at(location)
-            atomic = Assign.new(atomic.clone, call).at(location)
-          end
+          break
         end
-      else
-        break
+        allow_ops = true
       end
-      allow_ops = true
+
+      atomic
+    ensure
+      # dbg "end of parse_op_assign"
     end
 
-    atomic
-  ensure
-    #dbg "end of parse_op_assign"
-  end
+    # *TODO* - remove ternary!!!
 
+    # ColonOrNewline = [:":", :NEWLINE]
 
+    # def parse_question_colon
+    #   cond = parse_range
 
-  # *TODO* - remove ternary!!!
+    #   while @token.type == :"?"
+    #     location = @token.location
 
-  # ColonOrNewline = [:":", :NEWLINE]
+    #     check_void_value cond, location
 
-  # def parse_question_colon
-  #   cond = parse_range
+    #     next_token_skip_space_or_newline
+    #     next_token_skip_space_or_newline if @token.type == :":"
+    #     true_val = parse_question_colon
 
-  #   while @token.type == :"?"
-  #     location = @token.location
+    #     check ColonOrNewline
 
-  #     check_void_value cond, location
+    #     next_token_skip_space_or_newline
+    #     next_token_skip_space_or_newline if @token.type == :":"
+    #     false_val = parse_question_colon
 
-  #     next_token_skip_space_or_newline
-  #     next_token_skip_space_or_newline if @token.type == :":"
-  #     true_val = parse_question_colon
+    #     cond = If.new(cond, true_val, false_val)
+#
+    #   end
+    #   cond
+    # end
 
-  #     check ColonOrNewline
-
-  #     next_token_skip_space_or_newline
-  #     next_token_skip_space_or_newline if @token.type == :":"
-  #     false_val = parse_question_colon
-
-  #     cond = If.new(cond, true_val, false_val)
-  #   end
-  #   cond
-  # end
-
-
-
-  def parse_range
-    location = @token.location
-
-    dbg "parse_range before parse_or"
-    exp = parse_or
-    dbg "parse_range after parse_or"
-
-    while true
-      case @token.type
-      when :".."
-        exp = new_range(exp, location, false)
-      when :"..."
-        exp = new_range(exp, location, true)
-      else
-        return exp
-      end
-    end
-  end
-
-  def new_range(exp, location, exclusive)
-    check_void_value exp, location
-    next_token_skip_space_or_newline
-    check_void_expression_keyword
-    right = parse_or
-    RangeLiteral.new(exp, right, exclusive).at(location).at_end(right)
-  end
-
-  macro parse_operator(name, next_operator, node, operators)
-    def parse_{{name.id}}
+    def parse_range
       location = @token.location
 
-      left = parse_{{next_operator.id}}
+      dbg "parse_range before parse_or"
+      exp = parse_or
+      dbg "parse_range after parse_or"
+
+      while true
+        case @token.type
+        when :".."
+          exp = new_range(exp, location, false)
+        when :"..."
+          exp = new_range(exp, location, true)
+        else
+          return exp
+        end
+      end
+    end
+
+    def new_range(exp, location, exclusive)
+      check_void_value exp, location
+      next_token_skip_space_or_newline
+      check_void_expression_keyword
+      right = parse_or
+      RangeLiteral.new(exp, right, exclusive).at(location).at_end(right)
+    end
+
+    macro parse_operator(name, next_operator, node, operators)
+      def parse_{{name.id}}
+        location = @token.location
+        # dbg "now parse: {{next_operator.id}}"
+        # dbg %(will compare: {{operators.id}})
+
+        left = parse_{{next_operator.id}}
+
+        while true
+          case @token.type
+          when :SPACE
+            next_token
+          when {{operators.id}}
+            # dbg "OPERATOR MATCH".red
+            # dbg "check_void_value #{left}"
+            check_void_value left, location
+            # dbg "after check_void_value".red
+
+            method = @token.type.to_s
+            method_column_number = @token.column_number
+
+            dbg "method == #{method}".red
+
+            foometh = method
+            method = case method
+            when "is"
+              "=="
+            when "isnt"
+              "!="
+            when "and"
+              "&&"
+            when "or"
+              "||"
+            when "not"
+              dbg "\n\n\ndoes this happen? (not in parse_operator)\n\n\n".red
+              "!"
+            else
+              method
+            end
+
+
+            dbg "OPERATOR MUTATED".red if foometh != method
+            if foometh != method
+              @next_token_continuation_state = :CONTINUATION
+            end
+
+            slash_is_regex!
+            next_token_skip_space_or_newline
+            right = parse_{{next_operator.id}}
+            left = ({{node.id}}).at(location)
+          else
+            return left
+          end
+        end
+      end
+    end
+
+
+
+    parse_operator :or, :and, "Or.new left, right", ":\"||\", :or"
+    parse_operator :and, :equality, "And.new left, right", ":\"&&\", :and"
+    parse_operator :equality, :cmp, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<\", :\"<=\", :\">\", :\">=\", :\"<=>\""
+    parse_operator :cmp, :logical_or, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :is, :\"!=\", :isnt, :\"=~\", :\"~=\", :\"===\""
+    parse_operator :logical_or, :logical_and, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".|.\", :\".^.\""
+    parse_operator :logical_and, :shift, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".&.\""
+    parse_operator :shift, :add_or_sub, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<<\", :\">>\""
+
+    def parse_add_or_sub
+      location = @token.location
+
+      left = parse_mul_or_div
       while true
         case @token.type
         when :SPACE
           next_token
-        when {{operators.id}}
+        when :"+", :"-"
           check_void_value left, location
 
           method = @token.type.to_s
           method_column_number = @token.column_number
-
-          slash_is_regex!
           next_token_skip_space_or_newline
-          right = parse_{{next_operator.id}}
-          left = ({{node.id}}).at(location)
+          right = parse_mul_or_div
+          left = tag_onyx Call.new(left, method, [right] of ASTNode, name_column_number: method_column_number).at(location)
+        when :NUMBER
+          case char = @token.value.to_s[0]
+          when '+', '-'
+            left = tag_onyx Call.new(left, char.to_s, [NumberLiteral.new(@token.value.to_s.byte_slice(1), @token.number_kind)] of ASTNode, name_column_number: @token.column_number).at(location)
+            next_token_skip_space
+          else
+            return left
+          end
         else
           return left
         end
       end
     end
-  end
 
-  parse_operator :or, :and, "Or.new left, right", ":\"||\""
-  parse_operator :and, :equality, "And.new left, right", ":\"&&\""
-  parse_operator :equality, :cmp, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<\", :\"<=\", :\">\", :\">=\", :\"<=>\""
-  parse_operator :cmp, :logical_or, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :\"!=\", :\"=~\", :\"===\""
-  parse_operator :logical_or, :logical_and, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"|\", :\"^\""
-  parse_operator :logical_and, :shift, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"&\""
-  parse_operator :shift, :add_or_sub, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<<\", :\">>\""
+    parse_operator :mul_or_div, :prefix, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"*\", :\"/\", :\"%\""
 
-  def parse_add_or_sub
-    location = @token.location
+    def parse_prefix
+      column_number = @token.column_number
+      case token_type = @token.type
+      when :"!", :not, :"+", :"-", :"~"
+        token_type = :"!" if token_type == :not
 
-    left = parse_mul_or_div
-    while true
-      case @token.type
-      when :SPACE
-        next_token
-      when :"+", :"-"
-        check_void_value left, location
-
-        method = @token.type.to_s
-        method_column_number = @token.column_number
+        location = @token.location
         next_token_skip_space_or_newline
-        right = parse_mul_or_div
-        left = tag_onyx Call.new(left, method, [right] of ASTNode, name_column_number: method_column_number).at(location)
-      when :NUMBER
-        case char = @token.value.to_s[0]
-        when '+', '-'
-          left = tag_onyx Call.new(left, char.to_s, [NumberLiteral.new(@token.value.to_s.byte_slice(1), @token.number_kind)] of ASTNode, name_column_number: @token.column_number).at(location)
-          next_token_skip_space
-        else
-          return left
-        end
+        check_void_expression_keyword
+        arg = parse_prefix
+        tag_onyx Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
       else
-        return left
+        parse_pow
       end
     end
-  end
 
-  parse_operator :mul_or_div, :prefix, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"*\", :\"/\", :\"%\""
+    parse_operator :pow, :atomic_with_method, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
 
-  def parse_prefix
-    column_number = @token.column_number
-    case token_type = @token.type
-    when :"!", :"+", :"-", :"~"
+    AtomicWithMethodCheck = [:IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"===", :"[]", :"[]=", :"[]?", :"!", :"not"]
+
+    def parse_atomic_with_method
+      dbg "parse_atomic_method"
       location = @token.location
-      next_token_skip_space_or_newline
-      check_void_expression_keyword
-      arg = parse_prefix
-      tag_onyx Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
-    else
-      parse_pow
+      atomic = parse_atomic
+
+      if @was_just_nest_end == false
+        dbg "parse_atomic_with_method -> parse_atomic_method_suffix"
+        parse_atomic_method_suffix atomic, location
+      else
+        dbg "parse_atomic_with_method -> NO suffix - was nest_end before"
+        atomic
+      end
     end
-  end
 
-  parse_operator :pow, :atomic_with_method, "tag_onyx Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
+    def parse_atomic_method_suffix(atomic, location)
+      # *TODO* *9*
+      # *TODO* POSSIBLY for Functor calls! (`()` is a functor sugar for `inst.call()`)
 
-  AtomicWithMethodCheck = [:IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&", :"===", :"[]", :"[]=", :"[]?", :"!"]
+      # # *TODO* wrong place?
+      # possible_call_notation = false
 
-  def parse_atomic_with_method
-    location = @token.location
-    atomic = parse_atomic
+      # if tok? :SPACE
+      #   next_token
 
-    if @was_just_nest_end == false
-      dbg "parse_atomic_with_method -> parse_atomic_method_suffix"
-      parse_atomic_method_suffix atomic, location
-    else
-      dbg "parse_atomic_with_method -> NO suffix - was nest_end before"
-      atomic
-    end
-  end
+      #   case peek_next_char
+      #   when '\n', '.', '['
+      #     break
+#
+      #   else
+      #     possible_call_notation = true
+#
+      #   end
 
-  def parse_atomic_method_suffix(atomic, location)
+      # elsif tok? :"("
+      #   possible_call_notation = true
+      # end
 
+      # if possible_call_notation
+      #   args = parse_call_args false, false  # *TODO* look over the block–param aspects
+      #   return Call.new atomic, args   *TODO*
+      # end
 
-    # *TODO* *9*
-    # *TODO* POSSIBLY for Functor calls! (`()` is a functor sugar for `inst.call()`)
+      while true
+        maybe_mutate_gt_op_to_bigger_op
 
-    # # *TODO* wrong place?
-    # possible_call_notation = false
+        case @token.type
+        when :SPACE
+          next_token
+          # *TODO* wrong place?
 
-    # if tok? :SPACE
-    #   next_token
+        when :"\""
+          # *TODO* string–literal–type–creation
+          # r"^some–reg–exp.*$"gi
+          # raw"A raw string literal"
+          # c"x" -- a char literal
+          #
+          # etc. user implemented (?)
+          raise "Specific literal - not implemented yet"
 
-    #   case peek_next_char
-    #   when '\n', '.', '['
-    #     break
-    #   else
-    #     possible_call_notation = true
-    #   end
+        when :IDFR
+          if kwd?(:as)
+            check_void_value atomic, location
 
-    # elsif tok? :"("
-    #   possible_call_notation = true
-    # end
+            next_token_skip_space
+            to = parse_single_type
+            atomic = Cast.new(atomic, to).at(location)
+          else
+            break
+          end
 
-    # if possible_call_notation
-    #   args = parse_call_args false, false  # *TODO* look over the block–param aspects
-    #   return Call.new atomic, args   *TODO*
-    # end
+        when :NEWLINE
+          # If one_line nest, this means quits
+          if @one_line_nest != 0
+            break
+          end
+          # In these cases we don't want to chain a call
+          case atomic
+          when ClassDef, ModuleDef, EnumDef, FunDef, Def
+            break
+          end
 
+          # Allow '.' after newline for chaining calls
+          backed = backup_tok
+          next_token_skip_space_or_newline
+          unless @token.type == :"."
+            restore_tok backed
+            break
+          end
 
+        when :"."
+          atomic = parse_atomic_method_suffix_dot atomic, location
 
-    while true
-      mutate_gt_op_to_bigger_op?
-
-      case @token.type
-      when :SPACE
-        next_token
-
-
-      # *TODO* wrong place?
-      when :"\""
-        # *TODO* string–literal–type–creation
-        # r"^some–reg–exp.*$"gi
-        # raw"A raw string literal"
-        # c"x" -- a char literal
-        #
-        # etc. user implemented (?)
-        raise "Specific literal - not implemented yet"
-
-
-      when :IDFR
-        if @token.keyword?(:as)
+        when :"[]"
           check_void_value atomic, location
 
+          column_number = @token.column_number
           next_token_skip_space
-          to = parse_single_type
-          atomic = Cast.new(atomic, to).at(location)
-        else
-          break
-        end
-      when :NEWLINE
-        # If one_line nest, this means quits
-        if @one_line_nest != 0
-          break
-        end
-        # In these cases we don't want to chain a call
-        case atomic
-        when ClassDef, ModuleDef, EnumDef, FunDef, Def
-          break
-        end
+          atomic = tag_onyx Call.new(atomic, "[]",
+                                     name_column_number: column_number
+                                    ).at(location)
+          atomic.name_size = 0 if atomic.is_a?(Call)
+          atomic
 
-        # Allow '.' after newline for chaining calls
-        backed = backup_tok
-        next_token_skip_space_or_newline
-        unless @token.type == :"."
-          restore_tok backed
-          break
-        end
-      when :"."
-        atomic = parse_atomic_method_suffix_dot atomic, location
-      when :"[]"
-        check_void_value atomic, location
+        when :"["
+          check_void_value atomic, location
 
-        column_number = @token.column_number
-        next_token_skip_space
-        atomic = tag_onyx Call.new(atomic, "[]",
-                          name_column_number: column_number
-                         ).at(location)
-        atomic.name_size = 0 if atomic.is_a?(Call)
-        atomic
-      when :"["
-        check_void_value atomic, location
-
-        column_number = @token.column_number
-        next_token_skip_space_or_newline
-        args = [] of ASTNode
-        while true
-          args << parse_single_arg
-          skip_statement_end
-          case @token.type
-          when :","
-            next_token_skip_space_or_newline
-            if @token.type == :"]"
+          column_number = @token.column_number
+          next_token_skip_space_or_newline
+          args = [] of ASTNode
+          while true
+            args << parse_single_arg
+            skip_statement_end
+            case @token.type
+            when :","
+              next_token_skip_space_or_newline
+              if @token.type == :"]"
+                next_token
+                break
+              end
+            when :"]"
               next_token
               break
             end
-          when :"]"
+          end
+
+          if @token.type == :"?"
+            method_name = "[]?"
+            next_token_skip_space
+          else
+            method_name = "[]"
+            skip_space
+          end
+
+          atomic = tag_onyx Call.new(atomic, method_name, args,
+                                     name_column_number: column_number
+                                    ).at(location)
+          atomic.name_size = 0 if atomic.is_a?(Call)
+          atomic
+
+        else
+          break
+        end
+      end
+
+      atomic
+    end
+
+    def parse_atomic_method_suffix_dot(atomic, location)
+      dbg "parse_atomic_method_suffix_dot"
+      check_void_value atomic, location
+
+      @wants_regex = false
+
+      if current_char == '%'
+        next_char
+        @token.type = :"%"
+        @token.column_number += 1
+        skip_statement_end
+      else
+        next_token_skip_space_or_newline
+
+        if @token.type == :INSTANCE_VAR
+          dbg "parse_atomic_method_suffix_dot instance var"
+          ivar_name = @token.value.to_s
+          end_location = token_end_location
+          next_token_skip_space
+
+          atomic = ReadInstanceVar.new(atomic, ivar_name).at(location)
+          atomic.end_location = end_location
+          return atomic
+        end
+      end
+
+      dbg "parse_atomic_method_suffix_dot check AtomicWithMethodCheck"
+      check AtomicWithMethodCheck
+      name_column_number = @token.column_number
+
+      if @token.value == :is_a?
+        atomic = parse_is_a(atomic).at(location)
+      elsif @token.value == :responds_to?
+        atomic = parse_responds_to(atomic).at(location)
+      else
+        dbg "parse_atomic_method_suffix_dot else"
+
+        name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
+        end_location = token_end_location
+
+        @wants_regex = false
+        next_token
+
+        space_consumed = false
+        if @token.type == :SPACE
+          @wants_regex = true
+          next_token
+          space_consumed = true
+        end
+
+        case @token.type
+        when :"="
+          # Rewrite 'f.x = arg' as f.x=(arg)
+          next_token
+          if @token.type == :"("
+            next_token_skip_space
+            arg = parse_single_arg
+            check :")"
             next_token
-            break
+          else
+            skip_statement_end
+            arg = parse_single_arg
+          end
+          return tag_onyx Call.new(atomic, "#{name}=", [arg] of ASTNode, name_column_number: name_column_number).at(location)
+
+        when :"+=", :"-=", :"*=", :"/=", :"%=", :".|.=", :".&.=", :"^=", :"**=", :"<<=", :">>="
+          # Rewrite 'f.x += value' as 'f.x=(f.x + value)'
+          method = @token.type.to_s.byte_slice(0, @token.type.to_s.size - 1)
+          next_token_skip_space
+          value = parse_op_assign
+          return tag_onyx Call.new(atomic, "#{name}=", [tag_onyx Call.new(tag_onyx(Call.new(atomic.clone, name, name_column_number: name_column_number)), method, [value] of ASTNode, name_column_number: name_column_number)] of ASTNode, name_column_number: name_column_number).at(location)
+
+        when :"||="
+          # Rewrite 'f.x ||= value' as 'f.x || f.x=(value)'
+          next_token_skip_space
+          value = parse_op_assign
+          return Or.new(
+            tag_onyx(Call.new(atomic, name)).at(location),
+            tag_onyx(Call.new(atomic.clone, "#{name}=", value)).at(location)
+          ).at(location)
+
+        when :"&&="
+          # Rewrite 'f.x &&= value' as 'f.x && f.x=(value)'
+          next_token_skip_space
+          value = parse_op_assign
+          return And.new(
+            tag_onyx(Call.new(atomic, name)).at(location),
+            tag_onyx(Call.new(atomic.clone, "#{name}=", value)).at(location)
+          ).at(location)
+
+        else
+          call_args = space_consumed ? parse_call_args_space_consumed : parse_call_args
+
+          # call_args, last_call_has_parenthesis = (
+          #   preserve_last_call_has_parenthesis {
+          #     space_consumed ? parse_call_args_space_consumed : parse_call_args
+          #   }
+          # )
+          if call_args
+            args = call_args.args
+            block = call_args.block
+            block_cast = call_args.block_cast
+            named_args = call_args.named_args
+          else
+            args = block = block_cast = nil
           end
         end
 
-        if @token.type == :"?"
-          method_name = "[]?"
-          next_token_skip_space
+        #block = parse_block(block)
+
+        if block || block_cast
+          atomic = tag_onyx Call.new(
+            atomic,
+            name,
+            (args || [] of ASTNode),
+            block,
+            block_cast, named_args,
+            name_column_number: name_column_number
+          )
         else
-          method_name = "[]"
-          skip_space
+          atomic = args ? (tag_onyx Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number) : (tag_onyx Call.new atomic, name, name_column_number: name_column_number)
         end
-
-        atomic = tag_onyx Call.new(atomic, method_name, args,
-                          name_column_number: column_number
-                         ).at(location)
-        atomic.name_size = 0 if atomic.is_a?(Call)
-        atomic
-      else
-        break
-      end
-    end
-
-    atomic
-  end
-
-  def parse_atomic_method_suffix_dot(atomic, location)
-    check_void_value atomic, location
-
-    @wants_regex = false
-
-    if current_char == '%'
-      next_char
-      @token.type = :"%"
-      @token.column_number += 1
-      skip_statement_end
-    else
-      next_token_skip_space_or_newline
-
-      if @token.type == :INSTANCE_VAR
-        ivar_name = @token.value.to_s
-        end_location = token_end_location
-        next_token_skip_space
-
-        atomic = ReadInstanceVar.new(atomic, ivar_name).at(location)
-        atomic.end_location = end_location
+        atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
+        atomic.at(location)
         return atomic
       end
-    end
-
-    check AtomicWithMethodCheck
-    name_column_number = @token.column_number
-
-    if @token.value == :is_a?
-      atomic = parse_is_a(atomic).at(location)
-    elsif @token.value == :responds_to?
-      atomic = parse_responds_to(atomic).at(location)
-    else
-      name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
-      end_location = token_end_location
-
-      @wants_regex = false
-      next_token
-
-      space_consumed = false
-      if @token.type == :SPACE
-        @wants_regex = true
-        next_token
-        space_consumed = true
-      end
-
-      case @token.type
-      when :"="
-        # Rewrite 'f.x = arg' as f.x=(arg)
-        next_token
-        if @token.type == :"("
-          next_token_skip_space
-          arg = parse_single_arg
-          check :")"
-          next_token
-        else
-          skip_statement_end
-          arg = parse_single_arg
-        end
-        return tag_onyx Call.new(atomic, "#{name}=", [arg] of ASTNode, name_column_number: name_column_number).at(location)
-
-      when :"+=", :"-=", :"*=", :"/=", :"%=", :"|=", :"&=", :"^=", :"**=", :"<<=", :">>="
-        # Rewrite 'f.x += value' as 'f.x=(f.x + value)'
-        method = @token.type.to_s.byte_slice(0, @token.type.to_s.size - 1)
-        next_token_skip_space
-        value = parse_op_assign
-        return tag_onyx Call.new(atomic, "#{name}=", [tag_onyx Call.new(tag_onyx(Call.new(atomic.clone, name, name_column_number: name_column_number)), method, [value] of ASTNode, name_column_number: name_column_number)] of ASTNode, name_column_number: name_column_number).at(location)
-      when :"||="
-        # Rewrite 'f.x ||= value' as 'f.x || f.x=(value)'
-        next_token_skip_space
-        value = parse_op_assign
-        return Or.new(
-            tag_onyx(Call.new(atomic, name)).at(location),
-            tag_onyx(Call.new(atomic.clone, "#{name}=", value)).at(location)
-          ).at(location)
-      when :"&&="
-        # Rewrite 'f.x &&= value' as 'f.x && f.x=(value)'
-        next_token_skip_space
-        value = parse_op_assign
-        return And.new(
-            tag_onyx(Call.new(atomic, name)).at(location),
-            tag_onyx(Call.new(atomic.clone, "#{name}=", value)).at(location)
-          ).at(location)
-      else
-        call_args, last_call_has_parenthesis = (
-          preserve_last_call_has_parenthesis {
-            space_consumed ?
-              parse_call_args_space_consumed :
-              parse_call_args
-          }
-        )
-        if call_args
-          args = call_args.args
-          block = call_args.block
-          block_arg = call_args.block_arg
-          named_args = call_args.named_args
-        else
-          args = block = block_arg = nil
-        end
-      end
-
-      block = parse_block(block)
-      if block || block_arg
-        atomic = tag_onyx Call.new(atomic, name, (args || [] of ASTNode), block,
-                          block_arg, named_args,
-                          name_column_number: name_column_number
-                         )
-      else
-        atomic = args ? (tag_onyx Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number) : (tag_onyx Call.new atomic, name, name_column_number: name_column_number)
-      end
-      atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
-      atomic.at(location)
       return atomic
     end
-    return atomic
-  end
 
-  def parse_single_arg
-    if @token.type == :"..."
-      next_token_skip_space
-      arg = parse_op_assign_no_control
-      Splat.new(arg)
-    else
-      parse_op_assign_no_control
-    end
-  end
-
-  def parse_is_a(atomic)
-    next_token_skip_space
-
-    if @token.type == :"("
-      next_token_skip_space_or_newline
-      type = parse_single_type
-      skip_space
-      check :")"
-      next_token_skip_space
-    else
-      type = parse_single_type
-    end
-
-    IsA.new(atomic, type)
-  end
-
-  def parse_responds_to(atomic)
-    next_token
-
-    if @token.type == :"("
-      next_token_skip_space_or_newline
-      name = parse_responds_to_name
-      next_token_skip_space_or_newline
-      check :")"
-      next_token_skip_space
-    elsif @token.type == :SPACE
-      next_token
-      name = parse_responds_to_name
-      next_token_skip_space
-    end
-
-    RespondsTo.new(atomic, name)
-  end
-
-  def parse_responds_to_name
-    if @token.type != :SYMBOL
-      unexpected_token msg: "expected name or symbol"
-    end
-
-    @token.value.to_s
-  end
-
-  def parse_atomic
-    location = @token.location
-    atomic = parse_atomic_without_location
-    atomic.location ||= location
-    atomic
-  end
-
-  def parse_atomic_without_location
-    #dbg "parse_atomic_without_location"
-
-    case @token.type
-    when :"("
-      parse_parenthesized_expression
-    when :"[]"
-      parse_empty_array_literal
-
-
-    when :"["
-      parse_array_literal_or_multi_assign
-
-
-    when :"{"
-      parse_hash_or_tuple_literal
-    when :"{{"
-      macro_exp = parse_macro_expression
-      check_macro_expression_end
-      next_token
-      MacroExpression.new(macro_exp)
-    when :"{%"
-      macro_control = parse_macro_control(@line_number, @column_number)
-      if macro_control
-        check :"%}"
+    def parse_single_arg
+      if @token.type == :"..."
         next_token_skip_space
-        macro_control
+        arg = parse_op_assign_no_control
+        Splat.new(arg)
       else
-        unexpected_token_in_atomic
+        parse_op_assign_no_control
       end
-    when :"::"
-      parse_idfr_or_global_call
+    end
 
-    #when :"->"
-    #  parse_fun_literal
-
-    when :"@["
-      parse_attribute
-    when :NUMBER
-      @wants_regex = false
-      node_and_next_token NumberLiteral.new(@token.value.to_s, @token.number_kind)
-    when :CHAR
-      node_and_next_token CharLiteral.new(@token.value as Char)
-    when :STRING, :DELIMITER_START
-      parse_delimiter
-    when :STRING_ARRAY_START
-      parse_string_array
-    when :SYMBOL_ARRAY_START
-      parse_symbol_array
-    when :SYMBOL
-      node_and_next_token TagLiteral.new(@token.value.to_s)
-    when :GLOBAL
-      @wants_regex = false
-      node_and_next_token Global.new(@token.value.to_s)
-    when :"$~", :"$?"
-      location = @token.location
-      var = Var.new(@token.to_s).at(location)
-
-      backed = backup_tok
-
+    def parse_is_a(atomic)
       next_token_skip_space
 
-      if @token.type == :"="
-        restore_tok backed
-        add_var var
-        node_and_next_token var
+      if @token.type == :"("
+        next_token_skip_space_or_newline
+        type = parse_single_type
+        skip_space
+        check :")"
+        next_token_skip_space
       else
-        restore_tok backed
-        node_and_next_token tag_onyx Call.new(var, "not_nil!").at(location)
+        type = parse_single_type
       end
-    when :GLOBAL_MATCH_DATA_INDEX
-      value = @token.value.to_s
-      if value == "0"
-        node_and_next_token Path.global("PROGRAM_NAME")
-      else
-        if value.ends_with? '?'
-          method = "[]?"
-          value = value.chop
-        else
-          method = "[]"
-        end
-        location = @token.location
-        node_and_next_token tag_onyx Call.new(tag_onyx(Call.new(Var.new("$~").at(location), "not_nil!")).at(location), method, NumberLiteral.new(value.to_i))
-      end
-    when :__LINE__
-      node_and_next_token MagicConstant.expand_line_node(@token.location)
-    when :__FILE__
-      node_and_next_token MagicConstant.expand_file_node(@token.location)
-    when :__DIR__
-      node_and_next_token MagicConstant.expand_dir_node(@token.location)
-    when :IDFR
-      case @token.value
-      when :begin
-        parse_begin
-      when :nil
-        node_and_next_token NilLiteral.new
-      when :true
-        node_and_next_token BoolLiteral.new(true)
-      when :false
-        node_and_next_token BoolLiteral.new(false)
-      when :yield
-        parse_yield
-      when :with
-        parse_yield_with_scope
-      when :abstract
-        check_not_inside_def("can't use abstract inside def") do
-          doc = @token.doc
 
-          next_token_skip_space_or_newline
-          case @token.type
-          when :IDFR
-            case @token.value
-            when :def
-              parse_def is_abstract: true, doc: doc
-            when :type
-              parse_type_def is_abstract: true, doc: doc
-            when :class
-              parse_type_def is_abstract: true, doc: doc
-            when :struct
-              parse_type_def is_abstract: true, is_struct: true, doc: doc
+      IsA.new(atomic, type)
+    end
+
+    def parse_responds_to(atomic)
+      next_token
+
+      if @token.type == :"("
+        next_token_skip_space_or_newline
+        name = parse_responds_to_name
+        next_token_skip_space_or_newline
+        check :")"
+        next_token_skip_space
+      elsif @token.type == :SPACE
+        next_token
+        name = parse_responds_to_name
+        next_token_skip_space
+      end
+
+      RespondsTo.new(atomic, name)
+    end
+
+    def parse_responds_to_name
+      if @token.type != :SYMBOL
+        unexpected_token msg: "expected name or symbol"
+      end
+
+      @token.value.to_s
+    end
+
+    def parse_atomic
+      dbg "parse_atomic"
+      location = @token.location
+      atomic = parse_atomic_without_location
+      atomic.location ||= location
+      atomic
+    end
+
+    def parse_atomic_without_location
+      dbg "parse_atomic_without_location"
+
+      ret = case @token.type
+      when :"("
+        parse_parenthetical_unknown
+
+      when :"[]"
+        parse_empty_array_literal
+
+      when :"["
+        parse_array_literal_or_multi_assign
+
+      when :"{"
+        parse_hash_or_tuple_literal
+
+      when :"{{"
+        macro_exp = parse_macro_expression
+        check_macro_expression_end
+        next_token
+        MacroExpression.new(macro_exp)
+
+      when :"{%"
+        macro_control = parse_macro_control(@line_number, @column_number)
+        if macro_control
+          check :"%}"
+          next_token_skip_space
+          macro_control
+        else
+          unexpected_token_in_atomic
+        end
+
+      when :"::"
+        parse_idfr_or_global_call
+        # when :"->"
+        #  parse_fun_literal
+
+      when :"@["
+        parse_attribute
+
+      when :NUMBER
+        dbg "when :NUMBER"
+        @wants_regex = false
+        node_and_next_token NumberLiteral.new(@token.value.to_s, @token.number_kind)
+
+      when :CHAR
+        node_and_next_token CharLiteral.new(@token.value as Char)
+
+      when :STRING, :DELIMITER_START
+        parse_delimiter
+
+      when :STRING_ARRAY_START
+        parse_string_array
+
+      when :SYMBOL_ARRAY_START
+        parse_symbol_array
+
+      when :PRAGMA
+        #*TODO* GHOST IMPLEMENTATION ATM
+        pragmas = [] of Attribute
+
+        while tok? :PRAGMA
+          pragmas.concat parse_possible_pragmas
+          skip_space_or_newline
+        end
+
+        dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
+
+        parse_expression
+
+      when :SYMBOL
+        node_and_next_token TagLiteral.new(@token.value.to_s)
+
+      when :GLOBAL
+        @wants_regex = false
+        node_and_next_token Global.new(@token.value.to_s)
+
+      when :"$~", :"$?"
+        location = @token.location
+        var = Var.new(@token.to_s).at(location)
+
+        backed = backup_tok
+
+        next_token_skip_space
+
+        if @token.type == :"="
+          restore_tok backed
+          add_var var
+          node_and_next_token var
+        else
+          restore_tok backed
+          node_and_next_token tag_onyx Call.new(var, "not_nil!").at(location)
+        end
+
+      when :GLOBAL_MATCH_DATA_INDEX
+        value = @token.value.to_s
+        if value == "0"
+          node_and_next_token Path.global("PROGRAM_NAME")
+        else
+          if value.ends_with? '?'
+            method = "[]?"
+            value = value.chop
+          else
+            method = "[]"
+          end
+          location = @token.location
+          node_and_next_token tag_onyx Call.new(tag_onyx(Call.new(Var.new("$~").at(location), "not_nil!")).at(location), method, NumberLiteral.new(value.to_i))
+        end
+
+      when :__LINE__
+        node_and_next_token MagicConstant.expand_line_node(@token.location)
+
+      when :__FILE__
+        node_and_next_token MagicConstant.expand_file_node(@token.location)
+
+      when :__DIR__
+        node_and_next_token MagicConstant.expand_dir_node(@token.location)
+
+      when :IDFR
+
+        dbg "took idfr branch"
+        # when :"|" # *TODO* *TEST*
+        #   parse_var_or_call
+
+        case @token.value
+        when :begin
+          parse_begin
+        when :nil
+          node_and_next_token NilLiteral.new
+        when :true
+          node_and_next_token BoolLiteral.new(true)
+        when :false
+          node_and_next_token BoolLiteral.new(false)
+        when :yield
+          parse_yield
+        when :with
+          parse_yield_with_scope
+        when :abstract
+          check_not_inside_def("can't use abstract inside def") do
+            doc = @token.doc
+
+            next_token_skip_space_or_newline
+            case @token.type
+            when :IDFR
+              case @token.value
+              when :def
+                parse_def is_abstract: true, doc: doc
+              when :type
+                parse_type_def is_abstract: true, doc: doc
+              when :class
+                parse_type_def is_abstract: true, doc: doc
+              when :struct
+                parse_type_def is_abstract: true, is_struct: true, doc: doc
+              else
+                unexpected_token
+              end
             else
               unexpected_token
             end
-          else
-            unexpected_token
           end
-        end
-      when :def
-        # *TODO* create "owningdefname__private_def__thisdefname"
-        # - do this for the whole hierarchy of defs ofc. (if more)
-        check_not_inside_def("can't define def inside def") do
-          parse_def
-        end
-      when :macro
-        # *TODO* create "owningdefname__private_macro__thisdefname"
-        # - do this for the whole hierarchy of defs ofc. (if more)
-        check_not_inside_def("can't define macro inside def") do
-          parse_macro
-        end
-      when :require
-        parse_require
-      when :case, :match, :branch
-        parse_case
-      when :if
-        ret = parse_if
-        dbg "after parse_if in parse_atomic_without_location"
-        ret
-      when :ifdef
-        parse_ifdef
-      when :unless
-        parse_unless
-      when :include
-        check_not_inside_def("can't include inside def") do
-          parse_include
-        end
-      when :extend
-        check_not_inside_def("can't extend inside def") do
-          parse_extend
-        end
-      when :type
-        check_not_inside_def("can't define class inside def") do
-          parse_type_def
-        end
-      when :class
-        check_not_inside_def("can't define class inside def") do
-          parse_type_def
-        end
-      when :struct
-        check_not_inside_def("can't define struct inside def") do
-          parse_type_def is_struct: true
-        end
-      when :module
-        check_not_inside_def("can't define module inside def") do
-          parse_module_def
-        end
-      when :enum
-        check_not_inside_def("can't define enum inside def") do
-          parse_enum_def
-        end
-      when :for, :each
-        parse_for
-      when :while
-        parse_while
-      when :until
-        parse_until
-      when :return
-        parse_return
-      when :next
-        parse_next
-      when :break
-        parse_break
-      when :lib
-        check_not_inside_def("can't define lib inside def") do
-          parse_lib
-        end
-      when :fun
-        check_not_inside_def("can't define fun inside def") do
-          parse_fun_def require_body: true
-        end
-      when :alias
-        check_not_inside_def("can't define alias inside def") do
-          parse_alias
-        end
-      when :pointerof
-        parse_pointerof
-      when :sizeof
-        parse_sizeof
-      when :instance_sizeof
-        parse_instance_sizeof
-      when :typeof
-        parse_typeof
-      when :private
-        parse_visibility_modifier :private
-      when :protected
-        parse_visibility_modifier :protected
-      when :asm
-        parse_asm
-      else
-        set_visibility parse_var_or_call
-      end
-    when :CONST
-      parse_idfr_or_literal
+        when :def
+          # *TODO* create "owningdefname__private_def__thisdefname"
+          # - do this for the whole hierarchy of defs ofc. (if more)
+          check_not_inside_def("can't define def inside def") do
+            parse_def
+          end
+        when :macro
+          # *TODO* create "owningdefname__private_macro__thisdefname"
+          # - do this for the whole hierarchy of defs ofc. (if more)
+          check_not_inside_def("can't define macro inside def") do
+            parse_macro
+          end
+        when :require
+          parse_require
+        when :case, :match, :branch
+          parse_case
+        when :if
+          ret = parse_if
+          dbg "after parse_if in parse_atomic_without_location"
+          ret
+        when :ifdef
+          parse_ifdef
+        when :unless
+          parse_unless
+        when :include, :mixin
+          check_not_inside_def("can't include inside def") do
+            parse_include
+          end
+        when :extend
+          check_not_inside_def("can't extend inside def") do
+            parse_extend
+          end
+        when :type
+          check_not_inside_def("can't define class inside def") do
+            parse_type_def
+          end
+        when :class
+          check_not_inside_def("can't define class inside def") do
+            parse_type_def
+          end
+        when :struct
+          check_not_inside_def("can't define struct inside def") do
+            parse_type_def is_struct: true
+          end
+        when :module
+          check_not_inside_def("can't define module inside def") do
+            parse_module_def
+          end
+        when :trait, "trait"
+          dbg "trait!"
+          check_not_inside_def("can't define trait inside def") do
+            parse_trait_def
+          end
+        when :enum
+          check_not_inside_def("can't define enum inside def") do
+            parse_enum_def
+          end
+        when :for, :each
+          parse_for
+        when :while
+          parse_while
+        when :until
+          parse_until
+        when :return
+          parse_return
+        when :next
+          parse_next
+        when :break
+          parse_break
+        when :lib
+          check_not_inside_def("can't define lib inside def") do
+            parse_lib
+          end
+        when :fun
+          check_not_inside_def("can't define fun inside def") do
+            parse_fun_def require_body: true
+          end
+        when :alias
+          check_not_inside_def("can't define alias inside def") do
+            parse_alias
+          end
+        when :pointerof
+          parse_pointerof
+        when :sizeof
+          parse_sizeof
+        when :instance_sizeof
+          parse_instance_sizeof
+        when :typeof
+          parse_typeof
+        when :private
+          parse_visibility_modifier :private
+        when :protected
+          parse_visibility_modifier :protected
+        when :asm
+          parse_asm
 
+        # when :not, :and, :or, :is, :isnt
+        #   raise "BLOW UP TODO *TODO*" # *TODO*
 
+        else
+          set_visibility parse_var_or_call
+        end
+      when :CONST
+        parse_idfr_or_literal
+      when :INSTANCE_VAR
+        dbg "found instance var"
+        name = @token.value.to_s
+        add_instance_var name
+        ivar = InstanceVar.new(name).at(@token.location)
+        ivar.end_location = token_end_location
+        @wants_regex = false
+        next_token_skip_space
 
-    when :INSTANCE_VAR
-      dbg "found instance var"
-      name = @token.value.to_s
-      add_instance_var name
-      ivar = InstanceVar.new(name).at(@token.location)
-      ivar.end_location = token_end_location
-      @wants_regex = false
-      next_token_skip_space
-
-
-      # *TODO* we need to parse this whole thing differently depending on if
-      # "declarative context" or "use context"
-      if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
-        dbg "found type declaration"
-        ivar_type = parse_single_type
-        DeclareVar.new(ivar, ivar_type).at(ivar.location)
-      else
+        # *TODO* we need to parse this whole thing differently depending on if
+        # "declarative context" or "use context"
+        # if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
+        #   dbg "found type declaration"
+        #   ivar_type = parse_single_type
+        #   DeclareVar.new(ivar, ivar_type).at(ivar.location)
+        # else
         ivar
+        # end
+
+      when :CLASS_VAR
+        @wants_regex = false
+        node_and_next_token ClassVar.new(@token.value.to_s)
+      when :UNDERSCORE
+        node_and_next_token Underscore.new
+      else
+        unexpected_token_in_atomic
       end
 
-
-    when :CLASS_VAR
-      @wants_regex = false
-      node_and_next_token ClassVar.new(@token.value.to_s)
-
-
-
-    when :UNDERSCORE
-      node_and_next_token Underscore.new
-    else
-      unexpected_token_in_atomic
+    ensure
+      dbg "end of parse_atomic_without_location"
+      ret
     end
 
-  ensure
-    #dbg "end of parse_atomic_without_location"
-  end
+    def parse_idfr_or_literal
+      idfr = parse_idfr
 
-  def parse_idfr_or_literal
-    idfr = parse_idfr
+      dbg "parse_idfr_or_literal"
 
-    dbg "parse_idfr_or_literal"
-
-    case
-    when tok? :"("
-      return parse_idfr_type_new_call_sugar idfr
-
-    when tok? :SPACE
-      # *TODO* we should probably pre–parse and just make sure it's not a binary
-      # operator or assign
-      case peek_next_char
-      when .alpha?, '_', '"', .ord_gt?(0x9F), .digit?, '(',  '[', '{'
+      case
+      when tok? :"("
         return parse_idfr_type_new_call_sugar idfr
+      when tok? :SPACE
+        # *TODO* we should probably pre–parse and just make sure it's not a binary
+        # operator or assign
+        case peek_next_char
+        when .alpha?, '_', '"', .ord_gt?(0x9F), .digit?, '(', '[', '{'
+          return parse_idfr_type_new_call_sugar idfr
+        end
+      when @token.type == :"{"
+        return parse_idfr_tied_listish_literal idfr
       end
 
-    when @token.type == :"{"
-      return parse_idfr_tied_listish_literal idfr
+      dbg "nothing special - pass along"
 
+      return idfr
     end
 
-    dbg "nothing special - pass along"
+    def parse_idfr_or_global_call
+      location = @token.location
+      next_token_skip_space_or_newline
 
-    return idfr
-  end
-
-  def parse_idfr_tied_listish_literal(idfr)
-    # usertype literal
-    tuple_or_hash = parse_hash_or_tuple_literal allow_of: false
-
-    skip_space
-
-    if @token.keyword?(:"of")
-      unexpected_token
+      case @token.type
+      when :IDFR
+        set_visibility parse_var_or_call global: true
+      when :CONST
+        parse_idfr_after_colons(location, true, true)
+      else
+        unexpected_token
+      end
     end
 
-    case tuple_or_hash
-    when TupleLiteral
-      ary = ArrayLiteral.new(tuple_or_hash.elements, name: idfr).at(tuple_or_hash.location)
-      return ary
-    when HashLiteral
-      tuple_or_hash.name = idfr
-      return tuple_or_hash
-    else
-      raise "Bug: tuple_or_hash should be tuple or hash, not #{tuple_or_hash}"
-    end
-  end
+    def parse_idfr(allow_type_vars = true)
+      location = @token.location
 
-  def parse_idfr_type_new_call_sugar(idfr)
-    arg_node = parse_call_args(false, false)
+      dbg "parse_idfr"
 
-    if arg_node
-      new_args = arg_node.args || [] of ASTNode
-      #new_args = arg_node.args
-      named_args = nil
-      return tag_onyx Call.new(idfr, "new", new_args, nil,  nil, named_args, false, 0, false)
-    else
-      raise "bug in onyx when trying to parse Type.new() sugar!"
-    end
+      global = false
 
-    # *TODO* REPORT BUG! DEDUCTIVE, EARLY RETURN / FAIL PATTERN DOESN'T WORK
-    # WITH INFERRER!
-    # if !arg_node
-    #   raise "bug in onyx when trying to parse Type.new() sugar!"
-    # end
-    # new_args = arg_node.args
-    # named_args = nil
-    # return tag_onyx Call.new(idfr, "new", new_args, nil,  nil, named_args, false, 0, false)
-  end
-
-  def check_not_inside_def(message)
-    if @def_nest == 0
-      yield
-    else
-      raise message, @token.line_number, @token.column_number
-    end
-  end
-
-  def inside_def?
-    @def_nest > 0
-  end
-
-  def parse_attribute
-    doc = @token.doc
-
-    next_token_skip_space
-    name = check_const
-    next_token_skip_space
-
-    args = [] of ASTNode
-    named_args = nil
-
-    if @token.type == :"("
-      open("attribute") do
+      case @token.type
+      when :"::"
+        global = true
         next_token_skip_space_or_newline
-        while @token.type != :")"
-          if @token.type == :IDFR && current_char == ':'
-            named_args = parse_named_args(allow_newline: true)
-            check :")"
-            break
-          else
-            args << parse_call_arg
-          end
+      when :UNDERSCORE
+        return node_and_next_token Underscore.new.at(location)
+      end
 
-          skip_statement_end
-          if @token.type == :","
-            next_token_skip_space_or_newline
-          end
+      check :CONST
+      parse_idfr_after_colons(location, global, allow_type_vars)
+    end
+
+    def parse_idfr_after_colons(location, global, allow_type_vars)
+      start_line = location.line_number
+      start_column = location.column_number
+
+      dbg "parse_idfr_after_colons"
+
+      names = [] of String
+      names << @token.value.to_s
+      end_location = token_end_location
+
+      next_token
+      while @token.type == :"::"
+        next_token_skip_space_or_newline
+        names << check_const
+        end_location = token_end_location
+        next_token
+      end
+
+      const = Path.new(names, global).at(location)
+      const.end_location = end_location
+
+      token_location = @token.location
+      if token_location && token_location.line_number == start_line
+        const.name_size = token_location.column_number - start_column
+      end
+
+      if allow_type_vars && tok? :"<", :"["
+        next_token_skip_space
+
+        types = parse_types allow_primitives: true
+        if types.empty?
+          raise "must specify at least one type var"
         end
+
+        raise "expected `>` or `]` ending type params" if !tok? :">", :"]"
+        const = Generic.new(const, types).at(location)
+        const.end_location = token_end_location
+        next_token
+      end
+
+      dbg "eof parse_idfr_after_colons"
+
+      const
+    end
+
+    def parse_idfr_tied_listish_literal(idfr)
+      # usertype literal
+      tuple_or_hash = parse_hash_or_tuple_literal allow_of: false
+
+      skip_space
+
+      if kwd?(:"of")
+        unexpected_token
+      end
+
+      case tuple_or_hash
+      when TupleLiteral
+        ary = ArrayLiteral.new(tuple_or_hash.elements, name: idfr).at(tuple_or_hash.location)
+        return ary
+      when HashLiteral
+        tuple_or_hash.name = idfr
+        return tuple_or_hash
+      else
+        raise "Bug: tuple_or_hash should be tuple or hash, not #{tuple_or_hash}"
+      end
+    end
+
+    def parse_idfr_type_new_call_sugar(idfr)
+      arg_node = parse_call_args(false)
+
+      if arg_node
+        new_args = arg_node.args || [] of ASTNode
+        # *TODO* we should handle named args for this situation too!
+        named_args = nil
+        return tag_onyx Call.new(idfr, "new", new_args, nil, nil, named_args, false, 0, false)
+      else
+        raise "bug in onyx when trying to parse Type.new() sugar!"
+      end
+
+      # *TODO* REPORT BUG! DEDUCTIVE, EARLY RETURN / FAIL PATTERN DOESN'T WORK
+      # WITH INFERRER!
+      # if !arg_node
+      #   raise "bug in onyx when trying to parse Type.new() sugar!"
+      # end
+      # new_args = arg_node.args
+      # named_args = nil
+      # return tag_onyx Call.new(idfr, "new", new_args, nil,  nil, named_args, false, 0, false)
+    end
+
+
+    def check_not_inside_def(message)
+      if @def_nest == 0
+        yield
+      else
+        raise message, @token.line_number, @token.column_number
+      end
+    end
+
+    def inside_def?
+      @def_nest > 0
+    end
+
+
+    # *TODO* check for :PRAGMA ? should be done before - skip "possible"
+    def parse_possible_pragmas() : Array(Attribute)
+      pragmas = [] of Attribute
+
+      while tok? :PRAGMA
+        pragmas << parse_pragma
+      end
+
+      pragmas
+    end
+
+    def parse_pragma
+      doc = @token.doc
+
+      # *TODO* *TODOOOOO*
+
+      name = @token.value.to_s
+      next_token #_skip_space
+
+      # *TODO* format for params etc.
+      if tok? :"="
+        next_token #_skip_space
+        # and then take the value...
         next_token_skip_space
       end
-    end
-    check :"]"
-    next_token_skip_space
 
-    attr = Attribute.new(name, args, named_args)
-    attr.doc = doc
-    attr
-  end
+      skip_space # _or_newline
 
-  def parse_begin
-    slash_is_regex!
-    next_token_skip_statement_end
-    exps = parse_expressions
-    exps2 = Expressions.new([exps] of ASTNode).at(exps)
-    node, end_location = parse_exception_handler exps
-    node.end_location = end_location
-    node
-  end
+      args = [] of ASTNode
+      named_args = nil
 
+      attr = Attribute.new(name, args, named_args)
+      attr.doc = doc
+      attr
 
-
-  def parse_exception_handler(exp)
-    rescues = nil
-    a_else = nil
-    a_ensure = nil
-
-    if @token.keyword?(:rescue)
-      rescues = [] of Rescue
-      found_catch_all = false
-      while true
-        location = @token.location
-        a_rescue = parse_rescue
-        if a_rescue.types
-          if found_catch_all
-            raise "specific rescue must come before catch-all rescue", location
-          end
-        else
-          if found_catch_all
-            raise "catch-all rescue can only be specified once", location
-          end
-          found_catch_all = true
-        end
-        rescues << a_rescue
-        break unless @token.keyword?(:rescue)
-      end
     end
 
-    if @token.keyword?(:else)
-      unless rescues
-        raise "'else' is useless without 'rescue'", @token, 4
-      end
 
-      add_nest :else, @indent, "", false  # *TODO* flag WHAT kind of else it is (try)
+    def parse_attribute
+      doc = @token.doc
 
-      #next_token_skip_statement_end
-      if parse_nest_start(:else) == :NIL_NEST
-        raise "empty else clause!"
-      end
-
-      a_else = parse_expressions
-      skip_statement_end
-    end
-
-    if @token.keyword?(:ensure)
-      add_nest :ensure, @indent, "", false
-
-      #next_token_skip_statement_end
-      block_kind = parse_nest_start :generic
-      if block_kind == :NIL_NEST
-        raise "empty ensure clause!"
-      end
-
-      a_ensure = parse_expressions
-      skip_statement_end
-    end
-
-    end_location = token_end_location
-
-    #check_idfr "end"
-    #next_token_skip_space
-
-    if rescues || a_ensure
-      {ExceptionHandler.new(exp, rescues, a_else, a_ensure).at_end(end_location), end_location}
-    else
-      exp
-      {exp, end_location}
-    end
-  end
-
-  #SemicolonOrNewLine = [:";", :NEWLINE]
-
-  def parse_rescue
-    next_token_skip_space
-
-    case @token.type
-    when :IDFR
-      name = @token.value.to_s
-      add_var name
+      next_token_skip_space
+      name = check_const
       next_token_skip_space
 
-      if @token.type == :":"
-        next_token_skip_space_or_newline
-        check :CONST
+      args = [] of ASTNode
+      named_args = nil
+
+      if @token.type == :"("
+        open("attribute") do
+          next_token_skip_space_or_newline
+          while @token.type != :")"
+            if @token.type == :IDFR && current_char == ':'
+              named_args = parse_named_args(allow_newline: true)
+              check :")"
+              break
+            else
+              args << parse_call_arg
+            end
+
+            skip_statement_end
+            if @token.type == :","
+              next_token_skip_space_or_newline
+            end
+          end
+          next_token_skip_space
+        end
+      end
+      check :"]"
+      next_token_skip_space
+
+      attr = Attribute.new(name, args, named_args)
+      attr.doc = doc
+      attr
+    end
+
+
+
+
+    def parse_begin
+      slash_is_regex!
+      next_token_skip_statement_end
+      exps = parse_expressions
+      exps2 = Expressions.new([exps] of ASTNode).at(exps)
+      node, end_location = parse_exception_handler exps
+      node.end_location = end_location
+      node
+    end
+
+    def parse_exception_handler(exp)
+      rescues = nil
+      a_else = nil
+      a_ensure = nil
+
+      if kwd?(:rescue)
+        rescues = [] of Rescue
+        found_catch_all = false
+        while true
+          location = @token.location
+          a_rescue = parse_rescue
+          if a_rescue.types
+            if found_catch_all
+              raise "specific rescue must come before catch-all rescue", location
+            end
+          else
+            if found_catch_all
+              raise "catch-all rescue can only be specified once", location
+            end
+            found_catch_all = true
+          end
+          rescues << a_rescue
+          break unless kwd?(:rescue)
+        end
+      end
+
+      if kwd?(:else)
+        unless rescues
+          raise "'else' is useless without 'rescue'", @token, 4
+        end
+
+        nest_kind = parse_nest_start(:else)
+
+        # next_token_skip_statement_end
+        if nest_kind == :NIL_NEST
+          raise "empty else clause!"
+        end
+
+        add_nest :else, @indent, "", (nest_kind == :LINE_NEST), false # *TODO* flag WHAT kind of else it is (try)
+
+        a_else = parse_expressions
+        skip_statement_end
+      end
+
+      if kwd?(:ensure)
+        # next_token_skip_statement_end
+        nest_kind = parse_nest_start :generic
+        if nest_kind == :NIL_NEST
+          raise "empty ensure clause!"
+        end
+
+        add_nest :ensure, @indent, "", (nest_kind == :LINE_NEST), false
+
+        a_ensure = parse_expressions
+        skip_statement_end
+      end
+
+      end_location = token_end_location
+
+      # check_idfr "end"
+      # next_token_skip_space
+
+      if rescues || a_ensure
+        {ExceptionHandler.new(exp, rescues, a_else, a_ensure).at_end(end_location), end_location}
+      else
+        exp
+        {exp, end_location}
+      end
+    end
+
+    # SemicolonOrNewLine = [:";", :NEWLINE]
+
+    def parse_rescue
+      next_token_skip_space
+
+      case @token.type
+      when :IDFR
+        name = @token.value.to_s
+        add_var name
+        next_token_skip_space
+
+        if @token.type == :":"
+          next_token_skip_space_or_newline
+          check :CONST
+          types = parse_rescue_types
+        end
+      when :CONST
         types = parse_rescue_types
       end
-    when :CONST
-      types = parse_rescue_types
-    end
 
-    add_nest :rescue, @indent, "", false
+      # check SemicolonOrNewLine
+      nest_kind = parse_nest_start :generic
 
-    #check SemicolonOrNewLine
-    block_kind = parse_nest_start :generic
+      add_nest :rescue, @indent, "", (nest_kind == :LINE_NEST), false
 
-    next_token_skip_space_or_newline
+      next_token_skip_space_or_newline
 
-    if block_kind == :NIL_NEST # @token.keyword?("end")
-      body = nil
-      handle_nest_end true
-    else
-      body = parse_expressions
-      skip_statement_end
-    end
-
-    Rescue.new(body, types, name)
-  end
-
-  def parse_rescue_types
-    types = [] of ASTNode
-    while true
-      types << parse_idfr
-      skip_space
-      if @token.type == :"|"
-        next_token_skip_space
+      if nest_kind == :NIL_NEST # kwd?("end")
+        body = nil
+        handle_nest_end true
       else
-        skip_space
-        break
+        body = parse_expressions
+        skip_statement_end
       end
-    end
-    types
-  end
 
-
-
-
-  def parse_for
-    # for k, v in some–range
-    # for k: v in some–range
-    # for v in some–range
-    # for k: in some-range
-    # for k:_ in some-range
-    # for k, in some–range
-    # for k,_ in some–range
-    # for v[k] in some–range
-    # for [k] in some–range
-    # for v til 10
-    # for v to 10
-    # for v from 1 to 10
-    # for v from 0 til 10
-    # for v in 0 til 10
-    # for v in 1 to 10
-    # for v in 0...10
-    # for v in 1..10
-
-    # we should push a new scope huh?
-    slash_is_regex!
-    add_nest :for, @indent, "", false
-    push_scope
-
-    next_token_skip_space
-
-    dbg "check if index only `[`|`,`"
-
-    if tok? :"[", :","
-      val_var = nil
-    else
-      val_var = Var.new(check_idfr).at(@token.location)
-      next_token_skip_space
+      Rescue.new(body, types, name)
     end
 
-    key_var = nil
+    def parse_rescue_types
+      types = [] of ASTNode
+      while true
+        types << parse_idfr
+        skip_space
+        if @token.type == :"|"
+          next_token_skip_space
+        else
+          skip_space
+          break
+        end
+      end
+      types
+    end
 
-    dbg "check for `:`|`,`|`[`"
+    def parse_for
+      # for k, v in some–range
+      # for k: v in some–range
+      # for v in some–range
+      # for k: in some-range
+      # for k:_ in some-range
+      # for k, in some–range
+      # for k,_ in some–range
+      # for v[k] in some–range
+      # for [k] in some–range
+      # for v in 0...10
+      # for v in 1..10
 
-    if tok? :":"
+      # range syntax ONLY available in for–construct
+      # for v til 10
+      # for v to 10
+      # for v from 1 to 10
+      # for v from 0 til 10
+      # for v in 0 til 10
+      # for v in 1 to 10
+
+      # we should push a new scope huh?
+      slash_is_regex!
+      for_indent = @indent
+      push_scope
+
       next_token_skip_space
-      key_var = val_var
-      if !kwd? :in, :from, :to, :til
+
+      dbg "check if index only `[` | `,`"
+
+      if tok? :"[", :","
+        val_var = nil
+
+      else
         val_var = Var.new(check_idfr).at(@token.location)
         next_token_skip_space
       end
 
-    elsif tok? :","
-      next_token_skip_space
-      key_var = Var.new(check_idfr).at(@token.location)
-      next_token_skip_space
+      key_var = nil
 
-    elsif tok? :"["
-      next_token_skip_space
-      key_var = Var.new(check_idfr).at(@token.location)
-      next_token_skip_space
-      raise "Expected `]` in `for`-expression" unless tok? :"]"
-      next_token_skip_space
-    end
+      dbg "check for `:` | `,` | `[`"
 
-    add_var key_var if key_var
-    add_var val_var if val_var
+      if tok? :":"
+        next_token_skip_space
+        key_var = val_var
+        if kwd? :in, :from, :to, :til
+          val_var = nil
 
-    dbg "check for in|from|to|til"
+        else
+          val_var = Var.new(check_idfr).at(@token.location)
+          next_token_skip_space
+        end
 
-    # *TODO*
-    case @token.value
-    when :in
-      next_token_skip_space
-      dbg "parse iterable expression"
-      iterable = parse_op_assign_no_control allow_suffix: false
+      elsif tok? :","
+        next_token_skip_space
+        key_var = Var.new(check_idfr).at(@token.location)
+        next_token_skip_space
 
-    when :to
-      next_token_skip_space
-      dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
-      iterable = RangeLiteral.new NumberLiteral.new(0), range_end_expr, false
-
-    when :til
-      next_token_skip_space
-      dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
-      iterable = RangeLiteral.new NumberLiteral.new(0), range_end_expr, true
-
-    when :from
-      next_token_skip_space
-      dbg "parse range begin expression"
-      range_begin_expr = parse_op_assign_no_control allow_suffix: false
-      kwd = @token.value
-      # *TODO* should get tokens position for the possible raise also
-      next_token_skip_space
-      dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
-      if kwd == :til
-        iterable = RangeLiteral.new range_begin_expr, range_end_expr, true
-      elsif kwd == :to
-        iterable = RangeLiteral.new range_begin_expr, range_end_expr, false
-      else
-        raise "expected `to` or `til` in `for .. from ..`-expression"
+      elsif tok? :"["
+        next_token_skip_space
+        key_var = Var.new(check_idfr).at(@token.location)
+        next_token_skip_space
+        raise "Expected `]` in `for`-expression" unless tok? :"]"
+        next_token_skip_space
       end
-    else
+
+      add_var key_var if key_var
+      add_var val_var if val_var
+
+      dbg "check for in|from|to|til"
+
+      # *TODO*
+      case @token.value
+      when :in
+        next_token_skip_space
+        dbg "parse iterable expression"
+        iterable = parse_op_assign_no_control allow_suffix: false
+
+      when :to
+        next_token_skip_space
+        dbg "parse range end expression"
+        range_end_expr = parse_op_assign_no_control allow_suffix: false
+        iterable = RangeLiteral.new NumberLiteral.new(0), range_end_expr, false
+
+      when :til
+        next_token_skip_space
+        dbg "parse range end expression"
+        range_end_expr = parse_op_assign_no_control allow_suffix: false
+        iterable = RangeLiteral.new NumberLiteral.new(0), range_end_expr, true
+
+      when :from
+        next_token_skip_space
+        dbg "parse range begin expression"
+        range_begin_expr = parse_op_assign_no_control allow_suffix: false
+        kwd = @token.value
+        # *TODO* should get tokens position for the possible raise also
+        next_token_skip_space
+        dbg "parse range end expression"
+        range_end_expr = parse_op_assign_no_control allow_suffix: false
+        if kwd == :til
+          iterable = RangeLiteral.new range_begin_expr, range_end_expr, true
+        elsif kwd == :to
+          iterable = RangeLiteral.new range_begin_expr, range_end_expr, false
+        else
+          raise "expected `to` or `til` in `for .. from ..`-expression"
+        end
+
+      else
       # *TODO* also here: save the position above
-      raise "expected `in`, `from`, `to` or `til` in `for`-expression"
-    end
-
-    dbg "check for step|by"
-
-    if kwd? :step, :by
-      next_token_skip_space
-      stepping = parse_op_assign_no_control allow_suffix: false
-    else
-      stepping = nil
-    end
-
-    dbg "check block start"
-
-    if parse_nest_start(:generic) == :NIL_NEST
-      body = NilLiteral.new
-      handle_nest_end true
-    else
-      body = parse_expressions
-    end
-
-    dbg "after for body"
-
-    pop_scope
-
-    For.new(val_var, key_var, iterable, stepping, body)
-
-  end
-
-
-
-
-  def parse_while
-    parse_while_or_until While
-  end
-
-  def parse_until
-    parse_while_or_until Until
-  end
-
-  def parse_while_or_until(klass)
-    add_nest (klass == While ? :while : :until), @indent, "", false
-
-    slash_is_regex!
-    next_token_skip_space_or_newline
-
-    cond = parse_op_assign_no_control allow_suffix: false
-
-    slash_is_regex!
-    #skip_statement_end
-    block_kind = parse_nest_start :generic
-    if block_kind == :NIL_NEST
-      body = NilLiteral.new
-      handle_nest_end true
-    else
-      body = parse_expressions
-    end
-
-    dbg "after while body parse"
-    skip_statement_end
-
-    end_location = token_end_location
-
-    dbg "after while body parse before next_token_skip_space"
-
-    #next_token_skip_space
-
-    dbg "end of while parse"
-
-    klass.new(cond, body).at_end(end_location)
-  end
-
-  def call_block_arg_follows?
-    @token.type == :"&" && !current_char.whitespace?
-  end
-
-  def parse_call_block_arg(args, check_paren, named_args = nil)
-    location = @token.location
-
-    next_token_skip_space
-
-    if @token.type == :"."
-      block_arg_name = "__arg#{@block_arg_count}"
-      @block_arg_count += 1
-
-      obj = Var.new(block_arg_name)
-      @wants_regex = false
-      next_token_skip_space
-
-      location = @token.location
-
-      if @token.value == :is_a?
-        call = parse_is_a(obj).at(location)
-      elsif @token.value == :responds_to?
-        call = parse_responds_to(obj).at(location)
-      elsif @token.type == :"["
-        call = parse_atomic_method_suffix obj, location
-
-        if @token.type == :"=" && call.is_a?(Call)
-          next_token_skip_space
-          exp = parse_op_assign
-          call.name = "#{call.name}="
-          call.args << exp
-        end
-      else
-        # At this point we want to attach the "do" to the next call,
-        # so we set this var to true to make the parser think the call
-        # has parenthesis and so a "do" must be attached to it
-        @last_call_has_parenthesis = true
-        call = parse_var_or_call(force_call: true).at(location)
-
-        if call.is_a?(Call)
-          call.obj = obj
-        else
-          raise "Bug: #{call} should be a call"
-        end
-
-        call = call as Call
-
-        if @token.type == :"="
-          next_token_skip_space
-          if @token.type == :"("
-            next_token_skip_space
-            exp = parse_op_assign
-            check :")"
-            next_token_skip_space
-            call.name = "#{call.name}="
-            call.args = [exp] of ASTNode
-            call = parse_atomic_method_suffix call, location
-          else
-            exp = parse_op_assign
-            call.name = "#{call.name}="
-            call.args = [exp] of ASTNode
-          end
-        else
-          call = parse_atomic_method_suffix call, location
-
-          if @token.type == :"=" && call.is_a?(Call) && call.name == "[]"
-            next_token_skip_space
-            exp = parse_op_assign
-            call.name = "#{call.name}="
-            call.args << exp
-          end
-        end
+        raise "expected `in`, `from`, `to` or `til` in `for`-expression"
       end
 
-      block = Block.new([Var.new(block_arg_name)], call).at(location)
-    else
-      block_arg = parse_op_assign
+      dbg "check for step|by"
+
+      if kwd? :step, :by
+        next_token_skip_space
+        stepping = parse_op_assign_no_control allow_suffix: false
+      else
+        stepping = nil
+      end
+
+      dbg "check block start"
+
+      nest_kind = parse_nest_start(:generic)
+      add_nest :for, for_indent, "", (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = NilLiteral.new
+        handle_nest_end true
+      else
+        body = parse_expressions
+      end
+
+      dbg "after for body"
+
+      pop_scope
+
+      For.new(val_var, key_var, iterable, stepping, body)
     end
 
-    end_location = token_end_location
-
-    if check_paren
-      check :")"
-      next_token_skip_space
-    else
-      skip_space
+    def parse_while
+      parse_while_or_until While
     end
 
-    CallArgs.new args, block, block_arg, named_args, false, end_location
-  end
+    def parse_until
+      parse_while_or_until Until
+    end
 
-
-
-
-  # def parse_type_def(is_abstract = false, is_struct = false, doc = nil)
-  #   @type_nest += 1
-
-  #   doc ||= @token.doc
-
-  #   indent_level = @indent
-
-  #   next_token_skip_space_or_newline
-  #   name_column_number = @token.column_number
-
-  #   name = parse_idfr allow_type_vars: false
-  #   #skip_space
-
-  #   add_nest :type, indent_level, name.to_s, false
-
-  #   type_vars = parse_type_vars
-  #   skip_space
-
-  #   superclass = nil
-
-  #   if @token.type == :"<<"
-  #     next_token_skip_space_or_newline
-  #     superclass = parse_idfr
-  #   end
-
-
-  #   dbg "parse_type_def - before body"
-
-
-  #   #skip_statement_end
-
-  #   if parse_nest_start(:type) == :NIL_NEST
-  #     body = NilLiteral.new
-  #     handle_nest_end true
-  #   else
-  #     #@prioritize_fun_def = true
-  #     body = parse_expressions
-  #     #@prioritize_fun_def = false
-  #   end
-
-  #   dbg "parse_type_def - after body"
-
-  #   end_location = body.end_location # token_end_location
-  #   #check_idfr "end"
-  #   #next_token_skip_space
-
-  #   raise "Bug: ClassDef name can only be a Path" unless name.is_a?(Path)
-
-  #   @type_nest -= 1
-
-  #   class_def = ClassDef.new name, body, superclass, type_vars, is_abstract, is_struct, name_column_number
-  #   class_def.doc = doc
-  #   class_def.end_location = end_location
-  #   class_def
-  # end
-
-  def parse_type_def(is_abstract = false, is_struct = false, doc = nil)
-    @type_nest += 1
-
-    doc ||= @token.doc
-
-    indent_level = @indent
-
-    next_token_skip_space_or_newline
-    name_column_number = @token.column_number
-
-    name = parse_idfr allow_type_vars: false
-    #skip_space
-
-    add_nest :type, indent_level, name.to_s, false
-
-    # *TODO* add scope???
-
-    type_vars = parse_type_vars
-    skip_space
-
-    superclass = nil
-
-    if @token.type == :"<<"
+    def parse_while_or_until(klass)
+      while_indent = @indent
+      slash_is_regex!
       next_token_skip_space_or_newline
-      superclass = parse_idfr
+
+      cond = parse_op_assign_no_control allow_suffix: false
+
+      slash_is_regex!
+      # skip_statement_end
+      nest_kind = parse_nest_start :generic
+      add_nest (klass == While ? :while : :until), while_indent, "", (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = NilLiteral.new
+        handle_nest_end true
+      else
+        body = parse_expressions
+      end
+
+      dbg "after while body parse"
+      skip_statement_end
+
+      end_location = token_end_location
+
+      dbg "after while body parse before next_token_skip_space"
+
+      # next_token_skip_space
+
+      dbg "end of while parse"
+
+      klass.new(cond, body).at_end(end_location)
     end
 
 
-    dbg "parse_type_def - before body"
 
 
-    #skip_statement_end
 
-    if parse_nest_start(:type) == :NIL_NEST
-      body = NilLiteral.new
-      handle_nest_end true
-    else
+    def parse_type_def(is_abstract = false, is_struct = false, doc = nil) : ASTNode
+      @type_nest += 1
 
+      doc ||= @token.doc
+
+      indent_level = @indent
+
+      next_token_skip_space_or_newline
+      name_column_number = @token.column_number
+
+      name = parse_idfr allow_type_vars: false
+      # skip_space
+
+      # *TODO* add scope???
+
+      type_vars = parse_type_vars
+      skip_space
+
+      superclass = nil
+
+      if @token.type == :"<<"
+        next_token_skip_space_or_newline
+        superclass = parse_idfr
+      end
+
+      dbg "parse_type_def - before body"
+
+      # skip_statement_end
+
+      nest_kind = parse_nest_start(:type)
+      add_nest :type, indent_level, name.to_s, (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = NilLiteral.new
+        handle_nest_end true
+      else
+        body = parse_type_def_body :TYPE_DEF
+      end
+
+      dbg "parse_type_def - after body"
+
+      end_location = body.end_location # token_end_location
+      # check_idfr "end"
+      # next_token_skip_space
+
+      raise "Bug: ClassDef name can only be a Path" unless name.is_a?(Path)
+
+      @type_nest -= 1
+
+      class_def = ClassDef.new name, body, superclass, type_vars, is_abstract, is_struct, name_column_number
+      class_def.doc = doc
+      class_def.end_location = end_location
+      class_def
+    end
+
+    def parse_type_def_body(def_kind) : Expressions
       members = [] of ASTNode
 
+      # *TODO* def_kind == :TRAIT => disallow 'init'
 
-      until handle_nest_end  #tok?(:END)
+      until handle_nest_end # tok?(:END)
         p "in parse_type_def body loop: #{@token}"
-
 
         # BEST TO IMPLEMENT FULL PARSE FOR EACH ROOT–CONSTRUCT OF TYPEDEF!
 
         # *TODO*
-        # :public     - pub 
+        # :public     - pub
         # :private    - rel | fam
         # :protected  - mine
 
-
         case @token.type
+        when :NEWLINE
+          next_token_skip_space
+
+        when :PRAGMA
+          # *TODO* use the pragmas
+          pragmas = parse_possible_pragmas
+          dbg "Got pragma in type-def root level - apply to next item! #{pragmas}"
+
         when :IDFR
+          p "in parse_type_def body loop: in IDFR branch"
+
           case @token.value
           when :mixin
-            check_not_inside_def("can't include inside def") do
-              parse_include
+            p "in parse_type_def body loop: in IDFR :mixin branch"
+            check_not_inside_def("can't mixin inside def") do
+              members << parse_include
             end
-
           when :extend
             check_not_inside_def("can't extend inside def") do
-              parse_extend
+              members << parse_extend
             end
-
           when :template
             # *TODO*
             check_not_inside_def("can't define macro inside def") do
-              parse_macro # *TODO* parse_tpl_macro
+              members << parse_macro # *TODO* parse_tpl_macro
             end
-
           when :macro
             # *TODO*
             check_not_inside_def("can't define macro inside def") do
-              parse_macro # *TODO* parse_run_macro
+              members << parse_macro # *TODO* parse_run_macro
             end
-
           when :ifdef
-            parse_ifdef
-
+            members << parse_ifdef
           else
-            parse_intype_def_var_or_const on_self: false
+            members.concat parse_intype_def_var_or_const on_self: false
           end
-
         when :CONST
+          dbg "is const - check for Self, Class or Type"
           if const? :Self, :Class, :Type
             variant = @token.value
+            dbg "is #{variant}"
             next_token_skip_space
 
-            if ! tok? :"."
+            if !tok? :"."
               raise "unexpected `#{variant}` in type definition. Expected following `.`"
             end
-            
             next_token_skip_space
 
-            parse_intype_def_var_or_const on_self: true
+            members.concat parse_intype_def_var_or_const on_self: true
 
           else
-            parse_intype_def_var_or_const on_self: false
+            dbg "is \"generic\" const"
+            members.concat parse_intype_def_var_or_const on_self: false
 
           end
-
         when :INSTANCE_VAR
-          parse_intype_var_decl on_self: false
+          members.concat parse_intype_def_var_or_const on_self: false
 
         when :CLASS_VAR
-          parse_intype_var_decl on_self: true
+          members.concat parse_intype_def_var_or_const on_self: true
+
+        else
+          # we try method parse on most things simplt ( [](), +(), etc!!)
+          members.concat parse_intype_def_var_or_const on_self: false
+          #raise "Wtf, etc. mm. and so on.: unexpected #{@token}"
 
         end
 
-
-
-
-
-
-        # case @token.type
-        # when :CONST
-
-        #   if const? :Self, :Class, :Type
-        #     next_token_skip_space
-
-        #     if ! tok? :"."
-        #       raise "unexpected `Self` in type definition"
-        #     end
-        #     next_token_skip_space
-
-        #     case @token.type
-        #     when :CONST
-        #       members << parse_op_assign_no_control # parse_idfr_or_literal
-
-        #     when :CLASS_VAR
-
-        #     when :IDFR
-        #       id = @token.value
-        #       next_token_skip_space
-        #       if tok
-        #       members << parse_typedef_classvar_or_methoddef
-        #     end
-
-
-
-
-        # when :CONST
-        #   members << parse_op_assign_no_control # parse_idfr_or_literal
-
-        # when :INSTANCE_VAR
-        #   dbg "found instance var"
-        #   name = @token.value.to_s
-        #   add_instance_var name
-        #   ivar = InstanceVar.new(name).at(@token.location)
-        #   ivar.end_location = token_end_location
-        #   @wants_regex = false
-        #   next_token_skip_space
-
-
-        #   # *TODO* we need to parse this whole thing differently depending on if
-        #   # "declarative context" or "use context"
-        #   if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
-        #     dbg "found type declaration"
-        #     ivar_type = parse_single_type
-        #     DeclareVar.new(ivar, ivar_type).at(ivar.location)
-        #   else
-        #     ivar
-        #   end
-
-
-        # when :CLASS_VAR
-        #   @wants_regex = false
-        #   node_and_next_token ClassVar.new(@token.value.to_s)
-
-
-
-
-        # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
-
-
-
-        #   else
-        #     location = @token.location
-        #     constant_name = @token.value.to_s
-        #     member_doc = @token.doc
-
-        #     next_token_skip_space
-        #     if @token.type == :"="
-        #       next_token_skip_space_or_newline
-
-        #       constant_value = parse_logical_or
-        #       next_token_skip_statement_end
-        #     else
-        #       constant_value = nil
-        #       skip_statement_end
-        #     end
-
-        #     case @token.type
-        #     when :",", :";"
-        #       next_token_skip_statement_end
-        #     end
-
-        #     arg = Arg.new(constant_name, constant_value).at(location)
-        #     arg.doc = member_doc
-
-        #     members << arg
-        #   end
-
-        # when :IDFR
-        #   visibility = nil
-
-        #   case @token.value
-        #   when :private
-        #     visibility = :private
-        #     next_token_skip_space
-        #   when :protected
-        #     visibility = :protected
-        #     next_token_skip_space
-        #   end
-
-        #   if @token.value == :def
-        #     member = parse_def
-        #     member = VisibilityModifier.new(visibility, member) if visibility
-        #     members << member
-        #   else
-        #     unexpected_token
-        #   end
-        # when :CLASS_VAR
-        #   class_var = ClassVar.new(@token.value.to_s).at(@token.location)
-
-        #   next_token_skip_space
-        #   check :"="
-        #   next_token_skip_space_or_newline
-        #   value = parse_op_assign
-
-        #   members << Assign.new(class_var, value).at(class_var)
-        # when :";", :NEWLINE
-        #   skip_statement_end
-        # else
-        #   unexpected_token
-        # end
       end
+
+      body = Expressions.from(members) # *TODO* .at(members)
+    end
+
+    def ensure_at_prefix(s)
+      return s if s.starts_with? "@"
+      return "@#{s}"
+    end
+
+    def ensure_atat_prefix(s)
+      return s if s.starts_with? "@@"
+      return "@@#{s}"
+    end
+
+    def parse_intype_def_var_or_const(on_self = false) : Array(ASTNode)
+      rets = [] of ASTNode
+
+      # "name" contains "@@" for classvar in AST
+
+      # @@Const = 47
+      #   Assign
+      #     ClassVar
+
+      # @Const = 47 *TODO* verify - speculated
+      #   Assign
+      #     InstanceVar
+
+      # Const = 47
+      #   Assign
+      #     Path
+
+      # @@var = 47
+      #   Assign
+      #     ClassVar
+
+      # @var :: I32
+      #   DeclareVar
+      #     InstanceVar
+      #     Path
+
+      # @var :: Array(I32)
+      #   DeclareVar
+      #     ivar: InstanceVar
+      #     decltyp: Generic
+      #       name: Path
+      #       tvars: Path
+
+      # @var = 47
+      #   Assign
+      #     InstanceVar
+      #       name: Str
+      #     NumberLiteral
+
+      # def set_bar(v) ...
+      #   Def
+      #     args: [ Arg ]
+      #     body: ...
+
+      # def self.set_bar(v) ...
+      #   Def
+      #     receiver: Var: name: String
+      #     args: [ Arg ]
+      #     body: ...
+
+
+      case
+      when tok? :CONST
+        # constvar = parse_idfr_or_literal
+        # skip_space
+        name = @token.value.to_s
+
+        if on_self
+          name = ensure_atat_prefix name
+          constvar = ClassVar.new(name).at(@token.location)
+        else
+          constvar = InstanceVar.new(name).at(@token.location)
+        end
+
+        next_token_skip_space
+
+        # *TODO* handle type (!!??)
+
+        if tok? :"="
+          dbg "found assign"
+          next_token_skip_space_or_newline
+          value = parse_op_assign
+          rets << Assign.new(constvar, value).at(constvar)
+
+        else
+          rets << constvar
+        end
+
+      when tok?(:CLASS_VAR) || tok?(:INSTANCE_VAR) || tok?(:IDFR)
+        dbg "(maybe) found instance var"
+        name = @token.value.to_s
+
+        if tok?(:IDFR)
+          if (name == "def" || name == "fn" || name == "own" || name == "fun")  # *TODO* old–school def's supported for now
+            next_token_skip_space
+            name = @token.value.to_s
+          end
+
+          if current_char == '('  # method def?
+            dbg "NOPE! Found def"
+            # *TODO* handle class vs instance method
+            rets << (ret = parse_def)
+            if on_self
+              ret.receiver = Var.new "self"
+            end
+
+            return rets
+          end
+
+        end
+
+        if tok?(:CLASS_VAR) || on_self
+          name = ensure_atat_prefix name
+
+        else # if tok?(:INSTANCE_VAR)
+          name = ensure_at_prefix name
+
+        end
+
+        dbg "Did so!"
+
+        if ! on_self
+          # *TODO*
+          add_instance_var name
+        end
+
+        if tok?(:CLASS_VAR) || on_self
+          var = ClassVar.new(name).at(@token.location)
+        else
+          var = InstanceVar.new(name).at(@token.location)
+        end
+
+        var.end_location = token_end_location
+        @wants_regex = false
+        next_token_skip_space
+
+        if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
+          dbg "found type declaration"
+
+          # *TODO* we must take care of the type qualifiers
+          x,y,var_type  =  parse_arg_type # parse_type false
+
+
+          dbg "add type declaration"
+          rets << DeclareVar.new(var, var_type).at(var.location)
+
+        else
+          dbg "found NO type"
+        end
+
+        # *TODO*
+        if tok? :"="
+          dbg "found assign"
+          next_token_skip_space_or_newline
+          value = parse_op_assign
+          if is_declare_composite = rets.size > 0
+            var = var.clone
+          end
+          rets << Assign.new(var, value, is_declare_composite).at(var)
+        end
+
+        pragmas = parse_possible_pragmas
+        if pragmas.size
+          dbg "found pragmas for .. whatever..: #{pragmas}"
+        end
+
+        rets
+
+      else
+        # Try parse_def ELSE do some error!
+        begin
+          rets << (ret = parse_def)
+          if on_self
+            ret.receiver = Var.new "self"
+          end
+          return rets
+        rescue
+          dbg "What happened in parse_intype_def_var_or_const?"
+          raise "What happened in parse_intype_def_var_or_const?"
+        end
+      end
+
+      rets
 
     end
 
-    dbg "parse_type_def - after body"
 
-    end_location = body.end_location # token_end_location
-    #check_idfr "end"
-    #next_token_skip_space
 
-    raise "Bug: ClassDef name can only be a Path" unless name.is_a?(Path)
 
-    @type_nest -= 1
 
-    class_def = ClassDef.new name, body, superclass, type_vars, is_abstract, is_struct, name_column_number
-    class_def.doc = doc
-    class_def.end_location = end_location
-    class_def
-  end
 
-  def parse_intype_def_var_or_const(on_self = false)
-    # *TODO* figure out if const|var - else def
-  end
+    def parse_type_vars
+      type_vars = nil
+      if tok? :"<", :"["
+        type_vars = [] of String
 
-  def parse_intype_var_decl(on_self = false)
-    if tok? :INSTANCE_VAR
-      dbg "is instance var!"
-
-      class_var = ClassVar.new(@token.value.to_s).at(@token.location)
-      next_token_skip_space
-
-      if tok? :"="
         next_token_skip_space_or_newline
-        value = parse_op_assign
-        class_var = Assign.new(class_var, value).at(class_var)
+        while !tok? :">", :"]"
+          type_var_name = check_const
+          unless OnyxParser.free_var_name?(type_var_name)
+            raise "type variables can only be single letters optionally followed by a digit", @token
+          end
+
+          if type_vars.includes? type_var_name
+            raise "duplicated type var name: #{type_var_name}", @token
+          end
+          type_vars.push type_var_name
+
+          next_token_skip_space_or_newline
+          if @token.type == :","
+            next_token_skip_space_or_newline
+          end
+        end
+
+        if type_vars.empty?
+          raise "must specify at least one type var"
+        end
+
+        next_token_skip_space
       end
-
-      class_var
-
-    else # constant
-      dbg "is constant!"
-
-      # *TODO*
-      fooo_var = ClassVar.new("BAZAA").at(@token.location)
-      # *TODO*
-
+      type_vars
     end
 
-  end
+    def parse_module_def
+      @type_nest += 1
 
+      mod_indent = @indent
 
-  def parse_type_vars
-    type_vars = nil
-    if tok? :"<", :"["
-      type_vars = [] of String
+      location = @token.location
+      doc = @token.doc
 
       next_token_skip_space_or_newline
-      while ! tok? :">", :"]"
-        type_var_name = check_const
-        unless OnyxParser.free_var_name?(type_var_name)
-          raise "type variables can only be single letters optionally followed by a digit", @token
-        end
 
-        if type_vars.includes? type_var_name
-          raise "duplicated type var name: #{type_var_name}", @token
-        end
-        type_vars.push type_var_name
+      name_column_number = @token.column_number
+      name = parse_idfr allow_type_vars: false
+      skip_space
 
-        next_token_skip_space_or_newline
-        if @token.type == :","
-          next_token_skip_space_or_newline
-        end
+      type_vars = parse_type_vars
+      skip_statement_end
+
+      nest_kind = parse_nest_start(:generic)
+      add_nest :module, mod_indent, name.to_s, (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = Nop.new
+        handle_nest_end true
+      else
+        body = parse_expressions
       end
 
-      if type_vars.empty?
-        raise "must specify at least one type var"
-      end
+      end_location = token_end_location
 
-      next_token_skip_space
+      raise "Bug: ModuleDef name can only be a Path" unless name.is_a?(Path)
+
+      @type_nest -= 1
+
+      module_def = ModuleDef.new name, body, type_vars, name_column_number
+      module_def.doc = doc
+      module_def.end_location = end_location
+      module_def
     end
-    type_vars
-  end
 
-  def parse_module_def
-    @type_nest += 1
+    def parse_trait_def
+      @type_nest += 1
 
-    location = @token.location
-    doc = @token.doc
+      trait_indent = @indent
 
-    next_token_skip_space_or_newline
+      location = @token.location
+      doc = @token.doc
 
-    name_column_number = @token.column_number
-    name = parse_idfr allow_type_vars: false
-    skip_space
+      next_token_skip_space_or_newline
 
-    type_vars = parse_type_vars
-    skip_statement_end
+      name_column_number = @token.column_number
+      name = parse_idfr allow_type_vars: false
+      skip_space
 
-    body = parse_expressions
+      type_vars = parse_type_vars
+      skip_statement_end
 
-    end_location = token_end_location
-    check :END
-    next_token_skip_space
+      nest_kind = parse_nest_start(:generic)
+      add_nest :trait, trait_indent, name.to_s, (nest_kind == :LINE_NEST), false
 
-    raise "Bug: ModuleDef name can only be a Path" unless name.is_a?(Path)
+      if nest_kind == :NIL_NEST
+        body = Nop.new
+        handle_nest_end true
+      else
+        body = parse_type_def_body :TRAIT_DEF
+      end
 
-    @type_nest -= 1
+      end_location = token_end_location
 
-    module_def = ModuleDef.new name, body, type_vars, name_column_number
-    module_def.doc = doc
-    module_def.end_location = end_location
-    module_def
-  end
+      raise "Bug: TraitDef name can only be a Path" unless name.is_a?(Path)
 
-  def parse_parenthesized_expression
-    dbg "parse_parenthesized_expression"
-    dbginc
+      @type_nest -= 1
 
-    @paren_nest += 1
+      # *TODO* ModuelDef will do for now unti we know if we go with the trait notation
+      module_def = ModuleDef.new name, body, type_vars, name_column_number
+      module_def.doc = doc
+      module_def.end_location = end_location
+      module_def
+    end
 
-    backed = backup_tok()
-    expression_failed = false
 
-    begin
+    def parse_parenthetical_unknown
+      dbg "parse_parenthetical_unknown"
+
+      backed = backup_tok()
+
+      begin
+        dbg "parse_parenthetical_unknown - TRY parse_parenthesized_expression".magenta
+        ret = parse_parenthesized_expression
+        dbg "parse_parenthetical_unknown - parse_parenthesized_expression try worked".magenta
+
+      rescue e
+        restore_tok backed
+
+        begin
+          dbg "parse_parenthetical_unknown - TRY parse_lambda_literal".magenta
+          ret = parse_lambda_literal
+          return ret
+
+        rescue e : LambdaSyntaxException
+          restore_tok backed
+          dbg "parse_parenthetical_unknown".magenta + " - parse_parenthesized_expression TO FAIL!".red
+          # Parse again and _let it fail this time_
+          ret = parse_parenthesized_expression
+          raise "This shouldn't be reached ever (above should fail) 2363!".red
+        end
+
+      else
+        dbg "parse_parenthetical_unknown - else after par-expr worked".magenta
+
+        skip_space
+
+        # It's a lambda even though an expression could be parsed - REDO!
+        if tok? :"->"
+          dbg "parse_parenthetical_unknown - got PAR_EXPR - but it is a lambda anyway: re-parse".magenta
+
+          restore_tok backed
+          return parse_lambda_literal
+
+        elsif ret == nil
+          raise "UNEXPECTED ERROR 2372! FIXME!"
+
+        else
+          return ret
+        end
+      end
+    end
+
+    def parse_parenthesized_expression
+      dbg "parse_parenthesized_expression"
+      dbginc
+
       location = @token.location
       next_token_skip_statement_end
 
       if @token.type == :")"
-        @paren_nest -= 1
         return node_and_next_token NilLiteral.new
       end
 
@@ -2456,1374 +2639,1340 @@ class OnyxParser < OnyxLexer
         case @token.type
         when :")"
           dbg "parse_parenthesized_expression: got ')'"
-          @paren_nest -= 1
           @wants_regex = false
           next_token_skip_space
           break
-        when :NEWLINE, :";"   # *TODO* add INDENT, DEDENT? (shouldn't be generated: lexer!!)
+
+        when :NEWLINE, :";", :INDENT, :DEDENT # (shouldn't be generated: lexer!!)
           dbg "parse_parenthesized_expression: got ;|\\n"
           next_token_skip_space_or_indent
+
           if @token.type == :")"
             dbg "parse_parenthesized_expression: got ')' after stop"
-            @paren_nest -= 1
             @wants_regex = false
             next_token_skip_space
             break
           end
+
         else
           raise "unterminated parenthesized expression", location
+
         end
       end
 
-    rescue e
-      dbg "Happened while parsing paranthesized expression:" + e.message.to_s
-      expression_failed = true
-      @paren_nest -= 1
-      restore_tok backed
-      return parse_lambda_literal
-    end
+      # rescue e
+      #   dbg "Happened while parsing paranthesized expression:".red + e.message.to_s
+      #   expression_failed = true
+      #   restore_tok backed
+      #   return parse_lambda_literal
+      # end
 
+      # # It's a lambda even though an expression could be parsed - REDO!
+      # if tok? :"->"
+      #   restore_tok backed
+      #   return parse_lambda_literal
+      # else
 
-    # It's a lambda even though an expression could be parsed - REDO!
-    if tok? :"->"
-      restore_tok backed
-      return parse_lambda_literal
-
-    else
+        #  *TODO* - WTF! Of course you should be able to use more than one paren for groupings!!!???
       unexpected_token "(" if @token.type == :"("
+
       Expressions.new exps
+
+    ensure
+      dbgdec
     end
 
-  ensure
-    dbgdec
-  end
 
-
-
-  def parse_lambda_literal
-    dbg "parse_lambda_literal"
-    check :"("
-
-    add_nest :lambda, @indent, "", false
-
-    next_token_skip_space_or_newline
-
-    args = [] of Arg
-
-    while @token.type != :")"
-      location = @token.location
-      arg = parse_lambda_literal_arg.at(location)
-      if args.any? &.name.==(arg.name)
-        raise "duplicated argument name: #{arg.name}", location
-      end
-
-      args << arg
+    class LambdaSyntaxException < SyntaxException
     end
 
-    next_token_skip_space_or_newline
+    def parse_lambda_literal
+      dbg "parse_lambda_literal"
+      check :"("
 
-    @scope_stack.push_scope
-    add_vars args
+      lambda_indent = @indent
 
-    end_location = nil
-
-    block_kind, callable_kind, returns_nothing = parse_def_nest_start
-    # *TODO* use callable_kind and set on Def–node
-
-    if block_kind == :NIL_NEST
-      body = Nop.new
-      handle_nest_end true
-    else
-      body = parse_expressions
-    end
-    end_location = token_end_location
-
-    pop_scope
-
-    #next_token_skip_space
-
-    FunLiteral.new(Def.new("->", args, body)).at_end(end_location)
-  end
-
-  def check_not_pipe_before_proc_literal_body
-    if @token.type == :"|"
-      location = @token.location
-      next_token_skip_space
-
-      msg = String.build do |msg|
-        msg << "unexpected token '|', proc literals specify their arguments like this: ->("
-        if @token.type == :IDFR
-          msg << @token.value.to_s << " : Type"
-          next_token_skip_space_or_newline
-          msg << ", ..." if @token.type == :","
-        else
-          msg << "arg : Type"
-        end
-        msg << ") { ... }"
-      end
-
-      raise msg, location
-    end
-  end
-
-  def parse_lambda_literal_arg
-    dbg "parse_lambda_literal_ARG, at"
-
-    # *TODO* generate new tmp name per arg. if several...
-    if tok? :UNDERSCORE
-      name = "tmp_47_"
-    else
-      name = check_idfr
-    end
-    next_token_skip_space_or_newline
-
-    dbg "parse_lambda_literal_ARG: name = " + name.to_s
-
-    if @token.type != :"," && @token.type != :";" && @token.type != :")"
-      dbg "parse_lambda_literal: parse a type"
-
-      is_mod_const, is_mod_mut, type, is_val_const, is_val_mut =
-        parse_arg_type()
-
-    else
-      dbg "parse_lambda_literal: no type"
-    end
-
-    if @token.type == :"," || @token.type == :";"
       next_token_skip_space_or_newline
-    end
 
-    Arg.new name, restriction: type
-  end
+      args = [] of Arg
 
-  def parse_fun_pointer
-    location = @token.location
-
-    case @token.type
-    when :IDFR
-      name = @token.value.to_s
-      next_token_skip_space
-      if @token.type == :"."
-        next_token_skip_space
-        second_name = check_idfr
-        if name != "self" && !@scope_stack.cur_has?(name)
-          raise "undefined variable '#{name}'", location.line_number, location.column_number
-        end
-        obj = Var.new(name)
-        name = second_name
-        next_token_skip_space
-      end
-    when :CONST
-      obj = parse_idfr
-      check :"."
-      next_token_skip_space
-      name = check_idfr
-      next_token_skip_space
-    else
-      unexpected_token
-    end
-
-    if @token.type == :"."
-      unexpected_token
-    end
-
-    if @token.type == :"("
-      next_token_skip_space
-      types = parse_types
-      check :")"
-      next_token_skip_space
-    else
-      types = [] of ASTNode
-    end
-
-    FunPointer.new(obj, name, types)
-  end
-
-  def parse_delimiter
-    if @token.type == :STRING
-      return node_and_next_token StringLiteral.new(@token.value.to_s)
-    end
-
-    location = @token.location
-    delimiter_state = @token.delimiter_state
-
-    check :DELIMITER_START
-
-    next_string_token(delimiter_state)
-    delimiter_state = @token.delimiter_state
-
-    pieces = [] of ASTNode | String
-    has_interpolation = false
-
-    delimiter_state, has_interpolation, options, token_end_location = consume_delimiter pieces, delimiter_state, has_interpolation
-
-    if delimiter_state.kind == :string
-      while true
-        passed_backslash_newline = @token.passed_backslash_newline
-        skip_space
-
-        if passed_backslash_newline && @token.type == :DELIMITER_START && @token.delimiter_state.kind == :string
-          next_string_token(delimiter_state)
-          delimiter_state = @token.delimiter_state
-          delimiter_state, has_interpolation, options, token_end_location = consume_delimiter pieces, delimiter_state, has_interpolation
-        else
-          break
-        end
-      end
-    end
-
-    if has_interpolation
-      pieces = pieces.map do |piece|
-        piece.is_a?(String) ? StringLiteral.new(piece) : piece
-      end
-      result = StringInterpolation.new(pieces)
-    else
-      result = StringLiteral.new pieces.join
-    end
-
-    case delimiter_state.kind
-    when :command
-      result = tag_onyx Call.new(nil, "`", result)
-    when :regex
-      if result.is_a?(StringLiteral) && (regex_error = Regex.error?(result.value))
-        raise "invalid regex: #{regex_error}", location
-      end
-
-      result = RegexLiteral.new(result, options)
-    end
-
-    result.end_location = token_end_location
-
-    result
-  end
-
-  def consume_delimiter(pieces, delimiter_state, has_interpolation)
-    options = Regex::Options::None
-    token_end_location = nil
-    while true
-      case @token.type
-      when :STRING
-        pieces << @token.value.to_s
-
-        next_string_token(delimiter_state)
-        delimiter_state = @token.delimiter_state
-      when :DELIMITER_END
-        if delimiter_state.kind == :regex
-          options = consume_regex_options
-        end
-        token_end_location = token_end_location()
-        next_token
-        break
-      when :EOF
-        case delimiter_state.kind
-        when :command
-          raise "Unterminated command"
-        when :regex
-          raise "Unterminated regular expression"
-        when :heredoc
-          raise "Unterminated heredoc"
-        else
-          raise "Unterminated string literal"
-        end
-      else
-        delimiter_state = @token.delimiter_state
-        next_token_skip_space_or_newline
-        exp = parse_expression
-
-        if exp.is_a?(StringLiteral)
-          pieces << exp.value
-        else
-          pieces << exp
-          has_interpolation = true
-        end
-
-        if @token.type != :"}"
-          raise "Unterminated string interpolation"
-        end
-        next_token
-        if @token.type != :"}"
-          raise "Unterminated string interpolation"
-        end
-
-        @token.delimiter_state = delimiter_state
-        next_string_token(delimiter_state)
-        delimiter_state = @token.delimiter_state
-      end
-    end
-
-    {delimiter_state, has_interpolation, options, token_end_location}
-  end
-
-  def consume_regex_options
-    options = Regex::Options::None
-    while true
-      case current_char
-      when 'i'
-        options |= Regex::Options::IGNORE_CASE
-        next_char
-      when 'm'
-        options |= Regex::Options::MULTILINE
-        next_char
-      when 'x'
-        options |= Regex::Options::EXTENDED
-        next_char
-      else
-        if 'a' <= current_char.downcase <= 'z'
-          raise "unknown regex option: #{current_char}"
-        end
-        break
-      end
-    end
-    options
-  end
-
-  def parse_string_without_interpolation
-    string = parse_delimiter
-    if string.is_a?(StringLiteral)
-      string.value
-    else
-      yield
-    end
-  end
-
-  def parse_string_array
-    parse_string_or_symbol_array StringLiteral, "String"
-  end
-
-  def parse_symbol_array
-    parse_string_or_symbol_array TagLiteral, "Symbol"
-  end
-
-  def parse_string_or_symbol_array(klass, elements_type)
-    strings = [] of ASTNode
-
-    next_string_array_token
-    while true
-      case @token.type
-      when :STRING
-        strings << klass.new(@token.value.to_s)
-        next_string_array_token
-      when :STRING_ARRAY_END
-        next_token
-        break
-      when :EOF
-        raise "Unterminated symbol array literal"
-      end
-    end
-
-    ArrayLiteral.new strings, Path.global(elements_type)
-  end
-
-  def parse_empty_array_literal
-    line = @line_number
-    column = @token.column_number
-
-    next_token_skip_space
-    if @token.keyword?(:of)
-      next_token_skip_space_or_newline
-      of = parse_single_type
-      ArrayLiteral.new(of: of).at_end(of)
-    else
-      raise "for empty arrays use '[] of ElementType'", line, column
-    end
-  end
-
-  def parse_array_literal_or_multi_assign
-    dbg "parse_array_literal_or_multi_assign"
-    node = parse_array_literal
-
-    dbg "after parse_array_literal"
-    if tok? :"="
-      dbg "got '='"
-      if node.of
-        raise "Multi assign or array literal? Can't figure out."
-      end
-      parse_multi_assign node
-    else
-      dbg "didn't get '='"
-      node
-    end
-  end
-
-  def parse_multi_assign(assignees)
-    dbg "parse_multi_assign - get location"
-    location = assignees.location.not_nil!
-
-
-    # *TODO*
-    # - extend with [a, _, _, b, ..., c, d] notation
-    # (- optimize away temps for literals by assigning immediately)
-    # optimally it should be a deconstructor - pattern matching style!
-    # (thn half of pattern matching is solved too!)
-
-    dbg "parse_multi_assign - check assign"
-    check :"="
-    next_token_skip_space_or_newline
-
-    exps = assignees.elements
-
-    if (source = parse_expression).is_a? ArrayLiteral
-      values = source.elements
-    else
-      values = [source]
-    end
-
-    targets = exps.map { |exp| to_lhs(exp) }
-    if ivars = @instance_vars
-      targets.each do |target|
-        ivars.add target.name if target.is_a?(InstanceVar)
-      end
-    end
-
-    if values.size != 1 && targets.size != 1 && targets.size != values.size
-      raise "Multiple assignment count mismatch", location
-    end
-
-    multi = MultiAssign.new(targets, values).at(location)
-
-    dbg "Multi to_s: " + multi.to_s
-
-    parse_expression_suffix multi, @token.location
-  end
-
-  def to_lhs(exp)
-    if exp.is_a?(Path) && inside_def?
-      raise "dynamic constant assignment"
-    end
-
-    if exp.is_a?(Call) && !exp.obj && exp.args.empty?
-      exp = Var.new(exp.name).at(exp)
-    end
-    if exp.is_a?(Var)
-      if exp.name == "self"
-        raise "can't change the value of self", exp.location.not_nil!
-      end
-      add_var exp
-    end
-    exp
-  end
-
-
-  def parse_array_literal
-    slash_is_regex!
-
-    location = @token.location
-
-    exps = [] of ASTNode
-    end_location = nil
-
-    open("array literal") do
-      next_token
-      skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-      while @token.type != :"]"
-        exps << parse_expression
-        end_location = token_end_location
-        #skip_statement_end *TODO* verify
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          next_token if tok? :","
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          if tok? :","
-            raise "got one comma too much!"
-          end
-          # *TODO* two commas during the separation should raise!!!
-          slash_is_regex!
-        end
-      end
-      next_token_skip_space
-    end
-
-    of = nil
-    if @token.keyword?(:of)
-      next_token_skip_space_or_newline
-      of = parse_single_type
-      end_location = of.end_location
-    end
-
-    ArrayLiteral.new(exps, of).at(location).at_end(end_location)
-  end
-
-  def parse_hash_or_tuple_literal(allow_of = true)
-    location = @token.location
-    line = @line_number
-    column = @token.column_number
-
-    slash_is_regex!
-    next_token
-    skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-
-    if @token.type == :"}"
-      end_location = token_end_location
-      next_token_skip_space
-      new_hash_literal([] of HashLiteral::Entry, line, column, end_location)
-    else
-      if hash_symbol_key?
-        first_key = TagLiteral.new(@token.value.to_s)
-        next_token
-      else
-        first_key = parse_op_assign
-        case @token.type
-        when :":"
-          # It's a hash!
-        when :",", :NEWLINE, :INDENT, :DEDENT
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          next_token if tok? :","
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          if tok? :","
-            raise "got one comma too much!"
-          end
-          slash_is_regex!
-          #next_token_skip_space_or_newline
-          return parse_tuple first_key, location
-        when :"}"
-          return parse_tuple first_key, location
-        else
-          check :"=>"
-          #check :":"
-        end
-      end
-      slash_is_regex!
-      next_token_skip_space_or_newline
-      parse_hash_literal first_key, location, allow_of
-    end
-  end
-
-  def parse_hash_literal(first_key, location, allow_of)
-    slash_is_regex!
-
-    line = @line_number
-    column = @token.column_number
-    end_location = nil
-
-    entries = [] of HashLiteral::Entry
-
-    open("hash literal", location) do
-      entries << HashLiteral::Entry.new(first_key, parse_op_assign)
-      skip_statement_end
-      if @token.type == :","
-        slash_is_regex!
-        next_token_skip_space_or_newline
-      end
-
-      while @token.type != :"}"
-
-        # *TODO* can't this simply be taken care of automatically by parse_op_assign!!!????
-        if hash_symbol_key?
-          key = TagLiteral.new(@token.value.to_s)
-          next_token
-        else
-          key = parse_op_assign
-          # skip_statement_end *TODO* *VERIFY*
-
-          # if @token.type == :":" && key.is_a?(StringLiteral)
-          #   # Nothing: it's a string key
-          # else
-          #   #check :"=>"
-          #   check :":"
-          # end
-        end
-        slash_is_regex!
-        next_token_skip_space_or_newline
-        entries << HashLiteral::Entry.new(key, parse_op_assign)
-        #skip_statement_end
-
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          next_token if tok? :","
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          if tok? :","
-            raise "got one comma too much!"
-          end
-          slash_is_regex!
-          #next_token_skip_space_or_newline
-        end
-      end
-      end_location = token_end_location
-      next_token_skip_space
-    end
-
-    new_hash_literal entries, line, column, end_location, allow_of: allow_of
-  end
-
-  def hash_symbol_key?
-    (@token.type == :IDFR || @token.type == :CONST) && current_char == '#'
-  end
-
-  def parse_tuple(first_exp, location)
-    exps = [] of ASTNode
-    end_location = nil
-
-    open("tuple literal", location) do
-      exps << first_exp
-      while @token.type != :"}"
-        exps << parse_expression
-        # skip_statement_end
-
-        # if @token.type == :","
-        #   next_token_skip_space_or_newline
-        # end
-
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          next_token if tok? :","
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          if tok? :","
-            raise "got one comma too much!"
-          end
-        end
-
-      end
-      end_location = token_end_location
-      next_token_skip_space
-    end
-
-    TupleLiteral.new(exps).at_end(end_location)
-  end
-
-  def new_hash_literal(entries, line, column, end_location, allow_of = true)
-    of = nil
-
-    if allow_of
-      if @token.keyword?(:of)
-        next_token_skip_space_or_newline
-        of_key = parse_single_type
-        #check :"=>"
-        check :":"
-        next_token_skip_space_or_newline
-        of_value = parse_single_type
-        of = HashLiteral::Entry.new(of_key, of_value)
-        end_location = of_value.end_location
-      end
-
-      if entries.empty? && !of
-        raise "for empty hashes use '{} of KeyType => ValueType'", line, column
-      end
-    end
-
-    HashLiteral.new(entries, of).at_end(end_location)
-  end
-
-  def parse_require
-    raise "can't require inside def", @token if @def_nest > 0
-    raise "can't require inside type declarations", @token if @type_nest > 0
-
-    next_token_skip_space
-    check :DELIMITER_START
-    string = parse_string_without_interpolation { "interpolation not allowed in require" }
-
-    skip_space
-
-    Require.new string
-  end
-
-  def parse_case
-
-    dbg "parse_case"
-
-    # *TODO* depending on (match|branch|case) - the end–token should match
-    case_indent_level = @indent
-
-    slash_is_regex!
-    next_token_skip_space
-
-    unless tok?(:NEWLINE, :INDENT, :DEDENT)
-      @significant_newline = true
-      cond = parse_op_assign_no_control
-      skip_statement_end
-    end
-
-    dbg "parse_case - check block start"
-    block_kind = parse_nest_start(:case)
-    if block_kind == :NIL_NEST
-      raise "Can't have an empty \"case\" expression. What's the point?"
-    end
-
-    free_style = block_kind == :FREE_WHEN_NEST
-    branch_indent_level = @indent
-
-    add_nest :case, case_indent_level, "", free_style == false
-
-
-    whens = [] of When
-    a_else = nil
-
-    dbg "parse_case - before whens-loop - " + "free_style == #{free_style}".yellow
-
-    while true
-      what = :unknown
-
-      if branch_indent_level == @indent
-        if (free_style && tok?(:"*")) || kwd?(:else)
-          what = :default
-          next_token_skip_space
-
-        elsif tok?(:"|")
-          next_token_skip_space
-          if tok?(:"*", :NEWLINE, :DEDENT, :INDENT, :"=>", :":") || kwd?(:then, :do)
-            what = :default
-            next_token_skip_space
-          else
-            what = :when
-          end
-
-        elsif kwd?(:when)
-          what = :when
-          next_token_skip_space
-
-        elsif free_style
-          what = :when
-
-        end
-      elsif free_style && tok? :DEDENT
-        what = :dedent
-
-      elsif !free_style
-        what = :non_when
-
-      end
-
-      case what
-      when :default
-        add_nest :when, @indent, "", false
-
-        if parse_nest_start(:else) == :NIL_NEST
-          a_else = Expressions.new([Nop.new] of ASTNode)
-        else
-          if whens.size == 0
-            unexpected_token @token.to_s, "expecting when, not catch all"
-          end
-          slash_is_regex!
-
-          @significant_newline = false
-          #next_token_skip_statement_end
-          a_else = parse_expressions
-
-          if branch_indent_level == case_indent_level
-            if tok? :DEDENT
-              #next_token_skip_space
-            end
-          end
-
-          #skip_statement_end
-          dbg "parse_case - finished with an ELSE - break out"
-          break
-        end
-
-      when :when
-        add_nest :when, @indent, "", false
-
-        slash_is_regex!
-        #next_token_skip_space_or_newline
-        when_conds = [] of ASTNode
-        while true
-          if cond && @token.type == :"."
-            next_token
-            call = parse_var_or_call(force_call: true) as Call
-            call.obj = ImplicitObj.new
-            when_conds << call
-          else
-            when_conds << parse_op_assign_no_control
-          end
-
-          dbg "parse_case - parsed when_conds"
-
-          skip_space
-
-          if kwd?(:then, :do)
-            #next_token_skip_space_or_newline
-            break
-          else
-            slash_is_regex!
-            case @token.type
-            when :","
-              next_token_skip_space_or_newline
-            when :INDENT, :"=>", :":"
-              #skip_statement_end
-              break
-            when :";"
-              skip_statement_end
-              break
-            else
-              unexpected_token @token.to_s, "expecting ',', ';' or '\n'"
-            end
-          end
-        end
-
-        if parse_nest_start(:when) == :NIL_NEST
-          whens << When.new(when_conds, Expressions.new([Nop.new] of ASTNode))
-        else
-          slash_is_regex!
-          when_body = parse_expressions   # "case" is nested with "require–explicit–end–pop"
-
-          if branch_indent_level == case_indent_level
-            if tok? :DEDENT
-              next_token_skip_space
-            end
-          end
-
-          skip_statement_end
-          whens << When.new(when_conds, when_body)
-        end
-
-      when :dedent
-        dbg "parse_case - got free_style and DEDENT token - break out"
-        break
-
-      when :non_when
-        dbg "parse_case - got NON free_style and non 'when'-token - break out"
-        break
-        #*TODO* when 'WHEN'-mode, a non–when token at when–indent–level is considered dedent
-
-      else
-        # can this happen?
-        unexpected_token @token.to_s, "expecting when, else or end"
-      end
-    end
-
-    handle_definite_nest_end_  force: true  # *TODO* force can be purged from the codebase
-
-    Case.new(cond, whens, a_else)
-  end
-
-  def parse_include
-    parse_include_or_extend Include
-  end
-
-  def parse_extend
-    parse_include_or_extend Extend
-  end
-
-  def parse_include_or_extend(klass)
-    location = @token.location
-
-    next_token_skip_space_or_newline
-
-    if @token.keyword?(:self)
-      name = Self.new.at(@token.location)
-      name.end_location = token_end_location
-      next_token_skip_space
-    else
-      name = parse_idfr
-    end
-
-    klass.new name
-  end
-
-  def parse_to_def(a_def)
-    instance_vars = prepare_parse_def
-    @def_nest += 1
-
-    # Small memory optimization: don't keep the Set in the Def if it's empty
-    instance_vars = nil if instance_vars.empty?
-
-    result = parse
-
-    a_def.instance_vars = instance_vars
-    a_def.calls_super = @calls_super
-    a_def.calls_initialize = @calls_initialize
-    a_def.uses_block_arg = @uses_block_arg
-    a_def.assigns_special_var = @assigns_special_var
-
-    result
-  end
-
-  def try_parse_def(is_abstract = false, is_macro_def = false, doc = nil)
-
-    # *TODO*
-    # BETTER ERROR REPORTING!
-    # when parsing implicit def (most likely), or expression (less likely)
-    # one should catch errors from expr parse (after def–fail), and make a
-    # HEURISTIC match against def–look–like - IF expr fails in CALL–W–PAREN-LIKE
-    # AND/OR ")"+TYPE–LIKE | ")"+"->"
-
-
-    backed = backup_tok
-    nest_count = @nesting_stack.size
-    def_parsing = @def_parsing
-    def_nest = @def_nest
-    certain_def_count = @certain_def_count
-
-    begin
-      ret = parse_def(is_abstract, is_macro_def, doc)
-      return ret # as ASTNode
-
-    rescue
-      if certain_def_count != @certain_def_count
-        ::raise @error_stack.last
-      end
-
-      dbg "failed try_parse_def".white
-
-      restore_tok backed
-      hard_pop_nest nest_count
-      @def_parsing = def_parsing
-      @def_nest = def_nest
-      @certain_def_count = certain_def_count
-      return nil
-    end
-  end
-
-  def parse_def(is_abstract = false, is_macro_def = false, doc = nil)
-    @def_parsing += 1
-    doc ||= @token.doc
-
-    instance_vars = prepare_parse_def
-    a_def = parse_def_helper is_abstract: is_abstract, is_macro_def: is_macro_def
-
-    # Small memory optimization: don't keep the Set in the Def if it's empty
-    instance_vars = nil if instance_vars.empty?
-
-    a_def.instance_vars = instance_vars
-    a_def.calls_super = @calls_super
-    a_def.calls_initialize = @calls_initialize
-    a_def.uses_block_arg = @uses_block_arg
-    a_def.assigns_special_var = @assigns_special_var
-    a_def.doc = doc
-    @instance_vars = nil
-    @calls_super = false
-    @calls_initialize = false
-    @uses_block_arg = false
-    @assigns_special_var = false
-    @block_arg_name = nil
-
-    dbg "parse_def done"
-    @def_parsing -= 1
-
-    a_def
-  end
-
-  def prepare_parse_def
-    @calls_super = false
-    @calls_initialize = false
-    @uses_block_arg = false
-    @block_arg_name = nil
-    @assigns_special_var = false
-    @instance_vars = Set(String).new
-  end
-
-  def parse_macro
-    doc = @token.doc
-
-    next_token_skip_space_or_newline
-
-    if @token.keyword?(:def)
-      a_def = parse_def_helper is_macro_def: true
-      a_def.doc = doc
-      return a_def
-    end
-
-    push_fresh_scope
-
-    check DefOrMacroCheck1
-
-    name_line_number = @token.line_number
-    name_column_number = @token.column_number
-
-    name = check_idfr
-    next_token_skip_space
-
-    args = [] of Arg
-
-    found_default_value = false
-    found_splat = false
-
-    splat_index = nil
-    index = 0
-
-    case @token.type
-    when :"("
-      next_token_skip_space_or_newline
       while @token.type != :")"
-        extras = parse_arg(args, nil, true, found_default_value, found_splat, allow_restrictions: false)
-        if !found_default_value && extras.default_value
-          found_default_value = true
+        location = @token.location
+        arg = parse_lambda_literal_arg.at(location)
+        if args.any? &.name.==(arg.name)
+          raise "duplicated argument name: #{arg.name}", location
         end
-        if !splat_index && extras.splat
-          splat_index = index
-          found_splat = true
-        end
-        if block_arg = extras.block_arg
-          check :")"
-          break
-        elsif @token.type == :","
-          next_token_skip_space_or_newline
-        else
-          skip_space
-          if @token.type != :")"
-            unexpected_token @token.to_s, "expected ',' or ')'"
-          end
-        end
-        index += 1
-      end
-      next_token
-    when :IDFR, :"..." # *TODO* verify - was "*"
-      while @token.type != :NEWLINE && @token.type != :";"
-        extras = parse_arg(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
-        if !found_default_value && extras.default_value
-          found_default_value = true
-        end
-        if !splat_index && extras.splat
-          splat_index = index
-          found_splat = true
-        end
-        if block_arg = extras.block_arg
-          break
-        elsif @token.type == :","
-          next_token_skip_space_or_newline
-        else
-          skip_space
-          if @token.type != :NEWLINE && @token.type != :";"
-            unexpected_token @token.to_s, "expected ';' or newline"
-          end
-        end
-        index += 1
-      end
-    end
 
-    end_location = nil
+        args << arg
+      end
 
-    if tok?(:END)
+      next_token_skip_space_or_newline
+
+      end_location = nil
+
+      nest_kind, callable_kind, returns_nothing = parse_def_nest_start
+      add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+      # *TODO* use callable_kind and set on Def–node
+
+      @scope_stack.push_scope
+      add_vars args
+
+      if nest_kind == :NIL_NEST
+        body = Nop.new
+        handle_nest_end true
+      else
+        body = parse_expressions
+      end
       end_location = token_end_location
-      body = Expressions.new
-      next_token_skip_space
-    else
-      body, end_location = parse_macro_body(name_line_number, name_column_number)
+
+      pop_scope
+
+      # next_token_skip_space
+
+      FunLiteral.new(Def.new("->", args, body)).at_end(end_location)
     end
 
-    pop_scope
+    def check_not_pipe_before_proc_literal_body
+      if @token.type == :"|"
+        location = @token.location
+        next_token_skip_space
 
-    node = Macro.new name, args, body, block_arg, splat_index
-    node.name_column_number = name_column_number
-    node.doc = doc
-    node.end_location = end_location
-    node
-  end
+        msg = String.build do |msg|
+                msg << "unexpected token '|', proc literals specify their arguments like this: ->("
+                if @token.type == :IDFR
+                  msg << @token.value.to_s << " : Type"
+                  next_token_skip_space_or_newline
+                  msg << ", ..." if @token.type == :","
+                else
+                  msg << "arg : Type"
+                end
+                msg << ") { ... }"
+              end
 
-  def parse_macro_body(start_line, start_column, macro_state = Token::MacroState.default)
-    skip_whitespace = check_macro_skip_whitespace
+        raise msg, location
+      end
+    end
 
-    pieces = [] of ASTNode
+    def parse_lambda_literal_arg
+      dbg "parse_lambda_literal_ARG, at"
 
-    while true
-      next_macro_token macro_state, skip_whitespace
-      macro_state = @token.macro_state
-      if macro_state.yields
-        @yields = 0
+      # *TODO* generate new tmp name per arg. if several...
+      if tok? :UNDERSCORE
+        name = "tmp_47_"
+      else
+        name = check_idfr
+      end
+      next_token_skip_space_or_newline
+
+      dbg "parse_lambda_literal_ARG: name = " + name.to_s
+
+      if @token.type != :"," && @token.type != :";" && @token.type != :")"
+        dbg "parse_lambda_literal: parse a type"
+
+        is_mod_immut, is_mod_mut, type = parse_arg_type()
+      else
+        dbg "parse_lambda_literal: no type"
       end
 
-      skip_whitespace = false
+      if @token.type == :"," || @token.type == :";"
+        next_token_skip_space_or_newline
+      end
+
+      Arg.new name, restriction: type
+    end
+
+    def parse_fun_pointer
+      location = @token.location
 
       case @token.type
-      when :MACRO_LITERAL
-        pieces << MacroLiteral.new(@token.value.to_s)
-      when :MACRO_EXPRESSION_START
-        pieces << MacroExpression.new(parse_macro_expression)
-        check_macro_expression_end
-        skip_whitespace = check_macro_skip_whitespace
-      when :MACRO_CONTROL_START
-        macro_control = parse_macro_control(start_line, start_column, macro_state)
-        if macro_control
-          pieces << macro_control
-          skip_whitespace = check_macro_skip_whitespace
-        else
-          return Expressions.from(pieces), nil
+      when :IDFR
+        name = @token.value.to_s
+        next_token_skip_space
+        if @token.type == :"."
+          next_token_skip_space
+          second_name = check_idfr
+          if name != "self" && !@scope_stack.cur_has?(name)
+            raise "undefined variable '#{name}'", location.line_number, location.column_number
+          end
+          obj = Var.new(name)
+          name = second_name
+          next_token_skip_space
         end
-      when :MACRO_VAR
-        macro_var_name = @token.value.to_s
-        if current_char == '{'
-          macro_var_exps = parse_macro_var_exps
-        else
-          macro_var_exps = nil
-        end
-        pieces << MacroVar.new(macro_var_name, macro_var_exps)
-      when :MACRO_END
-        break
-      when :EOF
-        raise "unterminated macro", start_line, start_column
+      when :CONST
+        obj = parse_idfr
+        check :"."
+        next_token_skip_space
+        name = check_idfr
+        next_token_skip_space
       else
         unexpected_token
       end
-    end
 
-    end_location = token_end_location
-
-    next_token
-
-    {Expressions.from(pieces), end_location}
-  end
-
-  def parse_macro_var_exps
-    next_token # '{'
-    next_token
-
-    exps = [] of ASTNode
-    while true
-      exps << parse_expression_inside_macro
-      skip_space
-      case @token.type
-      when :","
-        next_token_skip_space
-        if @token.type == :"}"
-          break
-        end
-      when :"}"
-        break
-      else
-        unexpected_token @token, "expecting ',' or '}'"
+      if @token.type == :"."
+        unexpected_token
       end
-    end
-    exps
-  end
 
-  def check_macro_skip_whitespace
-    if current_char == '\\' && peek_next_char.whitespace?
-      next_char
-      true
-    else
-      false
-    end
-  end
-
-  def parse_macro_expression
-    next_token_skip_space_or_newline
-    parse_expression_inside_macro
-  end
-
-  def check_macro_expression_end
-    check :"}"
-
-    next_token
-    check :"}"
-  end
-
-  def parse_macro_control(start_line, start_column, macro_state = Token::MacroState.default)
-    next_token_skip_space_or_newline
-
-    case @token.type
-    when :END
-      return nil
-    when :IDFR
-      case @token.value
-      when :for
+      if @token.type == :"("
         next_token_skip_space
+        types = parse_types
+        check :")"
+        next_token_skip_space
+      else
+        types = [] of ASTNode
+      end
 
-        vars = [] of Var
+      FunPointer.new(obj, name, types)
+    end
 
+    def parse_delimiter
+      if @token.type == :STRING
+        return node_and_next_token StringLiteral.new(@token.value.to_s)
+      end
+
+      location = @token.location
+      delimiter_state = @token.delimiter_state
+
+      check :DELIMITER_START
+
+      next_string_token(delimiter_state)
+      delimiter_state = @token.delimiter_state
+
+      pieces = [] of ASTNode | String
+      has_interpolation = false
+
+      delimiter_state, has_interpolation, options, token_end_location = consume_delimiter pieces, delimiter_state, has_interpolation
+
+      if delimiter_state.kind == :string
         while true
-          vars << Var.new(check_idfr).at(@token.location)
+          passed_backslash_newline = @token.passed_backslash_newline
+          skip_space
 
-          next_token_skip_space
-          if @token.type == :","
-            next_token_skip_space
+          if passed_backslash_newline && @token.type == :DELIMITER_START && @token.delimiter_state.kind == :string
+            next_string_token(delimiter_state)
+            delimiter_state = @token.delimiter_state
+            delimiter_state, has_interpolation, options, token_end_location = consume_delimiter pieces, delimiter_state, has_interpolation
           else
             break
           end
         end
+      end
 
-        check_idfr :in
-        next_token_skip_space
+      if has_interpolation
+        pieces = pieces.map do |piece|
+                   piece.is_a?(String) ? StringLiteral.new(piece) : piece
+                 end
+        result = StringInterpolation.new(pieces)
+      else
+        result = StringLiteral.new pieces.join
+      end
 
-        exp = parse_expression_inside_macro
+      case delimiter_state.kind
+      when :command
+        result = tag_onyx Call.new(nil, "`", result)
+      when :regex
+        if result.is_a?(StringLiteral) && (regex_error = Regex.error?(result.value))
+          raise "invalid regex: #{regex_error}", location
+        end
 
-        check :"%}"
+        result = RegexLiteral.new(result, options)
+      end
 
-        body, end_location = parse_macro_body(start_line, start_column, macro_state)
+      result.end_location = token_end_location
 
-        check :END
-        next_token_skip_space
-        check :"%}"
+      result
+    end
 
-        return MacroFor.new(vars, exp, body)
-      when :if
-        return parse_macro_if(start_line, start_column, macro_state)
-      when :unless
-        macro_if = parse_macro_if(start_line, start_column, macro_state)
-        case macro_if
-        when MacroIf
-          macro_if.then, macro_if.else = macro_if.else, macro_if.then
-        when MacroExpression
-          if (exp = macro_if.exp).is_a?(If)
-            exp.then, exp.else = exp.else, exp.then
+    def consume_delimiter(pieces, delimiter_state, has_interpolation)
+      options = Regex::Options::None
+      token_end_location = nil
+      while true
+        case @token.type
+        when :STRING
+          pieces << @token.value.to_s
+
+          next_string_token(delimiter_state)
+          delimiter_state = @token.delimiter_state
+        when :DELIMITER_END
+          if delimiter_state.kind == :regex
+            options = consume_regex_options
+          end
+          token_end_location = token_end_location()
+          next_token
+          break
+        when :EOF
+          case delimiter_state.kind
+          when :command
+            raise "Unterminated command"
+          when :regex
+            raise "Unterminated regular expression"
+          when :heredoc
+            raise "Unterminated heredoc"
+          else
+            raise "Unterminated string literal"
+          end
+        else
+          delimiter_state = @token.delimiter_state
+          next_token_skip_space_or_newline
+          exp = parse_expression
+
+          if exp.is_a?(StringLiteral)
+            pieces << exp.value
+          else
+            pieces << exp
+            has_interpolation = true
+          end
+
+          if @token.type != :"}"
+            raise "Unterminated string interpolation"
+          end
+          next_token
+          if @token.type != :"}"
+            raise "Unterminated string interpolation"
+          end
+
+          @token.delimiter_state = delimiter_state
+          next_string_token(delimiter_state)
+          delimiter_state = @token.delimiter_state
+        end
+      end
+
+      {delimiter_state, has_interpolation, options, token_end_location}
+    end
+
+    def consume_regex_options
+      options = Regex::Options::None
+      while true
+        case current_char
+        when 'i'
+          options |= Regex::Options::IGNORE_CASE
+          next_char
+        when 'm'
+          options |= Regex::Options::MULTILINE
+          next_char
+        when 'x'
+          options |= Regex::Options::EXTENDED
+          next_char
+        else
+          if 'a' <= current_char.downcase <= 'z'
+            raise "unknown regex option: #{current_char}"
+          end
+          break
+        end
+      end
+      options
+    end
+
+    def parse_string_without_interpolation
+      string = parse_delimiter
+      if string.is_a?(StringLiteral)
+        string.value
+      else
+        yield
+      end
+    end
+
+    def parse_string_array
+      parse_string_or_symbol_array StringLiteral, "String"
+    end
+
+    def parse_symbol_array
+      parse_string_or_symbol_array TagLiteral, "Symbol"
+    end
+
+    def parse_string_or_symbol_array(klass, elements_type)
+      strings = [] of ASTNode
+
+      next_string_array_token
+      while true
+        case @token.type
+        when :STRING
+          strings << klass.new(@token.value.to_s)
+          next_string_array_token
+        when :STRING_ARRAY_END
+          next_token
+          break
+        when :EOF
+          raise "Unterminated symbol array literal"
+        end
+      end
+
+      ArrayLiteral.new strings, Path.global(elements_type)
+    end
+
+    def parse_empty_array_literal
+      dbg "parse_empty_array_literal"
+      line = @line_number
+      column = @token.column_number
+
+      next_token_skip_space
+
+      dbg "parse_empty_array_literal - check for 'of', #{kwd?(:of)}"
+
+      if kwd?(:of)
+        next_token_skip_space_or_newline
+        of = parse_single_type
+        ArrayLiteral.new(of: of).at_end(of)
+      else
+        raise "for empty arrays use '[] of ElementType'", line, column
+      end
+    end
+
+    def parse_array_literal_or_multi_assign
+      dbg "parse_array_literal_or_multi_assign"
+      node = parse_array_literal
+
+      dbg "after parse_array_literal"
+      if tok? :"="
+        dbg "got '='"
+        if node.of
+          raise "Multi assign or array literal? Can't figure out."
+        end
+        parse_multi_assign node
+      else
+        dbg "didn't get '='"
+        node
+      end
+    end
+
+    def parse_multi_assign(assignees)
+      dbg "parse_multi_assign - get location"
+      location = assignees.location.not_nil!
+
+      # *TODO*
+      # - extend with [a, _, _, b, ..., c, d] notation
+      # (- optimize away temps for literals by assigning immediately)
+      # optimally it should be a deconstructor - pattern matching style!
+      # (thn half of pattern matching is solved too!)
+
+      dbg "parse_multi_assign - check assign"
+      check :"="
+      next_token_skip_space_or_newline
+
+      exps = assignees.elements
+
+      if (source = parse_expression).is_a? ArrayLiteral
+        values = source.elements
+      else
+        values = [source]
+      end
+
+      targets = exps.map { |exp| to_lhs(exp) }
+      if ivars = @instance_vars
+        targets.each do |target|
+          ivars.add target.name if target.is_a?(InstanceVar)
+        end
+      end
+
+      if values.size != 1 && targets.size != 1 && targets.size != values.size
+        raise "Multiple assignment count mismatch", location
+      end
+
+      multi = MultiAssign.new(targets, values).at(location)
+
+      dbg "Multi to_s: " + multi.to_s
+
+      parse_expression_suffix multi, @token.location
+    end
+
+    def to_lhs(exp)
+      if exp.is_a?(Path) && inside_def?
+        raise "dynamic constant assignment"
+      end
+
+      if exp.is_a?(Call) && !exp.obj && exp.args.empty?
+        exp = Var.new(exp.name).at(exp)
+      end
+      if exp.is_a?(Var)
+        if exp.name == "self"
+          raise "can't change the value of self", exp.location.not_nil!
+        end
+        add_var exp
+      end
+      exp
+    end
+
+    def parse_array_literal
+      slash_is_regex!
+
+      location = @token.location
+
+      exps = [] of ASTNode
+      end_location = nil
+
+      open("array literal") do
+        next_token
+        skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+        while @token.type != :"]"
+          exps << parse_expression
+          end_location = token_end_location
+          # skip_statement_end *TODO* verify
+          if tok? :",", :NEWLINE, :INDENT, :DEDENT
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            next_token if tok? :","
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            if tok? :","
+              raise "got one comma too much!"
+            end
+            # *TODO* two commas during the separation should raise!!!
+            slash_is_regex!
           end
         end
-        return macro_if
-      when :begin
         next_token_skip_space
-        check :"%}"
+      end
 
-        body, end_location = parse_macro_body(start_line, start_column, macro_state)
+      of = nil
+      if kwd?(:of)
+        next_token_skip_space_or_newline
+        of = parse_single_type
+        end_location = of.end_location
+      end
 
-        check :END
+      ArrayLiteral.new(exps, of).at(location).at_end(end_location)
+    end
+
+    def parse_hash_or_tuple_literal(allow_of = true)
+      dbg "parse_hash_or_tuple_literal"
+
+      location = @token.location
+      line = @line_number
+      column = @token.column_number
+
+      slash_is_regex!
+      next_token
+      skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+
+      if @token.type == :"}"
+        end_location = token_end_location
         next_token_skip_space
-        check :"%}"
+        new_hash_literal([] of HashLiteral::Entry, line, column, end_location)
+      else
+        if hash_symbol_key?
+          first_key = TagLiteral.new(@token.value.to_s)
+          next_token
+        else
+          first_key = parse_op_assign
+          case @token.type
+          when :":"
+            # It's a hash!
+          when :",", :NEWLINE, :INDENT, :DEDENT
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            next_token if tok? :","
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            if tok? :","
+              raise "got one comma too much!"
+            end
+            slash_is_regex!
+            # next_token_skip_space_or_newline
+            return parse_tuple first_key, location
+          when :"}"
+            return parse_tuple first_key, location
+          else
+            check :"=>"
+            # check :":"
+          end
+        end
+        slash_is_regex!
+        next_token_skip_space_or_newline
+        parse_hash_literal first_key, location, allow_of
+      end
+    end
 
-        return MacroIf.new(BoolLiteral.new(true), body)
-      when :else, :elsif, :elif
+    def parse_hash_literal(first_key, location, allow_of)
+      slash_is_regex!
+
+      line = @line_number
+      column = @token.column_number
+      end_location = nil
+
+      entries = [] of HashLiteral::Entry
+
+      open("hash literal", location) do
+        entries << HashLiteral::Entry.new(first_key, parse_op_assign)
+        skip_statement_end
+        if @token.type == :","
+          slash_is_regex!
+          next_token_skip_space_or_newline
+        end
+
+        while @token.type != :"}"
+          # *TODO* can't this simply be taken care of automatically by parse_op_assign!!!????
+          if hash_symbol_key?
+            key = TagLiteral.new(@token.value.to_s)
+            next_token
+          else
+            key = parse_op_assign
+
+            # skip_statement_end *TODO* *VERIFY*
+
+            # if @token.type == :":" && key.is_a?(StringLiteral)
+            #   # Nothing: it's a string key
+            # else
+            #   #check :"=>"
+            #   check :":"
+            # end
+          end
+          slash_is_regex!
+          next_token_skip_space_or_newline
+          entries << HashLiteral::Entry.new(key, parse_op_assign)
+          # skip_statement_end
+
+          if tok? :",", :NEWLINE, :INDENT, :DEDENT
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            next_token if tok? :","
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            if tok? :","
+              raise "got one comma too much!"
+            end
+            slash_is_regex!
+            # next_token_skip_space_or_newline
+          end
+        end
+        end_location = token_end_location
+        next_token_skip_space
+      end
+
+      new_hash_literal entries, line, column, end_location, allow_of: allow_of
+    end
+
+    def hash_symbol_key?
+      (@token.type == :IDFR || @token.type == :CONST) && current_char == '#'
+    end
+
+    def parse_tuple(first_exp, location)
+      exps = [] of ASTNode
+      end_location = nil
+
+      open("tuple literal", location) do
+        exps << first_exp
+        while @token.type != :"}"
+          exps << parse_expression
+          # skip_statement_end
+
+          # if @token.type == :","
+          #   next_token_skip_space_or_newline
+          # end
+
+          if tok? :",", :NEWLINE, :INDENT, :DEDENT
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            next_token if tok? :","
+            skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+            if tok? :","
+              raise "got one comma too much!"
+            end
+          end
+        end
+        end_location = token_end_location
+        next_token_skip_space
+      end
+
+      TupleLiteral.new(exps).at_end(end_location)
+    end
+
+    def new_hash_literal(entries, line, column, end_location, allow_of = true)
+      of = nil
+
+      if allow_of
+        if kwd?(:of)
+          next_token_skip_space_or_newline
+          of_key = parse_single_type
+          # check :"=>"
+          check :":"
+          next_token_skip_space_or_newline
+          of_value = parse_single_type
+          of = HashLiteral::Entry.new(of_key, of_value)
+          end_location = of_value.end_location
+        end
+
+        if entries.empty? && !of
+          raise "for empty hashes use '{} of KeyType => ValueType'", line, column
+        end
+      end
+
+      HashLiteral.new(entries, of).at_end(end_location)
+    end
+
+    def parse_require
+      raise "can't require inside def", @token if @def_nest > 0
+      raise "can't require inside type declarations", @token if @type_nest > 0
+
+      next_token_skip_space
+      check :DELIMITER_START
+      string = parse_string_without_interpolation { "interpolation not allowed in require" }
+
+      skip_space
+
+      Require.new string
+    end
+
+    def parse_case
+      dbg "parse_case"
+
+      # *TODO* depending on (match|branch|case) - the end–token should match
+      case_indent_level = @indent
+
+      slash_is_regex!
+      next_token_skip_space
+
+      unless tok?(:NEWLINE, :INDENT, :DEDENT)
+        @significant_newline = true
+        cond = parse_op_assign_no_control
+        skip_statement_end
+      end
+
+      dbg "parse_case - check block start"
+      nest_kind = parse_nest_start(:case)
+      if nest_kind == :NIL_NEST
+        raise "Can't have an empty \"case\" expression. What's the point?"
+      end
+
+      free_style = nest_kind == :FREE_WHEN_NEST
+      branch_indent_level = @indent
+
+      add_nest :case, case_indent_level, "", false, free_style == false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+
+
+      whens = [] of When
+      a_else = nil
+
+      dbg "parse_case - before whens-loop - " + "free_style == #{free_style}".yellow
+
+      while true
+        what = :unknown
+
+        if branch_indent_level == @indent
+          if (free_style && tok?(:"*")) || kwd?(:else)
+            what = :default
+            @next_token_continuation_state = :NO_CONTINUATION
+            next_token_skip_space
+          elsif tok?(:"|")
+            next_token_skip_space
+            if tok?(:"*", :NEWLINE, :DEDENT, :INDENT, :"=>", :":") || kwd?(:then, :do)
+              what = :default
+              @next_token_continuation_state = :NO_CONTINUATION
+              next_token_skip_space
+            else
+              what = :when
+            end
+          elsif kwd?(:when)
+            what = :when
+            next_token_skip_space
+          elsif free_style
+            what = :when
+          end
+        elsif free_style && tok? :DEDENT
+          what = :dedent
+        elsif !free_style
+          what = :non_when
+        end
+
+        case what
+        when :default
+          add_nest :when, @indent, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+
+          if parse_nest_start(:else) == :NIL_NEST
+            a_else = Expressions.new([Nop.new] of ASTNode)
+          else
+            if whens.size == 0
+              unexpected_token @token.to_s, "expecting when, not catch all"
+            end
+            slash_is_regex!
+
+            @significant_newline = false
+            # next_token_skip_statement_end
+            a_else = parse_expressions
+
+            if branch_indent_level == case_indent_level
+              if tok? :DEDENT
+                # next_token_skip_space
+              end
+            end
+
+            # skip_statement_end
+            dbg "parse_case - finished with an ELSE - break out"
+            break
+          end
+        when :when
+          add_nest :when, @indent, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+
+          slash_is_regex!
+          # next_token_skip_space_or_newline
+          when_conds = [] of ASTNode
+          while true
+            if cond && @token.type == :"."
+              next_token
+              call = parse_var_or_call(force_call: true) as Call
+              call.obj = ImplicitObj.new
+              when_conds << call
+            else
+              when_conds << parse_op_assign_no_control
+            end
+
+            dbg "parse_case - parsed when_conds"
+
+            skip_space
+
+            if kwd?(:then, :do)
+              # next_token_skip_space_or_newline
+              break
+            else
+              slash_is_regex!
+              case @token.type
+              when :","
+                next_token_skip_space_or_newline
+              when :INDENT, :"=>", :":"
+                # skip_statement_end
+                break
+              when :";"
+                skip_statement_end
+                break
+              else
+                unexpected_token @token.to_s, "expecting ',', ';' or '\n'"
+              end
+            end
+          end
+
+          if parse_nest_start(:when) == :NIL_NEST
+            whens << When.new(when_conds, Expressions.new([Nop.new] of ASTNode))
+          else
+            slash_is_regex!
+            when_body = parse_expressions # "case" is nested with "require–explicit–end–pop"
+
+            if branch_indent_level == case_indent_level
+              if tok? :DEDENT
+                next_token_skip_space
+              end
+            end
+
+            skip_statement_end
+            whens << When.new(when_conds, when_body)
+          end
+        when :dedent
+          dbg "parse_case - got free_style and DEDENT token - break out"
+          break
+        when :non_when
+          dbg "parse_case - got NON free_style and non 'when'-token - break out"
+          break
+          # *TODO* when 'WHEN'-mode, a non–when token at when–indent–level is considered dedent
+
+        else
+        # can this happen?
+          unexpected_token @token.to_s, "expecting when, else or end"
+        end
+      end
+
+      handle_definite_nest_end_ force: true # *TODO* force can be purged from the codebase
+
+      Case.new(cond, whens, a_else)
+    end
+
+    def parse_include
+      parse_include_or_extend Include
+    end
+
+    def parse_extend
+      parse_include_or_extend Extend
+    end
+
+    def parse_include_or_extend(klass)
+      location = @token.location
+
+      next_token_skip_space_or_newline
+
+      if kwd?(:self)
+        name = Self.new.at(@token.location)
+        name.end_location = token_end_location
+        next_token_skip_space
+      else
+        name = parse_idfr
+      end
+
+      klass.new name
+    end
+
+    def parse_to_def(a_def)
+      instance_vars = prepare_parse_def
+      @def_nest += 1
+
+      # Small memory optimization: don't keep the Set in the Def if it's empty
+      instance_vars = nil if instance_vars.empty?
+
+      result = parse
+
+      a_def.instance_vars = instance_vars
+      a_def.calls_super = @calls_super
+      a_def.calls_initialize = @calls_initialize
+      a_def.uses_block_arg = @uses_block_cast
+      a_def.assigns_special_var = @assigns_special_var
+
+      result
+    end
+
+    def try_parse_def(is_abstract = false, is_macro_def = false, doc = nil)
+      # *TODO*
+      # BETTER ERROR REPORTING!
+      # when parsing implicit def (most likely), or expression (less likely)
+      # one should catch errors from expr parse (after def–fail), and make a
+      # HEURISTIC match against def–look–like - IF expr fails in CALL–W–PAREN-LIKE
+      # AND/OR ")"+TYPE–LIKE | ")"+"->"
+
+      backed = backup_tok
+      nest_count = @nesting_stack.size
+      def_parsing = @def_parsing
+      def_nest = @def_nest
+      certain_def_count = @certain_def_count
+
+      begin
+        ret = parse_def(is_abstract, is_macro_def, doc)
+        return ret # as ASTNode
+
+      rescue
+        if certain_def_count != @certain_def_count
+          ::raise @error_stack.last
+        end
+
+        dbg "failed try_parse_def".white
+
+        restore_tok backed
+        hard_pop_nest nest_count
+        @def_parsing = def_parsing
+        @def_nest = def_nest
+        @certain_def_count = certain_def_count
         return nil
       end
     end
 
-    @in_macro_expression = true
-    exps = parse_expressions
-    @in_macro_expression = false
+    def parse_def(is_abstract = false, is_macro_def = false, doc = nil)
+      @def_parsing += 1
+      doc ||= @token.doc
 
-    MacroExpression.new(exps, output: false)
-  end
+      instance_vars = prepare_parse_def
+      a_def = parse_def_helper is_abstract: is_abstract, is_macro_def: is_macro_def
 
-  def parse_macro_if(start_line, start_column, macro_state, check_end = true)
-    next_token_skip_space
+      # Small memory optimization: don't keep the Set in the Def if it's empty
+      instance_vars = nil if instance_vars.empty?
 
-    @in_macro_expression = true
-    cond = parse_op_assign
-    @in_macro_expression = false
+      a_def.instance_vars = instance_vars
+      a_def.calls_super = @calls_super
+      a_def.calls_initialize = @calls_initialize
+      a_def.uses_block_arg = @uses_block_cast
+      a_def.assigns_special_var = @assigns_special_var
+      a_def.doc = doc
+      @instance_vars = nil
+      @calls_super = false
+      @calls_initialize = false
+      @uses_block_cast = false
+      @assigns_special_var = false
+      @block_cast_name = nil
 
-    if @token.type != :"%}" && check_end
-      an_if = parse_if_after_condition cond, true
-      return MacroExpression.new(an_if, output: false)
+      dbg "parse_def done"
+      @def_parsing -= 1
+
+      a_def
     end
 
-    check :"%}"
+    def prepare_parse_def
+      @calls_super = false
+      @calls_initialize = false
+      @uses_block_cast = false
+      @block_cast_name = nil
+      @assigns_special_var = false
+      @instance_vars = Set(String).new
+    end
 
-    a_then, end_location = parse_macro_body(start_line, start_column, macro_state)
+    def parse_macro
+      doc = @token.doc
 
-    if @token.type == :END
-      if check_end
-        next_token_skip_space
-        check :"%}"
+      next_token_skip_space_or_newline
+
+      if kwd?(:def)
+        a_def = parse_def_helper is_macro_def: true
+        a_def.doc = doc
+        return a_def
       end
-    elsif @token.type == :IDFR
-      case @token.value
-      when :else
+
+      push_fresh_scope
+
+      check DefOrMacroCheck1
+
+      name_line_number = @token.line_number
+      name_column_number = @token.column_number
+
+      name = check_idfr
+      next_token_skip_space
+
+      args = [] of Arg
+
+      found_default_value = false
+      found_splat = false
+
+      splat_index = nil
+      index = 0
+
+      case @token.type
+      when :"("
+        next_token_skip_space_or_newline
+        while @token.type != :")"
+          extras = parse_arg(args, nil, true, found_default_value, found_splat, allow_restrictions: false)
+          if !found_default_value && extras.default_value
+            found_default_value = true
+          end
+          if !splat_index && extras.splat
+            splat_index = index
+            found_splat = true
+          end
+          if block_cast = extras.block_cast
+            check :")"
+            break
+          elsif @token.type == :","
+            next_token_skip_space_or_newline
+          else
+            skip_space
+            if @token.type != :")"
+              unexpected_token @token.to_s, "expected ',' or ')'"
+            end
+          end
+          index += 1
+        end
+        next_token
+      when :IDFR, :"..." # *TODO* verify - was "*"
+        while @token.type != :NEWLINE && @token.type != :";"
+          extras = parse_arg(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
+          if !found_default_value && extras.default_value
+            found_default_value = true
+          end
+          if !splat_index && extras.splat
+            splat_index = index
+            found_splat = true
+          end
+          if block_cast = extras.block_cast
+            break
+          elsif @token.type == :","
+            next_token_skip_space_or_newline
+          else
+            skip_space
+            if @token.type != :NEWLINE && @token.type != :";"
+              unexpected_token @token.to_s, "expected ';' or newline"
+            end
+          end
+          index += 1
+        end
+      end
+
+      end_location = nil
+
+      if tok?(:END)
+        end_location = token_end_location
+        body = Expressions.new
         next_token_skip_space
-        check :"%}"
+      else
+        body, end_location = parse_macro_body(name_line_number, name_column_number)
+      end
 
-        a_else, end_location = parse_macro_body(start_line, start_column, macro_state)
+      pop_scope
 
-        if check_end
+      node = Macro.new name, args, body, block_cast, splat_index
+      node.name_column_number = name_column_number
+      node.doc = doc
+      node.end_location = end_location
+      node
+    end
+
+    def parse_macro_body(start_line, start_column, macro_state = Token::MacroState.default)
+      skip_whitespace = check_macro_skip_whitespace
+
+      pieces = [] of ASTNode
+
+      while true
+        next_macro_token macro_state, skip_whitespace
+        macro_state = @token.macro_state
+        if macro_state.yields
+          @yields = 0
+        end
+
+        skip_whitespace = false
+
+        case @token.type
+        when :MACRO_LITERAL
+          pieces << MacroLiteral.new(@token.value.to_s)
+        when :MACRO_EXPRESSION_START
+          pieces << MacroExpression.new(parse_macro_expression)
+          check_macro_expression_end
+          skip_whitespace = check_macro_skip_whitespace
+        when :MACRO_CONTROL_START
+          macro_control = parse_macro_control(start_line, start_column, macro_state)
+          if macro_control
+            pieces << macro_control
+            skip_whitespace = check_macro_skip_whitespace
+          else
+            return Expressions.from(pieces), nil
+          end
+        when :MACRO_VAR
+          macro_var_name = @token.value.to_s
+          if current_char == '{'
+            macro_var_exps = parse_macro_var_exps
+          else
+            macro_var_exps = nil
+          end
+          pieces << MacroVar.new(macro_var_name, macro_var_exps)
+        when :MACRO_END
+          break
+        when :EOF
+          raise "unterminated macro", start_line, start_column
+        else
+          unexpected_token
+        end
+      end
+
+      end_location = token_end_location
+
+      next_token
+
+      {Expressions.from(pieces), end_location}
+    end
+
+    def parse_macro_var_exps
+      next_token # '{'
+      next_token
+
+      exps = [] of ASTNode
+      while true
+        exps << parse_expression_inside_macro
+        skip_space
+        case @token.type
+        when :","
+          next_token_skip_space
+          if @token.type == :"}"
+            break
+          end
+        when :"}"
+          break
+        else
+          unexpected_token @token, "expecting ',' or '}'"
+        end
+      end
+      exps
+    end
+
+    def check_macro_skip_whitespace
+      if current_char == '\\' && peek_next_char.whitespace?
+        next_char
+        true
+      else
+        false
+      end
+    end
+
+    def parse_macro_expression
+      next_token_skip_space_or_newline
+      parse_expression_inside_macro
+    end
+
+    def check_macro_expression_end
+      check :"}"
+
+      next_token
+      check :"}"
+    end
+
+    def parse_macro_control(start_line, start_column, macro_state = Token::MacroState.default)
+      next_token_skip_space_or_newline
+
+      case @token.type
+      when :END
+        return nil
+      when :IDFR
+        case @token.value
+        when :for
+          next_token_skip_space
+
+          vars = [] of Var
+
+          while true
+            vars << Var.new(check_idfr).at(@token.location)
+
+            next_token_skip_space
+            if @token.type == :","
+              next_token_skip_space
+            else
+              break
+            end
+          end
+
+          check_idfr :in
+          next_token_skip_space
+
+          exp = parse_expression_inside_macro
+
+          check :"%}"
+
+          body, end_location = parse_macro_body(start_line, start_column, macro_state)
+
           check :END
+          next_token_skip_space
+          check :"%}"
+
+          return MacroFor.new(vars, exp, body)
+        when :if
+          return parse_macro_if(start_line, start_column, macro_state)
+        when :unless
+          macro_if = parse_macro_if(start_line, start_column, macro_state)
+          case macro_if
+          when MacroIf
+            macro_if.then, macro_if.else = macro_if.else, macro_if.then
+          when MacroExpression
+            if (exp = macro_if.exp).is_a?(If)
+              exp.then, exp.else = exp.else, exp.then
+            end
+          end
+          return macro_if
+        when :begin
+          next_token_skip_space
+          check :"%}"
+
+          body, end_location = parse_macro_body(start_line, start_column, macro_state)
+
+          check :END
+          next_token_skip_space
+          check :"%}"
+
+          return MacroIf.new(BoolLiteral.new(true), body)
+        when :else, :elsif, :elif
+          return nil
+        end
+      end
+
+      @in_macro_expression = true
+      exps = parse_expressions
+      @in_macro_expression = false
+
+      MacroExpression.new(exps, output: false)
+    end
+
+    def parse_macro_if(start_line, start_column, macro_state, check_end = true)
+      next_token_skip_space
+
+      macro_if_indent = @indent
+
+      @in_macro_expression = true
+      cond = parse_op_assign
+      @in_macro_expression = false
+
+      if @token.type != :"%}" && check_end
+        an_if = parse_if_after_condition macro_if_indent, cond, true
+        return MacroExpression.new(an_if, output: false)
+      end
+
+      check :"%}"
+
+      a_then, end_location = parse_macro_body(start_line, start_column, macro_state)
+
+      if @token.type == :END
+        if check_end
           next_token_skip_space
           check :"%}"
         end
-      when :elsif, :elif
-        a_else = parse_macro_if(start_line, start_column, macro_state, false)
-
-        if check_end
-          check :END
+      elsif @token.type == :IDFR
+        case @token.value
+        when :else
           next_token_skip_space
           check :"%}"
+
+          a_else, end_location = parse_macro_body(start_line, start_column, macro_state)
+
+          if check_end
+            check :END
+            next_token_skip_space
+            check :"%}"
+          end
+        when :elsif, :elif
+          a_else = parse_macro_if(start_line, start_column, macro_state, false)
+
+          if check_end
+            check :END
+            next_token_skip_space
+            check :"%}"
+          end
+        else
+          unexpected_token
         end
       else
         unexpected_token
       end
-    else
-      unexpected_token
+
+      return MacroIf.new(cond, a_then, a_else)
     end
 
-    return MacroIf.new(cond, a_then, a_else)
-  end
+    def parse_expression_inside_macro
+      @in_macro_expression = true
 
-  def parse_expression_inside_macro
-    @in_macro_expression = true
-
-    if @token.type == :"..."
-      next_token_skip_space
-      exp = parse_expression
-      exp = Splat.new(exp).at(exp.location)
-    else
-      exp = parse_expression
-    end
-
-    skip_statement_end
-
-    @in_macro_expression = false
-    exp
-  end
-
-  DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"===", :"!=", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"~", :"%", :"&", :"|", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
-  DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"===", :"!=", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"~", :"%", :"&", :"|", :"^", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
-
-  def parse_def_helper(is_abstract = false, is_macro_def = false)
-    push_fresh_scope
-    @doc_enabled = false
-    @def_nest += 1
-
-    # At this point we want to attach the "do" to calls inside the def,
-    # not to calls that might have this def as a macro argument.
-    @last_call_has_parenthesis = true
-
-    if kwd? :def, :fun, :own
-      next_token_skip_space
-    end
-
-    mutate_gt_op_to_bigger_op?
-
-    case current_char
-    when '%'
-      next_char
-      @token.type = :"%"
-      @token.column_number += 1
-    when '/'
-      next_char
-      @token.type = :"/"
-      @token.column_number += 1
-    when '`'
-      next_char
-      @token.type = :"`"
-      @token.column_number += 1
-    else
-      skip_statement_end
-      check DefOrMacroCheck1
-    end
-
-    receiver = nil
-    @yields = nil
-    name_line_number = @token.line_number
-    name_column_number = @token.column_number
-    receiver_location = @token.location
-    end_location = token_end_location
-
-    if @token.type == :CONST
-      receiver = parse_idfr
-    elsif @token.type == :IDFR
-      name = @token.value.to_s
-      next_token
-      if tok?(:"=")
-        name = "#{name}="
+      if @token.type == :"..."
         next_token_skip_space
+        exp = parse_expression
+        exp = Splat.new(exp).at(exp.location)
       else
-        skip_space
+        exp = parse_expression
       end
-    else
-      name = @token.type.to_s
-      next_token_skip_space
+
+      skip_statement_end
+
+      @in_macro_expression = false
+      exp
     end
 
+    DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :"~", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
+    DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :"~", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
 
-    # *TODO* error message column is fucked up! Points to first param!!!
-    case name
-    when "init"     # Onyx uses "init", but promotes it to "initialize" for Crystal compatibility
-      name = "initialize"
-    when "initialize"
-      raise "initialize is a reserved internal method name. Use 'init' for constructor code.", name_line_number, name_column_number
-    end
+    def parse_def_helper(is_abstract = false, is_macro_def = false)
 
-
-    add_nest (is_macro_def ? :macro : :def), @indent, name.to_s, false
+      # *TODO* 'abstract' should be parsed by this parser:
+      # foo(a, b) -> abstract  <-- this is good!
 
 
-    if tok?(:".")
-      unless receiver
-        if name
-          receiver = Var.new(name).at(receiver_location)
-        else
-          raise "shouldn't reach this line"
-        end
+      push_fresh_scope
+      @doc_enabled = false
+      @def_nest += 1
+
+      def_indent = @indent
+
+      # At this point we want to attach the "do" to calls inside the def,
+      # not to calls that might have this def as a macro argument.
+      @last_call_has_parenthesis = true
+
+      if kwd? :def, :fun, :own
+        next_token_skip_space
       end
-      next_token_skip_space
 
-      if @token.type == :IDFR
+      maybe_mutate_gt_op_to_bigger_op
+
+      case current_char
+      when '%'
+        next_char
+        @token.type = :"%"
+        @token.column_number += 1
+      when '/'
+        next_char
+        @token.type = :"/"
+        @token.column_number += 1
+      when '`'
+        next_char
+        @token.type = :"`"
+        @token.column_number += 1
+      else
+        skip_statement_end
+        check DefOrMacroCheck1
+      end
+
+      receiver = nil
+      @yields = nil
+      name_line_number = @token.line_number
+      name_column_number = @token.column_number
+      receiver_location = @token.location
+      end_location = token_end_location
+
+      if @token.type == :CONST
+        receiver = parse_idfr
+      elsif @token.type == :IDFR
         name = @token.value.to_s
-        name_column_number = @token.column_number
         next_token
         if tok?(:"=")
           name = "#{name}="
@@ -3832,2459 +3981,2661 @@ class OnyxParser < OnyxLexer
           skip_space
         end
       else
-        mutate_gt_op_to_bigger_op?
-        check DefOrMacroCheck2
         name = @token.type.to_s
-        name_column_number = @token.column_number
         next_token_skip_space
       end
-    else
-      if receiver
-        unexpected_token
-      else
-        raise "shouldn't reach this line" unless name
+
+      # *TODO* error message column is fucked up! Points to first param!!!
+      case name
+      when "init" # Onyx uses "init", but promotes it to "initialize" for Crystal compatibility
+        name = "initialize"
+      when "initialize"
+        raise "initialize is a reserved internal method name. Use 'init' for constructor code.", name_line_number, name_column_number
       end
-      name = name.not_nil!
-    end
 
-
-    arg_list = [] of Arg
-    extra_assigns = [] of ASTNode
-
-    found_default_value = false
-    found_splat = false
-
-    index = 0
-    splat_index = nil
-
-    # *TODO* It should ALWAYS be `(` at this point! required!
-
-    dbg ""
-
-    case @token.type
-    when :"("
-      dbg "Got with parens arg_list"
-      next_token_skip_space_or_newline
-
-      while @token.type != :")"
-        dbg "!=)"
-
-        extras = parse_arg(arg_list, extra_assigns, true, found_default_value, found_splat)
-
-        if !found_default_value && extras.default_value
-          found_default_value = true
-        end
-        if !splat_index && extras.splat
-          splat_index = index
-          found_splat = true
-        end
-        if block_arg = extras.block_arg
-          compute_block_arg_yields block_arg
-          check :")"
-          break
-
-        elsif tok?(:",") || tok?(:";") || @token.type == :"NEWLINE"
-          next_token_skip_space_or_newline
-
-        else
-          skip_statement_end
-          if @token.type != :")"
-            unexpected_token @token.to_s, "expected ',' or ')'"
+      if tok?(:".")
+        unless receiver
+          if name
+            receiver = Var.new(name).at(receiver_location)
+          else
+            raise "shouldn't reach this line"
           end
         end
-        index += 1
-      end
-      next_token_skip_space
+        next_token_skip_space
 
-    when :";", :"NEWLINE"
-       # Skip
-    when :":"
-      # Skip
-    when :"&"
-      next_token_skip_space_or_newline
-      block_arg = parse_block_arg(extra_assigns)
-      compute_block_arg_yields block_arg
-    else
-      if is_abstract && @token.type == :EOF
-        # OK
+        if @token.type == :IDFR
+          name = @token.value.to_s
+          name_column_number = @token.column_number
+          next_token
+          if tok?(:"=")
+            name = "#{name}="
+            next_token_skip_space
+          else
+            skip_space
+          end
+        else
+          maybe_mutate_gt_op_to_bigger_op
+          check DefOrMacroCheck2
+          name = @token.type.to_s
+          name_column_number = @token.column_number
+          next_token_skip_space
+        end
       else
-        unexpected_token
+        if receiver
+          unexpected_token
+        else
+          raise "shouldn't reach this line" unless name
+        end
+        name = name.not_nil!
+      end
+
+      arg_list = [] of Arg
+      extra_assigns = [] of ASTNode
+
+      found_default_value = false
+      found_splat = false
+
+      index = 0
+      splat_index = nil
+
+      # *TODO* It should ALWAYS be `(` at this point! required!
+
+      dbg ""
+
+      case @token.type
+      when :"("
+        dbg "Got with parens arg_list"
+        next_token_skip_space_or_newline
+
+        while @token.type != :")"
+          dbg "!=)"
+
+          extras = parse_arg(arg_list, extra_assigns, true, found_default_value, found_splat)
+
+          if !found_default_value && extras.default_value
+            found_default_value = true
+          end
+          if !splat_index && extras.splat
+            splat_index = index
+            found_splat = true
+          end
+          if block_cast = extras.block_cast
+            compute_block_cast_yields block_cast
+            check :")"
+            break
+          elsif tok?(:",") || tok?(:";") || @token.type == :"NEWLINE"
+            next_token_skip_space_or_newline
+          else
+            skip_statement_end
+            if @token.type != :")"
+              unexpected_token @token.to_s, "expected ',' or ')'"
+            end
+          end
+          index += 1
+        end
+        next_token_skip_space
+      when :";", :"NEWLINE"
+        # Skip
+      when :":"
+        # Skip
+      when :"&"
+        next_token_skip_space_or_newline
+        block_cast = parse_block_cast(extra_assigns)
+        compute_block_cast_yields block_cast
+      else
+        if is_abstract && @token.type == :EOF
+          # OK
+        else
+          unexpected_token
+        end
+      end
+
+      dbg "before is_macro_def"
+
+      if is_macro_def
+        check :":"
+        next_token_skip_space
+        return_type = parse_single_type
+        end_location = return_type.end_location
+
+        if is_abstract
+          body = Nop.new
+        else
+          # if kwd?("end")  # *TODO*
+          if is_explicit_end_tok? # *TODO* all kinds of endings
+
+            body = Expressions.new
+            next_token_skip_space
+          else
+            body, end_location = parse_macro_body(name_line_number, name_column_number)
+          end
+        end
+      else
+        # The part below should be cleaned up
+
+        if @token.type != :"->"
+          dbg "No ->, type?"
+          # next_token_skip_space
+          if @token.type != :"NEWLINE" # *TODO* we don't accept newline here
+            dbg "Tries TYPE PARSE"
+            return_type = parse_single_type
+            end_location = return_type.end_location
+          else
+            dbg "GOT NEWLINE"
+            return_type = nil
+          end
+          dbg "tok:" + @token.to_s
+
+          if @token.type != :"->" # this is checked in parse_nest_start too!!
+            unexpected_token @token.to_s, "expected '->' or return type"
+          end
+          dbg "Got ->"
+          # Done with header..
+
+        else
+          dbg "Got -> - so no return type given"
+        end
+
+        end_location = token_end_location
+
+        @certain_def_count += 1
+
+        dbg "body time"
+
+        nest_kind, callable_kind, returns_nothing, suffix_pragmas = parse_def_nest_start
+        # *TODO* use callable_kind and set on Def–node
+        add_nest (is_macro_def ? :macro : :def), def_indent, name.to_s, (nest_kind == :LINE_NEST), false
+
+        pragmas = [] of Attribute
+        pragmas.concat suffix_pragmas
+
+        dbg "found pragmas for def: #{pragmas}"
+
+
+
+        if returns_nothing
+          if return_type
+            # *TODO* wrong position on error message!
+            raise "Callable declared with both return type and \"returns nothing\" notation. Which is it?"
+          else
+            return_type = Path.global("Nil") # *TODO* Nothing / Void if it gets introduced
+          end
+        end
+
+        dbg "do we have an abstract kwd? #{kwd? :abstract}"
+
+
+        if nest_kind == :NIL_NEST
+          dbg "got nil block"
+          body = Nop.new
+          handle_nest_end true
+
+        elsif is_abstract  # for prefixed `abstract`, the suffix–vers is below
+          dbg "is_abstract - sets nil block"
+          body = Nop.new
+          handle_nest_end true
+
+        else
+          dbg "got a body"
+          slash_is_regex!
+          # dbg "before skip_statement_end"
+          # skip_statement_end
+          # dbg "after skip_statement_end"
+
+          end_location = token_end_location
+
+          if kwd? :abstract  # if the only thing in the body is "abstract"... you get it!
+            next_token_skip_space
+            dbg "Got astract keyword as 'body'"
+            is_abstract = true
+            body = Nop.new
+
+            if ! handle_nest_end true
+              raise "unexpected token \"#{@token}\". Expected def to be done after 'abstract' keyword.", @token.location
+            end
+
+          elsif is_explicit_end_tok?                  # *TODO* all kinds of endings
+            raise "Does this happen? When? *TODO*" # *TODO* *UGLY* TRACING WHAT HAPPENS THE RAW WAY! RAPID DEV! ;-)
+            body = Expressions.from(extra_assigns)
+            next_token_skip_space
+
+          else
+            dbg "before body=parse_expressions"
+            body = parse_expressions
+            dbg "after body=parse_expressions"
+            if extra_assigns.size > 0
+              exps = [] of ASTNode
+              exps.concat extra_assigns
+              if body.is_a?(Expressions)
+                exps.concat body.expressions
+              else
+                exps.push body
+              end
+
+              body = Expressions.from exps
+            end
+
+            body, end_location = parse_exception_handler body
+          end
+        end
+        @certain_def_count -= 1   # *TODO* replace with throwing DefSyntaxException
+      end
+
+      if returns_nothing && body.is_a? Expressions # *TODO* should be `nop` - or nothing at all if Nothing/Void gets introduced
+
+        dbg "It's a returns_nothing callable and body.last == #{body.last}"
+
+        if body.last && body.last.is_a? NilLiteral
+          dbg "Already got a 'nil'"
+        else
+          dbg "it's not 'nil'"
+          body.expressions.push NilLiteral.new
+        end
+      else
+        dbg "returns_nothing == #{returns_nothing}, typeof(body) == #{typeof(body)}, of Expressions? == #{body.is_a? Expressions}"
+      end
+
+      @def_nest -= 1
+      @doc_enabled = @wants_doc
+      pop_scope
+
+      node = Def.new name, arg_list, body, receiver, block_cast, return_type, is_macro_def, @yields, is_abstract, splat_index
+      node.name_column_number = name_column_number
+      node.visibility = @visibility
+      node.end_location = end_location
+
+      dbg "parse_def_helper done"
+      node
+    end
+
+    def compute_block_cast_yields(block_cast)
+      block_cast_restriction = block_cast.restriction
+      if block_cast_restriction.is_a?(Fun)
+        @yields = block_cast_restriction.inputs.try(&.size) || 0
+      else
+        @yields = 0
       end
     end
 
-    dbg "before is_macro_def"
+    record ArgExtras, block_cast, default_value, splat
 
-    if is_macro_def
-      check :":"
-      next_token_skip_space
-      return_type = parse_single_type
-      end_location = return_type.end_location
+    def parse_arg(arg_list, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
+      if @token.type == :"&"
+        next_token_skip_space_or_newline
+        block_cast = parse_block_cast(extra_assigns)
+        return ArgExtras.new(block_cast, false, false)
+      end
 
-      if is_abstract
-        body = Nop.new
+      splat = false
+      if @token.type == :"..."
+        if found_splat
+          # *TODO* Should say that it's a duplicate splat!
+          unexpected_token
+        end
+
+        splat = true
+        next_token_skip_space
+      end
+
+      arg_location = @token.location
+      arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
+
+      if arg_list.any? { |arg| arg.name == arg_name }
+        raise "duplicated argument name: #{arg_name}", @token
+      end
+
+      default_value = nil
+      restriction = nil
+
+      if parenthesis
+        next_token_skip_space_or_newline
       else
+        next_token_skip_space
+      end
 
+      if tok? :":"
+        dbg "\nWARNING!".red + " `:` after param-name - did you mean to annotate type? Ditch the colon!\n".yellow
+      end
 
-        #if @token.keyword?("end")  # *TODO*
-        if is_explicit_end_tok? # *TODO* all kinds of endings
+      if (allow_restrictions &&
+          !tok?(:"=", :",", :";", :"<", :")")
+          )
+        # next_token_skip_space_or_newline
+        location = @token.location
+        is_mod_immut, is_mod_mut, type = parse_arg_type()
+        dbg is_mod_immut.to_s + ", " + is_mod_mut.to_s + ", " + type.to_s
 
-          body = Expressions.new
-          next_token_skip_space
+        restriction = type
+      end
+
+      unless splat
+        if @token.type == :"="
+          if found_splat
+            unexpected_token
+          end
+
+          next_token_skip_space_or_newline
+
+          case @token.type
+          when :__LINE__, :__FILE__, :__DIR__
+            default_value = MagicConstant.new(@token.type).at(@token.location)
+            next_token
+          else
+            default_value = parse_op_assign
+          end
+
+          skip_space
         else
-          body, end_location = parse_macro_body(name_line_number, name_column_number)
+          if found_default_value
+            raise "argument must have a default value", arg_location
+          end
         end
       end
 
-    else
+      raise "Bug: arg_name is nil" unless arg_name
 
+      arg = Arg.new(arg_name, default_value, restriction).at(arg_location)
+      arg_list << arg
+      add_var arg
 
+      ArgExtras.new(nil, !!default_value, splat)
+    end
 
-      # The part below should be cleaned up
+    def parse_block_cast(extra_assigns)
+      name_location = @token.location
+      arg_name, uses_arg = parse_arg_name(name_location, extra_assigns)
+      @uses_block_cast = true if uses_arg
 
-      if @token.type != :"->"
-        dbg "No ->, type?"
-        #next_token_skip_space
-        if @token.type != :"NEWLINE"    # *TODO* we don't accept newline here
-          dbg "Tries TYPE PARSE"
-          return_type = parse_single_type
-          end_location = return_type.end_location
+      next_token_skip_space_or_newline
+
+      inputs = nil
+      output = nil
+
+      if @token.type == :":" # *TODO*
+        next_token_skip_space_or_newline
+
+        location = @token.location
+
+        type_spec = parse_single_type
+      # else
+      #   type_spec = Fun.new
+      end
+
+      #block_cast = BlockArg.new(arg_name, type_spec).at(name_location)
+      block_cast = Arg.new(arg_name, restriction: type_spec).at(name_location)
+
+      add_var block_cast
+
+      @block_cast_name = block_cast.name
+
+      block_cast
+    end
+
+    def parse_arg_name(location, extra_assigns)
+      # *TODO* also consider symbol style (#name) for
+      # named fields
+
+      case @token.type
+      when :IDFR
+        arg_name = @token.value.to_s
+        uses_arg = false
+      when :INSTANCE_VAR
+        arg_name = @token.value.to_s[1..-1]
+        ivar = InstanceVar.new(@token.value.to_s).at(location)
+        var = Var.new(arg_name).at(location)
+        assign = Assign.new(ivar, var).at(location)
+        if extra_assigns
+          extra_assigns.push assign
         else
-          dbg "GOT NEWLINE"
-          return_type = nil
+          raise "can't use @instance_variable here"
         end
-        dbg "tok:" + @token.to_s
-
-        if @token.type != :"->" # this is checked in parse_nest_start too!!
-          unexpected_token @token.to_s, "expected '->' or return type"
+        add_instance_var ivar.name
+        uses_arg = true
+      when :CLASS_VAR
+        arg_name = @token.value.to_s[2..-1]
+        cvar = ClassVar.new(@token.value.to_s).at(location)
+        var = Var.new(arg_name).at(location)
+        assign = Assign.new(cvar, var).at(location)
+        if extra_assigns
+          extra_assigns.push assign
+        else
+          raise "can't use @@class_var here"
         end
-        dbg "Got ->"
-        # Done with header..
-
+        uses_arg = true
       else
-        dbg "Got -> - so no return type given"
+        raise "unexpected token: #{@token}"
+      end
+
+      {arg_name, uses_arg}
+    end
+
+    def parse_if(check_end = true)
+      dbg "parse_if"
+      # dbginc
+      if_indent = @indent
+      slash_is_regex!
+      next_token_skip_space_or_newline
+
+      if kwd? :likely, :unlikely
+        dbg "\n\nGot likely/unlikely keyword in if-expression! GHOST IMPLEMENTATION ATM. NO IR-GENERATION!\n\n".red
+        next_token_skip_space_or_newline
+      end
+
+      dbg "parse_if condition"
+      cond = parse_op_assign_no_control allow_suffix: false
+      dbg "parse_if code block"
+      parse_if_after_condition if_indent, cond, check_end
+    ensure
+      # dbgdec
+    end
+
+    def parse_if_after_condition(initial_indent, cond, check_end)
+      dbg "parse_if_after_condition, at"
+      slash_is_regex!
+
+      # skip_statement_end
+
+      # "then" || "=>" || "\n"+:INDENT
+      nest_kind = parse_nest_start :if
+      add_nest :if, initial_indent, "", (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        dbg "parse_if_after_condition: was nilblock"
+        a_then = nil # NilLiteral.new   ?
+        handle_nest_end true
+      else
+        dbg "parse_if_after_condition: parse then block"
+        a_then = parse_expressions
+        dbg "parse_if_after_condition: after then-block - before skip_statement_end, @one_line_nest = " + @one_line_nest.to_s
+        skip_statement_end
+        dbg "parse_if_after_condition: after skip_statement_end"
+      end
+
+      a_else = nil
+      if @token.type == :IDFR
+        dbg "parse_if_after_condition: idfr - is it else or elsif?"
+
+        case @token.value
+        when :else
+          dbg "parse_if_after_condition: was else"
+          # next_token_skip_statement_end
+          else_indent = @indent
+          next_token_skip_space
+
+          nest_kind = parse_nest_start :else
+          add_nest :if, else_indent, "", (nest_kind == :LINE_NEST), false # *TODO* -> :else  - we use :if now for :end–if matching...
+
+          if nest_kind == :NIL_NEST
+            a_else = nil # NilLiteral.new   ?
+            handle_nest_end true
+          else
+            a_else = parse_expressions
+          end
+        when :elsif, :elif
+          dbg "parse_if_after_condition: was elsif"
+          a_else = parse_if check_end: false
+        end
       end
 
       end_location = token_end_location
 
-      @certain_def_count += 1
+      # *TODO*
+      # if check_end
+      #   check_idfr "end"
+      #   next_token_skip_space
+      # end
 
-      dbg "body time"
-
-      block_kind, callable_kind, returns_nothing = parse_def_nest_start
-      # *TODO* use callable_kind and set on Def–node
-
-      if returns_nothing
-        if return_type
-          # *TODO* wrong position on error message!
-          raise "Callable declared with both return type and \"returns nothing\" notation. Which is it?"
-        else
-          return_type = Path.global("Nil") # *TODO* Nothing / Void if it gets introduced
-        end
-      end
-
-      if block_kind == :NIL_NEST
-        dbg "got nil block"
-        body = Nop.new
-        handle_nest_end true
-      elsif is_abstract
-        dbg "is_abstract - sets nil block"
-        body = Nop.new
-        handle_nest_end true
-      else
-        dbg "got a body"
-        slash_is_regex!
-        #dbg "before skip_statement_end"
-        #skip_statement_end
-        #dbg "after skip_statement_end"
-
-        end_location = token_end_location
-
-        if is_explicit_end_tok? # *TODO* all kinds of endings
-          raise "Does this happen? When? *TODO*" # *TODO* *UGLY* TRACING WHAT HAPPENS THE RAW WAY! RAPID DEV! ;-)
-          body = Expressions.from(extra_assigns)
-          next_token_skip_space
-        else
-          dbg "before body=parse_expressions"
-          body = parse_expressions
-          dbg "after body=parse_expressions"
-          if extra_assigns.size > 0
-            exps = [] of ASTNode
-            exps.concat extra_assigns
-            if body.is_a?(Expressions)
-              exps.concat body.expressions
-            else
-              exps.push body
-            end
-
-            body = Expressions.from exps
-          end
-
-          body, end_location = parse_exception_handler body
-
-        end
-      end
-      @certain_def_count -= 1
-
+      If.new(cond, a_then, a_else).at_end(end_location)
     end
 
-    if returns_nothing && body.is_a? Expressions
-
-      # *TODO* should be `nop` - or nothing at all if Nothing/Void gets introduced
-
-      dbg "It's a returns_nothing callable and body.last == #{body.last}"
-
-      if body.last && body.last.is_a? NilLiteral
-        dbg "Already got a 'nil'"
-      else
-        dbg "it's not 'nil'"
-        body.expressions.push NilLiteral.new
-      end
-    else
-      dbg "returns_nothing == #{returns_nothing}, typeof(body) == #{typeof(body)}, of Expressions? == #{body.is_a? Expressions}"
-    end
-
-    @def_nest -= 1
-    @doc_enabled = @wants_doc
-    pop_scope
-
-    node = Def.new name, arg_list, body, receiver, block_arg, return_type, is_macro_def, @yields, is_abstract, splat_index
-    node.name_column_number = name_column_number
-    node.visibility = @visibility
-    node.end_location = end_location
-
-    dbg "parse_def_helper done"
-    node
-  end
-
-  def compute_block_arg_yields(block_arg)
-    block_arg_fun = block_arg.fun
-    if block_arg_fun.is_a?(Fun)
-      @yields = block_arg_fun.inputs.try(&.size) || 0
-    else
-      @yields = 0
-    end
-  end
-
-
-
-  record ArgExtras, block_arg, default_value, splat
-
-  def parse_arg(arg_list, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
-    if @token.type == :"&"
-      next_token_skip_space_or_newline
-      block_arg = parse_block_arg(extra_assigns)
-      return ArgExtras.new(block_arg, false, false)
-    end
-
-    splat = false
-    if @token.type == :"..."
-      if found_splat
-        # *TODO* Should say that it's a duplicate splat!
-        unexpected_token
-      end
-
-      splat = true
-      next_token_skip_space
-    end
-
-    arg_location = @token.location
-    arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
-
-    if arg_list.any? { |arg| arg.name == arg_name }
-      raise "duplicated argument name: #{arg_name}", @token
-    end
-
-    default_value = nil
-    restriction = nil
-
-    if parenthesis
-      next_token_skip_space_or_newline
-    else
-      next_token_skip_space
-    end
-
-    if tok? :":"
-      dbg "\nWARNING!".red + " `:` after param-name - did you mean to annotate type? Ditch the colon!\n".yellow
-    end
-
-    if (allow_restrictions && # && @token.type == :":"
-        !tok?(:"=", :",", :";", :"<", :")")
-    )
-      #next_token_skip_space_or_newline
-      location = @token.location
-      is_mod_const, is_mod_mut, type, is_val_const, is_val_mut =
-        parse_arg_type()
-      dbg is_mod_const.to_s + ", " + is_mod_mut.to_s + ", " + type.to_s + ", " + is_val_const.to_s + ", " + is_val_mut.to_s
-
-      restriction = type
-    end
-
-    unless splat
-      if @token.type == :"="
-        if found_splat
-          unexpected_token
-        end
-
-        next_token_skip_space_or_newline
-
-        case @token.type
-        when :__LINE__, :__FILE__, :__DIR__
-          default_value = MagicConstant.new(@token.type).at(@token.location)
-          next_token
-        else
-          default_value = parse_op_assign
-        end
-
-        skip_space
-      else
-        if found_default_value
-          raise "argument must have a default value", arg_location
-        end
-      end
-    end
-
-    raise "Bug: arg_name is nil" unless arg_name
-
-    arg = Arg.new(arg_name, default_value, restriction).at(arg_location)
-    arg_list << arg
-    add_var arg
-
-    ArgExtras.new(nil, !!default_value, splat)
-  end
-
-
-
-  def parse_block_arg(extra_assigns)
-    name_location = @token.location
-    arg_name, uses_arg = parse_arg_name(name_location, extra_assigns)
-    @uses_block_arg = true if uses_arg
-
-    next_token_skip_space_or_newline
-
-    inputs = nil
-    output = nil
-
-    if @token.type == :":"  # *TODO*
+    def parse_unless
       next_token_skip_space_or_newline
 
-      location = @token.location
-
-      type_spec = parse_single_type
-    else
-      type_spec = Fun.new
-    end
-
-    block_arg = BlockArg.new(arg_name, type_spec).at(name_location)
-
-    add_var block_arg
-
-    @block_arg_name = block_arg.name
-
-    block_arg
-  end
-
-  def parse_arg_name(location, extra_assigns)
-    # *TODO* also consider symbol style (#name) for
-    # named fields
-
-    case @token.type
-    when :IDFR
-      arg_name = @token.value.to_s
-      uses_arg = false
-    when :INSTANCE_VAR
-      arg_name = @token.value.to_s[1 .. -1]
-      ivar = InstanceVar.new(@token.value.to_s).at(location)
-      var = Var.new(arg_name).at(location)
-      assign = Assign.new(ivar, var).at(location)
-      if extra_assigns
-        extra_assigns.push assign
-      else
-        raise "can't use @instance_variable here"
-      end
-      add_instance_var ivar.name
-      uses_arg = true
-    when :CLASS_VAR
-      arg_name = @token.value.to_s[2 .. -1]
-      cvar = ClassVar.new(@token.value.to_s).at(location)
-      var = Var.new(arg_name).at(location)
-      assign = Assign.new(cvar, var).at(location)
-      if extra_assigns
-        extra_assigns.push assign
-      else
-        raise "can't use @@class_var here"
-      end
-      uses_arg = true
-    else
-      raise "unexpected token: #{@token}"
-    end
-
-    {arg_name, uses_arg}
-  end
-
-  def parse_if(check_end = true)
-    dbg "parse_if"
-    #dbginc
-
-    add_nest :if, @indent, "", false
-
-    slash_is_regex!
-    next_token_skip_space_or_newline
-
-    dbg "parse_if condition"
-    cond = parse_op_assign_no_control allow_suffix: false
-    dbg "parse_if code block"
-    parse_if_after_condition cond, check_end
-
-  ensure
-    #dbgdec
-  end
-
-  def parse_if_after_condition(cond, check_end)
-    dbg "parse_if_after_condition, at"
-    slash_is_regex!
-
-
-    #skip_statement_end
-
-
-    # "then" || "=>" || "\n"+:INDENT
-    block_kind = parse_nest_start :if
-
-    if block_kind == :NIL_NEST
-      dbg "parse_if_after_condition: was nilblock"
-      a_then = nil # NilLiteral.new   ?
-      handle_nest_end true
-    else
-      dbg "parse_if_after_condition: parse then block"
-      a_then = parse_expressions
-      dbg "parse_if_after_condition: after then-block - before skip_statement_end, @one_line_nest = " + @one_line_nest.to_s
+      cond = parse_op_assign_no_control allow_suffix: false
       skip_statement_end
-      dbg "parse_if_after_condition: after skip_statement_end"
-    end
 
-    a_else = nil
-    if @token.type == :IDFR
-      dbg "parse_if_after_condition: idfr - is it else or elsif?"
+      a_then = parse_expressions
+      skip_statement_end
 
-      case @token.value
-      when :else
-        dbg "parse_if_after_condition: was else"
-        #next_token_skip_statement_end
-        add_nest :if, @indent, "", false  # *TODO* -> :else  - we use :if now for :end–if matching...
-
-        next_token_skip_space
-
-        block_kind = parse_nest_start :else
-        if block_kind == :NIL_NEST
-          a_else = nil # NilLiteral.new   ?
-          handle_nest_end true
-        else
-          a_else = parse_expressions
-        end
-      when :elsif, :elif
-        dbg "parse_if_after_condition: was elsif"
-        a_else = parse_if check_end: false
+      a_else = nil
+      if kwd?(:else)
+        next_token_skip_statement_end
+        a_else = parse_expressions
       end
-    end
 
-    end_location = token_end_location
-
-    # *TODO*
-    # if check_end
-    #   check_idfr "end"
-    #   next_token_skip_space
-    # end
-
-    If.new(cond, a_then, a_else).at_end(end_location)
-  end
-
-  def parse_unless
-    next_token_skip_space_or_newline
-
-    cond = parse_op_assign_no_control allow_suffix: false
-    skip_statement_end
-
-    a_then = parse_expressions
-    skip_statement_end
-
-    a_else = nil
-    if @token.keyword?(:else)
-      next_token_skip_statement_end
-      a_else = parse_expressions
-    end
-
-    check :END
-    end_location = token_end_location
-    next_token_skip_space
-
-    Unless.new(cond, a_then, a_else).at_end(end_location)
-  end
-
-  def parse_ifdef(check_end = true, mode = :normal)
-    next_token_skip_space_or_newline
-
-    cond = parse_flags_or
-    #skip_statement_end
-
-    if parse_nest_start(:if) == :NIL_NEST
-      raise "expected a body for the `ifdef` statement"
-    end
-
-    a_then = parse_ifdef_body(mode)
-
-    a_else = nil
-    if @token.type == :IDFR
-      case @token.value
-      when :else
-        next_token_skip_space
-        if parse_nest_start(:if) == :NIL_NEST
-          raise "expected a body for the `ifdef else` statement"
-        end
-        a_else = parse_ifdef_body(mode)
-      when :elsif, :elif
-        a_else = parse_ifdef check_end: false, mode: mode
-      end
-    end
-
-    end_location = token_end_location
-
-    if check_end
-      # *TODO* must be done in parse_ifdef_body!!!
-      #check :END
-      #next_token_skip_space
-    end
-
-    IfDef.new(cond, a_then, a_else).at_end(end_location)
-  end
-
-  def parse_ifdef_body(mode)
-    case mode
-    when :lib
-      parse_lib_body
-    when :struct_or_union
-      parse_struct_or_union_body
-    else
-      parse_expressions
-    end
-  end
-
-  parse_operator :flags_or, :flags_and, "Or.new left, right", ":\"||\""
-  parse_operator :flags_and, :flags_atomic, "And.new left, right", ":\"&&\""
-
-  def parse_flags_atomic
-    case @token.type
-    when :"("
+      check :END
+      end_location = token_end_location
       next_token_skip_space
-      if @token.type == :")"
+
+      Unless.new(cond, a_then, a_else).at_end(end_location)
+    end
+
+    def parse_ifdef(check_end = true, mode = :normal)
+      next_token_skip_space_or_newline
+
+
+      # *TODO* add_nest/pop_nest!?
+
+      cond = parse_flags_or
+      # skip_statement_end
+
+      if parse_nest_start(:if) == :NIL_NEST
+        raise "expected a body for the `ifdef` statement"
+      end
+
+      a_then = parse_ifdef_body(mode)
+
+      a_else = nil
+      if @token.type == :IDFR
+        case @token.value
+        when :else
+          next_token_skip_space
+          if parse_nest_start(:if) == :NIL_NEST
+            raise "expected a body for the `ifdef else` statement"
+          end
+          a_else = parse_ifdef_body(mode)
+        when :elsif, :elif
+          a_else = parse_ifdef check_end: false, mode: mode
+        end
+      end
+
+      end_location = token_end_location
+
+      # if check_end
+      #   # *TODO* must be done in parse_ifdef_body!!!
+      #   # check :END
+      #   # next_token_skip_space
+      # end
+
+      IfDef.new(cond, a_then, a_else).at_end(end_location)
+    end
+
+    def parse_ifdef_body(mode)
+      case mode
+      when :lib
+        parse_lib_body
+      when :struct_or_union
+        parse_struct_or_union_body
+      else
+        parse_expressions
+      end
+    end
+
+    parse_operator :flags_or, :flags_and, "Or.new left, right", ":\"||\", :\"or\""
+    parse_operator :flags_and, :flags_atomic, "And.new left, right", ":\"&&\", :\"and\""
+
+    def parse_flags_atomic
+      case @token.type
+      when :"("
+        next_token_skip_space
+        if @token.type == :")"
+          raise "unexpected token: #{@token}"
+        end
+
+        atomic = parse_flags_or
+        skip_space
+
+        check :")"
+        next_token_skip_space
+
+        atomic
+      when :"!", :not
+        next_token_skip_space
+        Not.new(parse_flags_atomic)
+      when :IDFR
+        str = @token.to_s
+        next_token_skip_space
+        Var.new(str)
+      else
         raise "unexpected token: #{@token}"
       end
-
-      atomic = parse_flags_or
-      skip_space
-
-      check :")"
-      next_token_skip_space
-
-      atomic
-    when :"!"
-      next_token_skip_space
-      Not.new(parse_flags_atomic)
-    when :IDFR
-      str = @token.to_s
-      next_token_skip_space
-      Var.new(str)
-    else
-      raise "unexpected token: #{@token}"
-    end
-  end
-
-  def set_visibility(node)
-    if visibility = @visibility
-      node.visibility = visibility
-    end
-    node
-  end
-
-  def parse_var_or_call(global = false, force_call = false)
-    location = @token.location
-    end_location = token_end_location
-    doc = @token.doc
-
-    case @token.value
-    when :is_a?
-      obj = Var.new("self").at(location)
-      return parse_is_a(obj)
-    when :responds_to?
-      obj = Var.new("self").at(location)
-      return parse_responds_to(obj)
     end
 
-    name = @token.value.to_s
-    name_column_number = @token.column_number
-
-    if force_call && !@token.value
-      name = @token.type.to_s
+    def set_visibility(node)
+      if visibility = @visibility
+        node.visibility = visibility
+      end
+      node
     end
 
-    is_var = is_var?(name)
 
-    @wants_regex = false
-    next_token
 
-    if @token.type == :SPACE
-      # We don't want the next token to be a regex literal if the call's name is
-      # a variable in the current scope (it's unlikely that there will be a method
-      # with that name that accepts a regex as a first argument).
-      # This allows us to write: a = 1; b = 2; a /b
-      @wants_regex = !is_var
-    end
+    #            ######     ###    ##         ##          #####
+    #         ##    ##     ## ##     ##         ##       ##    ##
+    #         ##        ##     ##    ##         ##       ##
+    #         ##         ##     ## ##         ##         #####
+    #         ##         ######### ##         ##             ##
+    #         ##    ## ##     ## ##         ##         ##   ##
+    #            ######    ##     ## ######## ########   ######
 
-    case name
-    when "super"
-      @calls_super = true
-    when "init"                 # Onyx uses "init", but promotes it to "initialize" for Crystal compatibility
-      @calls_initialize = true
-      name = "initialize"
-    when "initialize"
-      raise "initialize is a reserved internal method name. Use 'init' for constructor code."
-    end
+    def parse_var_or_call(global = false, force_call = false)
+      dbg "parse_var_or_call(#{global}, #{force_call})"
 
-    call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis do
-      parse_call_args stop_on_do_after_space: (is_var || !@last_call_has_parenthesis)
-    end
-    if call_args
-      args = call_args.args
-      block = call_args.block
-      block_arg = call_args.block_arg
-      named_args = call_args.named_args
-    end
+      location = @token.location
+      end_location = token_end_location
+      doc = @token.doc
 
-    if call_args && call_args.stopped_on_do_after_space
-      # This is the case when we have:
-      #
-      #     x = 1
-      #     foo x do
-      #     end
-      #
-      # In this case, since x is a variable and the previous call (foo)
-      # doesn't have parenthesis, we don't parse "x do end" as an invocation
-      # to a method x with a block. Instead, we just stop on x and we don't
-      # consume the block, leaving the block for 'foo' to consume.
-    else
-      block = parse_block(block)
-    end
+      case @token.value
+      when :is_a?
+        obj = Var.new("self").at(location)
+        return parse_is_a(obj)
 
-    node =
-      if block || block_arg || global
-        tag_onyx Call.new nil, name, (args || [] of ASTNode), block, block_arg, named_args, global, name_column_number, last_call_has_parenthesis
-      else
-        if args
-          if (!force_call && is_var) && args.size == 1 && (num = args[0]) && (num.is_a?(NumberLiteral) && num.has_sign?)
-            sign = num.value[0].to_s
-            num.value = num.value.byte_slice(1)
-            tag_onyx Call.new(Var.new(name), sign, args)
-          else
-            tag_onyx Call.new(nil, name, args, nil, block_arg, named_args, global, name_column_number, last_call_has_parenthesis)
-          end
+      when :responds_to?
+        obj = Var.new("self").at(location)
+        return parse_responds_to(obj)
+
+      end
+
+      name = @token.value.to_s
+      name_column_number = @token.column_number
+
+      if force_call && !@token.value
+        name = @token.type.to_s
+      end
+
+      is_var = is_var?(name)
+
+      dbg "identifier #{name} is_var == #{is_var}"
+
+      if name[0] == '_' && name.size == 2 && name[1] >= '0' && name[1] <= '9'   # magic param?
+        is_var = true
+        #name = "tmp_par" + name
+
+        if in_auto_paramed?
+          add_magic_param name
         else
-          if @token.type == :"::"
-            next_token_skip_space_or_newline
-            declared_type = parse_single_type
-            declare_var = DeclareVar.new(Var.new(name).at(location), declared_type).at(location)
-            add_var declare_var
-            declare_var
-          elsif (!force_call && is_var)
-            if @block_arg_name && !@uses_block_arg && name == @block_arg_name
-              @uses_block_arg = true
+          raise "The identifier \"#{name}\" is reserved for auto-magic parametrization of blocks (used via `~>`)", location
+        end
+      end
+
+      @wants_regex = false
+      next_token
+
+      if @token.type == :SPACE
+        # We don't want the next token to be a regex literal if the call's name is
+        # a variable in the current scope (it's unlikely that there will be a method
+        # with that name that accepts a regex as a first argument).
+        # This allows us to write: a = 1; b = 2; a /b
+        @wants_regex = !is_var
+      end
+
+      case name
+      when "super"
+        @calls_super = true
+
+      when "init" # Onyx uses "init", but promotes it to "initialize" for Crystal compatibility
+        @calls_initialize = true
+        name = "initialize"
+
+      when "initialize"
+        raise "initialize is a reserved internal method name. Use 'init' for 'constructor'-code."
+
+      end
+
+
+
+      # *TODO* needed for what? DITCH?
+      last_call_has_parenthesis = @last_call_has_parenthesis  # är det denna vi behöver här? behövs den alls?
+
+
+
+      call_args = parse_call_args()
+
+      if call_args
+        args = call_args.args
+        block = call_args.block
+        block_cast = call_args.block_cast
+        named_args = call_args.named_args
+      end
+
+      node =
+        if block || block_cast || global
+          dbg "parse_var_or_call - got some kinda block"
+          tag_onyx Call.new nil, name, (args || [] of ASTNode), block, block_cast, named_args, global, name_column_number, last_call_has_parenthesis
+        else
+          if args
+            dbg "parse_var_or_call - got some kinda args"
+            if (!force_call && is_var) && args.size == 1 && (num = args[0]) && (num.is_a?(NumberLiteral) && num.has_sign?)
+              sign = num.value[0].to_s
+              num.value = num.value.byte_slice(1)
+              tag_onyx Call.new(Var.new(name), sign, args)
+            else
+              tag_onyx Call.new(nil, name, args, nil, block_cast, named_args, global, name_column_number, last_call_has_parenthesis)
             end
-            Var.new name
           else
-            tag_onyx Call.new nil, name, [] of ASTNode, nil, block_arg, named_args, global, name_column_number, last_call_has_parenthesis
+            if @token.type == :"::"
+              next_token_skip_space_or_newline
+              declared_type = parse_single_type
+              declare_var = DeclareVar.new(Var.new(name).at(location), declared_type).at(location)
+              add_var declare_var
+              declare_var
+            elsif (!force_call && is_var)
+              if @block_cast_name && !@uses_block_cast && name == @block_cast_name
+                @uses_block_cast = true
+              end
+              Var.new name
+            else
+              dbg "parse_var_or_call - got call as default else case"
+              tag_onyx Call.new nil, name, [] of ASTNode, nil, block_cast, named_args, global, name_column_number, last_call_has_parenthesis
+            end
           end
         end
-      end
-    node.doc = doc
-    node.end_location = block.try(&.end_location) || call_args.try(&.end_location) || end_location
-    node
-  end
-
-  def preserve_last_call_has_parenthesis
-    old_last_call_has_parenthesis = @last_call_has_parenthesis
-    value = yield
-    last_call_has_parenthesis = @last_call_has_parenthesis
-    @last_call_has_parenthesis = old_last_call_has_parenthesis
-    {value, last_call_has_parenthesis}
-  end
-
-  def parse_block(block)
-    if @token.keyword?(:do)
-      raise "block already specified with &" if block
-      parse_block2 { check :END }
-    elsif @token.type == :"{"
-      raise "block already specified with &" if block
-      parse_block2 { check :"}" }
-    else
-      block
+      node.doc = doc
+      node.end_location = block.try(&.end_location) || call_args.try(&.end_location) || end_location
+      node
     end
-  end
 
-  def parse_block2
-    block_args = [] of Var
-    block_body = nil
+    # def preserve_last_call_has_parenthesis
+    #   old_last_call_has_parenthesis = @last_call_has_parenthesis
+    #   value = yield
+    #   last_call_has_parenthesis = @last_call_has_parenthesis
+    #   @last_call_has_parenthesis = old_last_call_has_parenthesis
+    #   {value, last_call_has_parenthesis}
+    # end
 
-    next_token_skip_space
-    if @token.type == :"|"
-      next_token_skip_space_or_newline
-      while @token.type != :"|"
-        case @token.type
-        when :IDFR
-          arg_name = @token.value.to_s
-        when :UNDERSCORE
-          arg_name = "_"
-        else
-          raise "expecting block argument name, not #{@token.type}", @token
-        end
 
-        var = Var.new(arg_name).at(@token.location)
-        block_args << var
 
-        next_token_skip_space_or_newline
-        if @token.type == :","
+    record CallArgs, args, block, block_cast, named_args, stopped_on_do_after_space, end_location
+
+    def parse_call_args(allow_curly = false)
+      dbg "parse_call_args"
+
+      case @token.type
+
+      # *TODO* what's up here then - follow tracing - no block parsing?
+      when :"{"
+        @last_call_has_parenthesis = false
+        nil
+
+      when :"("
+        dbg "parse_call_args -> '('"
+        slash_is_regex!
+
+        args = [] of ASTNode
+        end_location = nil
+
+        open("call") do
           next_token_skip_space_or_newline
+          while @token.type != :")"
+
+            if call_block_cast_follows?
+              return parse_call_block_cast(args, true)
+            end
+
+            # Do we have a block?
+            if tok? :"|", :"~>"
+              dbg "parse_call_args block arg - parse it"
+              block = parse_block
+
+              dbg "parse_call_args after block arg - check for ')'"
+              check :")"
+              end_location = token_end_location
+
+              next_token_skip_space
+
+              return CallArgs.new args, block, nil, nil, false, end_location
+
+            # `discard`-konstrukttion: sök noder, efter normalisering (auto-
+            # return etc.), där funcktions–anrop finns och returvärdet hamnar
+            # i en dead–end. Nej - ALLA UTTRYCK SÅKLART!!!
+            # Bara om 'stricter` mode eller flagga skickats till kompilatorn.
+
+            elsif @token.type == :IDFR && current_char == ':'
+              named_args = parse_named_args(allow_newline: true)
+
+              if call_block_cast_follows?
+                return parse_call_block_cast(args, true, named_args)
+              end
+
+              dbg "parse_call_args after named-args - check for ')'"
+
+              check :")"
+              end_location = token_end_location
+
+              next_token_skip_space
+              return CallArgs.new args, nil, nil, named_args, false, end_location
+
+            else
+              args << parse_call_arg
+
+            end
+
+            skip_statement_end
+            if @token.type == :","
+              slash_is_regex!
+              next_token_skip_space_or_newline
+            else
+              dbg "parse_call_args found non ',' in loop - check for ')'"
+
+              check :")"
+              break
+            end
+          end
+
+          dbg "parse_call_args after 'while' - do next_token_skip_space"
+
+          end_location = token_end_location
+          next_token_skip_space
+          @last_call_has_parenthesis = true
         end
+
+        CallArgs.new args, nil, nil, nil, false, end_location
+
+      when :SPACE
+        dbg "parse_call_args -> SPACE"
+        slash_is_not_regex!
+        end_location = token_end_location
+        next_token
+        @last_call_has_parenthesis = false
+
+        # if tok? :"|", :"~>"
+        #   dbg "parse_call_args -> BLOCKISH"
+        #   block = parse_block
+        # end
+        # # if stop_on_do_after_space && kwd?(:do)
+        # #   return CallArgs.new nil, nil, nil, nil, true, end_location
+        # # end
+
+        parse_call_args_space_consumed check_plus_and_minus: true, allow_curly: allow_curly
+
+      else
+        @last_call_has_parenthesis = false
+        nil
       end
-      next_token_skip_statement_end
-    else
-      skip_statement_end
     end
 
-    # current_vars = @scope_stack.last.dup
-    # push_scope current_vars
-    push_scope
-    add_vars block_args
+    def parse_call_args_space_consumed(block = nil, check_plus_and_minus = true, allow_curly = false)
+      dbg "parse_call_args_space_consumed"
+      if kwd?(:as) || tok?(:END) # *TODO* end–tok? check instead - old code
+        return nil
+      end
 
-    block_body = parse_expressions
+      dbg "parse_call_args_space_consumed check token.type"
 
-    pop_scope
+      case @token.type
+      when :"&"
+        return nil if current_char.whitespace?
+      when :"+", :"-"
+        if check_plus_and_minus
+          return nil if current_char.whitespace?
+        end
+      when :"{"
+        return nil unless allow_curly
+      when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START,
+          :SYMBOL_ARRAY_START, :NUMBER, :IDFR, :SYMBOL, :INSTANCE_VAR,
+          :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX,
+          :REGEX, :"(", :"!", :not, :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{",
+           :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE,  :"|", :"~>"
+        # Nothing
+      when :"..." # *TODO* verify - was :"*" - so it doesn't clash with `range–til`
+        if current_char.whitespace?
+          return nil
+        end
+      when :"::"
+        if current_char.whitespace?
+          return nil
+        end
+      else
+        return nil
+      end
 
-    yield
-
-    end_location = token_end_location
-    next_token_skip_space
-
-    Block.new(block_args, block_body).at_end(end_location)
-  end
-
-  record CallArgs, args, block, block_arg, named_args, stopped_on_do_after_space, end_location
-
-  def parse_call_args(stop_on_do_after_space = false, allow_curly = false)
-    case @token.type
-    when :"{"
-      @last_call_has_parenthesis = false
-      nil
-    when :"("
-      slash_is_regex!
+      case @token.value
+      when :if, :unless, :while, :until, :rescue, :ensure, :do, :then
+        return nil
+      when :yield
+        return nil if @stop_on_yield > 0
+      end
 
       args = [] of ASTNode
       end_location = nil
 
-      open("call") do
-        next_token_skip_space_or_newline
-        while @token.type != :")"
-          if call_block_arg_follows?
-            return parse_call_block_arg(args, true)
-          end
+      while @token.type != :NEWLINE && @token.type != :";" && @token.type != :EOF && @token.type != :")" && @token.type != :":" && !is_end_token
+        if call_block_cast_follows?
+          return parse_call_block_cast(args, false)
 
-          if @token.type == :IDFR && current_char == ':'
-            named_args = parse_named_args(allow_newline: true)
+        elsif tok? :"|", :"~>"
+          dbg "parse_call_args -> BLOCKISH"
+          block = parse_block
 
-            if call_block_arg_follows?
-              return parse_call_block_arg(args, true, named_args)
-            end
+          end_location = token_end_location
 
-            check :")"
-            end_location = token_end_location
+          return CallArgs.new args, block, nil, nil, false, end_location
 
-            next_token_skip_space
-            return CallArgs.new args, nil, nil, named_args, false, end_location
-          else
-            args << parse_call_arg
-          end
-
-          skip_statement_end
-          if @token.type == :","
-            slash_is_regex!
-            next_token_skip_space_or_newline
-          else
-            check :")"
-            break
-          end
-        end
-        end_location = token_end_location
-        next_token_skip_space
-        @last_call_has_parenthesis = true
-      end
-
-      CallArgs.new args, nil, nil, nil, false, end_location
-    when :SPACE
-      slash_is_not_regex!
-      end_location = token_end_location
-      next_token
-      @last_call_has_parenthesis = false
-
-      if stop_on_do_after_space && @token.keyword?(:do)
-        return CallArgs.new nil, nil, nil, nil, true, end_location
-      end
-
-      parse_call_args_space_consumed check_plus_and_minus: true, allow_curly: allow_curly
-    else
-      @last_call_has_parenthesis = false
-      nil
-    end
-  end
-
-  def parse_call_args_space_consumed(check_plus_and_minus = true, allow_curly = false)
-    if @token.keyword?(:as) || tok?(:END)
-      return nil
-    end
-
-    case @token.type
-    when :"&"
-      return nil if current_char.whitespace?
-    when :"+", :"-"
-      if check_plus_and_minus
-        return nil if current_char.whitespace?
-      end
-    when :"{"
-      return nil unless allow_curly
-    when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START, :SYMBOL_ARRAY_START, :NUMBER, :IDFR, :SYMBOL, :INSTANCE_VAR, :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX, :REGEX, :"(", :"!", :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE
-      # Nothing
-    when :"..." # *TODO* verify - was :"*"
-      if current_char.whitespace?
-        return nil
-      end
-    when :"::"
-      if current_char.whitespace?
-        return nil
-      end
-    else
-      return nil
-    end
-
-    case @token.value
-    when :if, :unless, :while, :until, :rescue, :ensure
-      return nil
-    when :yield
-      return nil if @stop_on_yield > 0
-    end
-
-    args = [] of ASTNode
-    end_location = nil
-
-    while @token.type != :NEWLINE && @token.type != :";" && @token.type != :EOF && @token.type != :")" && @token.type != :":" && !is_end_token
-      if call_block_arg_follows?
-        return parse_call_block_arg(args, false)
-      end
-
-      if @token.type == :IDFR && current_char == ':'
-        named_args = parse_named_args
-
-        if call_block_arg_follows?
-          return parse_call_block_arg(args, false, named_args: named_args)
         end
 
-        end_location = token_end_location
+        if @token.type == :IDFR && current_char == ':'
+          named_args = parse_named_args
+
+          if call_block_cast_follows?
+            return parse_call_block_cast(args, false, named_args: named_args)
+          end
+
+          end_location = token_end_location
+
+          skip_space
+          return CallArgs.new args, nil, nil, named_args, false, end_location
+        else
+          arg = parse_call_arg
+          args << arg
+          end_location = arg.end_location
+        end
 
         skip_space
-        return CallArgs.new args, nil, nil, named_args, false, end_location
-      else
-        arg = parse_call_arg
-        args << arg
-        end_location = arg.end_location
+
+        if @token.type == :","
+          slash_is_regex!
+          next_token_skip_space_or_newline
+        else
+          break
+        end
       end
 
-      skip_space
+      CallArgs.new args, block, nil, nil, false, end_location
+    end
 
-      if @token.type == :","
-        slash_is_regex!
+    def parse_named_args(allow_newline = false)
+      named_args = [] of NamedArgument
+      while true
+        location = @token.location
+        name = @token.value.to_s
+
+        if named_args.any? { |arg| arg.name == name }
+          raise "duplicated named argument: #{name}", @token
+        end
+
+        next_token
+        check :":"
+
+        # *TODO* default valued and named args should be separated
+
         next_token_skip_space_or_newline
+        value = parse_op_assign
+
+
+        named_args << NamedArgument.new(name, value).at(location)
+        skip_statement_end if allow_newline
+        if @token.type == :","
+          next_token_skip_space_or_newline
+          if @token.type == :")" || @token.type == :"&"
+            break
+          end
+        else
+          break
+        end
+      end
+      named_args
+    end
+
+    def parse_call_arg
+      if kwd?(:out)
+        parse_out
       else
-        break
+        splat = false
+        if @token.type == :"..."
+          unless current_char.whitespace?
+            splat = true
+            next_token
+          end
+        end
+        arg = parse_op_assign_no_control
+        arg = Splat.new(arg).at(arg.location) if splat
+        arg
       end
     end
 
-    CallArgs.new args, nil, nil, nil, false, end_location
-  end
-
-  def parse_named_args(allow_newline = false)
-    named_args = [] of NamedArgument
-    while true
+    def parse_out
+      next_token_skip_space_or_newline
       location = @token.location
       name = @token.value.to_s
 
-      if named_args.any? { |arg| arg.name == name }
-        raise "duplicated named argument: #{name}", @token
-      end
-
-      next_token
-      check :":"
-      next_token_skip_space_or_newline
-      value = parse_op_assign
-      named_args << NamedArgument.new(name, value).at(location)
-      skip_statement_end if allow_newline
-      if @token.type == :","
-        next_token_skip_space_or_newline
-        if @token.type == :")" || @token.type == :"&"
-          break
-        end
-      else
-        break
-      end
-    end
-    named_args
-  end
-
-  def parse_call_arg
-    if @token.keyword?(:out)
-      parse_out
-    else
-      splat = false
-      if @token.type == :"..."
-        unless current_char.whitespace?
-          splat = true
-          next_token
-        end
-      end
-      arg = parse_op_assign_no_control
-      arg = Splat.new(arg).at(arg.location) if splat
-      arg
-    end
-  end
-
-  def parse_out
-    next_token_skip_space_or_newline
-    location = @token.location
-    name = @token.value.to_s
-
-    case @token.type
-    when :IDFR
-      var = Var.new(name).at(location)
-      var_out = Out.new(var).at(location)
-      add_var var
-
-      next_token
-      var_out
-    when :INSTANCE_VAR
-      ivar = InstanceVar.new(name).at(location)
-      ivar_out = Out.new(ivar).at(location)
-
-      add_instance_var name
-
-      next_token
-      ivar_out
-    when :UNDERSCORE
-      underscore = Underscore.new.at(location)
-      var_out = Out.new(underscore).at(location)
-      next_token
-      var_out
-    else
-      raise "expecting variable or instance variable after out"
-    end
-  end
-
-  def parse_idfr_or_global_call
-    location = @token.location
-    next_token_skip_space_or_newline
-
-    case @token.type
-    when :IDFR
-      set_visibility parse_var_or_call global: true
-    when :CONST
-      parse_idfr_after_colons(location, true, true)
-    else
-      unexpected_token
-    end
-  end
-
-  def parse_idfr(allow_type_vars = true)
-    location = @token.location
-
-    dbg "parse_idfr"
-
-    global = false
-
-    case @token.type
-    when :"::"
-      global = true
-      next_token_skip_space_or_newline
-    when :UNDERSCORE
-      return node_and_next_token Underscore.new.at(location)
-    end
-
-    check :CONST
-    parse_idfr_after_colons(location, global, allow_type_vars)
-  end
-
-  def parse_idfr_after_colons(location, global, allow_type_vars)
-    start_line = location.line_number
-    start_column = location.column_number
-
-    dbg "parse_idfr_after_colons"
-
-    names = [] of String
-    names << @token.value.to_s
-    end_location = token_end_location
-
-    next_token
-    while @token.type == :"::"
-      next_token_skip_space_or_newline
-      names << check_const
-      end_location = token_end_location
-      next_token
-    end
-
-    const = Path.new(names, global).at(location)
-    const.end_location = end_location
-
-    token_location = @token.location
-    if token_location && token_location.line_number == start_line
-      const.name_size = token_location.column_number - start_column
-    end
-
-    if allow_type_vars && tok? :"<", :"["
-      next_token_skip_space
-
-      types = parse_types allow_primitives: true
-      if types.empty?
-        raise "must specify at least one type var"
-      end
-
-      raise "expected `>` or `]` ending type params" if !tok? :">", :"]"
-      const = Generic.new(const, types).at(location)
-      const.end_location = token_end_location
-      next_token
-    end
-
-    dbg "eof parse_idfr_after_colons"
-
-    const
-  end
-
-
-
-  ######## ##    ## ########  ########  ######
-     ##     ##  ##  ##     ## ##       ##    ##
-     ##      ####   ##     ## ##       ##
-     ##       ##    ########  ######    ######
-     ##       ##    ##        ##             ##
-     ##       ##    ##        ##       ##    ##
-     ##       ##    ##        ########  ######
-
-  def parse_arg_type()
-    dbg "parse_arg_type - check pre mods"
-
-    if (is_mod_mut = next_is_mut_modifier?())
-      is_mod_const = false
-    else
-      is_mod_const = next_is_const_modifier?()
-    end
-
-    type = parse_single_type false
-
-    dbg "parse_arg_type - after parse_simple_type"
-
-    if (is_val_mut = next_is_mut_modifier?())
-      is_val_const = false
-    else
-      is_val_const = next_is_const_modifier?()
-    end
-
-    dbg "parse_arg_type - checks done"
-
-    {is_mod_const, is_mod_mut, type, is_val_const, is_val_mut}
-
-  end
-
-  def parse_types(allow_primitives = false)
-    type_list = [] of ASTNode
-    type_list << parse_type allow_primitives
-
-    while @token.type == :"," || @token.type == :";"
-      next_token_skip_space_or_newline
-      type_list << parse_type allow_primitives
-    end
-
-    type_list
-  end
-
-  def parse_single_type(allow_primitives = false)
-    location = @token.location
-    type = parse_type allow_primitives
-    case type
-    when Array
-      raise "unexpected ',' in type (use parenthesis to disambiguate)", location
-    when ASTNode
-      type
-    else
-      raise "Bug"
-    end
-  end
-
-  def parse_type(allow_primitives)
-    location = @token.location
-
-    dbg "parse_type"
-
-    if tok?(:"(")
-      dbg "is '('"
-      next_token_skip_space_or_newline
-      return parse_type_lambda_or_group(location, allow_primitives) as ASTNode  # needed to not muck up inference
-    else
-      dbg "is not '('"
-      ret = parse_type_union allow_primitives
-      dbg "parse_type got type from type_union()"
-      return ret
-    end
-  end
-
-  def splat(val)
-    val.is_a?(Array) ? val : [val]
-  end
-
-  def parse_type_lambda_or_group(location, allow_primitives)
-    dbg "parse_type_lambda_or_group"
-
-    if tok?(:"->")
-      param_type_list = nil
-    else
-      param_type_list = splat parse_type(allow_primitives)
-      #param_type_list = splat parse_type_union(allow_primitives)
-
-      while tok?(:",") || tok?(:";")
-        next_token_skip_space_or_newline
-
-        dbg "next param_type_list"
-
-        if tok?(:"->")
-          raise "Does this even happen? '->' and then some - [remove me when known] (inside paren ret-type syntax style!?)"
-          next_types = parse_type(false)
-          case next_types
-          when Array
-            param_type_list.concat next_types
-          when ASTNode
-            param_type_list << next_types
-          end
-          next
-        else
-          #type_union = parse_type_union(allow_primitives)
-          type = parse_type(allow_primitives)
-          #if type.is_a?(Array)
-          #  param_type_list.concat type
-          #else
-          param_type_list << type
-          #end
-        end
-      end
-    end
-
-    lambda_end_paren = false
-
-    if tok? :")"
-      lambda_end_paren = true
-      next_token_skip_space
-    end
-
-    if tok? :"->"
-      next_token_skip_space
-
       case @token.type
-      when :",", :")", :"}", :";", :NEWLINE
-        return_type = nil
+      when :IDFR
+        var = Var.new(name).at(location)
+        var_out = Out.new(var).at(location)
+        add_var var
+
+        next_token
+        var_out
+      when :INSTANCE_VAR
+        ivar = InstanceVar.new(name).at(location)
+        ivar_out = Out.new(ivar).at(location)
+
+        add_instance_var name
+
+        next_token
+        ivar_out
+      when :UNDERSCORE
+        underscore = Underscore.new.at(location)
+        var_out = Out.new(underscore).at(location)
+        next_token
+        var_out
       else
-        return_type = parse_type(allow_primitives)
-        if return_type.is_a?(Array)
-          raise "can't return more than one type", location.line_number, location.column_number
+        raise "expecting variable or instance variable after out"
+      end
+    end
+
+
+
+
+    #     ########  ##      #####     ######  ##  ##   ######
+    #     ##    ##  ##     ##   ##    ##  ## ##   ##  ##  ##
+    #     ##     ## ##     ##   ##   ##      #  ##   ##
+    #     ########  ##     ##   ##   ##      ####    #####
+    #     ##     ##  ##     ##   ##    ##     ##  ##     ##
+    #     ##      ## ##     ##   ##    ##  ## ##   ##   #  ##
+    #     ########   ########  #######   ######  ##  ##  ######
+
+    def call_block_cast_follows?
+      @token.type == :"&" && !current_char.whitespace?
+    end
+
+    def parse_call_block_cast(args, check_paren, named_args = nil)
+      location = @token.location
+
+      next_token_skip_space
+
+      if @token.type == :"."
+        block_cast_name = "__arg#{@block_cast_count}"
+        @block_cast_count += 1
+
+        obj = Var.new(block_cast_name)
+        @wants_regex = false
+        next_token_skip_space
+
+        location = @token.location
+
+        if @token.value == :is_a?
+          call = parse_is_a(obj).at(location)
+        elsif @token.value == :responds_to?
+          call = parse_responds_to(obj).at(location)
+        elsif @token.type == :"["
+          call = parse_atomic_method_suffix obj, location
+
+          if @token.type == :"=" && call.is_a?(Call)
+            next_token_skip_space
+            exp = parse_op_assign
+            call.name = "#{call.name}="
+            call.args << exp
+          end
+        else
+          # At this point we want to attach the "do" to the next call,
+          # so we set this var to true to make the parser think the call
+          # has parenthesis and so a "do" must be attached to it
+          @last_call_has_parenthesis = true
+          call = parse_var_or_call(force_call: true).at(location)
+
+          if call.is_a?(Call)
+            call.obj = obj
+          else
+            raise "Bug: #{call} should be a call"
+          end
+
+          call = call as Call
+
+          if @token.type == :"="
+            next_token_skip_space
+            if @token.type == :"("
+              next_token_skip_space
+              exp = parse_op_assign
+              check :")"
+              next_token_skip_space
+              call.name = "#{call.name}="
+              call.args = [exp] of ASTNode
+              call = parse_atomic_method_suffix call, location
+            else
+              exp = parse_op_assign
+              call.name = "#{call.name}="
+              call.args = [exp] of ASTNode
+            end
+          else
+            call = parse_atomic_method_suffix call, location
+
+            if @token.type == :"=" && call.is_a?(Call) && call.name == "[]"
+              next_token_skip_space
+              exp = parse_op_assign
+              call.name = "#{call.name}="
+              call.args << exp
+            end
+          end
+        end
+
+        block = Block.new([Var.new(block_cast_name)], call).at(location)
+      else
+        block_cast = parse_op_assign
+      end
+
+      end_location = token_end_location
+
+      if check_paren
+        check :")"
+        next_token_skip_space
+      else
+        skip_space
+      end
+
+      CallArgs.new args, block, block_cast, named_args, false, end_location
+    end
+
+    def parse_block : Block
+      dbg "parse_block"
+
+      block_params = [] of Var
+      block_body = nil
+      auto_parametrization = false
+
+      block_indent = @indent
+
+      if @token.type == :"|"
+        next_token_skip_space
+
+        while @token.type != :"|"
+          case @token.type
+          when :IDFR
+            arg_name = @token.value.to_s
+
+          when :UNDERSCORE
+            arg_name = "_"
+
+          else
+            raise "expecting block argument name, not #{@token.type}", @token
+          end
+
+          var = Var.new(arg_name).at(@token.location)
+          block_params << var
+
+          next_token_skip_space_or_newline
+          if @token.type == :","
+            next_token_skip_space_or_newline
+          end
+        end
+
+        dbg "parse_block - done parsing block parameters"
+
+        # # *TODO* reduce these redundant ways of auto–paraming
+        # if block_params.size == 1 &&
+        #   (block_params[0].name == "_" || block_params[0].name == "~")
+        #   auto_parametrization = true
+        # end
+
+      elsif tok? :"~>"
+        dbg "parse_block - auto-paramed arrow"
+        auto_parametrization = true
+
+      else
+        raise "Expected block start!"
+      end
+
+      #next_token_skip_statement_end
+      next_token_skip_space
+
+      push_scope
+
+      nest_kind = parse_nest_start(:block_start)
+      add_nest :block, block_indent, "", (nest_kind == :LINE_NEST), false
+
+      if auto_parametrization
+        dbg "auto_parametrization - so we add to nesting_stack. block_params == nil? : #{block_params == nil}".red
+        @nesting_stack.last.block_params = block_params
+      else
+        add_vars block_params
+      end
+
+      if nest_kind == :NIL_NEST
+        raise "can't have an empty block!"  # *TODO* we probably should be able to!
+      end
+
+      dbg "parse_block - before parse_expressions"
+
+      # auto–params are extracted in var_or_call parsing when above nest_stack
+      # has block_params and name ~= /_\d/
+      block_body = parse_expressions
+
+      dbg "parse_block - AFTER parse_expressions"
+
+      pop_scope
+
+      end_location = token_end_location
+      #next_token_skip_space
+      #next_token_skip_space_or_newline
+      #skip_space_or_newline
+
+      Block.new(block_params, block_body).at_end(end_location)
+    end
+
+    def add_magic_param(name)
+      dbg "add_magic_param #{name}"
+      add_var name
+      var = Var.new(name).at(@token.location)
+      if bp = @nesting_stack.last.block_params
+        bp << var
+      else
+        raise "Internal error: tried to add_magic_param() when par-stack == nil [4953]"
+      end
+    end
+
+    def in_auto_paramed?
+      #ret = @nesting_stack.last.block_params != nil
+      ret = @nesting_stack.in_auto_paramed?
+      dbg "in_auto_paramed? = #{ret}"
+      ret
+    end
+
+    #       ######### ##  ## ########  ########   ######
+    #          ##    ##  ##  ##   ## ##         ##  ##
+    #          ##    ####   ##   ## ##        ##
+    #          ##     ##  ########  ######      ######
+    #         ##     ##  ##        ##              ##
+    #         ##     ##  ##       ##     ##       ##
+    #        ##     ##  ##         ########  ######
+    def parse_arg_type # *TODO* AKA parse_qualifier_and_type
+      dbg "parse_arg_type - check pre mods"
+
+
+      # *TODO* comment out and cleanup to only "default", "mut" or "immut" (NOT _const_)
+
+
+      if (is_mod_mut = next_is_mut_modifier?())
+        is_mod_immut = false
+      else
+        is_mod_immut = next_is_immut_modifier?()
+      end
+
+      type = parse_single_type false
+
+      dbg "parse_arg_type - after parse_simple_type"
+
+      # We won't do the symbol/value separation!
+      # if (is_val_mut = next_is_mut_modifier?())
+      #   is_val_const = false
+      # else
+      #   is_val_const = next_is_immut_modifier?()
+      # end
+
+      dbg "parse_arg_type - checks done"
+
+      {is_mod_immut, is_mod_mut, type}
+    end
+
+    def parse_types(allow_primitives = false)
+      type_list = [] of ASTNode
+      type_list << parse_type allow_primitives
+
+      while @token.type == :"," || @token.type == :";"
+        next_token_skip_space_or_newline
+        type_list << parse_type allow_primitives
+      end
+
+      type_list
+    end
+
+    def parse_single_type(allow_primitives = false)
+      location = @token.location
+      type = parse_type allow_primitives
+      case type
+      when Array
+        raise "unexpected ',' in type (use parenthesis to disambiguate)", location
+      when ASTNode
+        type
+      else
+        raise "Bug"
+      end
+    end
+
+    def parse_type(allow_primitives)
+      location = @token.location
+
+      dbg "parse_type"
+
+      if tok?(:"(")
+        dbg "is '('"
+        next_token_skip_space_or_newline
+        return parse_type_lambda_or_group(location, allow_primitives) as ASTNode # needed to not muck up inference
+      else
+        dbg "is not '('"
+        ret = parse_type_union allow_primitives
+        dbg "parse_type got type from type_union()"
+        return ret
+      end
+    end
+
+    def splat(val)
+      val.is_a?(Array) ? val : [val]
+    end
+
+    def parse_type_lambda_or_group(location, allow_primitives)
+      dbg "parse_type_lambda_or_group"
+
+      if tok?(:"->")
+        param_type_list = nil
+
+      elsif tok?(:")")
+        # nothing - handled next
+      else
+        dbg "parse_type_lambda_or_group - before parse_type"
+
+        param_type_list = splat parse_type(allow_primitives)
+        # param_type_list = splat parse_type_union(allow_primitives)
+
+        dbg "parse_type_lambda_or_group - before while ',;'"
+
+        while tok?(:",") || tok?(:";")
+          next_token_skip_space_or_newline
+
+          dbg "next param_type_list"
+
+          if tok?(:"->")
+            raise "Does this even happen? '->' and then some - [remove me when known] (inside paren ret-type syntax style!?)"
+            next_types = parse_type(false)
+            case next_types
+            when Array
+              param_type_list.concat next_types
+            when ASTNode
+              param_type_list << next_types
+            end
+            next
+          else
+            # type_union = parse_type_union(allow_primitives)
+            type = parse_type(allow_primitives)
+            # if type.is_a?(Array)
+            #  param_type_list.concat type
+            # else
+            param_type_list << type
+            # end
+          end
         end
       end
 
-      if !lambda_end_paren && tok? :")"
+      lambda_end_paren = false
+
+      dbg "parse_type_lambda_or_group - before ')' check"
+
+      if tok? :")"
         lambda_end_paren = true
         next_token_skip_space
       end
 
-      if !lambda_end_paren
-        raise "unterminated lambda type", location.line_number, location.column_number
-      end
+      dbg "parse_type_lambda_or_group - before '->'? branch"
 
-      return Fun.new(param_type_list, return_type).at(location)
+      if tok? :"->"
+        next_token_skip_space
 
-    else
-      if !lambda_end_paren
-          # *TODO* if try_parse return nil else raise...
-        raise "unterminated parenthesis or lambda type", location.line_number, location.column_number
-      end
+        case @token.type
+        when :",", :")", :"}", :";", :NEWLINE
+          return_type = nil
+        else
+          return_type = parse_type(allow_primitives)
+          if return_type.is_a?(Array)
+            raise "can't return more than one type", location.line_number, location.column_number
+          end
+        end
 
-      param_type_list = param_type_list.not_nil!
-      if param_type_list.size == 1
-        return param_type_list.first
+        if !lambda_end_paren && tok? :")"
+          lambda_end_paren = true
+          next_token_skip_space
+        end
+
+        if !lambda_end_paren
+          raise "unterminated lambda type", location.line_number, location.column_number
+        end
+
+        return Fun.new(param_type_list, return_type).at(location)
       else
-        #return param_type_list
-        raise "expected one type - found a list"
+        if !lambda_end_paren
+          # *TODO* if try_parse return nil else raise...
+          raise "unterminated parenthesis or lambda type", location.line_number, location.column_number
+        end
+
+        param_type_list = param_type_list.not_nil!
+        if param_type_list.size == 1
+          return param_type_list.first
+        else
+          # return param_type_list
+          raise "expected one type - found a list"
+        end
       end
     end
-  end
 
-  def parse_type_union(allow_primitives)
-    types = [] of ASTNode
+    def parse_type_union(allow_primitives)
+      types = [] of ASTNode
 
-    dbg "parse_type_union"
+      dbg "parse_type_union"
 
-    types << parse_typeunit_with_suffix allow_primitives
+      types << parse_typeunit_with_suffix allow_primitives
 
-    dbg "after parse_typeunit_with_suffix"
+      dbg "after parse_typeunit_with_suffix"
 
-    if @token.type == :"|"
-      while @token.type == :"|"
-        next_token_skip_space_or_newline
-        types << parse_typeunit_with_suffix allow_primitives
-      end
+      if @token.type == :"|"
+        while @token.type == :"|"
+          next_token_skip_space_or_newline
+          types << parse_typeunit_with_suffix allow_primitives
+        end
 
-      if types.size == 1
-        dbg "after '|' loop, one type: " + types.first.to_s
+        if types.size == 1
+          dbg "after '|' loop, one type: " + types.first.to_s
+          return types.first
+        else
+          dbg "after '|' loop, got union: " + types.to_s
+          return Union.new types
+        end
+      elsif types.size == 1
+        dbg "after '|' CHECK, got single type: " + types.first.to_s
         return types.first
       else
-        dbg "after '|' loop, got union: " + types.to_s
-        return Union.new types
+        raise "expected one type (or type union) - found a list"
+
+        # dbg "!!? after '|' CHECK, got multiple types (!?): " + types.to_s + " at"
+        # return types
       end
-
-    elsif types.size == 1
-      dbg "after '|' CHECK, got single type: " + types.first.to_s
-      return types.first
-
-    else
-      raise "expected one type (or type union) - found a list"
-      # dbg "!!? after '|' CHECK, got multiple types (!?): " + types.to_s + " at"
-      # return types
     end
-  end
 
-  def parse_typeunit_with_suffix(allow_primitives) : ASTNode
-    dbg "parse_typeunit_with_suffix"
-    # *TODO* *TYPE*
-    if kwd? :SelfType
-      dbg "was 'Self'"
-      type = Self.new
-      next_token_skip_space
-
-    elsif kwd?(:auto) || tok?(:"*")
-      dbg "was 'auto'"
-      type = Underscore.new       # *TODO* - we want a specific "Auto" node!
-      next_token_skip_space
-
-    else
-      case @token.type
-      when :"("
-        next_token_skip_space_or_newline
-        type = parse_type(allow_primitives)
-        check :")"
+    def parse_typeunit_with_suffix(allow_primitives) : ASTNode
+      dbg "parse_typeunit_with_suffix"
+      # *TODO* *TYPE*
+      if const? :Self
+        dbg "was 'Self'"
+        type = Self.new
         next_token_skip_space
-        case type
-        when ASTNode
-          # skip
-        when Array
-          raise "expected one type - got a list"
+      elsif kwd?(:auto) || tok?(:"*")
+        dbg "was 'auto'"
+        type = Underscore.new # *TODO* - we want a specific "Auto" node!
+        next_token_skip_space
+      else
+        case @token.type
+        when :"("
+          next_token_skip_space_or_newline
+          type = parse_type(allow_primitives)
+          check :")"
+          next_token_skip_space
+          case type
+          when ASTNode
+            # skip
+          when Array
+            raise "expected one type - got a list"
+          else
+            raise "Bug"
+          end
         else
-          raise "Bug"
+          if allow_primitives && tok? :NUMBER
+            num = NumberLiteral.new(@token.value.to_s, @token.number_kind).at(@token.location)
+            type = node_and_next_token(num)
+            skip_space
+            return type
+          end
+
+          dbg "parse_typeunit_with_suffix, before parse_simple_type"
+          type = parse_simple_type
+          dbg "parse_typeunit_with_suffix, after parse_simple_type"
         end
+      end
+
+      parse_type_suffix type
+    end
+
+    def parse_simple_type : ASTNode
+      if kwd?(:typeof) # this is here because type–suffixes can be added
+        type = parse_typeof
       else
-        if allow_primitives && tok? :NUMBER
-          num = NumberLiteral.new(@token.value.to_s, @token.number_kind).at(@token.location)
-          type = node_and_next_token(num)
-          skip_space
-          return type
+        dbg "parse_simple_type, before parse_idfr"
+        type = parse_idfr
+        dbg "parse_simple_type, after parse_idfr"
+      end
+      skip_space
+      dbg "parse_simple_type, after skip_space"
+      type
+    end
+
+    def parse_type_suffix(type)
+      while true
+        case @token.type
+        when :"?"
+          type = Union.new([type, Path.global("Nil")] of ASTNode)
+          next_token_skip_space
+          # *TODO* *TYPE* remove pointer shortcuts!?
+          # when :"*"
+          #   type = make_pointer_type(type)
+          #   next_token_skip_space
+          # when :"**"
+          #   type = make_pointer_type(make_pointer_type(type))
+          #   next_token_skip_space
+
+          # For sizing a static array..
+        when :"["
+          next_token_skip_space
+          size = parse_single_type allow_primitives: true
+          check :"]"
+          next_token_skip_space
+          type = make_static_array_type(type, size)
+        when :"+"
+          type = Virtual.new(type)
+          next_token_skip_space
+        when :"."
+          next_token
+          check_idfr :type
+          type = Metaclass.new(type)
+          next_token_skip_space
+        else
+          break
         end
-
-        dbg "parse_typeunit_with_suffix, before parse_simple_type"
-        type = parse_simple_type
-        dbg "parse_typeunit_with_suffix, after parse_simple_type"
-
       end
+      type
     end
 
-    parse_type_suffix type
-
-  end
-
-  def parse_simple_type : ASTNode
-    if @token.keyword?(:typeof) # this is here because type–suffixes can be added
-      type = parse_typeof
-
-    else
-      dbg "parse_simple_type, before parse_idfr"
-      type = parse_idfr
-      dbg "parse_simple_type, after parse_idfr"
-    end
-    skip_space
-    dbg "parse_simple_type, after skip_space"
-    type
-  end
-
-  def parse_type_suffix(type)
-    while true
-      case @token.type
-      when :"?"
-        type = Union.new([type, Path.global("Nil")] of ASTNode)
-        next_token_skip_space
-      # *TODO* *TYPE* remove pointer shortcuts!?
-      # when :"*"
-      #   type = make_pointer_type(type)
-      #   next_token_skip_space
-      # when :"**"
-      #   type = make_pointer_type(make_pointer_type(type))
-      #   next_token_skip_space
-
-      # For sizing a static array..
-      when :"["
-        next_token_skip_space
-        size = parse_single_type allow_primitives: true
-        check :"]"
-        next_token_skip_space
-        type = make_static_array_type(type, size)
-      when :"+"
-        type = Virtual.new(type)
-        next_token_skip_space
-      when :"."
-        next_token
-        check_idfr :type
-        type = Metaclass.new(type)
-        next_token_skip_space
-      else
-        break
-      end
-    end
-    type
-  end
-
-  def parse_typeof
-    next_token_skip_space
-    check :"("
-    next_token_skip_space_or_newline
-    if @token.type == :")"
-      raise "missing typeof argument"
-    end
-
-    exps = [] of ASTNode
-    while @token.type != :")"
-      exps << parse_op_assign
-      if @token.type == :","
-        next_token_skip_space_or_newline
-      end
-    end
-
-    end_location = token_end_location
-    next_token_skip_space
-
-    TypeOf.new(exps).at_end(end_location)
-  end
-
-  def next_is_mut_modifier?()
-    dbg "next_is_mut_modifier?"
-
-    #is_mut = @token.type == :"mut"
-    is_mut = @token.type == :IDFR && @token.value == "mut"
-    is_mut ||= @token.type == :"~"
-
-    if is_mut
+    def parse_typeof
       next_token_skip_space
-      true
-    else
-      false
-    end
-  end
+      check :"("
+      next_token_skip_space_or_newline
+      if @token.type == :")"
+        raise "missing typeof argument"
+      end
 
-  def next_is_const_modifier?()
-    is_const = @token.type == :IDFR && @token.value == "const"
-    #is_const = @token.type == :"const"
-    is_const ||= @token.type == :"'"
+      exps = [] of ASTNode
+      while @token.type != :")"
+        exps << parse_op_assign
+        if @token.type == :","
+          next_token_skip_space_or_newline
+        end
+      end
 
-    if is_const
+      end_location = token_end_location
       next_token_skip_space
-      true
-    else
-      false
+
+      TypeOf.new(exps).at_end(end_location)
     end
-  end
 
+    def next_is_mut_modifier?
+      dbg "next_is_mut_modifier?"
 
+      # is_mut = @token.type == :"mut"
+      is_mut = @token.type == :IDFR && @token.value == "mut"
+      is_mut ||= @token.type == :"~"
 
-  ########  #######     ######## ##    ## ########  ########  ######
-  ##       ##     ##       ##     ##  ##  ##     ## ##       ##    ##
-  ##       ##     ##       ##      ####   ##     ## ##       ##
-  ######   ##     ##       ##       ##    ########  ######    ######
-  ##       ##     ##       ##       ##    ##        ##             ##
-  ##       ##     ##       ##       ##    ##        ##       ##    ##
-  ########  #######        ##       ##    ##        ########  ######
-
-
-  def make_pointer_type(node)
-    Generic.new(Path.global("Pointer").at(node), [node] of ASTNode).at(node)
-  end
-
-  def make_static_array_type(type, size)
-    Generic.new(Path.global("StaticArray").at(type), [type, size] of ASTNode).at(type.location).at(type)
-  end
-
-  def make_tuple_type(types)
-    Generic.new(Path.global("Tuple"), types)
-  end
-
-
-
-  def parse_visibility_modifier(modifier)
-    doc = @token.doc
-
-    next_token_skip_space
-    exp = parse_op_assign
-
-    modifier = VisibilityModifier.new(modifier, exp)
-    modifier.doc = doc
-    exp.doc = doc
-    modifier
-  end
-
-  def parse_asm
-    next_token_skip_space
-    check :"("
-    next_token_skip_space_or_newline
-    text = parse_string_without_interpolation { "interpolation not allowed in asm" }
-    skip_statement_end
-
-    volatile = false
-    alignstack = false
-    intel = false
-
-    unless @token.type == :")"
-      if @token.type == :"::"
-        # No output operands
-        next_token_skip_space_or_newline
-
-        if @token.type == :DELIMITER_START
-          inputs = parse_asm_operands
-        end
+      if is_mut
+        next_token_skip_space
+        true
       else
-        check :":"
-        next_token_skip_space_or_newline
+        false
+      end
+    end
 
-        if @token.type == :DELIMITER_START
-          output = parse_asm_operand
-        end
+    def next_is_immut_modifier?
+      is_const = @token.type == :IDFR && @token.value == "const"
+      # is_const = @token.type == :"const"
+      is_const ||= @token.type == :"'"
 
-        if @token.type == :":"
+      if is_const
+        next_token_skip_space
+        true
+      else
+        false
+      end
+    end
+
+  ########  #######  ########  ######## ##  ## ########  ########  ######
+  ##     ##   ## ##       ##   ##  ##  ##   ## ##     ##  ##
+  ##     ##   ## ##       ##    ####   ##   ## ##     ##
+  ######   ##   ## ######     ##     ##  ########  ######  ######
+  ##     ##   ## ##       ##     ##  ##    ##       ##
+  ##     ##   ## ##       ##     ##  ##    ##     ##  ##
+  ########  #######  ##       ##     ##  ##    ########  ######
+
+    def make_pointer_type(node)
+      Generic.new(Path.global("Pointer").at(node), [node] of ASTNode).at(node)
+    end
+
+    def make_static_array_type(type, size)
+      Generic.new(Path.global("StaticArray").at(type), [type, size] of ASTNode).at(type.location).at(type)
+    end
+
+    def make_tuple_type(types)
+      Generic.new(Path.global("Tuple"), types)
+    end
+
+    def parse_visibility_modifier(modifier)
+      doc = @token.doc
+
+      next_token_skip_space
+      exp = parse_op_assign
+
+      modifier = VisibilityModifier.new(modifier, exp)
+      modifier.doc = doc
+      exp.doc = doc
+      modifier
+    end
+
+    def parse_asm
+      next_token_skip_space
+      check :"("
+      next_token_skip_space_or_newline
+      text = parse_string_without_interpolation { "interpolation not allowed in asm" }
+      skip_statement_end
+
+      volatile = false
+      alignstack = false
+      intel = false
+
+      unless @token.type == :")"
+        if @token.type == :"::"
+          # No output operands
           next_token_skip_space_or_newline
 
           if @token.type == :DELIMITER_START
             inputs = parse_asm_operands
           end
-        end
-      end
-
-      if @token.type == :"::"
-        next_token_skip_space_or_newline
-        volatile, alignstack, intel = parse_asm_options
-      else
-        if @token.type == :":"
-          next_token_skip_space_or_newline
-          clobbers = parse_asm_clobbers
-        end
-
-        if @token.type == :":"
-          next_token_skip_space_or_newline
-          volatile, alignstack, intel = parse_asm_options
-        end
-      end
-
-      check :")"
-    end
-
-    next_token_skip_space
-
-    Asm.new(text, output, inputs, clobbers, volatile, alignstack, intel)
-  end
-
-  def parse_asm_operands
-    operands = [] of AsmOperand
-    while true
-      operands << parse_asm_operand
-      if @token.type == :","
-        next_token_skip_space_or_newline
-      end
-      break unless @token.type == :DELIMITER_START
-    end
-    operands
-  end
-
-  def parse_asm_operand
-    text = parse_string_without_interpolation { "interpolation not allowed in constraint" }
-    check :"("
-    next_token_skip_space_or_newline
-    exp = parse_expression
-    check :")"
-    next_token_skip_space_or_newline
-    AsmOperand.new(text, exp)
-  end
-
-  def parse_asm_clobbers
-    clobbers = [] of String
-    while true
-      clobbers << parse_string_without_interpolation { "interpolation not allowed in asm clobber" }
-      skip_statement_end
-      if @token.type == :","
-        next_token_skip_space_or_newline
-      end
-      break unless @token.type == :DELIMITER_START
-    end
-    clobbers
-  end
-
-  def parse_asm_options
-    volatile = false
-    alignstack = false
-    intel = false
-    while true
-      location = @token.location
-      option = parse_string_without_interpolation { "interpolation not allowed in asm clobber" }
-      skip_statement_end
-      case option
-      when "volatile"
-        volatile = true
-      when "alignstack"
-        alignstack = true
-      when "intel"
-        intel = true
-      else
-        raise "unkown asm option: #{option}", location
-      end
-
-      if @token.type == :","
-        next_token_skip_space_or_newline
-      end
-      break unless @token.type == :DELIMITER_START
-    end
-    {volatile, alignstack, intel}
-  end
-
-  def parse_yield_with_scope
-    location = @token.location
-    next_token_skip_space
-    @stop_on_yield += 1
-    @yields ||= 1
-    scope = parse_op_assign
-    @stop_on_yield -= 1
-    skip_space
-    check_idfr :yield
-    parse_yield scope, location
-  end
-
-  def parse_yield(scope = nil, location = @token.location)
-    end_location = token_end_location
-    next_token
-
-    call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { parse_call_args }
-
-    if call_args
-      args = call_args.args
-      end_location = nil
-    end
-
-    yields = (@yields ||= 0)
-    if args && args.size > yields
-      @yields = args.size
-    end
-
-    Yield.new(args || [] of ASTNode, scope).at(location).at_end(end_location)
-  end
-
-  def parse_break
-    parse_control_expression Break
-  end
-
-  def parse_return
-    parse_control_expression Return
-  end
-
-  def parse_next
-    parse_control_expression Next
-  end
-
-  def parse_control_expression(klass)
-    end_location = token_end_location
-    next_token
-
-    call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { parse_call_args allow_curly: true }
-    args = call_args.args if call_args
-
-    if args
-      if args.size == 1
-        node = klass.new(args.first)
-      else
-        tuple = TupleLiteral.new(args).at(args.last)
-        node = klass.new(tuple)
-      end
-    else
-      node = klass.new.at_end(end_location)
-    end
-
-    node
-  end
-
-  def parse_lib
-    next_token_skip_space_or_newline
-
-    name = check_const
-    name_column_number = @token.column_number
-    next_token_skip_statement_end
-
-    body = parse_lib_body
-
-    check :END
-    next_token_skip_space
-
-    LibDef.new name, body, name_column_number
-  end
-
-  def parse_lib_body
-    expressions = [] of ASTNode
-    while true
-      skip_statement_end
-      break if is_end_token
-      expressions << parse_lib_body_exp
-    end
-    expressions
-  end
-
-  def parse_lib_body_exp
-    location = @token.location
-    parse_lib_body_exp_without_location.at(location)
-  end
-
-  def parse_lib_body_exp_without_location
-    case @token.type
-    when :"@["
-      parse_attribute
-    when :IDFR
-      case @token.value
-      when :alias
-        parse_alias
-      when :fun
-        parse_fun_def
-      when :type
-        parse_api_type_def
-      when :struct
-        @inside_c_struct = true
-        node = parse_struct_or_union StructDef
-        @inside_c_struct = false
-        node
-      when :union
-        parse_struct_or_union UnionDef
-      when :enum
-        parse_enum_def
-      when :ifdef
-        parse_ifdef check_end: true, mode: :lib
-      else
-        unexpected_token
-      end
-    when :CONST
-      idfr = parse_idfr
-      next_token_skip_space
-      check :"="
-      next_token_skip_space_or_newline
-      value = parse_expression
-      skip_statement_end
-      Assign.new(idfr, value)
-    when :GLOBAL
-      location = @token.location
-      name = @token.value.to_s[1 .. -1]
-      next_token_skip_space_or_newline
-      if @token.type == :"="
-        next_token_skip_space
-        check IdentOrConst
-        real_name = @token.value.to_s
-        next_token_skip_space
-      end
-      check :":"
-      next_token_skip_space_or_newline
-      type = parse_single_type
-
-      if 'A' <= name[0] <= 'Z'
-        raise "external variables must start with lowercase, use for example `$#{name.underscore} = #{name} : #{type}`", location
-      end
-
-      skip_statement_end
-      ExternalVar.new(name, type, real_name)
-    else
-      unexpected_token
-    end
-  end
-
-  IdentOrConst = [:IDFR, :CONST]
-
-  def parse_fun_def(require_body = false)
-    doc = @token.doc
-
-    push_fresh_scope if require_body
-
-    next_token_skip_space_or_newline
-    name = check_idfr
-    next_token_skip_space_or_newline
-
-    if @token.type == :"="
-      next_token_skip_space_or_newline
-      case @token.type
-      when :IDFR, :CONST
-        real_name = @token.value.to_s
-        next_token_skip_space_or_newline
-      when :DELIMITER_START
-        real_name = parse_string_without_interpolation { "interpolation not allowed in fun name" }
-        skip_space
-      else
-        unexpected_token
-      end
-    else
-      real_name = name
-    end
-
-    args = [] of Arg
-    varargs = false
-
-    if @token.type == :"("
-      next_token_skip_space_or_newline
-      while @token.type != :")"
-        if @token.type == :"..."
-          varargs = true
-          next_token_skip_space_or_newline
-          check :")"
-          break
-        end
-
-        if @token.type == :IDFR
-          arg_name = @token.value.to_s
-          arg_location = @token.location
-
-          next_token_skip_space_or_newline
+        else
           check :":"
           next_token_skip_space_or_newline
-          arg_type = parse_single_type
-          skip_statement_end
 
-          args << Arg.new(arg_name, nil, arg_type).at(arg_location)
-
-          add_var arg_name if require_body
-        else
-          arg_types = parse_types
-          arg_types.each do |arg_type_2|
-            args << Arg.new("", nil, arg_type_2).at(arg_type_2.location)
+          if @token.type == :DELIMITER_START
+            output = parse_asm_operand
           end
+
+          if @token.type == :":"
+            next_token_skip_space_or_newline
+
+            if @token.type == :DELIMITER_START
+              inputs = parse_asm_operands
+            end
+          end
+        end
+
+        if @token.type == :"::"
+          next_token_skip_space_or_newline
+          volatile, alignstack, intel = parse_asm_options
+        else
+          if @token.type == :":"
+            next_token_skip_space_or_newline
+            clobbers = parse_asm_clobbers
+          end
+
+          if @token.type == :":"
+            next_token_skip_space_or_newline
+            volatile, alignstack, intel = parse_asm_options
+          end
+        end
+
+        check :")"
+      end
+
+      next_token_skip_space
+
+      Asm.new(text, output, inputs, clobbers, volatile, alignstack, intel)
+    end
+
+    def parse_asm_operands
+      operands = [] of AsmOperand
+      while true
+        operands << parse_asm_operand
+        if @token.type == :","
+          next_token_skip_space_or_newline
+        end
+        break unless @token.type == :DELIMITER_START
+      end
+      operands
+    end
+
+    def parse_asm_operand
+      text = parse_string_without_interpolation { "interpolation not allowed in constraint" }
+      check :"("
+      next_token_skip_space_or_newline
+      exp = parse_expression
+      check :")"
+      next_token_skip_space_or_newline
+      AsmOperand.new(text, exp)
+    end
+
+    def parse_asm_clobbers
+      clobbers = [] of String
+      while true
+        clobbers << parse_string_without_interpolation { "interpolation not allowed in asm clobber" }
+        skip_statement_end
+        if @token.type == :","
+          next_token_skip_space_or_newline
+        end
+        break unless @token.type == :DELIMITER_START
+      end
+      clobbers
+    end
+
+    def parse_asm_options
+      volatile = false
+      alignstack = false
+      intel = false
+      while true
+        location = @token.location
+        option = parse_string_without_interpolation { "interpolation not allowed in asm clobber" }
+        skip_statement_end
+        case option
+        when "volatile"
+          volatile = true
+        when "alignstack"
+          alignstack = true
+        when "intel"
+          intel = true
+        else
+          raise "unkown asm option: #{option}", location
         end
 
         if @token.type == :","
           next_token_skip_space_or_newline
         end
+        break unless @token.type == :DELIMITER_START
       end
+      {volatile, alignstack, intel}
+    end
+
+    def parse_yield_with_scope
+      location = @token.location
+      next_token_skip_space
+      @stop_on_yield += 1
+      @yields ||= 1
+      scope = parse_op_assign
+      @stop_on_yield -= 1
+      skip_space
+      check_idfr :yield
+      parse_yield scope, location
+    end
+
+    def parse_yield(scope = nil, location = @token.location)
+      end_location = token_end_location
+      next_token
+
+      #call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { parse_call_args }
+      call_args = parse_call_args
+
+      if call_args
+        args = call_args.args
+        end_location = nil
+      end
+
+      yields = (@yields ||= 0)
+      if args && args.size > yields
+        @yields = args.size
+      end
+
+      Yield.new(args || [] of ASTNode, scope).at(location).at_end(end_location)
+    end
+
+    def parse_break
+      parse_control_expression Break
+    end
+
+    def parse_return
+      parse_control_expression Return
+    end
+
+    def parse_next
+      parse_control_expression Next
+    end
+
+    def parse_control_expression(klass)
+      end_location = token_end_location
+      next_token
+
+      #call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { parse_call_args allow_curly: true }
+      call_args = parse_call_args allow_curly: true
+      args = call_args.args if call_args
+
+      if args
+        if args.size == 1
+          node = klass.new(args.first)
+        else
+          tuple = TupleLiteral.new(args).at(args.last)
+          node = klass.new(tuple)
+        end
+      else
+        node = klass.new.at_end(end_location)
+      end
+
+      node
+    end
+
+    def parse_lib
+      next_token_skip_space_or_newline
+
+      name = check_const
+      name_column_number = @token.column_number
       next_token_skip_statement_end
+
+      body = parse_lib_body
+
+      check :END
+      next_token_skip_space
+
+      LibDef.new name, body, name_column_number
     end
 
-    if @token.type == :":"
-      next_token_skip_space_or_newline
-      return_type = parse_single_type
-    end
-
-    skip_statement_end
-
-    if require_body
-      if tok?(:END)
-        body = Nop.new
-        next_token
-      else
-        body = parse_expressions
-        body, end_location = parse_exception_handler body
-      end
-    else
-      body = nil
-    end
-
-    pop_scope if require_body
-
-    fun_def = FunDef.new name, args, return_type, varargs, body, real_name
-    fun_def.doc = doc
-    fun_def
-  end
-
-  def parse_alias
-    doc = @token.doc
-
-    next_token_skip_space_or_newline
-    name = check_const
-    next_token_skip_space_or_newline
-    check :"="
-    next_token_skip_space_or_newline
-
-    value = parse_single_type
-    skip_space
-
-    alias_node = Alias.new(name, value)
-    alias_node.doc = doc
-    alias_node
-  end
-
-  def parse_pointerof
-    next_token_skip_space
-
-    check :"("
-    next_token_skip_space_or_newline
-
-    if @token.keyword?(:self)
-      raise "can't take pointerof(self)", @token.line_number, @token.column_number
-    end
-
-    exp = parse_op_assign
-    skip_space
-
-    end_location = token_end_location
-    check :")"
-    next_token_skip_space
-
-    PointerOf.new(exp).at_end(end_location)
-  end
-
-  def parse_sizeof
-    parse_sizeof SizeOf
-  end
-
-  def parse_instance_sizeof
-    parse_sizeof InstanceSizeOf
-  end
-
-  def parse_sizeof(klass)
-    next_token_skip_space
-
-    check :"("
-    next_token_skip_space_or_newline
-
-    location = @token.location
-    exp = parse_single_type.at(location)
-
-    skip_space
-
-    end_location = token_end_location
-    check :")"
-    next_token_skip_space
-
-    klass.new(exp).at_end(end_location)
-  end
-
-  def parse_api_type_def
-    next_token_skip_space_or_newline
-    name = check_const
-    name_column_number = @token.column_number
-    next_token_skip_space_or_newline
-    check :"="
-    next_token_skip_space_or_newline
-
-    type = parse_single_type
-    skip_space
-
-    TypeDef.new name, type, name_column_number
-  end
-
-  def parse_struct_or_union(klass)
-    next_token_skip_space_or_newline
-    name = check_const
-    next_token_skip_statement_end
-    body = parse_struct_or_union_body
-    check :END
-    next_token_skip_space
-
-    klass.new name, Expressions.from(body)
-  end
-
-  def parse_struct_or_union_body
-    exps = [] of ASTNode
-
-    while true
-      case @token.type
-      when :IDFR
-        case @token.value
-        when :ifdef
-          exps << parse_ifdef(mode: :struct_or_union)
-        when :include
-          if @inside_c_struct
-            location = @token.location
-            exps << parse_include.at(location)
-          else
-            parse_struct_or_union_fields exps
-          end
-        when :else
-          break
-        else
-          parse_struct_or_union_fields exps
-        end
-      when :END
-        break
-      when :";", :NEWLINE
+    def parse_lib_body
+      expressions = [] of ASTNode
+      while true
         skip_statement_end
-      else
-        break
+        break if is_end_token
+        expressions << parse_lib_body_exp
       end
+      expressions
     end
 
-    exps
-  end
-
-  def parse_struct_or_union_fields(exps)
-    args = [Arg.new(@token.value.to_s).at(@token.location)]
-
-    next_token_skip_space_or_newline
-
-    while @token.type == :","
-      next_token_skip_space_or_newline
-      args << Arg.new(check_idfr).at(@token.location)
-      next_token_skip_space_or_newline
+    def parse_lib_body_exp
+      location = @token.location
+      parse_lib_body_exp_without_location.at(location)
     end
 
-    check :":"
-    next_token_skip_space_or_newline
-
-    type = parse_single_type
-
-    skip_statement_end
-
-    args.each do |an_arg|
-      an_arg.restriction = type
-      exps << an_arg
-    end
-  end
-
-  def parse_enum_def
-    doc = @token.doc
-
-    next_token_skip_space #_or_newline
-
-    name = parse_idfr allow_type_vars: false
-    skip_space
-
-    if tok? :CONST, :"'"  # most likely a type!
-      base_type = parse_single_type
-    end
-
-    if parse_nest_start(:generic) == :NIL_NEST
-      raise "can't have an empty enum!"
-    end
-
-    members = [] of ASTNode
-    until handle_nest_end  #tok?(:END)
+    def parse_lib_body_exp_without_location
       case @token.type
-      when :CONST
-        location = @token.location
-        constant_name = @token.value.to_s
-        member_doc = @token.doc
-
-        next_token_skip_space
-        if @token.type == :"="
-          next_token_skip_space_or_newline
-
-          constant_value = parse_logical_or
-          next_token_skip_statement_end
-        else
-          constant_value = nil
-          skip_statement_end
-        end
-
-        case @token.type
-        when :",", :";"
-          next_token_skip_statement_end
-        end
-
-        arg = Arg.new(constant_name, constant_value).at(location)
-        arg.doc = member_doc
-
-        members << arg
+      when :"@["
+        parse_attribute
       when :IDFR
-        visibility = nil
-
         case @token.value
-        when :private
-          visibility = :private
-          next_token_skip_space
-        when :protected
-          visibility = :protected
-          next_token_skip_space
-        end
-
-        if @token.value == :def
-          member = parse_def
-          member = VisibilityModifier.new(visibility, member) if visibility
-          members << member
+        when :alias
+          parse_alias
+        when :fun
+          parse_fun_def
+        when :type
+          parse_api_type_def
+        when :struct
+          @inside_c_struct = true
+          node = parse_struct_or_union StructDef
+          @inside_c_struct = false
+          node
+        when :union
+          parse_struct_or_union UnionDef
+        when :enum
+          parse_enum_def
+        when :ifdef
+          parse_ifdef check_end: true, mode: :lib
         else
           unexpected_token
         end
-      when :CLASS_VAR
-        class_var = ClassVar.new(@token.value.to_s).at(@token.location)
-
+      when :CONST
+        idfr = parse_idfr
         next_token_skip_space
         check :"="
         next_token_skip_space_or_newline
-        value = parse_op_assign
-
-        members << Assign.new(class_var, value).at(class_var)
-      when :";", :NEWLINE
+        value = parse_expression
         skip_statement_end
+        Assign.new(idfr, value)
+      when :GLOBAL
+        location = @token.location
+        name = @token.value.to_s[1..-1]
+        next_token_skip_space_or_newline
+        if @token.type == :"="
+          next_token_skip_space
+          check IdentOrConst
+          real_name = @token.value.to_s
+          next_token_skip_space
+        end
+        check :":"
+        next_token_skip_space_or_newline
+        type = parse_single_type
+
+        if 'A' <= name[0] <= 'Z'
+          raise "external variables must start with lowercase, use for example `$#{name.underscore} = #{name} : #{type}`", location
+        end
+
+        skip_statement_end
+        ExternalVar.new(name, type, real_name)
       else
         unexpected_token
       end
     end
 
-    raise "Bug: EnumDef name can only be a Path" unless name.is_a?(Path)
+    IdentOrConst = [:IDFR, :CONST]
 
-    enum_def = EnumDef.new name, members, base_type
-    enum_def.doc = doc
-    enum_def
-  end
+    def parse_fun_def(require_body = false)
+      doc = @token.doc
 
-  def node_and_next_token(node)
-    node.end_location = token_end_location
-    next_token
-    node
-  end
+      push_fresh_scope if require_body
 
-  def const?(token : Symbol) : Bool
-    @token.value == token && @token.type == :CONST
-  end
+      next_token_skip_space_or_newline
+      name = check_idfr
+      next_token_skip_space_or_newline
 
-  def kwd?(token : Symbol) : Bool
-    @token.value == token && @token.type == :IDFR
-  end
-
-  def kwd?(* tokens : Symbol) : Bool
-    tokens.each do |t|
-      return true if @token.value == t && @token.type == :IDFR
-    end
-    false
-  end
-
-  def tok?(token : Symbol) : Bool
-    @token.type == token
-  end
-
-  def tok?(* tokens : Symbol) : Bool
-    tokens.each do |t|
-      return true if @token.type == t
-    end
-    false
-  end
-
-  def is_end_token : Bool
-    case @token.type
-    when :"}", :"]", :"%}", :EOF, :DEDENT #, :NEWLINE, :INDENT #,  :"=>"
-      return true
-
-    when :IDFR
-      case @token.value
-      when :do, :else, :elsif, :elif, :when, :rescue, :ensure, :then
-        return true
+      if @token.type == :"="
+        next_token_skip_space_or_newline
+        case @token.type
+        when :IDFR, :CONST
+          real_name = @token.value.to_s
+          next_token_skip_space_or_newline
+        when :DELIMITER_START
+          real_name = parse_string_without_interpolation { "interpolation not allowed in fun name" }
+          skip_space
+        else
+          unexpected_token
+        end
+      else
+        real_name = name
       end
 
-      if is_explicit_end_tok?
-        return true
+      args = [] of Arg
+      varargs = false
+
+      if @token.type == :"("
+        next_token_skip_space_or_newline
+        while @token.type != :")"
+          if @token.type == :"..."
+            varargs = true
+            next_token_skip_space_or_newline
+            check :")"
+            break
+          end
+
+          if @token.type == :IDFR
+            arg_name = @token.value.to_s
+            arg_location = @token.location
+
+            next_token_skip_space_or_newline
+            check :":"
+            next_token_skip_space_or_newline
+            arg_type = parse_single_type
+            skip_statement_end
+
+            args << Arg.new(arg_name, nil, arg_type).at(arg_location)
+
+            add_var arg_name if require_body
+          else
+            arg_types = parse_types
+            arg_types.each do |arg_type_2|
+              args << Arg.new("", nil, arg_type_2).at(arg_type_2.location)
+            end
+          end
+
+          if @token.type == :","
+            next_token_skip_space_or_newline
+          end
+        end
+        next_token_skip_statement_end
       end
 
+      if @token.type == :":"
+        next_token_skip_space_or_newline
+        return_type = parse_single_type
+      end
+
+      skip_statement_end
+
+      if require_body
+        if tok?(:END)
+          body = Nop.new
+          next_token
+        else
+          body = parse_expressions
+          body, end_location = parse_exception_handler body
+        end
+      else
+        body = nil
+      end
+
+      pop_scope if require_body
+
+      fun_def = FunDef.new name, args, return_type, varargs, body, real_name
+      fun_def.doc = doc
+      fun_def
     end
 
-    false
-  end
+    def parse_alias
+      doc = @token.doc
 
-  def can_be_assigned?(node) : Bool
-    case node
-    when Var, InstanceVar, ClassVar, Path, Global, Underscore
-      true
-    when Call
-      (node.obj.nil? && node.args.size == 0 && node.block.nil?) || node.name == "[]"
-    else
+      next_token_skip_space_or_newline
+      name = check_const
+      next_token_skip_space_or_newline
+      check :"="
+      next_token_skip_space_or_newline
+
+      value = parse_single_type
+      skip_space
+
+      alias_node = Alias.new(name, value)
+      alias_node.doc = doc
+      alias_node
+    end
+
+    def parse_pointerof
+      next_token_skip_space
+
+      check :"("
+      next_token_skip_space_or_newline
+
+      if kwd?(:self)
+        raise "can't take pointerof(self)", @token.line_number, @token.column_number
+      end
+
+      exp = parse_op_assign
+      skip_space
+
+      end_location = token_end_location
+      check :")"
+      next_token_skip_space
+
+      PointerOf.new(exp).at_end(end_location)
+    end
+
+    def parse_sizeof
+      parse_sizeof SizeOf
+    end
+
+    def parse_instance_sizeof
+      parse_sizeof InstanceSizeOf
+    end
+
+    def parse_sizeof(klass)
+      next_token_skip_space
+
+      check :"("
+      next_token_skip_space_or_newline
+
+      location = @token.location
+      exp = parse_single_type.at(location)
+
+      skip_space
+
+      end_location = token_end_location
+      check :")"
+      next_token_skip_space
+
+      klass.new(exp).at_end(end_location)
+    end
+
+    def parse_api_type_def
+      next_token_skip_space_or_newline
+      name = check_const
+      name_column_number = @token.column_number
+      next_token_skip_space_or_newline
+      check :"="
+      next_token_skip_space_or_newline
+
+      type = parse_single_type
+      skip_space
+
+      TypeDef.new name, type, name_column_number
+    end
+
+    def parse_struct_or_union(klass)
+      next_token_skip_space_or_newline
+      name = check_const
+      next_token_skip_statement_end
+      body = parse_struct_or_union_body
+      check :END
+      next_token_skip_space
+
+      klass.new name, Expressions.from(body)
+    end
+
+    def parse_struct_or_union_body
+      exps = [] of ASTNode
+
+      while true
+        case @token.type
+        when :IDFR
+          case @token.value
+          when :ifdef
+            exps << parse_ifdef(mode: :struct_or_union)
+          when :include, :mixin
+            if @inside_c_struct
+              location = @token.location
+              exps << parse_include.at(location)
+            else
+              parse_struct_or_union_fields exps
+            end
+          when :else
+            break
+          else
+            parse_struct_or_union_fields exps
+          end
+        when :END
+          break
+        when :";", :NEWLINE
+          skip_statement_end
+        else
+          break
+        end
+      end
+
+      exps
+    end
+
+    def parse_struct_or_union_fields(exps)
+      args = [Arg.new(@token.value.to_s).at(@token.location)]
+
+      next_token_skip_space_or_newline
+
+      while @token.type == :","
+        next_token_skip_space_or_newline
+        args << Arg.new(check_idfr).at(@token.location)
+        next_token_skip_space_or_newline
+      end
+
+      check :":"
+      next_token_skip_space_or_newline
+
+      type = parse_single_type
+
+      skip_statement_end
+
+      args.each do |an_arg|
+        an_arg.restriction = type
+        exps << an_arg
+      end
+    end
+
+    def parse_enum_def
+      doc = @token.doc
+
+      next_token_skip_space # _or_newline
+
+      name = parse_idfr allow_type_vars: false
+      skip_space
+
+      if tok? :CONST, :"'" # most likely a type!
+        base_type = parse_single_type
+      end
+
+      if parse_nest_start(:generic) == :NIL_NEST
+        raise "can't have an empty enum!"
+      end
+
+      members = [] of ASTNode
+      until handle_nest_end # tok?(:END)
+        case @token.type
+        when :CONST
+          location = @token.location
+          constant_name = @token.value.to_s
+          member_doc = @token.doc
+
+          next_token_skip_space
+          if @token.type == :"="
+            next_token_skip_space_or_newline
+
+            constant_value = parse_logical_or
+            next_token_skip_statement_end
+          else
+            constant_value = nil
+            skip_statement_end
+          end
+
+          case @token.type
+          when :",", :";"
+            next_token_skip_statement_end
+          end
+
+          arg = Arg.new(constant_name, constant_value).at(location)
+          arg.doc = member_doc
+
+          members << arg
+        when :IDFR
+          visibility = nil
+
+          case @token.value
+          when :private
+            visibility = :private
+            next_token_skip_space
+          when :protected
+            visibility = :protected
+            next_token_skip_space
+          end
+
+          if @token.value == :def
+            member = parse_def
+            member = VisibilityModifier.new(visibility, member) if visibility
+            members << member
+          else
+            unexpected_token
+          end
+        when :CLASS_VAR
+          class_var = ClassVar.new(@token.value.to_s).at(@token.location)
+
+          next_token_skip_space
+          check :"="
+          next_token_skip_space_or_newline
+          value = parse_op_assign
+
+          members << Assign.new(class_var, value).at(class_var)
+        when :";", :NEWLINE
+          skip_statement_end
+        else
+          unexpected_token
+        end
+      end
+
+      raise "Bug: EnumDef name can only be a Path" unless name.is_a?(Path)
+
+      enum_def = EnumDef.new name, members, base_type
+      enum_def.doc = doc
+      enum_def
+    end
+
+    def node_and_next_token(node)
+      dbg "node_and_next_token"
+      node.end_location = token_end_location
+      next_token
+      dbg "after next_token()"
+      node
+    end
+
+    def const?(token : Symbol) : Bool
+      @token.value == token && @token.type == :CONST
+    end
+
+    def const?(*tokens : Symbol) : Bool
+      tokens.each do |t|
+        return true if @token.value == t && @token.type == :CONST
+      end
       false
     end
-  end
 
-  def push_fresh_scope : Nil
-    @scope_stack.push_scope(Scope.new)  # push(Set(String).new)
-    nil
-  end
-
-  def push_scope(args)
-    push_scope(Scope.new(args.map &.name))
-    ret = yield
-    pop_scope
-    ret
-  end
-
-  def push_scope(scope) : Nil
-    @scope_stack.push_scope(scope)
-    nil
-  end
-
-  def push_scope : Nil
-    @scope_stack.push_scope
-    nil
-  end
-
-  def pop_scope : Nil
-    @scope_stack.pop_scope()
-    nil
-  end
-
-  def add_vars(vars) : Nil
-    vars.each do |var|
-      add_var var
-    end
-    nil
-  end
-
-  def add_var(var : Var | Arg | BlockArg) : Nil
-    add_var var.name.to_s
-    nil
-  end
-
-  def add_var(var : DeclareVar) : Nil
-    var_var = var.var
-    case var_var
-    when Var
-      add_var var_var.name
-    when InstanceVar
-      add_var var_var.name
-    else
-      raise "can't happen"
-    end
-    nil
-  end
-
-  def add_var(name : String) : Nil
-    @scope_stack.add_var name
-    nil
-  end
-
-  def add_var(node) : Nil
-    # Nothing
-    nil
-  end
-
-  def open(symbol, location = @token.location)
-    @unclosed_stack.push Unclosed.new(symbol, location)
-    begin
-      value = yield
-    ensure
-      @unclosed_stack.pop
-    end
-    value
-  end
-
-
-
-
-
-  def maybe_skip_anydents : Nil
-    return if @paren_nest == 0
-    if tok?(:INDENT) || tok?(:DEDENT)  || tok?(:NEWLINE)
-      next_token_skip_space_or_newline
-    end
-    nil
-  end
-
-
-
-
-  def parse_def_nest_start : {Symbol, Symbol, Bool}
-    # *TODO* we don't pass the syntax used, so a stylizer would have to look at
-    # the source via "location"
-
-    dbg "parse_def_nest_start"
-
-
-    if ! tok?(:"->")
-      raise "unexpected token. Expected `->`, or a variation of it"
+    def kwd?(token : Symbol) : Bool
+      @token.value == token && @token.type == :IDFR
     end
 
-    dbg "we got the mandatory '->'"
-
-    next_token_skip_space
-
-    dbg "check for callable variations"
-
-    if tok? :"@"
-      callable_type = :strict_method
-      next_token_skip_space
-
-    elsif tok? :">"
-      callable_type = :pure_callable
-      next_token_skip_space
-
-    elsif tok? :")", :"}"
-      callable_type = :soft_lambda
-      next_token_skip_space
-
-    else
-      callable_type = :standard_callable
-
+    def kwd?(*tokens : Symbol) : Bool
+      tokens.each do |t|
+        return true if @token.value == t && @token.type == :IDFR
+      end
+      false
     end
 
-    dbg "check for returns-nothing modifier"
-
-    if tok? :"!"
-      returns_nothing = true
-      next_token_skip_space
-    else
-      returns_nothing = false
+    def tok?(token : Symbol) : Bool
+      @token.type == token
     end
 
-    case
-    when tok? :INDENT
-      dbg "parse_def_nest_start - :INDENT"
-      next_token
-      unsignify_newline
-      {:NEST, callable_type, returns_nothing}
-
-    when tok?(:DEDENT, :NEWLINE, :END)
-      dbg "parse_def_nest_start - :DEDENT, :NEWLINE, :END"
-      #next_token_skip_space
-      {:NIL_NEST, callable_type, returns_nothing}
-
-    # when kwd?(:else, :elsif, :elif)
-    #   dbg "parse_def_nest_start - explicit_starter + :else|:elsif|:elif"
-    #   :NIL_NEST
-
-    else
-      dbg "parse_def_nest_start - explicit_starter | KIND == :else"
-      @one_line_nest += 1
-      @significant_newline = true
-      {:LINE_NEST, callable_type, returns_nothing}
-
+    def tok?(*tokens : Symbol) : Bool
+      tokens.each do |t|
+        return true if @token.type == t
+      end
+      false
     end
 
-  end
-
-  def parse_nest_start(kind: Symbol) : Symbol  #  = :generic
-    # *TODO* we don't pass the syntax used, so a stylizer would have to look at
-    # the source via "location"
-
-    dbg "parse_nest_start"
-
-
-    if ( tok?(:"=>", :":") || kwd?(:do, :then) )
-      dbg "parse_nest_start - found explicit_starter"
-      next_token_skip_space
-      explicit_starter = true
-    else
-      explicit_starter = false
-    end
-
-    case
-    when kind == :case
-      if tok?(:NEWLINE)
-        dbg "parse_nest_start - :case :NEWLINE"
-        next_token_skip_space
-        if kwd?(:when) || tok?(:"|")
-          :WHEN_NEST
-        else
-          raise "Does this happen. Is an error right? *TODO*"
+    def is_end_token : Bool
+      case @token.type
+      when :"}", :"]", :"%}", :EOF, :DEDENT # , :NEWLINE, :INDENT #,  :"=>"
+        return true
+      when :IDFR
+        case @token.value
+        when :else, :elsif, :elif, :when, :rescue, :ensure, :do, :then
+          return true
         end
 
-      elsif tok?(:INDENT)
-        dbg "parse_nest_start - :case :INDENT"
-        next_token_skip_space
-        if kwd?(:when) || tok?(:"|")
-          :WHEN_NEST
-        else
-          :FREE_WHEN_NEST
+        if is_explicit_end_tok?
+          return true
         end
+      end
 
-      elsif explicit_starter
-        dbg "parse_nest_start - :case explicit_starter"
+      false
+    end
+
+    def can_be_assigned?(node) : Bool
+      case node
+      when Var, InstanceVar, ClassVar, Path, Global, Underscore
+        true
+      when Call
+        (node.obj.nil? && node.args.size == 0 && node.block.nil?) || node.name == "[]"
+      else
+        false
+      end
+    end
+
+    def push_fresh_scope : Nil
+      @scope_stack.push_scope(Scope.new) # push(Set(String).new)
+      nil
+    end
+
+    def push_scope(args)
+      push_scope(Scope.new(args.map &.name))
+      ret = yield
+      pop_scope
+      ret
+    end
+
+    def push_scope(scope) : Nil
+      @scope_stack.push_scope(scope)
+      nil
+    end
+
+    def push_scope : Nil
+      @scope_stack.push_scope
+      nil
+    end
+
+    def pop_scope : Nil
+      @scope_stack.pop_scope
+      nil
+    end
+
+    def add_vars(vars) : Nil
+      vars.each do |var|
+        add_var var
+      end
+      nil
+    end
+
+    def add_var(var : Var | Arg) : Nil
+      add_var var.name.to_s
+      nil
+    end
+
+    def add_var(var : DeclareVar) : Nil
+      var_var = var.var
+      case var_var
+      when Var
+        add_var var_var.name
+      when InstanceVar
+        add_var var_var.name
+      else
+        raise "can't happen"
+      end
+      nil
+    end
+
+    def add_var(name : String) : Nil
+      @scope_stack.add_var name
+      nil
+    end
+
+    def add_var(node) : Nil
+      # Nothing
+      nil
+    end
+
+    def open(symbol, location = @token.location)
+      @unclosed_stack.push Unclosed.new(symbol, location)
+      begin
+        value = yield
+      ensure
+        @unclosed_stack.pop
+      end
+      value
+    end
+
+    def parse_def_nest_start() : {Symbol, Symbol, Bool, Array(Attribute)}
+      # *TODO* we don't pass the syntax used, so a stylizer would have to look
+      # at the source via "location"
+
+      dbg "parse_def_nest_start"
+
+      if !tok?(:"->")
+        # raise "unexpected token. Expected `->`, or a variation of it"
+        message = "unexpected token. Expected `->`, or a variation of it"
+        token = @token
+        ::raise LambdaSyntaxException.new(message, token.line_number, token.column_number, token.filename, 2)
+      end
+
+      dbg "we got the mandatory '->'"
+
+      next_token_skip_space
+
+      dbg "check for callable variations"
+
+      case
+      when tok? :"@"
+        callable_type = :strict_method
+        next_token_skip_space
+
+      when tok? :">"
+        callable_type = :pure_callable
+        next_token_skip_space
+      # when tok? :")", :"}"
+      #   callable_type = :soft_lambda
+      #   next_token_skip_space
+      else
+        callable_type = :standard_callable
+      end
+
+      dbg "check for returns-nothing modifier"
+
+      if tok? :"!"
+        returns_nothing = true
+        next_token_skip_space
+
+      else
+        returns_nothing = false
+      end
+
+      dbg "check for def suffix pragmas"
+      pragmas = parse_possible_pragmas
+
+      # handle one–line vs multi–line vs nil–nest etc.
+      nest_kind = case
+      when tok? :INDENT
+        dbg "parse_def_nest_start - :INDENT"
+        next_token
+        unsignify_newline
+        :NEST
+
+      when tok?(:DEDENT, :NEWLINE, :END)
+        dbg "parse_def_nest_start - :DEDENT, :NEWLINE, :END"
+        :NIL_NEST
+
+      else
+        dbg "parse_def_nest_start - explicit_starter"
         @one_line_nest += 1
         @significant_newline = true
         :LINE_NEST
 
-      else
-        dbg "parse_nest_start - :case unknown"
-        raise "unexpected token, expected code-block to start"
-
       end
 
-    when kind == :if && tok?(:"?")
-      dbg "parse_nest_start - :? -> TERNARY"
-      next_token_skip_statement_end
-      :TERNARY
+      {nest_kind, callable_type, returns_nothing, pragmas}
 
-    when tok? :INDENT
-      dbg "parse_nest_start - :INDENT"
-      next_token
-      unsignify_newline
-      :NEST
-
-    when tok?(:DEDENT, :NEWLINE, :END)
-      dbg "parse_nest_start - :DEDENT, :NEWLINE, :END"
-      #next_token_skip_space
-      :NIL_NEST
-
-    when explicit_starter && kwd?(:else, :elsif, :elif)
-      dbg "parse_nest_start - explicit_starter + :else|:elsif|:elif"
-      :NIL_NEST
-
-    when explicit_starter || kind == :else
-      dbg "parse_nest_start - explicit_starter | KIND == :else"
-      @one_line_nest += 1
-      @significant_newline = true
-      :LINE_NEST
-
-    else
-      raise "unexpected token, expected code-block to start"
     end
 
-  end
+    def parse_nest_start(kind : Symbol) : Symbol #  = :generic
+      # *TODO* we don't pass the syntax used, so a stylizer would have to look at
+      # the source via "location"
 
-  def handle_nest_end(known_nil_nest = false : Bool) : Bool
-    if tok? :";"
-      next_token_skip_space
-    end
+      dbg "parse_nest_start".yellow
 
-    # *TODO*
-    if tok?(:EOF)
-      return true
+      # *TODO* om `~>` block starter is kept, then an additional start-token
+      # should be illegal - looks crazy!
+      explicit_starter = parse_explicit_nest_start_token
 
+      case
+      when kind == :case
+        if tok?(:NEWLINE)
+          dbg "parse_nest_start - :case :NEWLINE"
+          next_token_skip_space
+          if kwd?(:when) || tok?(:"|")
+            :WHEN_NEST
+          else
+            raise "Does this happen. Is an error right? *TODO*"
+          end
+        elsif tok?(:INDENT)
+          dbg "parse_nest_start - :case :INDENT"
+          next_token_skip_space
+          if kwd?(:when) || tok?(:"|")
+            :WHEN_NEST
+          else
+            :FREE_WHEN_NEST
+          end
+        elsif explicit_starter
+          dbg "parse_nest_start - :case explicit_starter"
+          @one_line_nest += 1
+          @significant_newline = true
+          :LINE_NEST
+        else
+          dbg "parse_nest_start - :case unknown"
+          raise "unexpected token, expected code-block to start"
+        end
 
-    elsif @one_line_nest == 0 # *TODO* this is semi–defunct!!
-      if tok?(:DEDENT) || (known_nil_nest && tok?(:NEWLINE)) || tok?(:END)
-        dbg "handle_nest_end - multiline - dedent | nil-blk+nl"
-        handle_definite_nest_end_
-        @was_just_nest_end = true
-        return true
+      when kind == :if && tok?(:"?")
+        dbg "parse_nest_start - :? -> TERNARY"
+        next_token_skip_statement_end
+        :TERNARY
 
-      elsif handle_transition_tokens
-        return true
-      end
-
-      dbg "handle_nest_end - multiline - no nest_end"
-
-      return false
-    else
-      if handle_transition_tokens
-        return true
-      end
-
-      dbg "handle_nest_end - try handle_one_line_nest_end - one_line_nest = #{@one_line_nest}"
-      if handle_one_line_nest_end
-        @was_just_nest_end = true
-        return true
-      end
-
-      dbg "handle_nest_end - one_line - no nest_end"
-
-      return false
-    end
-
-  end
-
-
-
-  def handle_transition_tokens
-    dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
-    if kwd? :else, :elsif, :elif, :ensure, :rescue  # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
-      #@was_just_nest_end = true
-      de_nest @indent, :"", ""
-      return true
-    end
-
-    return false
-  end
-
-  def handle_one_line_nest_end : Bool
-    case
-    when tok? :NEWLINE
-      dbg "handle_one_line_nest_end NEWLINE"
-      handle_definite_nest_end_
-      unsignify_newline
-      return true
-
-    when tok? :DEDENT
-      dbg "handle_one_line_nest_end DEDENT"
-      unsignify_newline
-      return handle_definite_nest_end_
-
-    when is_explicit_end_tok?
-      dbg "handle_one_line_nest_end explicit END-*"
-      #handle_definite_nest_end_
-      indent_level = @indent
-      line, col = @token.line_number, @token.column_number
-      end_token, match_name = parse_explicit_end_statement
-      de_nest indent_level, end_token, match_name, line, col
-      return true
-
-    else
-      dbg "handle_one_line_nest_end - no nest_end in sight"
-      return false
-    end
-  end
-
-  def handle_definite_nest_end_(force = false) : Bool
-    dbg "handle_definite_nest_end_".yellow
-
-    backed = backup_tok
-    next_token
-
-    indent_level = @indent
-
-    if tok?(:NEWLINE, :DEDENT)
-      dbg "handle_definite_nest_end_: consumed NEWLINE|DEDENT - @significant_newline = #{@significant_newline}"
-      #last_backed = backup_pos
-      next_token_skip_space_or_newline
-    end
-
-    line, col = @token.line_number, @token.column_number
-
-    if is_explicit_end_tok?
-      #last_backed = backup_pos
-      end_token, match_name = parse_explicit_end_statement
-      dbg "handle_definite_nest_end_ is DEDENT: explicit end-token '#{end_token}'"
-
-    else
-      dbg "handle_definite_nest_end_ is DEDENT: implicit end"
-      end_token = :""
-      match_name = ""
-    end
-
-    case de_nest indent_level, end_token, match_name, line, col, force
-
-    when :false
-      #raise "Nothing to pop on the nesting stack! Wtf?"
-      dbg "de_nest returned :false - this was just a post-usage check then (to avoid suffix parse)"
-      return false
-
-    when :more
-      dbg "there's apparently MORE NESTINGS to pop, so we REPEAT the dedent-token in queue".magenta
-      restore_tok backed
-      dbg "token after restore"
-      return true
-
-    when :done
-      dbg "all NESTINGS are DONE"
-      while tok? :NEWLINE
+      when tok? :INDENT
+        dbg "parse_nest_start - :INDENT"
         next_token
-      end
+        unsignify_newline
+        :NEST
 
-      return true
-    else
-      raise "internal error in handle_definite_nest_end_ after de_nest"
+      when tok?(:DEDENT, :NEWLINE, :END)
+        dbg "parse_nest_start - :DEDENT, :NEWLINE, :END"
+        # next_token_skip_space
+        :NIL_NEST
+
+      when explicit_starter && kwd?(:else, :elsif, :elif)
+        dbg "parse_nest_start - explicit_starter + :else|:elsif|:elif"
+        :NIL_NEST
+
+      when explicit_starter, kind == :else, kind == :block_start
+        dbg "parse_nest_start - explicit_starter | KIND == :else | KIND == :block_start"
+        @one_line_nest += 1
+        @significant_newline = true
+        :LINE_NEST
+      else
+        raise "unexpected token, expected code-block to start"
+      end
     end
 
-  end
+    def parse_explicit_nest_start_token
+      if (tok?(:"=>", :":") || kwd?(:do, :then))
+        dbg "parse_explicit_nest_start_token - found explicit_starter"
+        next_token_skip_space
+        true
+      else
+        false
+      end
+    end
 
-  def parse_explicit_end_statement : {Symbol, String}
+    def handle_nest_end(known_nil_nest = false : Bool) : Bool
+      dbg "handle_nest".yellow + "_end".red
+      if tok? :";"
+        next_token_skip_space
+      end
+
+      # *TODO*
+      if tok?(:EOF)
+        return true
+
+
+      # elsif tok?(:")") # *TODO* *TEST*
+      #   return true
+
+      elsif @one_line_nest == 0 # *TODO* this is semi–defunct!!
+
+        if tok?(:DEDENT) || (known_nil_nest && tok?(:NEWLINE)) || tok?(:END)  # || tok?(:")") # *TODO* *TEST*
+          dbg "handle_nest_end - multiline - dedent | nil-blk+nl"
+          handle_definite_nest_end_
+          @was_just_nest_end = true
+          return true
+        elsif handle_transition_tokens
+          return true
+        end
+
+        dbg "handle_nest_end - multiline - no nest_end"
+
+        return false
+      else
+        if handle_transition_tokens
+          return true
+        end
+
+        dbg "handle_nest_end - try handle_one_line_nest_end - one_line_nest = #{@one_line_nest}"
+        if handle_one_line_nest_end
+          @was_just_nest_end = true
+          return true
+        end
+
+        dbg "handle_nest_end - one_line - no nest_end"
+
+        return false
+      end
+    end
+
+    def handle_transition_tokens
+      dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
+      if kwd? :else, :elsif, :elif, :ensure, :rescue # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
+        # @was_just_nest_end = true
+        de_nest @indent, :"", ""
+        return true
+      end
+
+      return false
+    end
+
+    def handle_one_line_nest_end : Bool
+      case
+      when tok? :")"
+        dbg "handle_one_line_nest_end LPAREN ')'"
+        handle_definite_nest_end_
+        unsignify_newline
+        return true
+
+      when tok? :NEWLINE
+        dbg "handle_one_line_nest_end NEWLINE"
+        handle_definite_nest_end_
+        unsignify_newline
+        return true
+
+      when tok? :DEDENT
+        dbg "handle_one_line_nest_end DEDENT"
+        unsignify_newline
+        return handle_definite_nest_end_
+
+      when is_explicit_end_tok?
+        dbg "handle_one_line_nest_end explicit END-*"
+        # handle_definite_nest_end_
+        indent_level = @indent
+        line, col = @token.line_number, @token.column_number
+        end_token, match_name = parse_explicit_end_statement
+        de_nest indent_level, end_token, match_name, line, col
+        return true
+
+      else
+        dbg "handle_one_line_nest_end - no nest_end in sight"
+        return false
+      end
+
+    end
+
+    def handle_definite_nest_end_(force = false) : Bool
+      dbg "handle_definite_nest_end_".yellow
+
+      backed = backup_tok
+      next_token if ! tok? :")"
+
+      indent_level = @indent
+
+      if tok?(:NEWLINE, :DEDENT)
+        dbg "handle_definite_nest_end_: consumed NEWLINE|DEDENT - @significant_newline = #{@significant_newline}"
+        # last_backed = backup_pos
+        next_token_skip_space_or_newline
+      end
+
+      line, col = @token.line_number, @token.column_number
+
+      if is_explicit_end_tok?
+        # last_backed = backup_pos
+        end_token, match_name = parse_explicit_end_statement
+        dbg "handle_definite_nest_end_ is DEDENT: explicit end-token '#{end_token}'"
+
+      else
+        dbg "handle_definite_nest_end_ is DEDENT: implicit end"
+        end_token = :""
+        match_name = ""
+      end
+
+      case de_nest indent_level, end_token, match_name, line, col, force
+      when :false
+        # raise "Nothing to pop on the nesting stack! Wtf?"
+        dbg "de_nest returned :false - this was just a post-usage check then (to avoid suffix parse)"
+        return false
+
+      when :more
+        dbg "there's apparently MORE NESTINGS to pop, so we REPEAT the dedent-token in queue".magenta
+        restore_tok backed
+        dbg "token after restore"
+        return true
+
+      when :done
+        dbg "all NESTINGS are DONE"
+        while tok? :NEWLINE
+          next_token
+        end
+
+        return true
+      else
+        raise "internal error in handle_definite_nest_end_ after de_nest"
+      end
+    end
+
+    def parse_explicit_end_statement : {Symbol, String}
       dbg "parse_explicit_end_statement"
 
       end_token = @token.value as Symbol
@@ -6297,185 +6648,178 @@ class OnyxParser < OnyxLexer
         dbg "parse_explicit_end_statement - got match name '" + match_name + "'"
         next_token_skip_space
 
-        if ! tok?(:NEWLINE, :";") # *TODO* can be comment, etc. muddafuckin shit
+        if !tok?(:NEWLINE, :";") # *TODO* can be comment, etc. muddafuckin shit
           raise "expect newline or ';' after name-matched end-token, got '" + @token.to_s + "'"
         end
-
       else
         match_name = ""
       end
 
-
       # *TODO* possibly eat ";" + " " here
       skip_statement_end
 
-
       {end_token, match_name}
-  end
-
-  def is_explicit_end_tok? : Bool
-    tok? :END
-  end
-
-  def add_nest(nest_kind : Symbol, indent : Int32, match_name : String, require_end_token : Bool) : Nil
-    dbg ">> ADD NESTING:   '".white + nest_kind.to_s + "'  at " + indent.to_s
-    @nesting_stack.add nest_kind, indent, match_name, require_end_token
-    dbg @nesting_stack.dbgstack.yellow
-    nil
-  end
-
-  def de_nest(indent : Int32, end_token : Symbol, match_name : String,
-              line = @token.line_number, col = @token.column_number,
-              force = false) : Symbol
-
-    tmp_dbg_nest_indent = @nesting_stack.last.indent.to_s
-    tmp_dbg_nest_kind = @nesting_stack.last.nest_kind.to_s
-
-    ret = @nesting_stack.dedent indent, end_token, match_name, force
-
-    if ret.is_a? String
-      raise ret, line, col
     end
 
-    if @one_line_nest > 0
-      @one_line_nest -= 1
+    def is_explicit_end_tok? : Bool
+      tok? :END
     end
 
-    unsignify_newline
-
-    dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
-    dbg @nesting_stack.dbgstack.red
-
-    ret
-  end
-
-  def hard_pop_nest(count : Int32)
-    @nesting_stack.hard_pop count
-    dbg ">> HARD POPPED NEST >> ".red
-    dbg @nesting_stack.dbgstack.red
-  end
-
-  def current_nest_indent : Int32
-    @nesting_stack.last.indent
-  end
-
-
-  def check_void_value(exp, location)
-    if exp.is_a?(ControlExpression)
-      raise "void value expression", location
+    def add_nest(nest_kind : Symbol, indent : Int32, match_name : String, line_block : Bool, require_end_token : Bool) : Nil
+      dbg ">> ADD NESTING:   '".white + nest_kind.to_s + "'  at " + indent.to_s
+      location = @token.location # *TODO* must be able to pass
+      @nesting_stack.add nest_kind, indent, match_name, location, line_block, require_end_token
+      dbg @nesting_stack.dbgstack.yellow
+      nil
     end
-  end
 
-  def check_void_expression_keyword
-    #dbg "check_void_expression_keyword"
-    case @token.type
-    when :IDFR
-      case @token.value
-      when :break, :next, :return
-        raise "void value expression", @token, @token.value.to_s.size
+    def de_nest(indent : Int32, end_token : Symbol, match_name : String,
+                line = @token.line_number, col = @token.column_number,
+                force = false) : Symbol
+      tmp_dbg_nest_indent = @nesting_stack.last.indent.to_s
+      tmp_dbg_nest_kind = @nesting_stack.last.nest_kind.to_s
+
+      ret = @nesting_stack.dedent indent, end_token, match_name, force
+
+      if ret.is_a? String
+        raise ret, line, col
+      end
+
+      if @one_line_nest > 0
+        @one_line_nest -= 1
+      end
+
+      unsignify_newline
+
+      dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
+      dbg @nesting_stack.dbgstack.red
+
+      ret
+    end
+
+    def hard_pop_nest(count : Int32)
+      @nesting_stack.hard_pop count
+      dbg ">> HARD POPPED NEST >> ".red
+      dbg @nesting_stack.dbgstack.red
+    end
+
+    def current_nest_indent : Int32
+      @nesting_stack.last.indent
+    end
+
+    def check_void_value(exp, location)
+      if exp.is_a?(ControlExpression)
+        raise "void value expression", location
       end
     end
-  end
 
-  def check(token_types : Array)
-    raise "expecting any of these tokens: #{token_types.join ", "} (not '#{@token.type.to_s}')", @token unless token_types.any? { |type| @token.type == type }
-  end
-
-  def check(token_type)
-    raise "expecting token '#{token_type}', not '#{@token.to_s}'", @token unless token_type == @token.type
-  end
-
-  def check_token(value)
-    raise "expecting token '#{value}', not '#{@token.to_s}'", @token unless @token.type == :TOKEN && @token.value == value
-  end
-
-  def check_idfr(value)
-    raise "expecting identifier '#{value}', not '#{@token.to_s}'", @token unless @token.keyword?(value)
-  end
-
-  def check_idfr
-    check :IDFR
-    @token.value.to_s
-  end
-
-  def check_const
-    check :CONST
-    @token.value.to_s
-  end
-
-  def unexpected_token(token = @token.to_s, msg = nil)
-    if msg
-      raise "unexpected token: #{token} (#{msg})", @token
-    else
-      raise "unexpected token: #{token}", @token
-    end
-  end
-
-  def unexpected_token_in_atomic
-    if unclosed = @unclosed_stack.last?
-      raise "unterminated #{unclosed.name}", unclosed.location
+    def check_void_expression_keyword
+      # dbg "check_void_expression_keyword"
+      case @token.type
+      when :IDFR
+        case @token.value
+        when :break, :next, :return
+          raise "void value expression", @token, @token.value.to_s.size
+        end
+      end
     end
 
-    unexpected_token
+    def check(token_types : Array)
+      raise "expecting any of these tokens: #{token_types.join ", "} (not '#{@token.type.to_s}')", @token unless token_types.any? { |type| @token.type == type }
+    end
+
+    def check(token_type)
+      raise "expecting token '#{token_type}', not '#{@token.to_s}'", @token unless token_type == @token.type
+    end
+
+    def check_token(value)
+      raise "expecting token '#{value}', not '#{@token.to_s}'", @token unless @token.type == :TOKEN && @token.value == value
+    end
+
+    def check_idfr(value)
+      raise "expecting identifier '#{value}', not '#{@token.to_s}'", @token unless kwd?(value)
+    end
+
+    def check_idfr
+      check :IDFR
+      @token.value.to_s
+    end
+
+    def check_const
+      check :CONST
+      @token.value.to_s
+    end
+
+    def unexpected_token(token = @token.to_s, msg = nil)
+      if msg
+        raise "unexpected token: #{token} (#{msg})", @token
+      else
+        raise "unexpected token: #{token}", @token
+      end
+    end
+
+    def unexpected_token_in_atomic
+      if unclosed = @unclosed_stack.last?
+        raise "unterminated #{unclosed.name}", unclosed.location
+      end
+
+      unexpected_token
+    end
+
+    def is_var?(name)
+      return true if @in_macro_expression
+
+      name = name.to_s
+      name == "self" || @scope_stack.cur_has?(name)
+    end
+
+    def add_instance_var(name)
+      return if @in_macro_expression
+
+      @instance_vars.try &.add name
+    end
+
+    def self.free_var_name?(name)
+      # *TODO* - this should be changed in Onyx - any length free var names possible!
+      # *TODO* where does it fuck up atm? Must we make a lookup–table back and forth?
+
+      # name.size == 1 || (name.size == 2 && name[1].digit?)
+      true
+    end
+
+    # token+position state backing/restoring (stacked via function–call scopes)
+    def backup_tok
+      token = Token.new
+      token.copy_from @token
+      {current_pos, @line_number, @column_number, @indent, token}
+    end
+
+    def restore_tok(backup : {Int32, Int32, Int32, Int32, Token})
+      self.current_pos, @line_number, @column_number, @indent, token = backup
+      @token.copy_from token
+    end
+
+    def backup_pos
+      {current_pos, @line_number, @column_number, @indent}
+    end
+
+    def restore_pos(backup : {Int32, Int32, Int32, Int32})
+      self.current_pos, @line_number, @column_number, @indent = backup
+    end
+
+    # DEBUG UTILS #
+    def dbginc
+      @dbgindent__ += 4
+    end
+
+    def dbgdec
+      @dbgindent__ -= 4
+    end
+
+    def dbg(str : String)
+      puts (" " * @dbgindent__) + str + "  (now:'" + @token.type.to_s + ":" +
+        @token.value.to_s +
+        "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s + "])"
+    end
   end
-
-  def is_var?(name)
-    return true if @in_macro_expression
-
-    name = name.to_s
-    name == "self" || @scope_stack.cur_has?(name)
-  end
-
-  def add_instance_var(name)
-    return if @in_macro_expression
-
-    @instance_vars.try &.add name
-  end
-
-  def self.free_var_name?(name)
-    # *TODO* - this should be changed in Onyx - any length free var names possible!
-    #name.size == 1 || (name.size == 2 && name[1].digit?)
-    true
-  end
-
-
-  # token+position state backing/restoring (stacked via function–call scopes)
-  def backup_tok
-    token = Token.new
-    token.copy_from @token
-    {current_pos, @line_number, @column_number, @indent, token}
-  end
-
-  def restore_tok(backup: {Int32, Int32, Int32, Int32, Token})
-    self.current_pos, @line_number, @column_number, @indent, token = backup
-    @token.copy_from token
-  end
-
-  def backup_pos
-    {current_pos, @line_number, @column_number, @indent}
-  end
-
-  def restore_pos(backup: {Int32, Int32, Int32, Int32})
-    self.current_pos, @line_number, @column_number, @indent = backup
-  end
-
-
-
-  # DEBUG UTILS #
-  def dbginc
-    @dbgindent__ += 4
-  end
-
-  def dbgdec
-    @dbgindent__ -= 4
-  end
-
-  def dbg(str : String)
-    puts (" " * @dbgindent__) + str + "  (now:'" + @token.type.to_s + ":" +
-         @token.value.to_s +
-         "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s + "])"
-  end
-
-end
-
 end # module

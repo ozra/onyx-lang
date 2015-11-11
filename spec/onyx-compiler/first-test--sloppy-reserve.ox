@@ -102,8 +102,6 @@ alias CompactInt    = I32
 — —end
 
 
-\default-int=StdInt
-
 — first comment
 a = 47  —another comment
 char = c"a"
@@ -112,7 +110,7 @@ say "char: " + char.to-s + " (" + typeof(char).to-s + ")"
 —| (NO LONGER) weirdly placed comment
 
 
-— foo(a, b, c I32) ->
+— \ foo(a, b, c I32) ->
 —     Str(a + b) + c.to-s
 
 the-str = "kjhgkjh" \
@@ -127,28 +125,28 @@ if (a == 47 &&
 )
     say "1"
 
-if (a is 48 - 1 and  -- *TODO* flag Continuation manually, se we need null, true, false :-/
-    a isnt 49
+if (a == 48 - 1 &&
+    a != 49
 ) =>
     say "2"
 
-if likely true =>
+if true =>
     i = 1
 
-    if (a is 48 - 1 and
-        (not(a is 49) or a isnt 49)
+    if (a == 48 - 1 &&
+        a != 49
     ):
         say "3"
 
     while i > 0
         i -= 1
-        say "3.1" if true isnt false
-        if likely not (true is false)
+        say "3.1" if true
+        if true
             say "3.2"
         if true => say "3.3"
         if true do say "3.4"
         if true then say "4 "; say "5"; if true then say "5.1"
-        if unlikely false: say "NO" else do say "5.2a "; say "5.3a"; if true: say "5.4a"
+        if false: say "NO" else do say "5.2a "; say "5.3a"; if true: say "5.4a"
         if false : else do say "5.2b "; say "5.3b"; if true => say "5.4b"
         if false =>
             — comment after indent
@@ -157,7 +155,7 @@ if likely true =>
             if 47: say "NO"
         if true
             — comment after indent
-            if not false then say "6"
+            if 47 then say "6"
             — for i in 0..6 => p i.to-s; say "."
             if 47 => say "7"
 
@@ -169,7 +167,7 @@ end-if
 —     say "Yeay 47 == 47"
 
 
-— zoo( \
+— \zoo( \
 —     a, \
 —     b, \
 —     c I32 \
@@ -188,7 +186,7 @@ say "should be 3: " + ac.to-s
 DEBUG-SEPARATOR
 
 — -#pure -#private
-def zoo(a, b, ...c I32) Str ->  \pure
+def zoo(a, b, ...c I32) Str ->  — #pure#
     if true:
         i = 1
 
@@ -251,11 +249,11 @@ end
 def qwo(a I32, b ~I32) ->
 end
 
-def qwo2(a 'I32, b I32) -> end
+def qwo2(a 'I32, b I32~) -> end
 
 def qwo3(a I32, b mut I32) Str -> — Str
 
-def qwo4(a I32; b I32) ->
+def qwo4(a I32; b I32 mut) ->
 end
 
 qwo2 1, 2
@@ -471,7 +469,7 @@ b = (a Str, _ I32, b 'Bool; c F64) ->
     "{{a}} {{x}}" — t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Int32, b 'Str, c 'Int32) -> a.to-s + b + c.to-s
+c = (a ~Int32', b 'Str', c 'Int32~) -> a.to-s + b + c.to-s
 
 p b.call "23.5 Closured Lambda says", 1, true, 0.47
 — p b("2 Closured Lambda says", 1, true, 0.47)
@@ -615,18 +613,14 @@ list.each-with-index ~>
 for val in list
     say val
 
-list.each |val|
-  say("do nest" + val.to_s)
-end
-
 for val in list =>
     say val
 
-for crux in list do say "do nest" + crux.to_s
+for val in list => say val
 
-for val in list: say ": nest" + val.to_s
+for val in list: say val
 
-for val in list =>  "=> nest" + val.to_s
+for val in list do say val
 
 for ,ix in list
     say ix
@@ -655,24 +649,22 @@ for val[ix] in ["c", "b", "a"]
 for val[ix] in {"c", "b", "a"}
     say "{{val}}, {{ix}}"
 
-for val[ix] in {"c", "b", "a"} -- by -1
+for val[ix] in {"c", "b", "a"} by -1
     say "{{val}}, {{ix}}"
 
-for val[ix] in ["c", "b", "a"] -- by 2
+for val[ix] in ["c", "b", "a"] by 2
     say "{{val}}, {{ix}}"
 
 
 trait TheTrait
     is-cool-traited?() -> true
-end-trait
+end
 
-trait AnotherTrait[S1]
-    -- another-val = 0  - "can't use instance variables at the top level"
+trait AnotherTrait
+    another-val = 0
 
     val() -> @another-val
     valhalla() -> abstract
-    -- valhalla2() -> abstract; say 47 -- should fail - and does
-    valhalla3() -> abstract
 end
 
 type Qwa
@@ -706,10 +698,6 @@ say "declare a Foo type"
 type Foo[S1] << Bar
     mixin AnotherTrait[S1]
 
-    foo-x I64 = 47  \get \set
-    foo-y = 48  \prop           -- better to use `\get \set` then `\prop`
-    foo-z = "bongo"  \get
-
     init(a S1) ->@
         @foo-a = a
 
@@ -717,14 +705,11 @@ type Foo[S1] << Bar
 
     -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
-    fn-1aa(x) ->>  \pub  nil
+    fn-1aa(x) ->> nil
 
-    \priv \foo-bar
-    \inline
-    \pure
     fn-1ba(x) ->>! nil
 
-    fn-1ca(x) ->>!  \pure
+    fn-1ca(x) ->>!
 
     -- fn-1ab(x) => nil
 
@@ -758,15 +743,15 @@ type Foo[S1] << Bar
     def fn-b(a S1, b I32) -> — fdsa
         "b: {{a}}, {{b}}"
 
-    \private
-    fn-c(a, b S1) S1 ->>  \redef \inline
+    — -#private
+    fn-c(a, b S1) S1 ->> — -#redef -#inline
         "c: {{a}}, {{b}}"
 
     end-def
 
-    \private
+    — private
     — fn-c(a, b I32) redef private ->
-    fn-c(a, b I32) -> \redef
+    fn-c(a, b I32) -> — redef
         "c: {{a}}, {{b}}"
         — t"c: {a}, {b}"
 

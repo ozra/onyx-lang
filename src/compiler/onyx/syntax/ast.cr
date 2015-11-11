@@ -1,8 +1,22 @@
 module Crystal
   # Base class for nodes in the grammar.
   abstract class ASTNode
+    property onyx_node # perhaps this should go only on specific nodes?
     @onyx_node = false
-    property onyx_node    # perhaps this should go only on specific nodes?
+  end
+
+  # Assign expression.
+  #
+  #     target '=' value
+  #
+  class Assign < ASTNode
+    @declare_composite = false
+    property :declare_composite
+
+    def initialize(@target, @value, @declare_composite = false)
+    end
+
+    def_equals_and_hash @target, @value, @declare_composite
   end
 
   # A method call.
@@ -14,14 +28,13 @@ module Crystal
   #     [ obj '.' ] name arg [ ',' arg ]* [ block ]
   #   |
   #     arg name arg
-  #
+#
   # The last syntax is for infix operators, and name will be
   # the symbol of that operator instead of a string.
   #
   class Call < ASTNode
     def_equals_and_hash obj, name, args, block, block_arg, named_args, global, onyx_node
   end
-
 
   # For expression.
   #
@@ -54,7 +67,6 @@ module Crystal
 
     def_equals_and_hash @value_id, @index_id, @iterable, @stepping, @body
   end
-
 end
 
 require "./to_s"

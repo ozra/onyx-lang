@@ -9,12 +9,19 @@ module Crystal
       normalizer.exp_nest = 1 if inside_exp
       node = normalizer.normalize(node)
       puts node if ENV["SSA"]? == "1"
+
+
+      # if   true  # *TEMP* *DEBUG* *TODO*
+      #   puts "NORMALIZED PROGRAM:"
+      #   puts node.to_s
+      # end
+
+
       node
     end
   end
 
   class Normalizer < Transformer
-
     # Convert For to expr.each*:
     #
     # From:
@@ -40,60 +47,56 @@ module Crystal
     def transform(node : For) : ASTNode
       method_name :: String
 
-      #if !(node.stepping && node.stepping != 1)
-        if (v = node.value_id) && (i = node.index_id)
-          method_name = "each_with_index"
-          block_args = [v, i]
+      # if !(node.stepping && node.stepping != 1)
+      if (v = node.value_id) && (i = node.index_id)
+        method_name = "each_with_index"
+        block_args = [v, i]
+      elsif (v = node.value_id)
+        method_name = "each"
+        block_args = [v]
+      else
+        method_name = "each_index"
+        block_args = [node.index_id.not_nil!]
+      end
 
-        elsif (v = node.value_id)
-          method_name = "each"
-          block_args = [v]
+      block = Block.new(
+                block_args,
+                node.body.transform(self).at(node.body)
+              )
 
-        else
-          method_name = "each_index"
-          block_args = [node.index_id.not_nil!]
+      result = Call.new(
+                 node.iterable.transform(self),
+                 method_name,
+                 [] of ASTNode,
+                 block
+               ).at(node)
 
-        end
+      p result.to_s
+      # dump foo.to_s
 
-        block = Block.new(
-          block_args,
-          node.body.transform(self).at(node.body)
-        )
+      # else
+      # *TODO* create a while construct
+      # create it in a block
 
-        result = Call.new(
-          node.iterable.transform(self),
-          method_name,
-          [] of ASTNode,
-          block
-        ).at(node)
+      # if stepping
+      #   if stepping.is_a? NumberLiteral
+      #     if stepping.value.to_i64 > 0
 
-        p result.to_s
-        # dump foo.to_s
+      #     elsif stepping.value.to_i64 < 0
 
-      #else
-        # *TODO* create a while construct
-        # create it in a block
+      #     else
+      #       raise "can't have a loop iteration step of 0!"
+      #     end
+      #   else
+      #     dynamic step
+#
+      #   end
+      # else
 
-
-        # if stepping
-        #   if stepping.is_a? NumberLiteral
-        #     if stepping.value.to_i64 > 0
-
-        #     elsif stepping.value.to_i64 < 0
-
-        #     else
-        #       raise "can't have a loop iteration step of 0!"
-        #     end
-        #   else
-        #     dynamic step
-        #   end
-        # else
-
-        # end
-      #end
+      # end
+      # end
       result
     end
-
 
     # Transform require to its source code.
     # The source code can be a Nop if the file was already required.
@@ -108,7 +111,6 @@ module Crystal
         nodes = Array(ASTNode).new(filenames.size)
         filenames.each do |filename|
           if @program.add_to_requires(filename)
-
             if filename.ends_with? ".ox"
               parser = OnyxParser.new File.read(filename)
             else
@@ -129,10 +131,8 @@ module Crystal
     rescue ex
       node.raise "while requiring \"#{node.string}\": #{ex.message}"
     end
-
   end
 end
-
 
 # @[AlwaysInline]
 # def for_increasing(begin, end, step)
