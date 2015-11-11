@@ -1,7 +1,7 @@
 require "./unix_socket"
 
 class UNIXServer < UNIXSocket
-  def initialize(@path : String, socktype =  Socket::Type::STREAM : Socket::Type, backlog = 128)
+  def initialize(@path : String, socktype = Socket::Type::STREAM : Socket::Type, backlog = 128)
     File.delete(path) if File.exists?(path)
 
     sock = create_socket(LibC::AF_UNIX, socktype.value, 0)
@@ -26,10 +26,20 @@ class UNIXServer < UNIXSocket
   end
 
   def accept
-    client_fd = LibC.accept(@fd, out client_addr, out client_addrlen)
-    sock = UNIXSocket.new(client_fd)
-    sock.sync = sync?
-    sock
+    loop do
+      client_fd = LibC.accept(@fd, out client_addr, out client_addrlen)
+      if client_fd == -1
+        if LibC.errno == Errno::EAGAIN
+          wait_readable
+        else
+          raise Errno.new("Error accepting socket at #{path}")
+        end
+      else
+        sock = UNIXSocket.new(client_fd)
+        sock.sync = sync?
+        return sock
+      end
+    end
   end
 
   def accept

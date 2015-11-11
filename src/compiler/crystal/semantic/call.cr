@@ -33,7 +33,6 @@ class Crystal::Call
     ::raise "Zero target defs for #{self}"
   end
 
-
   def update_input(from)
     recalculate
   end
@@ -527,16 +526,16 @@ class Crystal::Call
     when NonGenericModuleType
       ancestors = parent_visitor.scope.ancestors
       index_of_ancestor = ancestors.index(lookup).not_nil!
-      parents = ancestors[index_of_ancestor + 1 .. -1]
+      parents = ancestors[index_of_ancestor + 1..-1]
     when GenericModuleType
       ancestors = parent_visitor.scope.ancestors
       index_of_ancestor = ancestors.index { |ancestor| ancestor.is_a?(IncludedGenericModule) && ancestor.module == lookup }.not_nil!
-      parents = ancestors[index_of_ancestor + 1 .. -1]
+      parents = ancestors[index_of_ancestor + 1..-1]
     when GenericType
       ancestors = parent_visitor.scope.ancestors
       index_of_ancestor = ancestors.index { |ancestor| ancestor.is_a?(InheritedGenericClass) && ancestor.extended_class == lookup }
       if index_of_ancestor
-        parents = ancestors[index_of_ancestor + 1 .. -1]
+        parents = ancestors[index_of_ancestor + 1..-1]
       else
         parents = ancestors
       end
@@ -635,7 +634,7 @@ class Crystal::Call
   def match_block_arg(match)
     block_arg = match.def.block_arg
     return nil, nil unless block_arg
-    return nil, nil  unless ((yields = match.def.yields) && yields > 0) || match.def.uses_block_arg
+    return nil, nil unless match.def.yields || match.def.uses_block_arg
 
     yield_vars = nil
     block_arg_type = nil
@@ -721,8 +720,8 @@ class Crystal::Call
           if !matched && !void_return_type?(match.context, output)
             if output.is_a?(ASTNode) && !output.is_a?(Underscore) && block_type.no_return?
               block_type = ident_lookup.lookup_node_type(output).virtual_type
-              block.body.type = block_type
-              block.body.freeze_type = block_type
+              block.type = block_type
+              block.freeze_type = block_type
               block_arg_type = mod.fun_of(fun_args, block_type)
             else
               raise "expected block to return #{output}, not #{block_type}"
@@ -733,13 +732,15 @@ class Crystal::Call
         if block_arg_restriction_output
           if block_arg_restriction_output.is_a?(ASTNode) && !block_arg_restriction_output.is_a?(Underscore)
             output_type = ident_lookup.lookup_node_type(block_arg_restriction_output).virtual_type
-            block.body.freeze_type = output_type
+            block.type = output_type
+            block.freeze_type = output_type
             block_arg_type = mod.fun_of(fun_args, output_type)
           else
             cant_infer_block_return_type
           end
         else
           block.body.type = mod.void
+          block.type = mod.void
           block_arg_type = mod.fun_of(fun_args, mod.void)
         end
       end
@@ -756,7 +757,7 @@ class Crystal::Call
       # Similar to above: we check that the block's type matches the block arg specification,
       # and we delay it if possible.
       if output = block_arg_restriction_output
-        if !block.body.type?
+        if !block.type?
           if output.is_a?(ASTNode) && !output.is_a?(Underscore)
             begin
               block_type = ident_lookup.lookup_node_type(output).virtual_type
@@ -767,7 +768,7 @@ class Crystal::Call
             cant_infer_block_return_type
           end
         else
-          block_type = block.body.type
+          block_type = block.type
           matched = MatchesLookup.match_arg(block_type, output, match.context)
           if !matched && !void_return_type?(match.context, output)
             if output.is_a?(ASTNode) && !output.is_a?(Underscore)
@@ -789,7 +790,7 @@ class Crystal::Call
             end
           end
         end
-        block.body.freeze_type = block_type
+        block.freeze_type = block_type
       end
     end
 
@@ -916,7 +917,7 @@ class Crystal::Call
 
     args = MetaVars.new
 
-    if self_type#.is_a?(Type)
+    if self_type # .is_a?(Type)
       args["self"] = MetaVar.new("self", self_type)
     end
 

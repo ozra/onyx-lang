@@ -62,14 +62,14 @@ class Object
   end
 
   # Comparison operator. Returns 0 if the two objects are equal,
-  # a negative number if this object is considered less than `other`,
+  # a negative number if this object is considered less than *other*,
   # or a positive number otherwise.
   #
   # Subclasses define this method to provide class-specific ordering.
   #
   # ```
   # # Sort in a descending way
-  # [4, 7, 2].sort { |x, y| x <=> y } #=> [7, 4, 2]
+  # [4, 7, 2].sort { |x, y| x <=> y } # => [7, 4, 2]
   # ```
   abstract def <=>(other)
 
@@ -99,7 +99,7 @@ class Object
   # as this will in turn call `to_s(io)` on it.
   abstract def to_s(io : IO)
 
-  # Returns a String representation of this object.
+  # Returns a `String` representation of this object.
   #
   # Similar to `to_s`, but usually returns more information about
   # this object.
@@ -128,10 +128,10 @@ class Object
   # in order to perform operations on intermediate results within the chain.
   #
   # ```
-  # (1..10)                .tap {|x| puts "original: #{x.inspect}"}
-  #   .to_a                .tap {|x| puts "array: #{x.inspect}"}
-  #   .select {|x| x%2==0} .tap {|x| puts "evens: #{x.inspect}"}
-  #   .map {|x| x*x}       .tap {|x| puts "squares: #{x.inspect}"}
+  # (1..10).tap { |x| puts "original: #{x.inspect}" }
+  #        .to_a.tap { |x| puts "array: #{x.inspect}" }
+  #             .select { |x| x % 2 == 0 }.tap { |x| puts "evens: #{x.inspect}" }
+  #                                       .map { |x| x*x }.tap { |x| puts "squares: #{x.inspect}" }
   # ```
   def tap
     yield self
@@ -160,7 +160,7 @@ class Object
   #
   # ```
   # str = "hello"
-  # str.itself.object_id == str.object_id #=> true
+  # str.itself.object_id == str.object_id # => true
   # ```
   def itself
     self
@@ -459,8 +459,8 @@ class Object
   # end
   #
   # wrapper = StringWrapper.new "HELLO"
-  # wrapper.downcase #=> "hello"
-  # wrapper.gsub(/E/, "A") #=> "HALLO"
+  # wrapper.downcase       # => "hello"
+  # wrapper.gsub(/E/, "A") # => "HALLO"
   # ```
   macro delegate(method, to_object)
     def {{method.id}}(*args)
@@ -544,8 +544,8 @@ class Object
   # end
   #
   # wrapper = StringWrapper.new "HELLO"
-  # wrapper.downcase #=> "hello"
-  # wrapper.gsub(/E/, "A") #=> "HALLO"
+  # wrapper.downcase       # => "hello"
+  # wrapper.gsub(/E/, "A") # => "HALLO"
   # ```
   macro forward_missing_to(delegate)
     macro method_missing(name, args, block)

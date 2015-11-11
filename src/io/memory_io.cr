@@ -1,5 +1,5 @@
-# An IO object that reads and writes from a string in memory.
-class StringIO
+# An IO object that reads and writes from a buffer in memory.
+class MemoryIO
   include IO
 
   # Returns the internal buffer as a `Pointer(UInt8)`.
@@ -8,13 +8,13 @@ class StringIO
   # Same as `size`.
   getter bytesize
 
-  # Creates an empty StringIO with the given initialize capactiy for
+  # Creates an empty MemoryIO with the given initialize capactiy for
   # the internal buffer.
   #
   # ```
-  # io = StringIO.new
-  # io.pos  #=> 0
-  # io.read #=> ""
+  # io = MemoryIO.new
+  # io.pos  # => 0
+  # io.read # => ""
   # ```
   def initialize(capacity = 64 : Int)
     String.check_capacity_in_bounds(capacity)
@@ -26,14 +26,14 @@ class StringIO
     @closed = false
   end
 
-  # Creates a StringIO whose contents are the contents of *string*
+  # Creates a MemoryIO whose contents are the contents of *string*
   # (which are duplicated, as strings are immutable).
   #
   # The IO starts at position zero for reading and writing.
   #
   # ```
-  # io = StringIO.new "hello"
-  # io.pos #=> 0
+  # io = MemoryIO.new "hello"
+  # io.pos # => 0
   # io.gets(2).should eq("he")
   # ```
   def self.new(string : String)
@@ -56,7 +56,7 @@ class StringIO
 
     count = slice.size
 
-    return count if count < 0
+    return if count == 0
 
     new_bytesize = bytesize + count
     if new_bytesize > @capacity
@@ -72,7 +72,7 @@ class StringIO
     @pos += count
     @bytesize = @pos if @pos > @bytesize
 
-    count
+    nil
   end
 
   # :nodoc:
@@ -137,24 +137,24 @@ class StringIO
   # Clears the internal buffer and resets the position to zero.
   #
   # ```
-  # io = StringIO.new "hello"
-  # io.gets(3) #=> "hel"
+  # io = MemoryIO.new "hello"
+  # io.gets(3) # => "hel"
   # io.clear
-  # io.pos     #=> 0
-  # io.gets_to_end    #=> ""
+  # io.pos         # => 0
+  # io.gets_to_end # => ""
   # ```
   def clear
     @bytesize = 0
     @pos = 0
   end
 
-  # Returns `true` if this StringIO has no contents.
+  # Returns `true` if this MemoryIO has no contents.
   #
   # ```
-  # io = StringIO.new
-  # io.empty? #=> true
+  # io = MemoryIO.new
+  # io.empty? # => true
   # io.print "hello"
-  # io.empty? #=> false
+  # io.empty? # => false
   # ```
   def empty?
     @bytesize == 0
@@ -163,7 +163,7 @@ class StringIO
   # Rewinds this IO to the initial position (zero).
   #
   # ```
-  # io = StringIO.new "hello"
+  # io = MemoryIO.new "hello"
   # io.gets(2) => "he"
   # io.rewind
   # io.gets(2) #=> "he"
@@ -176,8 +176,8 @@ class StringIO
   # Returns the total number of bytes in this IO.
   #
   # ```
-  # io = StringIO.new "hello"
-  # io.size #=> 5
+  # io = MemoryIO.new "hello"
+  # io.size # => 5
   # ```
   def size
     @bytesize
@@ -191,12 +191,12 @@ class StringIO
   # Seeks to a given *offset* (in bytes) according to the *whence* argument.
   #
   # ```
-  # io = StringIO.new("abcdef")
-  # io.gets(3) #=> "abc"
+  # io = MemoryIO.new("abcdef")
+  # io.gets(3) # => "abc"
   # io.seek(1, IO::Seek::Set)
-  # io.gets(2) #=> "bc"
+  # io.gets(2) # => "bc"
   # io.seek(-1, IO::Seek::Current)
-  # io.gets(1) #=> "c"
+  # io.gets(1) # => "c"
   # ```
   def seek(offset, whence = Seek::Set : Seek)
     check_open
@@ -216,10 +216,10 @@ class StringIO
   # Returns the current position (in bytes) of this IO.
   #
   # ```
-  # io = StringIO.new "hello"
-  # io.pos     #=> 0
-  # io.gets(2) #=> "he"
-  # io.pos     #=> 2
+  # io = MemoryIO.new "hello"
+  # io.pos     # => 0
+  # io.gets(2) # => "he"
+  # io.pos     # => 2
   # ```
   def pos
     tell
@@ -228,9 +228,9 @@ class StringIO
   # Sets the current position (in bytes) of this IO.
   #
   # ```
-  # io = StringIO.new "hello"
+  # io = MemoryIO.new "hello"
   # io.pos = 3
-  # io.gets #=> "lo"
+  # io.gets # => "lo"
   # ```
   def pos=(value)
     raise ArgumentError.new("negative pos") if value < 0
@@ -241,9 +241,9 @@ class StringIO
   # Closes this IO. Further operations on this IO will raise an `IO::Error`.
   #
   # ```
-  # io = StringIO.new "hello"
+  # io = MemoryIO.new "hello"
   # io.close
-  # io.gets_to_end #=> IO::Error: closed stream
+  # io.gets_to_end # => IO::Error: closed stream
   # ```
   def close
     @closed = true
@@ -252,10 +252,10 @@ class StringIO
   # Determines if this IO is closed.
   #
   # ```
-  # io = StringIO.new "hello"
-  # io.closed? #=> false
+  # io = MemoryIO.new "hello"
+  # io.closed? # => false
   # io.close
-  # io.closed? #=> true
+  # io.closed? # => true
   # ```
   def closed?
     @closed
@@ -264,9 +264,9 @@ class StringIO
   # Returns a new String that contains the contents of the internal buffer.
   #
   # ```
-  # io = StringIO.new
+  # io = MemoryIO.new
   # io.print 1, 2, 3
-  # io.to_s #=> "123"
+  # io.to_s # => "123"
   # ```
   def to_s
     String.new @buffer, @bytesize
@@ -276,10 +276,10 @@ class StringIO
   # modifies the internal buffer.
   #
   # ```
-  # io = StringIO.new "hello"
+  # io = MemoryIO.new "hello"
   # slice = io.to_slice
   # slice[0] = 97_u8
-  # io.gets_to_end #=> "aello"
+  # io.gets_to_end # => "aello"
   # ```
   def to_slice
     Slice.new(@buffer, @bytesize)

@@ -1,8 +1,8 @@
 # The JSON module allows parsing and generating [JSON](http://json.org/) documents.
 #
-# ### Parsing and generating with `JSON::Mapping`
+# ### Parsing and generating with `JSON#mapping`
 #
-# Use `JSON::Mapping` to define how an object is mapped to JSON, making it
+# Use `JSON#mapping` to define how an object is mapped to JSON, making it
 # the recommended easy, type-safe and efficient option for parsing and generating
 # JSON. Refer to that module's documentation to learn about it.
 #
@@ -14,25 +14,25 @@
 # ```
 # require "json"
 #
-# value = JSON.parse("[1, 2, 3]") #:: JSON::Type
+# value = JSON.parse("[1, 2, 3]") # :: JSON::Type
 # # value[0] # compile-error, compiler can't know that value is indeed an Array
 # array = value as Array
-# array[0] #:: JSON::Type
-# (array[0] as Int) + 10 #=> 11
+# array[0]               # :: JSON::Type
+# (array[0] as Int) + 10 # => 11
 # ```
 #
 # The above becomes tedious quickly, but can be useful for handling dynamic JSON content.
 #
 # ### Generating with `JSON::Builder`
 #
-# Use `JSON::Buidler` to generate JSON on the fly by directly emitting data
+# Use `JSON::Builder` to generate JSON on the fly by directly emitting data
 # to an `IO`.
 #
 # ### Generating with `to_json`
 #
 # `to_json` and `to_json(IO)` methods are provided for primitive types, but you
 # need to define `to_json(IO)` for custom objects, either manually or using
-# `JSON::Mapping`.
+# `JSON#mapping`.
 module JSON
   # Exception thrown on a JSON parse error.
   class ParseException < Exception
