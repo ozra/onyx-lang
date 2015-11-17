@@ -120,6 +120,7 @@ lib LibCrypto
   fun evp_md_ctx_copy = EVP_MD_CTX_copy(dst : EVP_MD_CTX, src : EVP_MD_CTX) : Int32
   fun evp_md_ctx_md = EVP_MD_CTX_md(ctx : EVP_MD_CTX) : EVP_MD
   fun evp_md_size = EVP_MD_size(md : EVP_MD) : Int32
+  fun evp_md_block_size = EVP_MD_block_size(md : EVP_MD) : LibC::Int
   fun evp_digestfinal_ex = EVP_DigestFinal_ex(ctx : EVP_MD_CTX, md : UInt8*, size : UInt32*) : Int32
 
   fun evp_get_cipherbyname = EVP_get_cipherbyname(name : UInt8*) : EVP_CIPHER
@@ -162,4 +163,6 @@ lib LibCrypto
   fun md5_final = MD5_Final(md : UInt8*, c : MD5Context*) : Int
   fun md5_transform = MD5_Transform(c : MD5Context*, b : UInt8*)
   fun md5 = MD5(data : UInt8*, lengh : LibC::SizeT, md : UInt8*) : UInt8*
+
+  fun pkcs5_pbkdf2_hmac_sha1 = PKCS5_PBKDF2_HMAC_SHA1(pass : LibC::Char*, passlen : LibC::Int, salt : UInt8*, saltlen : LibC::Int, iter : LibC::Int, keylen : LibC::Int, out : UInt8*) : LibC::Int
 end
