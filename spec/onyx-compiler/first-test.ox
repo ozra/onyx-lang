@@ -48,46 +48,46 @@ f(() ->
 — alias Any = Float64 — Any just doesn't work having atm - Object disallowed
 
 
-alias Seq = Array
-alias Map = Hash
-alias Tag = Symbol
-alias Str = String
-alias I8  = Int8
-alias I16 = Int16
-alias I32 = Int32
-alias I64 = Int64
-alias U8  = UInt8
-alias U16 = UInt16
-alias U32 = UInt32
-alias U64 = UInt64
-alias F32 = Float32
-alias F64 = Float64
-alias Ptr = Pointer
+-- alias Seq = Array
+-- alias Map = Hash
+-- alias Tag = Symbol
+-- alias Str = String
+-- alias I8  = Int8
+-- alias I16 = Int16
+-- alias I32 = Int32
+-- alias I64 = Int64
+-- alias U8  = UInt8
+-- alias U16 = UInt16
+-- alias U32 = UInt32
+-- alias U64 = UInt64
+-- alias F32 = Float32
+-- alias F64 = Float64
+-- alias Ptr = Pointer
 
-— type Str = String   — alias
-— type I32 = Int32
-— type UStr < String   — "unique" (inherited)
-— type UI32 < Int32
+-- — type Str = String   — alias
+-- — type I32 = Int32
+-- — type UStr < String   — "unique" (inherited)
+-- — type UI32 < Int32
 
-alias SomeInt = Int
+-- alias SomeInt = Int
 
-ifdef x86_64
-   alias StdInt   = I64
-   alias StdUInt   = U64
-   alias StdReal   = F64
-else
-   alias StdInt   = I32
-   alias StdUInt   = U32
-   alias StdReal   = F64
-end
+-- ifdef x86_64
+--    alias StdInt   = I64
+--    alias StdUInt   = U64
+--    alias StdReal   = F64
+-- else
+--    alias StdInt   = I32
+--    alias StdUInt   = U32
+--    alias StdReal   = F64
+-- end
 
-alias Nat         = StdInt    — *TODO* Nat should have changes to methods. It's supposed to be positive only, and shifts etc. will be done with unsigned version
-alias Pos         = StdInt
-alias Offs        = StdInt
-alias Size        = StdInt
-alias Index       = StdInt
-alias FastInt      = StdInt
-alias CompactInt   = I32
+-- alias Nat         = StdInt    — *TODO* Nat should have changes to methods. It's supposed to be positive only, and shifts etc. will be done with unsigned version
+-- alias Pos         = StdInt
+-- alias Offs        = StdInt
+-- alias Size        = StdInt
+-- alias Index       = StdInt
+-- alias FastInt      = StdInt
+-- alias CompactInt   = I32
 
 
 — alias Rope = StringBuilder
