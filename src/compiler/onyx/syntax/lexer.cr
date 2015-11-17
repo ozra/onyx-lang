@@ -52,12 +52,21 @@ module Crystal
 
     end
 
+
+    def dbg_lex(s)
+      puts s
+    end
+
+    def dbg_ind(s)
+      # puts s
+    end
+
     def filename=(filename)
       @filename = filename
     end
 
     def next_token
-      dbg "next_token() - curch ='#{curch.ord}'"
+      dbg_lex "next_token() - curch ='#{curch.ord}'"
       prev_type = @token.type
       reset_token
 
@@ -87,8 +96,9 @@ module Crystal
         start = cur_pos
 
         # all pragmas / annotations begin with small cap latin ascii for now
-        if ('a' <= curch <= 'z')
-          return scan_pragma start
+        # NOPE! - Added caps too - for now!
+        if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' )
+          return scan_pragma start - 1
         end
 
         # p "nextch after backslash = " + curch
@@ -118,7 +128,7 @@ module Crystal
 
 
       when '\n'
-        p "Got into \\n"
+        dbg_ind  "Got into \\n"
         nextch
 
         back_line = @line_number
@@ -178,13 +188,13 @@ module Crystal
           gotten_indent = cur_pos - indent_start - 1
 
           is_continuation = @next_token_continuation_state == :CONTINUATION ||
-                                    (@next_token_continuation_state == :AUTO && 
+                                    (@next_token_continuation_state == :AUTO &&
                                       ContinuationTokens.includes?(prev_type)
                                     )
 
-          p "is_continuation == #{is_continuation}"
+          dbg_ind "is_continuation == #{is_continuation}, cont_state == #{@next_token_continuation_state}"
 
-          p "gotten indent = #{gotten_indent}, current = #{@indent}"
+          dbg_ind "gotten indent = #{gotten_indent}, current = #{@indent}"
           if gotten_indent != @indent && !is_continuation
             @token.value = gotten_indent
             if gotten_indent > @indent
@@ -217,7 +227,7 @@ module Crystal
 
       when '\r'
         if nc? '\n'
-          dbg "recurse to next lap"
+          dbg_ind "recurse to next lap"
           return next_token # We don't repeat our selves for teleprinter archaic linebreak combos
         else
           raise "expected '\\n' after '\\r'"
@@ -352,7 +362,7 @@ module Crystal
           @token.type = :"-"
         end
       when '—' # em–dash!
-        p "got EMDASH"
+        # p "got EMDASH"
         if (ret = handle_comment) == false
           raise "unexpected EMDASH!"
         elsif ret.is_a? Token
@@ -818,14 +828,26 @@ module Crystal
             return check_idfr_or_keyword(:case, start)
           end
           scan_idfr(start)
+        when 'f'
+          if nc?('u') && nc?('n')
+            return check_idfr_or_keyword(:cfun, start)
+          end
+          scan_idfr(start)
         when 'l'
           if nc?('a') && nc?('s') && nc?('s')
             return check_idfr_or_keyword(:class, start)
           end
           scan_idfr(start)
         when 'o'
-          if nc?('n') && nc?('s') && nc?('t')
-            return check_idfr_or_keyword(:const, start)
+          if nc?('n') 
+            case nextch
+            when 's'
+              if nc?('t')
+                return check_idfr_or_keyword(:const, start)
+              end
+            when 'd'
+              return check_idfr_or_keyword(:cond, start)
+            end
           end
           scan_idfr(start)
         when '"'
@@ -1396,9 +1418,14 @@ module Crystal
             if nc?('y') && nc?('p') && nc?('e')
               return check_const_or_token(:Type, start)
             end
+
+          else
+            nextch
+
           end
 
-          while idfr_part?(nextch)
+          while idfr_part?(curch)
+            nextch
             # Nothing to do
           end
           @token.type = :CONST
@@ -1419,7 +1446,8 @@ module Crystal
       @token
 
     ensure
-      unless @token.type == :SPACE || @token.type == :NEWLINE
+      unless @token.type == :SPACE || @token.type == :NEWLINE || @token_type == :INDENT
+        #p "resets continuation state"
         @next_token_continuation_state = :AUTO
       end
       puts ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s + ")").blue
@@ -1539,15 +1567,17 @@ module Crystal
           nextch
           # *TODO* verify - REALLY?? Leave it to top level parse??
         when '\\'
-          p "consume_whitespace: got backslash '\\'"
-          if nc?('\n')
-            p "consume_whitespace: got '\\n'"
+          dbg_ind  "consume_whitespace: got backslash '\\'"
+          if peek_nextch == '\n'
+            dbg_ind "consume_whitespace: got '\\n'"
+            nextch
             nextch
             @line_number += 1
             @column_number = 1
             @token.passed_backslash_newline = true
           else
-            scan_pragma cur_pos - 1
+            break
+            #scan_pragma cur_pos - 1
           end
         else
         # p "consume_whitespace: done"
@@ -1588,7 +1618,7 @@ module Crystal
 
     def check_const_or_token(symbol, start)
       if idfr_part_or_end?(peek_nextch)
-        scan_idfr(start, false)
+        scan_idfr(start, false, false)
         @token.type = :CONST
       else
         nextch
@@ -1612,7 +1642,7 @@ module Crystal
     def check_idfr_or_token(type, symbol, start)
       # p "check_idfr_or_token, peek: '" + peek_nextch + "'"
       if idfr_part_or_end?(peek_nextch)
-        scan_idfr(start)
+        scan_idfr(start, true, false)
       else
         nextch
         @token.type = type
@@ -1621,7 +1651,7 @@ module Crystal
       @token
     end
 
-    def scan_idfr(start, special_end_chars = true)
+    def scan_idfr(start, special_end_chars = true, do_magic = true) : Nil
       while idfr_part?(curch)
         nextch
       end
@@ -1632,11 +1662,32 @@ module Crystal
         end
       end
       @token.type = :IDFR
-      @token.value = string_range(start).tr("-–", "__")
-      @token
+
+      # *TODO* this can be incorporated below if kept
+      idfr_str = string_range(start).tr("-–", "__")
+
+      if do_magic
+        # *TODO* Highly experimental for those god damn camelCase fans!
+        @token.value = String.build idfr_str.size * 2, do |str|
+          idfr_str.each_char_with_index do |chr, i|
+            if 'A' <= chr <= 'Z' && (i != 0 && !(i == 1 && idfr_str[0] == '\\'))
+              str << '_'
+              str << chr.downcase
+            else
+              str << chr
+            end
+          end
+        end
+      else
+        @token.value = idfr_str
+      end
+
+      # p "scanned idfr: '#{@token.value}'"
+      nil
     end
 
     def scan_pragma(start)
+      # p "scan_pragma for '#{string_range(start)}'"
       scan_idfr start, false
       @token.type = :PRAGMA
       @token

@@ -5,6 +5,13 @@ module Crystal
     def append_to_s(source, io)
       io << "\n"
 
+
+      # *TODO* Callee file??
+      # io << "\n\n * * TEMP COMPILER DEBUG * * :\n"
+      # io << "#{__FILE__} : #{__LINE__}"
+      # io << "\n\n"
+
+
       if @filename
         io << colorize("Syntax error").red.bold.to_s + " in #{relative_filename(@filename)}:#{@line_number}: #{colorize(@message).bold.red}"
       else
@@ -35,14 +42,12 @@ module Crystal
       line = lines[rowix]
       io << colorize((rowix + 1).to_s.rjust(5, ' ') + ": ").red.bold.to_s + replace_leading_tabs_with_spaces(line.chomp) + "\n"
 
-      # with_color.green.bold.surround(io) do
       # cursor below error line
       io << " " * ((5 + 2) + @column_number - 1) << "^".green
       if size = @size
         io << ("~" * (size - 1)).green
       end
       io << "\n"
-      # end
 
       endix = {rowix + rows_around_count, lines.size - 1}.min
       (rowix + 1..endix).each do |ix|

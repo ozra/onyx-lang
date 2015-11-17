@@ -24,21 +24,6 @@ end
 module Crystal
   alias TagLiteral = SymbolLiteral
 
-  # This to_s is part of code generation - messes shit up!
-  # class Token
-  #     def to_s(io)
-  #       if @value
-  #         @type.to_s(io)
-  #         ":".to_s(io)
-  #         @value.to_s(io)
-  #       else
-  #         @type.to_s(io)
-  #       end
-  #     end
-#
-  # end
-
-
   class Scope
     property :name
 
@@ -56,6 +41,12 @@ module Crystal
     def dup
       Scope.new @vars
     end
+
+    def dbgstack
+      puts "VARS:".blue
+      puts @vars
+    end
+
   end
 
   class ScopeStack
@@ -73,6 +64,17 @@ module Crystal
 
     def last
       @current_scope
+    end
+
+    def size
+      @scopes.size
+    end
+
+    def hard_pop(size) : Nil
+      while @scopes.size > size
+        pop_scope
+      end
+      nil
     end
 
     def pop_scope
@@ -95,6 +97,14 @@ module Crystal
 
     def add_var(name : String)
       @current_scope.add name
+    end
+
+    def dbgstack
+      @scopes.each_with_index do |scope, i|
+        #@scopes[@scopes.size - 2].dbgstack
+        puts "#{i}:"
+        scope.dbgstack
+      end
     end
   end
 
@@ -310,15 +320,16 @@ module Crystal
 
       # @prioritize_fun_def = false
       @last_was_newline_or_dedent = false
-
       @was_just_nest_end = false
       @significant_newline = false
 
       @unclosed_stack = [] of Unclosed
       @nesting_stack = NestingStack.new
 
-      @magic_int_type_stack = ["StdInt"] of String
-      @magic_real_type_stack = ["StdReal"] of String
+      @magic_int_type_stack = ["StdInt"]
+      @magic_real_type_stack = ["StdReal"]
+
+      @dbg–switch = false
 
       @dbgindent__ = 0
     end
@@ -373,6 +384,18 @@ module Crystal
 
     # # FUUUL LÖSNING!
     def next_token
+
+
+      # dbg_on
+      if (v = @token.value).is_a?(String)
+        case v
+        when "_debug_start_"
+          dbg_on
+        when "_debug_stop_"
+          dbg_off
+        end
+      end
+
       @last_was_newline_or_dedent = tok?(:NEWLINE, :DEDENT)
       super()
       # if !was_nl && !tok?(:NEWLINE)
@@ -393,9 +416,11 @@ module Crystal
         expressions = parse_expressions # .tap { check :EOF }
       end
 
-      dbg "parse - after program body parse_expressions"
+      dbg "/parse - after program body parse_expressions"
 
-      check :EOF
+      if ! tok? :EOF
+        raise "Expected end of program, EOF, but got `#{@token}`"
+      end
 
       # *TODO* - debugga hela programstrukturen
       puts "\n\n\nAST:\n\n\n"
@@ -408,7 +433,7 @@ module Crystal
     end
 
     def parse_expressions
-      dbg "parse_expressions"
+      dbg "parse_expressions ->".yellow
       dbginc
 
       # Nil–blocks should be taken care of BEFORE calling parse_expressions
@@ -416,9 +441,8 @@ module Crystal
       # *TODO* continue watching this
       # happened on time: EMPTY FILE
       # now added to "top parse"
-
       if is_end_token # "stop tokens" - not _nest_end tokens_ - unless explicit
-        raise "Does this happen?"
+        raise "parse_expressions - Does this happen?"
         return Nop.new
       end
 
@@ -427,41 +451,48 @@ module Crystal
       exps = [] of ASTNode
 
       loop do
-        dbg "parse_expressions() >>> LOOP TOP >>>"
+        dbg "- parse_expressions() >>> LOOP TOP >>>"
 
         # *TODO*
         if tok?(:EOF)
+          dbg "- parse_expressions() - break loop because of EOF"
           break
         end
 
         exps << parse_expression # parse_multi_assign
 
+        dbg "- parse_expressions() - after parse_expression"
+
         if handle_nest_end
-          dbg "parse_expressions() break after handle_nest_end"
+          dbg "- parse_expressions() break after handle_nest_end"
           break
+
         elsif is_end_token
-          dbg "parse_expressions() break after is_end_token"
+          dbg "- parse_expressions() break after is_end_token"
           break
+
         elsif @one_line_nest > 0 && tok? :NEWLINE
-          dbg "parse_expressions() break after online-nest newline"
+          dbg "- parse_expressions() break after online-nest newline"
           @was_just_nest_end = true
           de_nest @indent, :"", ""
           next_token_skip_statement_end
           break
         end
 
+        dbg "- parse_expressions - before skip_statement_end"
         skip_statement_end
+
       end
 
       Expressions.from exps
     ensure
-      puts ""
       dbgdec
+      dbg "/parse_expressions".yellow
     end
 
     def parse_expression
-      dbg "parse_expression"
-      # dbginc
+      dbg "parse_expression ->"
+      dbginc
       location = @token.location
 
       # *TODO* not in AST yet...
@@ -470,34 +501,29 @@ module Crystal
       #   next_token_skip_space_or_newline
       # end
 
-      @was_just_nest_end = false # is for catching the suffix part..
+      # *TODO* this methodology ain't good - anyway - it's now put inside "parse_op_assign"
+      #@was_just_nest_end = false # is for catching the suffix part..
 
-      # *TODO* experiment. Use the nest–stack to decide priority instead - right here!
+      prioritize_fun_def = ({:type, :program}.includes? @nesting_stack.last.nest_kind) && @def_parsing == 0
 
-      prioritize_fun_def = @nesting_stack.last.nest_kind == :type && @def_parsing == 0
-      #   @prioritize_fun_def = true
-      # else
-      #   @prioritize_fun_def = false
-      # end
-
-      dbg "@nesting_stack.last.nest_kind = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
-      dbg "#2 @prioritize_fun_def = #{@prioritize_fun_def}, @last_was_newline_or_dedent = #{@last_was_newline_or_dedent}"
+      dbg "- parse_expression - @nesting_stack.last.nest_kind = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
+      dbg "- parse_expression - #2 @prioritize_fun_def = #{@prioritize_fun_def}, @last_was_newline_or_dedent = #{@last_was_newline_or_dedent}"
 
       if prioritize_fun_def && @last_was_newline_or_dedent
-        dbg "tries pre-emptive def parse".white
+        dbg "- parse_expression - tries pre-emptive def parse".white
 
         if ret = try_parse_def
           return ret as ASTNode
         end
 
-        dbg "continues regular parse_expression"
+        dbg "- parse_expression - continues unbiased parse_expression"
       else
-        dbg "regular parse_expression".white
+        dbg "- parse_expression - unbiased parse_expression"
       end
 
       atomic = parse_op_assign
 
-      dbg "parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
+      dbg "- parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
 
       if @was_just_nest_end == false
         parse_expression_suffix atomic, location
@@ -509,12 +535,25 @@ module Crystal
         atomic
       end
     ensure
-      # dbgdec
+      dbgdec
+      dbg "/parse_expression"
 
     end
 
     def parse_expression_suffix(atomic, location)
-      # dbg "parse_expression_suffix"
+
+
+
+
+      # *TODO* this is called after all kinds of things
+      # after def -> end for instance - where ofcourse ENSURE and RESCUE are ok,
+      # but no others.
+
+      # Look over the entire concept!
+
+
+
+      dbg "parse_expression_suffix ->"
       # dbginc
       while true
         case @token.type
@@ -534,6 +573,8 @@ module Crystal
             raise "suffix `while` is not supported", @token
           when :until
             raise "suffix `until` is not supported", @token
+
+
           when :rescue
             next_token_skip_space
             rescue_body = parse_expression
@@ -551,29 +592,38 @@ module Crystal
             else
               atomic = ExceptionHandler.new(atomic, ensure: ensure_body).at(location)
             end
+
+
           when :ifdef
             next_token_skip_statement_end
             exp = parse_flags_or
             atomic = IfDef.new(exp, atomic).at(location)
+
           else
             break
+
           end
 
         when :")", :",", :";", :"%}", :"}}", :NEWLINE, :EOF, :DEDENT
           # *TODO* skip explicit end token
           break
 
+
+        when :PRAGMA  # *TODO* look over when this is revised as mentioned at top
+          break
+
         else
           if is_end_token || tok? :INDENT
             break
           else
-            unexpected_token
+            unexpected_token "while parsing expression suffix"
           end
         end
       end
       atomic
     ensure
       # dbgdec
+      dbg "/parse_expression_suffix"
     end
 
     def parse_expression_suffix(location)
@@ -603,13 +653,16 @@ module Crystal
     end
 
     def parse_op_assign(allow_ops = true, allow_suffix = true)
-      # dbg "parse_op_assign"
+      dbg "parse_op_assign ->"
+
+      @was_just_nest_end = false  # *TODO* even deeper in then this? (was parse_expression)
+
       doc = @token.doc
       location = @token.location
 
       # atomic = parse_question_colon
       atomic = parse_range
-      dbg "parse_op_assign after parse_range"
+      dbg "- parse_op_assign after parse_range"
 
       while true
         maybe_mutate_gt_op_to_bigger_op
@@ -617,14 +670,14 @@ module Crystal
         case @token.type
 
         when :SPACE
-          dbg "parse_op_assign - got SPACE - next!"
+          dbg "- parse_op_assign - got SPACE - next!"
           next_token
           next
 
         when :IDFR
           break if kwd? :then, :do, :by, :step
 
-          unexpected_token unless allow_suffix
+          unexpected_token "suffix not allowed in the context" unless allow_suffix
           break
 
         when :"="
@@ -669,6 +722,7 @@ module Crystal
 
             add_var atomic
 
+            dbg "creates Assign"
             atomic = Assign.new(atomic, value).at(location)
             atomic.doc = doc
             atomic
@@ -677,7 +731,7 @@ module Crystal
         when :"+=", :"-=", :"*=", :"/=", :"%=", :".|.=", :".&.=", :"^=", :"**=", :"<<=", :">>=", :"||=", :"&&="
           # Rewrite 'a += b' as 'a = a + b'
 
-          unexpected_token unless allow_ops
+          unexpected_token "operators not allowed in this context" unless allow_ops
 
           break unless can_be_assigned?(atomic)
 
@@ -700,7 +754,15 @@ module Crystal
           method = @token.type.to_s.byte_slice(0, @token.to_s.bytesize - 1)
           method_column_number = @token.column_number
 
+          case method
+          when ".|."
+            method = "|"
+          when ".&."
+            method = "&"
+          end
+
           token_type = @token.type
+          # tok_location = location
 
           next_token_skip_space_or_newline
 
@@ -759,7 +821,7 @@ module Crystal
 
       atomic
     ensure
-      # dbg "end of parse_op_assign"
+      dbg "/parse_op_assign"
     end
 
     # *TODO* - remove ternary!!!
@@ -793,9 +855,9 @@ module Crystal
     def parse_range
       location = @token.location
 
-      dbg "parse_range before parse_or"
+      dbg "parse_range ->"
       exp = parse_or
-      dbg "parse_range after parse_or"
+      dbg "- parse_range - after parse_or"
 
       while true
         case @token.type
@@ -850,9 +912,15 @@ module Crystal
               "&&"
             when "or"
               "||"
+            when ".|."
+              "|"
+            when ".&."
+              "&"
+
             when "not"
               dbg "\n\n\ndoes this happen? (not in parse_operator)\n\n\n".red
               "!"
+
             else
               method
             end
@@ -860,7 +928,7 @@ module Crystal
 
             dbg "OPERATOR MUTATED".red if foometh != method
             if foometh != method
-              @next_token_continuation_state = :CONTINUATION
+              scan_next_as_continuation
             end
 
             slash_is_regex!
@@ -937,7 +1005,7 @@ module Crystal
     AtomicWithMethodCheck = [:IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"===", :"[]", :"[]=", :"[]?", :"!", :"not"]
 
     def parse_atomic_with_method
-      dbg "parse_atomic_method"
+      dbg "parse_atomic_with_method"
       location = @token.location
       atomic = parse_atomic
 
@@ -951,6 +1019,8 @@ module Crystal
     end
 
     def parse_atomic_method_suffix(atomic, location)
+      dbg "parse_atomic_method_suffix"
+
       # *TODO* *9*
       # *TODO* POSSIBLY for Functor calls! (`()` is a functor sugar for `inst.call()`)
 
@@ -1258,7 +1328,7 @@ module Crystal
 
     def parse_responds_to_name
       if @token.type != :SYMBOL
-        unexpected_token msg: "expected name or symbol"
+        unexpected_token "expected name or symbol"
       end
 
       @token.value.to_s
@@ -1270,10 +1340,32 @@ module Crystal
       atomic = parse_atomic_without_location
       atomic.location ||= location
       atomic
+    ensure
+      dbg "/parse_atomic"
     end
 
     def parse_atomic_without_location
       dbg "parse_atomic_without_location"
+
+
+      # *TODO* *9* LEXICAL LEVEL REWRITE - REALLY MOVE THIS PoC *TODO*!
+      # Could actually be done already in the Lexer! (for to_s / formatting -
+      # always use source as reference for construct kind
+      if @token.type == :CONST && ([:Self, :Type, :Class].includes? @token.value)
+        dbg "Found CONST with value Self, Type or Class"
+        if current_char == '.'
+          dbg "AND curch == '.'"
+
+          next_token
+          next_token
+          @token.type = :CLASS_VAR
+          @token.value = ensure_atat_prefix @token.value.to_s
+        else
+          dbg "curch == '#{current_char}'"
+        end
+      end
+      # *TODO*
+
 
       ret = case @token.type
       when :"("
@@ -1309,8 +1401,19 @@ module Crystal
         # when :"->"
         #  parse_fun_literal
 
+
+
       when :"@["
         parse_attribute
+
+      when :PRAGMA
+        #*TODO* GHOST IMPLEMENTATION ATM
+        pragmas = parse_pragma_cluster
+        dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
+
+        # *TODO* parse_expression very likely should NOT BE DONE HERE (see
+        # - GHOST IMPLEMENTATION -
+        parse_expression
 
       when :NUMBER
         dbg "when :NUMBER"
@@ -1328,19 +1431,6 @@ module Crystal
 
       when :SYMBOL_ARRAY_START
         parse_symbol_array
-
-      when :PRAGMA
-        #*TODO* GHOST IMPLEMENTATION ATM
-        pragmas = [] of Attribute
-
-        while tok? :PRAGMA
-          pragmas.concat parse_possible_pragmas
-          skip_space_or_newline
-        end
-
-        dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
-
-        parse_expression
 
       when :SYMBOL
         node_and_next_token TagLiteral.new(@token.value.to_s)
@@ -1392,7 +1482,7 @@ module Crystal
 
       when :IDFR
 
-        dbg "took idfr branch"
+        dbg "took IDFR branch"
         # when :"|" # *TODO* *TEST*
         #   parse_var_or_call
 
@@ -1410,29 +1500,30 @@ module Crystal
         when :with
           parse_yield_with_scope
         when :abstract
-          check_not_inside_def("can't use abstract inside def") do
-            doc = @token.doc
+          unexpected_token "abstract can only be used in place of of a func body, or as attribute on types."
+          # check_not_inside_def("can't use abstract inside def") do
+          #   doc = @token.doc
 
-            next_token_skip_space_or_newline
-            case @token.type
-            when :IDFR
-              case @token.value
-              when :def
-                parse_def is_abstract: true, doc: doc
-              when :type
-                parse_type_def is_abstract: true, doc: doc
-              when :class
-                parse_type_def is_abstract: true, doc: doc
-              when :struct
-                parse_type_def is_abstract: true, is_struct: true, doc: doc
-              else
-                unexpected_token
-              end
-            else
-              unexpected_token
-            end
-          end
-        when :def
+          #   next_token_skip_space_or_newline
+          #   case @token.type
+          #   when :IDFR
+          #     case @token.value
+          #     when :def
+          #       parse_def is_abstract: true, doc: doc
+          #     when :type
+          #       parse_type_def is_abstract: true, doc: doc
+          #     when :class
+          #       parse_type_def is_abstract: true, doc: doc
+          #     when :struct
+          #       parse_type_def is_abstract: true, is_struct: true, doc: doc
+          #     else
+          #       unexpected_token "after finding identifer after abstract"
+          #     end
+          #   else
+          #     unexpected_token "after finding abstract"
+          #   end
+          # end
+        when :def, :fun, :own
           # *TODO* create "owningdefname__private_def__thisdefname"
           # - do this for the whole hierarchy of defs ofc. (if more)
           check_not_inside_def("can't define def inside def") do
@@ -1446,7 +1537,7 @@ module Crystal
           end
         when :require
           parse_require
-        when :case, :match, :branch
+        when :case, :match, :branch, :cond
           parse_case
         when :if
           ret = parse_if
@@ -1505,7 +1596,7 @@ module Crystal
           check_not_inside_def("can't define lib inside def") do
             parse_lib
           end
-        when :fun
+        when :cfun
           check_not_inside_def("can't define fun inside def") do
             parse_fun_def require_body: true
           end
@@ -1532,12 +1623,15 @@ module Crystal
         #   raise "BLOW UP TODO *TODO*" # *TODO*
 
         else
-          set_visibility parse_var_or_call
+          set_visibility parse_var_or_call  # *TODO* this _can_ be a def
+
         end
+
       when :CONST
         parse_idfr_or_literal
+
       when :INSTANCE_VAR
-        dbg "found instance var"
+        dbg "found reference to instance var"
         name = @token.value.to_s
         add_instance_var name
         ivar = InstanceVar.new(name).at(@token.location)
@@ -1558,14 +1652,16 @@ module Crystal
       when :CLASS_VAR
         @wants_regex = false
         node_and_next_token ClassVar.new(@token.value.to_s)
+
       when :UNDERSCORE
         node_and_next_token Underscore.new
+
       else
         unexpected_token_in_atomic
       end
 
     ensure
-      dbg "end of parse_atomic_without_location"
+      dbg "/parse_atomic_without_location"
       ret
     end
 
@@ -1603,7 +1699,7 @@ module Crystal
       when :CONST
         parse_idfr_after_colons(location, true, true)
       else
-        unexpected_token
+        unexpected_token "while parsing identifer or global call"
       end
     end
 
@@ -1678,7 +1774,7 @@ module Crystal
       skip_space
 
       if kwd?(:"of")
-        unexpected_token
+        unexpected_token "got `of` keyword in an unexpected place when parsing user-typed collection literal"
       end
 
       case tuple_or_hash
@@ -1729,8 +1825,18 @@ module Crystal
     end
 
 
-    # *TODO* check for :PRAGMA ? should be done before - skip "possible"
-    def parse_possible_pragmas() : Array(Attribute)
+    def parse_pragma_cluster
+      dbg "parse_pragma_cluster"
+      pragmas = [] of Attribute
+
+      while tok? :PRAGMA
+        pragmas.concat parse_pragma_grouping
+        skip_space_or_newline
+      end
+    end
+
+    def parse_pragma_grouping() : Array(Attribute)
+      dbg "parse_pragma_grouping"
       pragmas = [] of Attribute
 
       while tok? :PRAGMA
@@ -2117,7 +2223,7 @@ module Crystal
 
       # next_token_skip_space
 
-      dbg "end of while parse"
+      dbg "/while parse"
 
       klass.new(cond, body).at_end(end_location)
     end
@@ -2127,6 +2233,7 @@ module Crystal
 
 
     def parse_type_def(is_abstract = false, is_struct = false, doc = nil) : ASTNode
+      dbg "parse_type_def ->"
       @type_nest += 1
 
       doc ||= @token.doc
@@ -2141,6 +2248,8 @@ module Crystal
 
       # *TODO* add scope???
 
+      dbg "- parse_type_def - parse_type_vars"
+
       type_vars = parse_type_vars
       skip_space
 
@@ -2151,7 +2260,17 @@ module Crystal
         superclass = parse_idfr
       end
 
-      dbg "parse_type_def - before body"
+      skip_space
+
+      dbg "- parse_type_def - check for type suffix-pragmas"
+      if tok? :PRAGMA
+        pragmas = parse_pragma_grouping
+      else
+        pragmas = [] of Attribute
+      end
+
+
+      dbg "- parse_type_def - before body"
 
       # skip_statement_end
 
@@ -2165,7 +2284,7 @@ module Crystal
         body = parse_type_def_body :TYPE_DEF
       end
 
-      dbg "parse_type_def - after body"
+      dbg "- parse_type_def - after body"
 
       end_location = body.end_location # token_end_location
       # check_idfr "end"
@@ -2179,15 +2298,25 @@ module Crystal
       class_def.doc = doc
       class_def.end_location = end_location
       class_def
+    ensure
+      dbg "/parse_type_def"
     end
 
     def parse_type_def_body(def_kind) : Expressions
+      dbg "parse_type_def_body ->"
+
       members = [] of ASTNode
+
+      if tok? :PRAGMA
+        # *TODO* use the pragmas
+        pragmas = parse_pragma_cluster
+        dbg "Got PRIMARY pragmas in type-def root level - apply to the type defined. #{pragmas}"
+      end
 
       # *TODO* def_kind == :TRAIT => disallow 'init'
 
       until handle_nest_end # tok?(:END)
-        p "in parse_type_def body loop: #{@token}"
+        dbg "in parse_type_def body loop: #{@token}"
 
         # BEST TO IMPLEMENT FULL PARSE FOR EACH ROOT–CONSTRUCT OF TYPEDEF!
 
@@ -2202,11 +2331,11 @@ module Crystal
 
         when :PRAGMA
           # *TODO* use the pragmas
-          pragmas = parse_possible_pragmas
+          pragmas = parse_pragma_grouping
           dbg "Got pragma in type-def root level - apply to next item! #{pragmas}"
 
         when :IDFR
-          p "in parse_type_def body loop: in IDFR branch"
+          dbg "in parse_type_def body loop: in IDFR branch"
 
           case @token.value
           when :mixin
@@ -2268,6 +2397,9 @@ module Crystal
       end
 
       body = Expressions.from(members) # *TODO* .at(members)
+
+    ensure
+      dbg "/parse_type_def_body"
     end
 
     def ensure_at_prefix(s)
@@ -2282,54 +2414,6 @@ module Crystal
 
     def parse_intype_def_var_or_const(on_self = false) : Array(ASTNode)
       rets = [] of ASTNode
-
-      # "name" contains "@@" for classvar in AST
-
-      # @@Const = 47
-      #   Assign
-      #     ClassVar
-
-      # @Const = 47 *TODO* verify - speculated
-      #   Assign
-      #     InstanceVar
-
-      # Const = 47
-      #   Assign
-      #     Path
-
-      # @@var = 47
-      #   Assign
-      #     ClassVar
-
-      # @var :: I32
-      #   DeclareVar
-      #     InstanceVar
-      #     Path
-
-      # @var :: Array(I32)
-      #   DeclareVar
-      #     ivar: InstanceVar
-      #     decltyp: Generic
-      #       name: Path
-      #       tvars: Path
-
-      # @var = 47
-      #   Assign
-      #     InstanceVar
-      #       name: Str
-      #     NumberLiteral
-
-      # def set_bar(v) ...
-      #   Def
-      #     args: [ Arg ]
-      #     body: ...
-
-      # def self.set_bar(v) ...
-      #   Def
-      #     receiver: Var: name: String
-      #     args: [ Arg ]
-      #     body: ...
-
 
       case
       when tok? :CONST
@@ -2349,7 +2433,7 @@ module Crystal
         # *TODO* handle type (!!??)
 
         if tok? :"="
-          dbg "found assign"
+          dbg "found assign to const"
           next_token_skip_space_or_newline
           value = parse_op_assign
           rets << Assign.new(constvar, value).at(constvar)
@@ -2414,6 +2498,8 @@ module Crystal
 
 
           dbg "add type declaration"
+          # *TODO* this should get is_assign_composite, instead of the other
+          # way around as now!
           rets << DeclareVar.new(var, var_type).at(var.location)
 
         else
@@ -2422,18 +2508,28 @@ module Crystal
 
         # *TODO*
         if tok? :"="
-          dbg "found assign"
+          dbg "found assign to idfr"
           next_token_skip_space_or_newline
+          # value = parse_expression
           value = parse_op_assign
           if is_declare_composite = rets.size > 0
             var = var.clone
           end
           rets << Assign.new(var, value, is_declare_composite).at(var)
+          dbg "/found assign to idfr"
         end
 
-        pragmas = parse_possible_pragmas
-        if pragmas.size
-          dbg "found pragmas for .. whatever..: #{pragmas}"
+        dbg "after possible assign to idfr"
+
+        skip_space
+
+        dbg "parse_intype_def_var_or_const() - check for pragmas"
+        if tok? :PRAGMA
+          pragmas = parse_pragma_grouping
+
+          if pragmas.size
+            dbg "found pragmas for .. whatever..: #{pragmas}"
+          end
         end
 
         rets
@@ -2447,13 +2543,15 @@ module Crystal
           end
           return rets
         rescue
-          dbg "What happened in parse_intype_def_var_or_const?"
-          raise "What happened in parse_intype_def_var_or_const?"
+          dbg "What happened in `parse_intype_def_var_or_const` ?"
+          raise "What happened in `parse_intype_def_var_or_const` ?"
         end
       end
 
       rets
 
+    ensure
+      dbg "/parse_intype_def_var_or_const"
     end
 
 
@@ -2627,6 +2725,11 @@ module Crystal
       location = @token.location
       next_token_skip_statement_end
 
+      if tok? :INDENT, :DEDENT, :NEWLINE  # for `(\n    expr–begins–here...`
+        next_token
+      end
+
+      # *TODO* should probably support `(\n    )` etc. constructs (for commented out stuff)
       if @token.type == :")"
         return node_and_next_token NilLiteral.new
       end
@@ -2636,6 +2739,7 @@ module Crystal
       while true
         exps << parse_expression
 
+        # *TODO* this (`)` vs `\n   )`) should be handled with a better LPAR|(DEDENT+LPAR) checking..
         case @token.type
         when :")"
           dbg "parse_parenthesized_expression: got ')'"
@@ -2721,6 +2825,11 @@ module Crystal
         body = Nop.new
         handle_nest_end true
       else
+        # parse possible "first of body" pragmas
+        if tok? :PRAGMA
+          raise "TODO  aight!"
+        end
+
         body = parse_expressions
       end
       end_location = token_end_location
@@ -2805,11 +2914,11 @@ module Crystal
         name = check_idfr
         next_token_skip_space
       else
-        unexpected_token
+        unexpected_token "while parsing lambda-pointer operator"
       end
 
       if @token.type == :"."
-        unexpected_token
+        unexpected_token "while parsing lambda-pointer operator"
       end
 
       if @token.type == :"("
@@ -3373,7 +3482,7 @@ module Crystal
             a_else = Expressions.new([Nop.new] of ASTNode)
           else
             if whens.size == 0
-              unexpected_token @token.to_s, "expecting when, not catch all"
+              unexpected_token "expecting when, not catch all"
             end
             slash_is_regex!
 
@@ -3426,7 +3535,7 @@ module Crystal
                 skip_statement_end
                 break
               else
-                unexpected_token @token.to_s, "expecting ',', ';' or '\n'"
+                unexpected_token "expecting ',', ';' or '\n'"
               end
             end
           end
@@ -3456,7 +3565,7 @@ module Crystal
 
         else
         # can this happen?
-          unexpected_token @token.to_s, "expecting when, else or end"
+          unexpected_token "expecting when, else or end"
         end
       end
 
@@ -3508,6 +3617,7 @@ module Crystal
     end
 
     def try_parse_def(is_abstract = false, is_macro_def = false, doc = nil)
+      dbg "try_parse_def ->".white
       # *TODO*
       # BETTER ERROR REPORTING!
       # when parsing implicit def (most likely), or expression (less likely)
@@ -3517,6 +3627,7 @@ module Crystal
 
       backed = backup_tok
       nest_count = @nesting_stack.size
+      scope_count = @scope_stack.size
       def_parsing = @def_parsing
       def_nest = @def_nest
       certain_def_count = @certain_def_count
@@ -3532,13 +3643,20 @@ module Crystal
 
         dbg "failed try_parse_def".white
 
+        # Rollback parsing a bit - once the language settles we'll implement all
+        # this in a neater way that's more performant. For now - low intrusion
+        # is better.
         restore_tok backed
         hard_pop_nest nest_count
+        hard_pop_scope scope_count
         @def_parsing = def_parsing
         @def_nest = def_nest
         @certain_def_count = certain_def_count
         return nil
       end
+
+    ensure
+      dbg "/try_parse_def".white
     end
 
     def parse_def(is_abstract = false, is_macro_def = false, doc = nil)
@@ -3612,7 +3730,7 @@ module Crystal
       when :"("
         next_token_skip_space_or_newline
         while @token.type != :")"
-          extras = parse_arg(args, nil, true, found_default_value, found_splat, allow_restrictions: false)
+          extras = parse_param(args, nil, true, found_default_value, found_splat, allow_restrictions: false)
           if !found_default_value && extras.default_value
             found_default_value = true
           end
@@ -3628,7 +3746,7 @@ module Crystal
           else
             skip_space
             if @token.type != :")"
-              unexpected_token @token.to_s, "expected ',' or ')'"
+              unexpected_token "expected ',' or ')'"
             end
           end
           index += 1
@@ -3636,7 +3754,7 @@ module Crystal
         next_token
       when :IDFR, :"..." # *TODO* verify - was "*"
         while @token.type != :NEWLINE && @token.type != :";"
-          extras = parse_arg(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
+          extras = parse_param(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
           if !found_default_value && extras.default_value
             found_default_value = true
           end
@@ -3651,7 +3769,7 @@ module Crystal
           else
             skip_space
             if @token.type != :NEWLINE && @token.type != :";"
-              unexpected_token @token.to_s, "expected ';' or newline"
+              unexpected_token "expected ';' or newline"
             end
           end
           index += 1
@@ -3719,7 +3837,7 @@ module Crystal
         when :EOF
           raise "unterminated macro", start_line, start_column
         else
-          unexpected_token
+          unexpected_token "while parsing macro body"
         end
       end
 
@@ -3747,7 +3865,7 @@ module Crystal
         when :"}"
           break
         else
-          unexpected_token @token, "expecting ',' or '}'"
+          unexpected_token "expecting ',' or '}'"
         end
       end
       exps
@@ -3893,10 +4011,10 @@ module Crystal
             check :"%}"
           end
         else
-          unexpected_token
+          unexpected_token "while parsing macro if"
         end
       else
-        unexpected_token
+        unexpected_token "while parsing macro if"
       end
 
       return MacroIf.new(cond, a_then, a_else)
@@ -3922,6 +4040,8 @@ module Crystal
     DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :"~", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
     DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :"~", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
 
+    # *TODO* remove is_abstract - prefix version _when_ it seems like it's fine
+    # using only the "abstract-body–notation"
     def parse_def_helper(is_abstract = false, is_macro_def = false)
 
       # *TODO* 'abstract' should be parsed by this parser:
@@ -4022,7 +4142,7 @@ module Crystal
         end
       else
         if receiver
-          unexpected_token
+          unexpected_token "somewhere in parsing def"
         else
           raise "shouldn't reach this line" unless name
         end
@@ -4050,7 +4170,7 @@ module Crystal
         while @token.type != :")"
           dbg "!=)"
 
-          extras = parse_arg(arg_list, extra_assigns, true, found_default_value, found_splat)
+          extras = parse_param(arg_list, extra_assigns, true, found_default_value, found_splat)
 
           if !found_default_value && extras.default_value
             found_default_value = true
@@ -4068,7 +4188,7 @@ module Crystal
           else
             skip_statement_end
             if @token.type != :")"
-              unexpected_token @token.to_s, "expected ',' or ')'"
+              unexpected_token "expected ',' or ')'"
             end
           end
           index += 1
@@ -4083,10 +4203,10 @@ module Crystal
         block_cast = parse_block_cast(extra_assigns)
         compute_block_cast_yields block_cast
       else
-        if is_abstract && @token.type == :EOF
+        if is_abstract && @token.type == :EOF  # for prefixed `abstract`, the suffix–vers is below
           # OK
         else
-          unexpected_token
+          unexpected_token "while parsing def"
         end
       end
 
@@ -4098,7 +4218,7 @@ module Crystal
         return_type = parse_single_type
         end_location = return_type.end_location
 
-        if is_abstract
+        if is_abstract  # for prefixed `abstract`, the suffix–vers is below
           body = Nop.new
         else
           # if kwd?("end")  # *TODO*
@@ -4127,7 +4247,7 @@ module Crystal
           dbg "tok:" + @token.to_s
 
           if @token.type != :"->" # this is checked in parse_nest_start too!!
-            unexpected_token @token.to_s, "expected '->' or return type"
+            unexpected_token "expected '->' or return type"
           end
           dbg "Got ->"
           # Done with header..
@@ -4144,6 +4264,7 @@ module Crystal
 
         nest_kind, callable_kind, returns_nothing, suffix_pragmas = parse_def_nest_start
         # *TODO* use callable_kind and set on Def–node
+        # *TODO* use add_def_nest!
         add_nest (is_macro_def ? :macro : :def), def_indent, name.to_s, (nest_kind == :LINE_NEST), false
 
         pragmas = [] of Attribute
@@ -4162,9 +4283,6 @@ module Crystal
           end
         end
 
-        dbg "do we have an abstract kwd? #{kwd? :abstract}"
-
-
         if nest_kind == :NIL_NEST
           dbg "got nil block"
           body = Nop.new
@@ -4172,11 +4290,23 @@ module Crystal
 
         elsif is_abstract  # for prefixed `abstract`, the suffix–vers is below
           dbg "is_abstract - sets nil block"
+          raise "remove prefix abstract! deprecated"
           body = Nop.new
           handle_nest_end true
 
         else
           dbg "got a body"
+
+          # parse possible "first of body" pragmas
+          if tok? :PRAGMA
+            dbg "got body primary pragmas"
+            pragmas = parse_pragma_cluster
+            # *TODO* use the pragmas
+            if handle_nest_end false
+              body = Nop.new
+            end
+          end
+
           slash_is_regex!
           # dbg "before skip_statement_end"
           # skip_statement_end
@@ -4184,7 +4314,10 @@ module Crystal
 
           end_location = token_end_location
 
-          if kwd? :abstract  # if the only thing in the body is "abstract"... you get it!
+          if body
+            # nothing to do
+
+          elsif kwd? :abstract  # if the only thing in the body is "abstract"... you get it!
             next_token_skip_space
             dbg "Got astract keyword as 'body'"
             is_abstract = true
@@ -4259,7 +4392,7 @@ module Crystal
 
     record ArgExtras, block_cast, default_value, splat
 
-    def parse_arg(arg_list, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
+    def parse_param(arg_list, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
       if @token.type == :"&"
         next_token_skip_space_or_newline
         block_cast = parse_block_cast(extra_assigns)
@@ -4270,7 +4403,7 @@ module Crystal
       if @token.type == :"..."
         if found_splat
           # *TODO* Should say that it's a duplicate splat!
-          unexpected_token
+          unexpected_token "while parsing arg"
         end
 
         splat = true
@@ -4278,7 +4411,7 @@ module Crystal
       end
 
       arg_location = @token.location
-      arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
+      arg_name, uses_arg = parse_param_name(arg_location, extra_assigns)
 
       if arg_list.any? { |arg| arg.name == arg_name }
         raise "duplicated argument name: #{arg_name}", @token
@@ -4311,7 +4444,7 @@ module Crystal
       unless splat
         if @token.type == :"="
           if found_splat
-            unexpected_token
+            unexpected_token "because we found a splat earlier - default params don't work out after"
           end
 
           next_token_skip_space_or_newline
@@ -4343,7 +4476,7 @@ module Crystal
 
     def parse_block_cast(extra_assigns)
       name_location = @token.location
-      arg_name, uses_arg = parse_arg_name(name_location, extra_assigns)
+      arg_name, uses_arg = parse_param_name(name_location, extra_assigns)
       @uses_block_cast = true if uses_arg
 
       next_token_skip_space_or_newline
@@ -4371,7 +4504,7 @@ module Crystal
       block_cast
     end
 
-    def parse_arg_name(location, extra_assigns)
+    def parse_param_name(location, extra_assigns)
       # *TODO* also consider symbol style (#name) for
       # named fields
 
@@ -4635,7 +4768,7 @@ module Crystal
 
       is_var = is_var?(name)
 
-      dbg "identifier #{name} is_var == #{is_var}"
+      dbg "identifier `#{name}`, is_var == #{is_var}"
 
       if name[0] == '_' && name.size == 2 && name[1] >= '0' && name[1] <= '9'   # magic param?
         is_var = true
@@ -4756,6 +4889,11 @@ module Crystal
 
         open("call") do
           next_token_skip_space_or_newline
+
+          if tok? :INDENT, :DEDENT, :NEWLINE
+            next_token
+          end
+
           while @token.type != :")"
 
             if call_block_cast_follows?
@@ -4768,7 +4906,7 @@ module Crystal
               block = parse_block
 
               dbg "parse_call_args after block arg - check for ')'"
-              check :")"
+              check_closing_paren
               end_location = token_end_location
 
               next_token_skip_space
@@ -4789,7 +4927,7 @@ module Crystal
 
               dbg "parse_call_args after named-args - check for ')'"
 
-              check :")"
+              check_closing_paren
               end_location = token_end_location
 
               next_token_skip_space
@@ -4802,12 +4940,16 @@ module Crystal
 
             skip_statement_end
             if @token.type == :","
+
+              dbg "got ',' skips apce + newline"
+              scan_next_as_continuation
+
               slash_is_regex!
               next_token_skip_space_or_newline
             else
               dbg "parse_call_args found non ',' in loop - check for ')'"
 
-              check :")"
+              check_closing_paren
               break
             end
           end
@@ -5077,7 +5219,7 @@ module Crystal
             if @token.type == :"("
               next_token_skip_space
               exp = parse_op_assign
-              check :")"
+              check_closing_paren
               next_token_skip_space
               call.name = "#{call.name}="
               call.args = [exp] of ASTNode
@@ -5107,7 +5249,7 @@ module Crystal
       end_location = token_end_location
 
       if check_paren
-        check :")"
+        check_closing_paren
         next_token_skip_space
       else
         skip_space
@@ -5821,13 +5963,18 @@ module Crystal
 
     def parse_lib_body_exp_without_location
       case @token.type
+
+
       when :"@["
         parse_attribute
+      when :PRAGMA
+        parse_pragma
+
       when :IDFR
         case @token.value
         when :alias
           parse_alias
-        when :fun
+        when :cfun
           parse_fun_def
         when :type
           parse_api_type_def
@@ -5843,7 +5990,7 @@ module Crystal
         when :ifdef
           parse_ifdef check_end: true, mode: :lib
         else
-          unexpected_token
+          unexpected_token "while parsing identifer-token in lib body expression"
         end
       when :CONST
         idfr = parse_idfr
@@ -5874,7 +6021,7 @@ module Crystal
         skip_statement_end
         ExternalVar.new(name, type, real_name)
       else
-        unexpected_token
+        unexpected_token "while parsing lib body expression"
       end
     end
 
@@ -5899,7 +6046,7 @@ module Crystal
           real_name = parse_string_without_interpolation { "interpolation not allowed in fun name" }
           skip_space
         else
-          unexpected_token
+          unexpected_token "while parsing fun, after `=`"
         end
       else
         real_name = name
@@ -6117,6 +6264,8 @@ module Crystal
     end
 
     def parse_enum_def
+      # *TODO* use parse_type_def_body!
+
       doc = @token.doc
 
       next_token_skip_space # _or_newline
@@ -6177,7 +6326,7 @@ module Crystal
             member = VisibilityModifier.new(visibility, member) if visibility
             members << member
           else
-            unexpected_token
+            unexpected_token "while parsing identifier-token in enum"
           end
         when :CLASS_VAR
           class_var = ClassVar.new(@token.value.to_s).at(@token.location)
@@ -6191,7 +6340,7 @@ module Crystal
         when :";", :NEWLINE
           skip_statement_end
         else
-          unexpected_token
+          unexpected_token "while parsing enum"
         end
       end
 
@@ -6325,12 +6474,22 @@ module Crystal
     end
 
     def add_var(name : String) : Nil
+
+      dbg "add_var(\"#{name}\")"
+
       @scope_stack.add_var name
+
+      # *TODO* *DEBUG*
+      @scope_stack.dbgstack
+
       nil
     end
 
     def add_var(node) : Nil
       # Nothing
+
+      dbg "add_var(node) - skipped ?: '#{node}'"
+
       nil
     end
 
@@ -6388,8 +6547,12 @@ module Crystal
         returns_nothing = false
       end
 
-      dbg "check for def suffix pragmas"
-      pragmas = parse_possible_pragmas
+      dbg "check for def suffix-pragmas"
+      if tok? :PRAGMA
+        pragmas = parse_pragma_grouping
+      else
+        pragmas = [] of Attribute
+      end
 
       # handle one–line vs multi–line vs nil–nest etc.
       nest_kind = case
@@ -6703,8 +6866,31 @@ module Crystal
       dbg @nesting_stack.dbgstack.red
     end
 
+    def hard_pop_scope(count : Int32)
+      @scope_stack.hard_pop count
+      dbg ">> HARD POPPED SCOPE >> ".red
+      @scope_stack.dbgstack
+    end
+
     def current_nest_indent : Int32
       @nesting_stack.last.indent
+    end
+
+    def check_closing_paren
+      return true if tok? :")"
+
+      # *TODO* when dedent/indent, they shouldn't _be_ that if it's paren
+      # because then they've changed the "last ind val" in lexer - and thus
+      # one can goof up the whole block nesting by punching out several levels!
+      # *TODO* *VERIFY*
+
+      if tok?(:DEDENT, :NEWLINE, :INDENT) && current_char == ')'
+        next_token
+        return true
+      end
+
+      raise "expecting token ')', not '#{@token.type.to_s}':'#{@token.value.to_s}'", @token
+      false
     end
 
     def check_void_value(exp, location)
@@ -6745,12 +6931,17 @@ module Crystal
       @token.value.to_s
     end
 
+    def scan_next_as_continuation
+      dbg "sets scan_next_as_continuation"
+      @next_token_continuation_state = :CONTINUATION
+    end
+
     def check_const
       check :CONST
       @token.value.to_s
     end
 
-    def unexpected_token(token = @token.to_s, msg = nil)
+    def unexpected_token(msg, token = @token.to_s)
       if msg
         raise "unexpected token: #{token} (#{msg})", @token
       else
@@ -6763,14 +6954,24 @@ module Crystal
         raise "unterminated #{unclosed.name}", unclosed.location
       end
 
-      unexpected_token
+      unexpected_token "while parsing atomic"
     end
 
     def is_var?(name)
       return true if @in_macro_expression
 
       name = name.to_s
-      name == "self" || @scope_stack.cur_has?(name)
+      ret = name == "self" || @scope_stack.cur_has?(name)
+
+      # *TODO* *DEBUG*
+      if !ret
+        if name == "failed_count"
+          dbg "failed_count 'NOT A VAR'!"
+          @scope_stack.dbgstack
+        end
+      end
+
+      ret
     end
 
     def add_instance_var(name)
@@ -6809,15 +7010,28 @@ module Crystal
 
     # DEBUG UTILS #
     def dbginc
-      @dbgindent__ += 4
+      @dbgindent__ += 1
     end
 
     def dbgdec
-      @dbgindent__ -= 4
+      @dbgindent__ -= 1
+    end
+
+    def dbg_on
+      return if @dbg–switch
+      @dbg–switch = true
+      dbg "TURNS DEBUG LOGGING ON".red
+    end
+
+    def dbg_off
+      return if !@dbg–switch
+      dbg "TURNS DEBUG LOGGING OFF".red
+      @dbg–switch = false
     end
 
     def dbg(str : String)
-      puts (" " * @dbgindent__) + str + "  (now:'" + @token.type.to_s + ":" +
+      return if @dbg–switch == false
+      puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str + "  (now:'" + @token.type.to_s + ":" +
         @token.value.to_s +
         "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s + "])"
     end

@@ -37,6 +37,7 @@ Tool:
     types                    show type of main variables
     stylize                  reformat source according to specs
     onyxify                  convert crystal sources to onyx
+    crystallize              convert onyx sources to crystal
     --help, -h               show this help
 USAGE
 
@@ -151,6 +152,9 @@ USAGE
       when "onyxify".starts_with?(tool)
         options.shift
         onyxify
+      when "crystallize".starts_with?(tool)
+        options.shift
+        crystallize
       when "--help" == tool, "-h" == tool
         puts COMMANDS_USAGE
         exit
@@ -347,6 +351,12 @@ USAGE
   end
 
   private def onyxify
+    # config, result = compile_no_codegen "tool types"
+    # Crystal.print_types result.original_node
+    STDERR.puts "IMPLEMENT ME!"
+  end
+
+  private def crystallize
     # config, result = compile_no_codegen "tool types"
     # Crystal.print_types result.original_node
     STDERR.puts "IMPLEMENT ME!"

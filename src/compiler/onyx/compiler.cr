@@ -1,9 +1,25 @@
 require "../crystal/compiler"
 
-require "../debug_utils/ast_dump"
+# require "../debug_utils/ast_dump"
 
 module Crystal
   class Compiler
+
+    def initialize
+      @debug = false
+      @dump_ll = false
+      @color = true
+      @no_codegen = false
+      @n_threads = 8.to_i32
+      @prelude = "onyx_prelude"
+      @release = false
+      @single_module = false
+      @stats = false
+      @verbose = false
+      @wants_doc = false
+      @flags = [] of String
+    end
+
     private def parse(source)
       if source.filename.ends_with? ".cr"
         parser = Parser.new(source.code)
