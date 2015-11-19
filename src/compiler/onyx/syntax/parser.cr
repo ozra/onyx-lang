@@ -265,7 +265,7 @@ module Crystal
     def dbgstack
       ret = "NEST-STACK:\n"
       @stack.each do |v|
-        ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, #{v.name} @ #{v.location.line_number}:#{v.location.column_number}\n"
+        ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, \"#{v.name}\" @ #{v.location.line_number}:#{v.location.column_number}\n"
       end
       ret += "\n"
       ret
@@ -1396,7 +1396,7 @@ module Crystal
           unexpected_token_in_atomic
         end
 
-      when :"::"
+      when :"$." # *TODO* - obviously `$` and `.` separate tokes...  # :"::"
         parse_idfr_or_global_call
         # when :"->"
         #  parse_fun_literal
@@ -1711,31 +1711,58 @@ module Crystal
       global = false
 
       case @token.type
-      when :"::"
-        global = true
-        next_token_skip_space_or_newline
+
+
+
+      # *TODO* $.my–accessor / Program.my–accessor must be possible!
+
+      when :"::", :"$", :"Program"
+
+        # Staying compat with C++-style atm for comparison
+        if tok? :"::"
+          is_global = true
+        else
+          if current_char == '.'
+            next_token_skip_space
+            is_global = true
+          else
+            is_global = false
+          end
+        end
+
+        if is_global
+          global = true
+          next_token_skip_space_or_newline
+        end
+
       when :UNDERSCORE
         return node_and_next_token Underscore.new.at(location)
       end
 
       check :CONST
       parse_idfr_after_colons(location, global, allow_type_vars)
+
     end
 
     def parse_idfr_after_colons(location, global, allow_type_vars)
+      dbg "parse_idfr_after_colons"
+
       start_line = location.line_number
       start_column = location.column_number
-
-      dbg "parse_idfr_after_colons"
 
       names = [] of String
       names << @token.value.to_s
       end_location = token_end_location
 
       next_token
-      while @token.type == :"::"
-        next_token_skip_space_or_newline
-        names << check_const
+      while tok? :"::", :"."
+        if 'A' <= current_char <= 'Z'  # next is const
+          next_token_skip_space_or_newline
+          names << check_const
+        else # possible identifier
+          break
+        end
+
         end_location = token_end_location
         next_token
       end
@@ -1761,6 +1788,12 @@ module Crystal
         const.end_location = token_end_location
         next_token
       end
+
+      # if tok? :IDFR
+
+      #    *TODO*  när parsa efter  var or def  - inte här... måste vara "path parsing" only...
+
+      # end
 
       dbg "eof parse_idfr_after_colons"
 
@@ -4836,7 +4869,7 @@ module Crystal
               tag_onyx Call.new(nil, name, args, nil, block_cast, named_args, global, name_column_number, last_call_has_parenthesis)
             end
           else
-            if @token.type == :"::"
+            if tok?  :"'", :"~", :"^", :":" # :"::"
               next_token_skip_space_or_newline
               declared_type = parse_single_type
               declare_var = DeclareVar.new(Var.new(name).at(location), declared_type).at(location)
@@ -5013,10 +5046,10 @@ module Crystal
         if current_char.whitespace?
           return nil
         end
-      when :"::"
-        if current_char.whitespace?
-          return nil
-        end
+      # when :"::"
+      #   if current_char.whitespace?
+      #     return nil
+      #   end
       else
         return nil
       end

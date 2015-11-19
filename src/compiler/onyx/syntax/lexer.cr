@@ -481,9 +481,11 @@ module Crystal
         reset_regex_flags = false
         toktype_then_nextch :";"
       when ':'
+        dbg_lex "Got colon"
         char = nextch
         case char
         when ':'
+          dbg_lex "Got colon 2"
           toktype_then_nextch :"::"
         else
           @token.type = :":"
