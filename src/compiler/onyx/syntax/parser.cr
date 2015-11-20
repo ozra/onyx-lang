@@ -2335,6 +2335,130 @@ module Crystal
       dbg "/parse_type_def"
     end
 
+    def parse_enum_def
+      doc = @token.doc
+
+      enum_indent = @indent
+
+      next_token_skip_space # _or_newline
+
+      name = parse_idfr allow_type_vars: false
+      skip_space
+
+      if tok? :CONST, :"'" # most likely a type!
+        base_type = parse_single_type
+      end
+
+      nest_kind = parse_nest_start(:type)
+      add_nest :enum, enum_indent, name.to_s, (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        raise "can't have an empty enum!"
+      end
+
+      members = parse_type_def_body :ENUM_DEF
+
+      raise "Bug: EnumDef name can only be a Path" unless name.is_a?(Path)
+
+      the_members = case
+      when members.is_a? Expressions
+        members.expressions
+      when members.is_a? Array(ASTNode+)
+        members
+      else
+        [members]
+      end
+
+      enum_def = EnumDef.new name, the_members, base_type
+      enum_def.doc = doc
+      enum_def
+    end
+
+    def parse_trait_def
+      @type_nest += 1
+
+      trait_indent = @indent
+
+      location = @token.location
+      doc = @token.doc
+
+      next_token_skip_space_or_newline
+
+      name_column_number = @token.column_number
+      name = parse_idfr allow_type_vars: false
+      skip_space
+
+      type_vars = parse_type_vars
+      skip_statement_end
+
+      nest_kind = parse_nest_start(:type)
+      add_nest :trait, trait_indent, name.to_s, (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = Nop.new
+        handle_nest_end true
+      else
+        body = parse_type_def_body :TRAIT_DEF
+      end
+
+      end_location = token_end_location
+
+      raise "Bug: TraitDef name can only be a Path" unless name.is_a?(Path)
+
+      @type_nest -= 1
+
+      # *TODO* ModuelDef will do for now unti we know if we go with the trait notation
+      module_def = ModuleDef.new name, body, type_vars, name_column_number
+      module_def.doc = doc
+      module_def.end_location = end_location
+      module_def
+    end
+
+    def parse_module_def
+      dbg "parse_module_def ->"
+
+      @type_nest += 1
+
+      mod_indent = @indent
+
+      location = @token.location
+      doc = @token.doc
+
+      next_token_skip_space_or_newline
+
+      name_column_number = @token.column_number
+      name = parse_idfr allow_type_vars: false
+      skip_space
+
+      type_vars = parse_type_vars
+      skip_statement_end
+
+      nest_kind = parse_nest_start(:generic)
+      add_nest :module, mod_indent, name.to_s, (nest_kind == :LINE_NEST), false
+
+      if nest_kind == :NIL_NEST
+        body = Nop.new
+        handle_nest_end true
+      else
+        body = parse_expressions
+      end
+
+      end_location = token_end_location
+
+      raise "Bug: ModuleDef name can only be a Path" unless name.is_a?(Path)
+
+      @type_nest -= 1
+
+      module_def = ModuleDef.new name, body, type_vars, name_column_number
+      module_def.doc = doc
+      module_def.end_location = end_location
+      module_def
+
+    ensure
+      dbg "/parse_module_def"
+    end
+
+
     def parse_type_def_body(def_kind) : Expressions
       dbg "parse_type_def_body ->"
 
@@ -2346,12 +2470,8 @@ module Crystal
         dbg "Got PRIMARY pragmas in type-def root level - apply to the type defined. #{pragmas}"
       end
 
-      # *TODO* def_kind == :TRAIT => disallow 'init'
-
       until handle_nest_end # tok?(:END)
         dbg "in parse_type_def body loop: #{@token}"
-
-        # BEST TO IMPLEMENT FULL PARSE FOR EACH ROOT–CONSTRUCT OF TYPEDEF!
 
         # *TODO*
         # :public     - pub
@@ -2410,9 +2530,37 @@ module Crystal
             members.concat parse_intype_def_var_or_const on_self: true
 
           else
-            dbg "is \"generic\" const"
-            members.concat parse_intype_def_var_or_const on_self: false
+            if def_kind == :ENUM_DEF
+              dbg "is \"generic enum const\""
 
+              location = @token.location
+              constant_name = @token.value.to_s
+              member_doc = @token.doc
+
+              next_token_skip_space
+              if @token.type == :"="
+                next_token_skip_space_or_newline
+
+                constant_value = parse_logical_or
+                next_token_skip_statement_end
+              else
+                constant_value = nil
+                skip_statement_end
+              end
+
+              if tok? :",", :";"
+                next_token_skip_statement_end
+              end
+
+              arg = Arg.new(constant_name, constant_value).at(location)
+              arg.doc = member_doc
+
+              members << arg
+
+            else
+              dbg "is \"generic\" const"
+              members.concat parse_intype_def_var_or_const on_self: false
+            end
           end
         when :INSTANCE_VAR
           members.concat parse_intype_def_var_or_const on_self: false
@@ -2429,6 +2577,11 @@ module Crystal
 
       end
 
+      # if def_kind == :ENUM_DEF
+      #   members
+      # else
+      #   body = Expressions.from(members) # *TODO* .at(members)
+      # end
       body = Expressions.from(members) # *TODO* .at(members)
 
     ensure
@@ -2487,7 +2640,12 @@ module Crystal
 
           if current_char == '('  # method def?
             dbg "NOPE! Found def"
+
+
+            # *TODO* def_kind == :TRAIT_DEF => disallow 'init'
+
             # *TODO* handle class vs instance method
+
             rets << (ret = parse_def)
             if on_self
               ret.receiver = Var.new "self"
@@ -2624,84 +2782,6 @@ module Crystal
       type_vars
     end
 
-    def parse_module_def
-      @type_nest += 1
-
-      mod_indent = @indent
-
-      location = @token.location
-      doc = @token.doc
-
-      next_token_skip_space_or_newline
-
-      name_column_number = @token.column_number
-      name = parse_idfr allow_type_vars: false
-      skip_space
-
-      type_vars = parse_type_vars
-      skip_statement_end
-
-      nest_kind = parse_nest_start(:generic)
-      add_nest :module, mod_indent, name.to_s, (nest_kind == :LINE_NEST), false
-
-      if nest_kind == :NIL_NEST
-        body = Nop.new
-        handle_nest_end true
-      else
-        body = parse_expressions
-      end
-
-      end_location = token_end_location
-
-      raise "Bug: ModuleDef name can only be a Path" unless name.is_a?(Path)
-
-      @type_nest -= 1
-
-      module_def = ModuleDef.new name, body, type_vars, name_column_number
-      module_def.doc = doc
-      module_def.end_location = end_location
-      module_def
-    end
-
-    def parse_trait_def
-      @type_nest += 1
-
-      trait_indent = @indent
-
-      location = @token.location
-      doc = @token.doc
-
-      next_token_skip_space_or_newline
-
-      name_column_number = @token.column_number
-      name = parse_idfr allow_type_vars: false
-      skip_space
-
-      type_vars = parse_type_vars
-      skip_statement_end
-
-      nest_kind = parse_nest_start(:generic)
-      add_nest :trait, trait_indent, name.to_s, (nest_kind == :LINE_NEST), false
-
-      if nest_kind == :NIL_NEST
-        body = Nop.new
-        handle_nest_end true
-      else
-        body = parse_type_def_body :TRAIT_DEF
-      end
-
-      end_location = token_end_location
-
-      raise "Bug: TraitDef name can only be a Path" unless name.is_a?(Path)
-
-      @type_nest -= 1
-
-      # *TODO* ModuelDef will do for now unti we know if we go with the trait notation
-      module_def = ModuleDef.new name, body, type_vars, name_column_number
-      module_def.doc = doc
-      module_def.end_location = end_location
-      module_def
-    end
 
 
     def parse_parenthetical_unknown
@@ -5406,8 +5486,9 @@ module Crystal
       dbg "parse_arg_type - check pre mods"
 
 
-      # *TODO* comment out and cleanup to only "default", "mut" or "immut" (NOT _const_)
-
+      # *TODO* comment out and cleanup
+      # mut_flags = :"default", :"mut" or :"immut" (NOT _const_)
+      # pass/store/alloc_mode = :"byval" or :"byref"
 
       if (is_mod_mut = next_is_mut_modifier?())
         is_mod_immut = false
@@ -6296,93 +6377,6 @@ module Crystal
       end
     end
 
-    def parse_enum_def
-      # *TODO* use parse_type_def_body!
-
-      doc = @token.doc
-
-      next_token_skip_space # _or_newline
-
-      name = parse_idfr allow_type_vars: false
-      skip_space
-
-      if tok? :CONST, :"'" # most likely a type!
-        base_type = parse_single_type
-      end
-
-      if parse_nest_start(:generic) == :NIL_NEST
-        raise "can't have an empty enum!"
-      end
-
-      members = [] of ASTNode
-      until handle_nest_end # tok?(:END)
-        case @token.type
-        when :CONST
-          location = @token.location
-          constant_name = @token.value.to_s
-          member_doc = @token.doc
-
-          next_token_skip_space
-          if @token.type == :"="
-            next_token_skip_space_or_newline
-
-            constant_value = parse_logical_or
-            next_token_skip_statement_end
-          else
-            constant_value = nil
-            skip_statement_end
-          end
-
-          case @token.type
-          when :",", :";"
-            next_token_skip_statement_end
-          end
-
-          arg = Arg.new(constant_name, constant_value).at(location)
-          arg.doc = member_doc
-
-          members << arg
-        when :IDFR
-          visibility = nil
-
-          case @token.value
-          when :private
-            visibility = :private
-            next_token_skip_space
-          when :protected
-            visibility = :protected
-            next_token_skip_space
-          end
-
-          if @token.value == :def
-            member = parse_def
-            member = VisibilityModifier.new(visibility, member) if visibility
-            members << member
-          else
-            unexpected_token "while parsing identifier-token in enum"
-          end
-        when :CLASS_VAR
-          class_var = ClassVar.new(@token.value.to_s).at(@token.location)
-
-          next_token_skip_space
-          check :"="
-          next_token_skip_space_or_newline
-          value = parse_op_assign
-
-          members << Assign.new(class_var, value).at(class_var)
-        when :";", :NEWLINE
-          skip_statement_end
-        else
-          unexpected_token "while parsing enum"
-        end
-      end
-
-      raise "Bug: EnumDef name can only be a Path" unless name.is_a?(Path)
-
-      enum_def = EnumDef.new name, members, base_type
-      enum_def.doc = doc
-      enum_def
-    end
 
     def node_and_next_token(node)
       dbg "node_and_next_token"
@@ -6737,6 +6731,7 @@ module Crystal
     def handle_transition_tokens
       dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
       if kwd? :else, :elsif, :elif, :ensure, :rescue # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
+        dbg "- handle_transition_tokens - DE-NESTS".red
         # @was_just_nest_end = true
         de_nest @indent, :"", ""
         return true
@@ -6770,6 +6765,9 @@ module Crystal
         indent_level = @indent
         line, col = @token.line_number, @token.column_number
         end_token, match_name = parse_explicit_end_statement
+
+        dbg "- handle_one_line_nest_end - DE-NESTS".red
+
         de_nest indent_level, end_token, match_name, line, col
         return true
 
@@ -6806,6 +6804,8 @@ module Crystal
         end_token = :""
         match_name = ""
       end
+
+      dbg "- handle_definite_nest_end_ - DE-NESTS".red
 
       case de_nest indent_level, end_token, match_name, line, col, force
       when :false
@@ -6872,6 +6872,8 @@ module Crystal
     def de_nest(indent : Int32, end_token : Symbol, match_name : String,
                 line = @token.line_number, col = @token.column_number,
                 force = false) : Symbol
+      dbg "de_nest ->".red
+
       tmp_dbg_nest_indent = @nesting_stack.last.indent.to_s
       tmp_dbg_nest_kind = @nesting_stack.last.nest_kind.to_s
 
@@ -7063,10 +7065,13 @@ module Crystal
     end
 
     def dbg(str : String)
+      # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
+
       return if @dbg–switch == false
-      puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str + "  (now:'" + @token.type.to_s + ":" +
-        @token.value.to_s +
-        "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s + "])"
+      puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
+            "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+            "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+            "])"
     end
   end
 end # module

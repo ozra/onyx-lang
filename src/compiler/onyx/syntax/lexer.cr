@@ -934,7 +934,6 @@ module Crystal
               # KVAR:
               #   cfun cstruct cunion cenum
               #   ctype
-              # module
               # struct
               # lambda
               # macro
@@ -1006,6 +1005,10 @@ module Crystal
                     set_pos back_end_pos
                     :end_if
                   end
+                end
+              when 'm'
+                if nc?('o') && nc?('d') && nc?('u') && nc?('l') && nc?('e')
+                  :end_module
                 end
               when 't'
                 case nextch
