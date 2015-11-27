@@ -1,4 +1,12 @@
+_debug_start_ = true
 
+
+foo-named(awol, foo = 47, bar = "fds") ->!
+   say "{{awol}}, {{foo}}, {{bar}}"
+
+foo-named 1, "blarg", "qwö qwö"
+foo-named 2, 42, #bar = "yo"
+foo-named 3, #foo = 11, #bar = "yo"
 
 list = ["foo", "yaa"]
 
@@ -40,6 +48,12 @@ f () ->
 
 f(() ->
    ([] of Int32).flat_map(~>
+      [] of Int32
+   )
+)
+
+(f () ->
+   (([] of Int32).flat_map ~>
       [] of Int32
    )
 )
@@ -370,7 +384,7 @@ match n
 end
 
 — onyx style 1 `case`
-case
+cond
    n == 1 =>
       say "NO is 1"
    n == 593 =>
@@ -412,7 +426,7 @@ end–case
 branch
    n == 593   => say "21"
    n == 2     => say "is 2"
-   *         => say n.to–s
+   *          => say n.to–s
 
 — onyx style 4 `case ref`
 case n
@@ -424,7 +438,7 @@ case n
 branch
    n == 593   then say "23"
    n == 2     do say "is 2"
-   *         then say n.to–s
+   *          then say n.to–s
 
 — onyx style 5 `case ref`
 match n
@@ -458,7 +472,7 @@ end–case
 branch
    n == 593   : say ": 23.3"
    n == 2     : say "is 2"
-   *         : say n.to–s
+   *          : say n.to–s
 
 for v[i] in [#apa, #katt]: say ": {{i}}: {{v}}"
 
@@ -488,8 +502,7 @@ def booze1(f1 Fn[I32,Array<*>,Array<Array[Ptr<Int32>]>], f2 Fn[Str, Nil, Array<B
 
 say "Array[Array<Ptr[Int32]>] => " + Array[Array<Ptr[Int32]>].to–s
 
-def booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
-end
+booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 
 def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
 end
@@ -551,7 +564,13 @@ say "the list: {{list}}"
 -- list.each (v) -) p v
 -- list.each (v) -} p v
 
-for v in list: p v
+for v in list => p v
+-- *TODO* resolve: either
+--    - change syntax for named args
+--    - make parsing smarter
+--    - remove python style block start token
+-- for v in list : p v
+-- for v in list: p v
 
 
 
@@ -624,9 +643,11 @@ for val in list =>
 
 for crux in list do say "do nest" + crux.to_s
 
-for val in list: say ": nest" + val.to_s
 
-for val in list =>  "=> nest" + val.to_s
+for arrowv in list => say "=> nest" + arrowv.to_s
+for spccolonv in list : say "\\s: nest" + spccolonv.to_s
+for colonv in list: say ": nest" + colonv.to_s
+
 
 for ,ix in list
    say ix

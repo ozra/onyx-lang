@@ -1,9 +1,0 @@
--- A very basic HTTP server
-require "http/server"
-
-server = HTTP::Server 8080, |request|
-  HTTP::Response.ok "text/plain", "Hello world, got {{request.path}}!"
-
-say "Listening on http://0.0.0.0:8080"
-server.listen
-

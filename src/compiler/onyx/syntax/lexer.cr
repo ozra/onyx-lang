@@ -54,11 +54,15 @@ module Crystal
 
 
     def dbg_lex(s)
-      puts s
+      ifdef !release
+        puts s
+      end
     end
 
     def dbg_ind(s)
-      # puts s
+      ifdef !release
+        puts s
+      end
     end
 
     def filename=(filename)
@@ -481,11 +485,11 @@ module Crystal
         reset_regex_flags = false
         toktype_then_nextch :";"
       when ':'
-        dbg_lex "Got colon"
+        # dbg_lex "Got colon"
         char = nextch
         case char
         when ':'
-          dbg_lex "Got colon 2"
+          # dbg_lex "Got colon 2"
           toktype_then_nextch :"::"
         else
           @token.type = :":"
@@ -578,7 +582,7 @@ module Crystal
 
 
       when '^'
-        toktype_then_nextch = :"^"
+        toktype_then_nextch :"^"
 
       when '\'' # NOT char anymore!
         toktype_then_nextch :"'"
@@ -841,7 +845,7 @@ module Crystal
           end
           scan_idfr(start)
         when 'o'
-          if nc?('n') 
+          if nc?('n')
             case nextch
             when 's'
               if nc?('t')
@@ -1455,7 +1459,9 @@ module Crystal
         #p "resets continuation state"
         @next_token_continuation_state = :AUTO
       end
-      puts ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s + "  (#{@line_number}:#{@column_number}): " + @token.type.to_s + ":" + @token.value.to_s + ")").blue
+      dbg_lex ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "  (#{@line_number}:#{@column_number}): '" + @token.type.to_s +
+              "' : '" + @token.value.to_s + "' )").blue
     end
 
 
@@ -1478,9 +1484,11 @@ module Crystal
       p "Is it 2nd '-'?"
       return false if !(peek_nextch == '-' || curch == '—')
       p "Was prev SPC?"
-      prevc = unsafe_char_at(cur_pos - 1)
-      p "It is '" + prevc + "'"
-      return false if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
+      if cur_pos > 1
+        prevc = unsafe_char_at(cur_pos - 1)
+        p "It is '" + prevc + "'"
+        return false if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
+      end
       p "Yep - comment!"
 
       # possible_comment_start = cur_pos

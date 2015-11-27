@@ -2,8 +2,10 @@ require "../../crystal/semantic/call"
 
 class Crystal::Call
   def dbgx(str : String)
-    if @onyx_node
-      puts str + " " + @name
+    ifdef !release
+      if @onyx_node
+        puts str + " " + @name
+      end
     end
   end
 

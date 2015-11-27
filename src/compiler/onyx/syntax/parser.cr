@@ -100,10 +100,12 @@ module Crystal
     end
 
     def dbgstack
-      @scopes.each_with_index do |scope, i|
-        #@scopes[@scopes.size - 2].dbgstack
-        puts "#{i}:"
-        scope.dbgstack
+      ifdef !release
+        @scopes.each_with_index do |scope, i|
+          #@scopes[@scopes.size - 2].dbgstack
+          puts "#{i}:"
+          scope.dbgstack
+        end
       end
     end
   end
@@ -263,12 +265,16 @@ module Crystal
     end
 
     def dbgstack
-      ret = "NEST-STACK:\n"
-      @stack.each do |v|
-        ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, \"#{v.name}\" @ #{v.location.line_number}:#{v.location.column_number}\n"
+      ifdef !release
+        ret = "NEST-STACK:\n"
+        @stack.each do |v|
+          ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, \"#{v.name}\" @ #{v.location.line_number}:#{v.location.column_number}\n"
+        end
+        ret += "\n"
+        ret
+      else
+        ""
       end
-      ret += "\n"
-      ret
     end
   end
 
@@ -422,12 +428,15 @@ module Crystal
         raise "Expected end of program, EOF, but got `#{@token}`"
       end
 
-      # *TODO* - debugga hela programstrukturen
-      puts "\n\n\nAST:\n\n\n"
-      expressions.dump_std
-      puts "\n\n\n"
+      ifdef !release
+        # *TODO* - debugga hela programstrukturen
+        puts "\n\n\nAST:\n\n\n"
+        expressions.dump_std
+        puts "\n\n\n"
 
-      puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
+        puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
+
+      end
 
       expressions
     end
@@ -1154,7 +1163,7 @@ module Crystal
     end
 
     def parse_atomic_method_suffix_dot(atomic, location)
-      dbg "parse_atomic_method_suffix_dot"
+      dbg "parse_atomic_method_suffix_dot".green
       check_void_value atomic, location
 
       @wants_regex = false
@@ -1244,11 +1253,11 @@ module Crystal
           ).at(location)
 
         else
-          call_args = space_consumed ? parse_call_args_space_consumed : parse_call_args
+          call_args = space_consumed ? parse_call_args_spaced : parse_call_args
 
           # call_args, last_call_has_parenthesis = (
           #   preserve_last_call_has_parenthesis {
-          #     space_consumed ? parse_call_args_space_consumed : parse_call_args
+          #     space_consumed ? parse_call_args_spaced : parse_call_args
           #   }
           # )
           if call_args
@@ -1668,11 +1677,12 @@ module Crystal
     def parse_idfr_or_literal
       idfr = parse_idfr
 
-      dbg "parse_idfr_or_literal"
+      dbg "parse_idfr_or_literal ->"
 
       case
       when tok? :"("
         return parse_idfr_type_new_call_sugar idfr
+
       when tok? :SPACE
         # *TODO* we should probably pre–parse and just make sure it's not a binary
         # operator or assign
@@ -1680,11 +1690,13 @@ module Crystal
         when .alpha?, '_', '"', .ord_gt?(0x9F), .digit?, '(', '[', '{'
           return parse_idfr_type_new_call_sugar idfr
         end
+
       when @token.type == :"{"
         return parse_idfr_tied_listish_literal idfr
+
       end
 
-      dbg "nothing special - pass along"
+      dbg "/parse_idfr_or_literal - found nothing special - pass along"
 
       return idfr
     end
@@ -1745,7 +1757,7 @@ module Crystal
     end
 
     def parse_idfr_after_colons(location, global, allow_type_vars)
-      dbg "parse_idfr_after_colons"
+      dbg "parse_idfr_after_colons ->"
 
       start_line = location.line_number
       start_column = location.column_number
@@ -1756,10 +1768,15 @@ module Crystal
 
       next_token
       while tok? :"::", :"."
+        dbg "- parse_idfr_after_colons - got `::` or `.`"
+
         if 'A' <= current_char <= 'Z'  # next is const
+          dbg "- parse_idfr_after_colons - next is constish: `#{current_char}"
           next_token_skip_space_or_newline
           names << check_const
-        else # possible identifier
+
+        else # possible identifier, T() or T arg, juxtaposition call
+          dbg "- parse_idfr_after_colons - next is NOT constish: `#{current_char}"
           break
         end
 
@@ -1795,7 +1812,7 @@ module Crystal
 
       # end
 
-      dbg "eof parse_idfr_after_colons"
+      dbg "/parse_idfr_after_colons"
 
       const
     end
@@ -1823,25 +1840,23 @@ module Crystal
     end
 
     def parse_idfr_type_new_call_sugar(idfr)
+      dbg "parse_idfr_type_new_call_sugar ->".yellow
       arg_node = parse_call_args(false)
 
       if arg_node
-        new_args = arg_node.args || [] of ASTNode
-        # *TODO* we should handle named args for this situation too!
-        named_args = nil
-        return tag_onyx Call.new(idfr, "new", new_args, nil, nil, named_args, false, 0, false)
+        args = arg_node.args || [] of ASTNode
+        block = arg_node.block
+        block_cast = arg_node.block_cast
+        named_args = arg_node.named_args
+
+        return tag_onyx Call.new(idfr, "new", args, block, block_cast, named_args, false, 0, false)
+
       else
         raise "bug in onyx when trying to parse Type.new() sugar!"
       end
 
-      # *TODO* REPORT BUG! DEDUCTIVE, EARLY RETURN / FAIL PATTERN DOESN'T WORK
-      # WITH INFERRER!
-      # if !arg_node
-      #   raise "bug in onyx when trying to parse Type.new() sugar!"
-      # end
-      # new_args = arg_node.args
-      # named_args = nil
-      # return tag_onyx Call.new(idfr, "new", new_args, nil,  nil, named_args, false, 0, false)
+    ensure
+      dbg "/parse_idfr_type_new_call_sugar".yellow
     end
 
 
@@ -2038,6 +2053,7 @@ module Crystal
         add_var name
         next_token_skip_space
 
+        # *TODO* don't use colon as THE type annotater
         if @token.type == :":"
           next_token_skip_space_or_newline
           check :CONST
@@ -2122,7 +2138,7 @@ module Crystal
 
       dbg "check for `:` | `,` | `[`"
 
-      if tok? :":"
+      if tok? :":" # the special "for-colon"
         next_token_skip_space
         key_var = val_var
         if kwd? :in, :from, :to, :til
@@ -2157,6 +2173,7 @@ module Crystal
         next_token_skip_space
         dbg "parse iterable expression"
         iterable = parse_op_assign_no_control allow_suffix: false
+        dbg "got iterable expression"
 
       when :to
         next_token_skip_space
@@ -2685,7 +2702,7 @@ module Crystal
           dbg "found type declaration"
 
           # *TODO* we must take care of the type qualifiers
-          x,y,var_type  =  parse_arg_type # parse_type false
+          x,y,var_type  =  parse_param_type # parse_type false
 
 
           dbg "add type declaration"
@@ -2991,7 +3008,7 @@ module Crystal
       if @token.type != :"," && @token.type != :";" && @token.type != :")"
         dbg "parse_lambda_literal: parse a type"
 
-        is_mod_immut, is_mod_mut, type = parse_arg_type()
+        is_mod_immut, is_mod_mut, type = parse_param_type()
       else
         dbg "parse_lambda_literal: no type"
       end
@@ -3498,7 +3515,7 @@ module Crystal
           next_token_skip_space_or_newline
           of_key = parse_single_type
           # check :"=>"
-          check :":"
+          check :":", "new_hash_literal"
           next_token_skip_space_or_newline
           of_value = parse_single_type
           of = HashLiteral::Entry.new(of_key, of_value)
@@ -4271,62 +4288,62 @@ module Crystal
       index = 0
       splat_index = nil
 
-      # *TODO* It should ALWAYS be `(` at this point! required!
 
       dbg ""
 
-      case @token.type
-      when :"("
-        dbg "Got with parens arg_list"
-        next_token_skip_space_or_newline
+      # *TODO* It should ALWAYS be `(` at this point! required!
+      # case @token.type
+      # when :"("
+      dbg "Got with parens arg_list"
+      next_token_skip_space_or_newline
 
-        while @token.type != :")"
-          dbg "!=)"
+      while @token.type != :")"
+        dbg "!=)"
 
-          extras = parse_param(arg_list, extra_assigns, true, found_default_value, found_splat)
+        extras = parse_param(arg_list, extra_assigns, true, found_default_value, found_splat)
 
-          if !found_default_value && extras.default_value
-            found_default_value = true
-          end
-          if !splat_index && extras.splat
-            splat_index = index
-            found_splat = true
-          end
-          if block_cast = extras.block_cast
-            compute_block_cast_yields block_cast
-            check :")"
-            break
-          elsif tok?(:",") || tok?(:";") || @token.type == :"NEWLINE"
-            next_token_skip_space_or_newline
-          else
-            skip_statement_end
-            if @token.type != :")"
-              unexpected_token "expected ',' or ')'"
-            end
-          end
-          index += 1
+        if !found_default_value && extras.default_value
+          found_default_value = true
         end
-        next_token_skip_space
-      when :";", :"NEWLINE"
-        # Skip
-      when :":"
-        # Skip
-      when :"&"
-        next_token_skip_space_or_newline
-        block_cast = parse_block_cast(extra_assigns)
-        compute_block_cast_yields block_cast
-      else
-        if is_abstract && @token.type == :EOF  # for prefixed `abstract`, the suffix–vers is below
-          # OK
+        if !splat_index && extras.splat
+          splat_index = index
+          found_splat = true
+        end
+        if block_cast = extras.block_cast
+          compute_block_cast_yields block_cast
+          check :")"
+          break
+        elsif tok?(:",") || tok?(:";") || @token.type == :"NEWLINE"
+          next_token_skip_space_or_newline
         else
-          unexpected_token "while parsing def"
+          skip_statement_end
+          if @token.type != :")"
+            unexpected_token "expected ',' or ')'"
+          end
         end
+        index += 1
       end
+      next_token_skip_space
+      # when :";", :"NEWLINE"
+      #   # Skip
+      # when :":"
+      #   # Skip
+      # when :"&"
+      #   next_token_skip_space_or_newline
+      #   block_cast = parse_block_cast(extra_assigns)
+      #   compute_block_cast_yields block_cast
+      # else
+      #   if is_abstract && @token.type == :EOF  # for prefixed `abstract`, the suffix–vers is below
+      #     # OK
+      #   else
+      #     unexpected_token "while parsing def"
+      #   end
+      # end
 
       dbg "before is_macro_def"
 
       if is_macro_def
-        check :":"
+        check :":", "before is_macro_def"
         next_token_skip_space
         return_type = parse_single_type
         end_location = return_type.end_location
@@ -4543,12 +4560,16 @@ module Crystal
         dbg "\nWARNING!".red + " `:` after param-name - did you mean to annotate type? Ditch the colon!\n".yellow
       end
 
+
+
+      # *TODO* this needs to go more places!!!
+
       if (allow_restrictions &&
           !tok?(:"=", :",", :";", :"<", :")")
           )
         # next_token_skip_space_or_newline
         location = @token.location
-        is_mod_immut, is_mod_mut, type = parse_arg_type()
+        is_mod_immut, is_mod_mut, type = parse_param_type()
         dbg is_mod_immut.to_s + ", " + is_mod_mut.to_s + ", " + type.to_s
 
         restriction = type
@@ -4597,15 +4618,15 @@ module Crystal
       inputs = nil
       output = nil
 
-      if @token.type == :":" # *TODO*
-        next_token_skip_space_or_newline
+      # if @token.type == :":" # *TODO*
+      #   next_token_skip_space_or_newline
 
-        location = @token.location
+      #   location = @token.location
 
-        type_spec = parse_single_type
+        type_spec = parse_single_type  # *TODO* parse_type or parse_param_type (!)
       # else
       #   type_spec = Fun.new
-      end
+      # end
 
       #block_cast = BlockArg.new(arg_name, type_spec).at(name_location)
       block_cast = Arg.new(arg_name, restriction: type_spec).at(name_location)
@@ -4883,6 +4904,8 @@ module Crystal
 
       dbg "identifier `#{name}`, is_var == #{is_var}"
 
+      # *TODO* add support for implicitly numbered magic params too!
+
       if name[0] == '_' && name.size == 2 && name[1] >= '0' && name[1] <= '9'   # magic param?
         is_var = true
         #name = "tmp_par" + name
@@ -4949,7 +4972,7 @@ module Crystal
               tag_onyx Call.new(nil, name, args, nil, block_cast, named_args, global, name_column_number, last_call_has_parenthesis)
             end
           else
-            if tok?  :"'", :"~", :"^", :":" # :"::"
+            if tok?  :"'", :"~", :"^" # , :":" # :"::"  - *TODO*, if ':' is wished to be used for this - either block-: or something else has to be ditched
               next_token_skip_space_or_newline
               declared_type = parse_single_type
               declare_var = DeclareVar.new(Var.new(name).at(location), declared_type).at(location)
@@ -4966,9 +4989,14 @@ module Crystal
             end
           end
         end
+
       node.doc = doc
       node.end_location = block.try(&.end_location) || call_args.try(&.end_location) || end_location
+
       node
+
+    ensure
+      dbg "/parse_var_or_call"
     end
 
     # def preserve_last_call_has_parenthesis
@@ -4979,105 +5007,23 @@ module Crystal
     #   {value, last_call_has_parenthesis}
     # end
 
-
-
     record CallArgs, args, block, block_cast, named_args, stopped_on_do_after_space, end_location
 
     def parse_call_args(allow_curly = false)
-      dbg "parse_call_args"
+      dbg "parse_call_args ->"
 
       case @token.type
 
-      # *TODO* what's up here then - follow tracing - no block parsing?
       when :"{"
         @last_call_has_parenthesis = false
         nil
 
       when :"("
-        dbg "parse_call_args -> '('"
-        slash_is_regex!
-
-        args = [] of ASTNode
-        end_location = nil
-
-        open("call") do
-          next_token_skip_space_or_newline
-
-          if tok? :INDENT, :DEDENT, :NEWLINE
-            next_token
-          end
-
-          while @token.type != :")"
-
-            if call_block_cast_follows?
-              return parse_call_block_cast(args, true)
-            end
-
-            # Do we have a block?
-            if tok? :"|", :"~>"
-              dbg "parse_call_args block arg - parse it"
-              block = parse_block
-
-              dbg "parse_call_args after block arg - check for ')'"
-              check_closing_paren
-              end_location = token_end_location
-
-              next_token_skip_space
-
-              return CallArgs.new args, block, nil, nil, false, end_location
-
-            # `discard`-konstrukttion: sök noder, efter normalisering (auto-
-            # return etc.), där funcktions–anrop finns och returvärdet hamnar
-            # i en dead–end. Nej - ALLA UTTRYCK SÅKLART!!!
-            # Bara om 'stricter` mode eller flagga skickats till kompilatorn.
-
-            elsif @token.type == :IDFR && current_char == ':'
-              named_args = parse_named_args(allow_newline: true)
-
-              if call_block_cast_follows?
-                return parse_call_block_cast(args, true, named_args)
-              end
-
-              dbg "parse_call_args after named-args - check for ')'"
-
-              check_closing_paren
-              end_location = token_end_location
-
-              next_token_skip_space
-              return CallArgs.new args, nil, nil, named_args, false, end_location
-
-            else
-              args << parse_call_arg
-
-            end
-
-            skip_statement_end
-            if @token.type == :","
-
-              dbg "got ',' skips apce + newline"
-              scan_next_as_continuation
-
-              slash_is_regex!
-              next_token_skip_space_or_newline
-            else
-              dbg "parse_call_args found non ',' in loop - check for ')'"
-
-              check_closing_paren
-              break
-            end
-          end
-
-          dbg "parse_call_args after 'while' - do next_token_skip_space"
-
-          end_location = token_end_location
-          next_token_skip_space
-          @last_call_has_parenthesis = true
-        end
-
-        CallArgs.new args, nil, nil, nil, false, end_location
+        dbg "- parse_call_args -> '('"
+        parse_call_args_parenthesized
 
       when :SPACE
-        dbg "parse_call_args -> SPACE"
+        dbg "- parse_call_args -> SPACE"
         slash_is_not_regex!
         end_location = token_end_location
         next_token
@@ -5091,38 +5037,135 @@ module Crystal
         # #   return CallArgs.new nil, nil, nil, nil, true, end_location
         # # end
 
-        parse_call_args_space_consumed check_plus_and_minus: true, allow_curly: allow_curly
+        parse_call_args_spaced check_plus_and_minus: true, allow_curly: allow_curly
 
       else
         @last_call_has_parenthesis = false
         nil
       end
+
+    ensure
+      dbg "/parse_call_args"
     end
 
-    def parse_call_args_space_consumed(block = nil, check_plus_and_minus = true, allow_curly = false)
-      dbg "parse_call_args_space_consumed"
+    def parse_call_args_parenthesized
+      dbg "parse_call_args_parenthesized"
+      slash_is_regex!
+
+      args = [] of ASTNode
+      end_location = nil
+
+      open("call") do
+        next_token_skip_space_or_newline
+
+        if tok? :INDENT, :DEDENT, :NEWLINE
+          next_token
+        end
+
+        while @token.type != :")"
+
+          if call_block_cast_follows?
+            return parse_call_block_cast(args, true)
+          end
+
+          # Do we have a block?
+          if tok? :"|", :"~>"
+            dbg "parse_call_args block arg - parse it"
+            block = parse_block
+
+            dbg "parse_call_args after block arg - check for ')'"
+            check_closing_paren
+            end_location = token_end_location
+
+            next_token_skip_space
+
+            return CallArgs.new args, block, nil, nil, false, end_location
+
+          # `discard`-konstrukttion: sök noder, efter normalisering (auto-
+          # return etc.), där funktions–anrop finns och returvärdet hamnar
+          # i en dead–end. Nej - ALLA UTTRYCK SÅKLART!!!
+          # Bara om 'stricter` mode eller flagga skickats till kompilatorn.
+
+          elsif @token.type == :IDFR  && current_char == ':' && peek_next_char == "=" # *TODO* named args - syntax needs to be defined
+            named_args = parse_named_args(allow_newline: true)
+
+            if call_block_cast_follows?
+              return parse_call_block_cast(args, true, named_args)
+            end
+
+            dbg "- parse_call_args_parenthesized - after named-args - check for ')'"
+
+            check_closing_paren
+            end_location = token_end_location
+
+            next_token_skip_space
+            return CallArgs.new args, nil, nil, named_args, false, end_location
+
+          else
+            args << parse_call_arg
+
+          end
+
+          skip_statement_end
+          if @token.type == :","
+
+            dbg "got ',' skips apce + newline"
+            scan_next_as_continuation
+
+            slash_is_regex!
+            next_token_skip_space_or_newline
+          else
+            dbg "- parse_call_args_parenthesized - found non ',' in loop - check for ')'"
+
+            check_closing_paren
+            break
+          end
+        end
+
+        dbg "- parse_call_args_parenthesized - after 'while' - do next_token_skip_space"
+
+        end_location = token_end_location
+        next_token_skip_space
+        @last_call_has_parenthesis = true
+      end
+
+      CallArgs.new args, nil, nil, nil, false, end_location
+    end
+
+    def parse_call_args_spaced(block = nil, check_plus_and_minus = true, allow_curly = false)
+      dbgXXX "parse_call_args_spaced ->"
+
       if kwd?(:as) || tok?(:END) # *TODO* end–tok? check instead - old code
         return nil
       end
 
-      dbg "parse_call_args_space_consumed check token.type"
+      dbgXXX "- parse_call_args_spaced - check token.type"
 
       case @token.type
       when :"&"
+        dbgXXX "- parse_call_args_spaced - token.type '&'"
         return nil if current_char.whitespace?
+
       when :"+", :"-"
+        dbgXXX "- parse_call_args_spaced - token.type '+/-'"
         if check_plus_and_minus
           return nil if current_char.whitespace?
         end
+
       when :"{"
+        dbgXXX "- parse_call_args_spaced - token.type '{'"
         return nil unless allow_curly
+
       when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START,
           :SYMBOL_ARRAY_START, :NUMBER, :IDFR, :SYMBOL, :INSTANCE_VAR,
           :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX,
           :REGEX, :"(", :"!", :not, :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{",
            :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE,  :"|", :"~>"
+        dbgXXX "- parse_call_args_spaced - token.type '****'"
         # Nothing
+
       when :"..." # *TODO* verify - was :"*" - so it doesn't clash with `range–til`
+        dbgXXX "- parse_call_args_spaced - token.type '...'"
         if current_char.whitespace?
           return nil
         end
@@ -5131,25 +5174,36 @@ module Crystal
       #     return nil
       #   end
       else
+        dbgXXX "- parse_call_args_spaced - token.type OTHER"
         return nil
       end
 
       case @token.value
       when :if, :unless, :while, :until, :rescue, :ensure, :do, :then
+        dbgXXX "returns since if|unless|..."
         return nil
       when :yield
+        dbgXXX "returns since yield"
         return nil if @stop_on_yield > 0
       end
 
       args = [] of ASTNode
       end_location = nil
 
-      while @token.type != :NEWLINE && @token.type != :";" && @token.type != :EOF && @token.type != :")" && @token.type != :":" && !is_end_token
+
+      # xxx
+      #        *TODO* : should be handles as => - where is that handled!?
+
+      dbgXXX "starts while loop"
+
+      while !tok?(:NEWLINE, :";", :EOF, :")") && !is_end_token
+        dbgXXX "- parse_call_args_spaced - TOP of WHILE"
+
         if call_block_cast_follows?
           return parse_call_block_cast(args, false)
 
         elsif tok? :"|", :"~>"
-          dbg "parse_call_args -> BLOCKISH"
+          dbgXXX "parse_call_args -> BLOCKISH"
           block = parse_block
 
           end_location = token_end_location
@@ -5158,18 +5212,29 @@ module Crystal
 
         end
 
-        if @token.type == :IDFR && current_char == ':'
-          named_args = parse_named_args
+        if @token.type == :SYMBOL
+          if parser_peek_non_ws_char == '='
+            dbgXXX "- parse_call_args_spaced - is :SYMBOL named arg"
+            named_args = parse_named_args
 
-          if call_block_cast_follows?
-            return parse_call_block_cast(args, false, named_args: named_args)
+            if call_block_cast_follows?
+              return parse_call_block_cast(args, false, named_args: named_args)
+            end
+
+            end_location = token_end_location
+
+            skip_space
+            return CallArgs.new args, nil, nil, named_args, false, end_location
+
+          else # *TODO* refactor into fallthrough to below
+            dbgXXX "- parse_call_args_spaced - is :SYMBOL _arg_ - NOT named arg"
+            arg = parse_call_arg
+            args << arg
+            end_location = arg.end_location
           end
 
-          end_location = token_end_location
-
-          skip_space
-          return CallArgs.new args, nil, nil, named_args, false, end_location
         else
+          dbgXXX "- parse_call_args_spaced - 'regular arg'"
           arg = parse_call_arg
           args << arg
           end_location = arg.end_location
@@ -5178,6 +5243,7 @@ module Crystal
         skip_space
 
         if @token.type == :","
+          dbgXXX "- parse_call_args_spaced - got comma, continue"
           slash_is_regex!
           next_token_skip_space_or_newline
         else
@@ -5186,11 +5252,17 @@ module Crystal
       end
 
       CallArgs.new args, block, nil, nil, false, end_location
+
+    ensure
+      dbgXXX "/parse_call_args_spaced"
     end
 
     def parse_named_args(allow_newline = false)
       named_args = [] of NamedArgument
+      dbgXXX "parse_named_args ->"
+
       while true
+        raise "Non named-argument when parsing name args: #{token}" if !tok? :SYMBOL
         location = @token.location
         name = @token.value.to_s
 
@@ -5198,17 +5270,21 @@ module Crystal
           raise "duplicated named argument: #{name}", @token
         end
 
-        next_token
-        check :":"
+        next_token_skip_space
+
+        dbgXXX "- parse_named_args - we have named-arg, check for `= value`"
+
+        check :"=", "parse_named_args"
 
         # *TODO* default valued and named args should be separated
 
         next_token_skip_space_or_newline
         value = parse_op_assign
 
-
         named_args << NamedArgument.new(name, value).at(location)
+
         skip_statement_end if allow_newline
+
         if @token.type == :","
           next_token_skip_space_or_newline
           if @token.type == :")" || @token.type == :"&"
@@ -5218,7 +5294,11 @@ module Crystal
           break
         end
       end
+
       named_args
+
+    ensure
+      dbgXXX "/parse_named_args"
     end
 
     def parse_call_arg
@@ -5482,8 +5562,8 @@ module Crystal
     #         ##     ##  ##        ##              ##
     #         ##     ##  ##       ##     ##       ##
     #        ##     ##  ##         ########  ######
-    def parse_arg_type # *TODO* AKA parse_qualifier_and_type
-      dbg "parse_arg_type - check pre mods"
+    def parse_param_type # *TODO* AKA parse_qualifier_and_type
+      dbg "parse_param_type - check pre mods"
 
 
       # *TODO* comment out and cleanup
@@ -5498,7 +5578,7 @@ module Crystal
 
       type = parse_single_type false
 
-      dbg "parse_arg_type - after parse_simple_type"
+      dbg "parse_param_type - after parse_simple_type"
 
       # We won't do the symbol/value separation!
       # if (is_val_mut = next_is_mut_modifier?())
@@ -5507,7 +5587,7 @@ module Crystal
       #   is_val_const = next_is_immut_modifier?()
       # end
 
-      dbg "parse_arg_type - checks done"
+      dbg "parse_param_type - checks done"
 
       {is_mod_immut, is_mod_mut, type}
     end
@@ -5878,7 +5958,7 @@ module Crystal
             inputs = parse_asm_operands
           end
         else
-          check :":"
+          check :":", "parse_asm"
           next_token_skip_space_or_newline
 
           if @token.type == :DELIMITER_START
@@ -6124,7 +6204,7 @@ module Crystal
           real_name = @token.value.to_s
           next_token_skip_space
         end
-        check :":"
+        check :":", "parse_lib_body_exp_without_location"
         next_token_skip_space_or_newline
         type = parse_single_type
 
@@ -6184,7 +6264,7 @@ module Crystal
             arg_location = @token.location
 
             next_token_skip_space_or_newline
-            check :":"
+            check :":", "parse_fun_def"
             next_token_skip_space_or_newline
             arg_type = parse_single_type
             skip_statement_end
@@ -6206,6 +6286,8 @@ module Crystal
         next_token_skip_statement_end
       end
 
+
+      # *TODO* WRONG!!!
       if @token.type == :":"
         next_token_skip_space_or_newline
         return_type = parse_single_type
@@ -6507,7 +6589,7 @@ module Crystal
       @scope_stack.add_var name
 
       # *TODO* *DEBUG*
-      @scope_stack.dbgstack
+      # @scope_stack.dbgstack
 
       nil
     end
@@ -6953,6 +7035,10 @@ module Crystal
       raise "expecting token '#{token_type}', not '#{@token.to_s}'", @token unless token_type == @token.type
     end
 
+    def check(token_type, when_what : String)
+      raise "expecting token '#{token_type}', not '#{@token.to_s}', when '#{when_what}", @token unless token_type == @token.type
+    end
+
     def check_token(value)
       raise "expecting token '#{value}', not '#{@token.to_s}'", @token unless @token.type == :TOKEN && @token.value == value
     end
@@ -6969,6 +7055,13 @@ module Crystal
     def scan_next_as_continuation
       dbg "sets scan_next_as_continuation"
       @next_token_continuation_state = :CONTINUATION
+    end
+
+    def parser_peek_non_ws_char : Char
+      while current_char == ' '
+        next_char
+      end
+      return current_char
     end
 
     def check_const
@@ -7053,25 +7146,39 @@ module Crystal
     end
 
     def dbg_on
-      return if @dbg–switch
-      @dbg–switch = true
-      dbg "TURNS DEBUG LOGGING ON".red
+      ifdef !release
+        return if @dbg–switch
+        @dbg–switch = true
+        dbg "TURNS DEBUG LOGGING ON".red
+      end
     end
 
     def dbg_off
-      return if !@dbg–switch
-      dbg "TURNS DEBUG LOGGING OFF".red
-      @dbg–switch = false
+      ifdef !release
+        return if !@dbg–switch
+        dbg "TURNS DEBUG LOGGING OFF".red
+        @dbg–switch = false
+      end
     end
 
     def dbg(str : String)
+      ifdef !release
       # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
+        return if @dbg–switch == false
+        puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
+              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "])"
+      end
+    end
 
-      return if @dbg–switch == false
-      puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
-            "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
-            "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
-            "])"
+    def dbgXXX(str : String)
+        puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
+              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "])" + " XXX".red
+
+        # STDOUT.flush
     end
   end
 end # module

@@ -1,4 +1,4 @@
-.PHONY: all spec onyx doc clean
+.PHONY: all spec onyx doc clean bootstrap
 
 -include Makefile.local # for optional local options e.g. threads
 
@@ -13,12 +13,17 @@ LLVM_EXT_DIR = src/llvm/ext
 LLVM_EXT_OBJ = $(LLVM_EXT_DIR)/llvm_ext.o
 
 all: onyx
+
+bootstrap:
+	./bootstrap.sh
+
 spec: all_spec
 	$(O)/all_spec
 doc:
 	$(BUILD_PATH) ./bin/crystal doc docs/main.cr
 
 onyx: $(O)/onyx
+
 all_spec: $(O)/all_spec
 
 llvm_ext: $(LLVM_EXT_OBJ)

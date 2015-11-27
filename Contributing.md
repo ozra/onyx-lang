@@ -61,13 +61,29 @@ Ok - you catch the drift - right?
     - This way we get less merge noise.
 - Crystal code - to facilitate sharing with the crystal project (an objective), follow crystal projects style (simply use the formatter!).
 
+The source code follows the same style guide lines as Crystal (just use the formatter!) for the time being - since it simplifies features making its way back into the Crystal repo when reasonable.
+
 ## Contribute to THIS guide ##
 
 If this is too vague currently - just PR changes!
 
-## Code of Conduct ##
+## Onyx Project Code of Conduct ##
 
-What ever you think promotes and helps the language forward is enough for code of conduct for now. If someone is offended - you've probably been an asshole, then acknowledge it and apologize. We can all stumble down that road some times. Apologizing is a strong and proud act.
-If someone starts acting in a way that reduces others happiness or
+Whatever you think promotes and helps the language forward is enough for code of conduct for now. If someone is offended - you've probably been an asshole;  acknowledge it and apologize. We can all stumble down that road some times. Apologizing is a strong and proud act.
+
+Cursing is ~~fucking~~ allowed, but not necessarily decreed.
+
+If someone starts acting in a way that reduces others' happiness or
 productivity _chronically_, then we might revise this.
-Everyone with an interest is welcome, no matter where you come from linguistically (in fact different backgrounds are preferable) or otherwise.
+
+Everyone with an interest is welcome, no matter where you come from linguistically or otherwise (creed, religion, sexual orientation, sexual make-up or _even_ musical taste). In fact different backgrounds are essential for a good project.
+
+## Gitting Down to Business ##
+
+1. Fork it ( https://github.com/ozra/onyx-lang/fork )
+2. Create your feature branch (git checkout -b my-new-feature)
+3. Commit your changes (git commit -am 'Add some feature')
+4. Push to the branch (git push origin my-new-feature)
+5. Create a new Pull Request
+
+**Do some sausage making before commit** - we want one commit: "Add this-and-that-feature", _not_: ~~"changed x", "fix y", "forgot trailing spaces", "this-and-that-feature done"~~ (note especially to @ozra ;-) )

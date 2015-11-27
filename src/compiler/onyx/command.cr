@@ -1,5 +1,13 @@
 require "json"
 
+
+# *TODO* make sure correct cornerstone path can be handled
+def dbg(*objs)
+  ifdef !release
+    puts objs
+  end
+end
+
 module Crystal
   def self.tempfile(basename)
     Dir.mkdir_p Config.cache_dir
@@ -13,7 +21,6 @@ Usage: onyx [command] [switches] [program file] [--] [arguments]
 
 Command:
     init                     generate new Onyx project
-    init–cr                  generate new Crystal project
     devel                    compile development program file
     release                  compile release program file
     deps                     install project dependencies
@@ -61,9 +68,9 @@ USAGE
       when "init".starts_with?(command)
         options.shift
         init(:onyx)
-      when "init-cr".starts_with?(command)
-        options.shift
-        init(:crystal)
+      # when "init-cr".starts_with?(command)
+      #   options.shift
+      #   init(:crystal)
       when "build".starts_with?(command)
         error "Use either 'release' or 'devel' specifically"
       when "release".starts_with?(command)
@@ -168,13 +175,13 @@ USAGE
   end
 
   private def init(base_lang)
-    if base_lang == :onyx
+    # if base_lang == :onyx
       # *TODO*
       error "Implement me!"
       Init.run(options)
-    else
-      Init.run(options)
-    end
+    # else
+    #   Init.run(options)
+    # end
   end
 
   private def build(mode = :devel)
@@ -317,6 +324,9 @@ USAGE
   end
 
   private def docs
+    # *TODO* debug
+    dbg "generate docs"
+
     if options.empty?
       sources = [Compiler::Source.new("require", %(require "./src/**"))]
       included_dirs = [] of String
@@ -332,6 +342,9 @@ USAGE
 
     compiler = Compiler.new
     compiler.wants_doc = true
+
+    do_link_flags_rationalism! compiler
+
     result = compiler.compile sources, output_filename
     Crystal.generate_docs result.program, included_dirs
   end
@@ -535,6 +548,7 @@ USAGE
                     end
 
     compiler.link_flags = link_flags.join(" ") unless link_flags.empty?
+    do_link_flags_rationalism! compiler
 
     output_filename = opt_output_filename
     filenames = opt_filenames.not_nil!
@@ -581,6 +595,44 @@ USAGE
       end
     end
     values
+  end
+
+  private def do_link_flags_rationalism!(compiler) : Nil
+    dbg "compiler.link_flags = #{compiler.link_flags}"
+
+    lflags = compiler.link_flags || ""
+
+    if lflags.index("-L") == nil
+      # *TODO* curr dir seems a bit impossible to do cross platform
+      # meanwhile another non cross platform hack is in place :-/
+      curr_dir = `which onyx`
+
+      out_flags =
+        case
+        when Dir.exists? "#{curr_dir}/lib/onyx/embedded/lib"
+          lflags + " -L#{curr_dir}/lib/onyx/embedded/lib"
+
+        when Dir.exists? "#{curr_dir}/../embedded/lib"
+          lflags + " -L#{curr_dir}/../embedded/lib"
+
+        when Dir.exists? "/opt/onyx/embedded/lib"
+          lflags + " -L/opt/onyx/embedded/lib"
+
+        when Dir.exists? "/usr/local/lib/onyx/embedded/lib"
+          lflags + " -L/usr/local/lib/onyx/embedded/lib"
+
+        else
+          lflags
+          # We don't know how to try to help - let's hope the system is actually setup right ;-)
+        end
+
+      dbg "compiler.link_flags massaged to: #{out_flags}"
+      compiler.link_flags = out_flags
+      return
+
+    else
+      return
+    end
   end
 
   private def error(msg)

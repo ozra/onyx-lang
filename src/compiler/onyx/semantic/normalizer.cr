@@ -11,11 +11,12 @@ module Crystal
       puts node if ENV["SSA"]? == "1"
 
 
-      # if   true  # *TEMP* *DEBUG* *TODO*
-      #   puts "NORMALIZED PROGRAM:"
-      #   puts node.to_s
+      # ifdef !release
+      #   if   true  # *TEMP* *DEBUG* *TODO*
+      #     puts "NORMALIZED PROGRAM:"
+      #     puts node.to_s
+      #   end
       # end
-
 
       node
     end

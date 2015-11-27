@@ -3,6 +3,7 @@
 /.tags_sorted_by_file
 /.vagrant
 .crystal/
+.onyx-cache/
 coverage/
 /deps/
 /.build/
@@ -12,3 +13,5 @@ all_spec
 /tmp
 /doc/
 /src/llvm/ext/llvm_ext.o
+.local-scripts/
+
