@@ -812,7 +812,12 @@ module Crystal
           return check_idfr_or_keyword(:by, start)
         when 'e'
           if nc?('g') && nc?('i') && nc?('n')
-            return check_idfr_or_keyword(:begin, start)
+            if peek_nextch == 's'
+              next_char
+              return check_idfr_or_keyword(:begins, start)
+            else
+              return check_idfr_or_keyword(:begin, start)
+            end
           end
         when 'r'
           case nextch

@@ -175,7 +175,10 @@ module Crystal
       @stack = [Nesting.new(:program, -1, "", Location.new(0, 0, ""), false, false)]
     end
 
-    def add(kind, indent, match_name, location, single_line, require_end_token)
+    def add(kind : Symbol, indent : Int32, match_name, location, single_line, require_end_token)
+      if indent == -1
+        indent = last.indent
+      end
       @stack.push Nesting.new kind, indent, match_name, location, single_line, require_end_token
     end
 
@@ -382,7 +385,7 @@ module Crystal
       end
     end
 
-    def unsignify_newline
+    def unsignificantify_newline
       if @significant_newline && @one_line_nest == 0
         @significant_newline = false
       end
@@ -515,7 +518,7 @@ module Crystal
 
       prioritize_fun_def = ({:type, :program}.includes? @nesting_stack.last.nest_kind) && @def_parsing == 0
 
-      dbg "- parse_expression - @nesting_stack.last.nest_kind = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
+      dbg "- parse_expression - @nesting_stack.last.nest_kind, dedent_level = #{@nesting_stack.last.nest_kind}, @def_parsing = #{@def_parsing}"
       dbg "- parse_expression - #2 @prioritize_fun_def = #{@prioritize_fun_def}, @last_was_newline_or_dedent = #{@last_was_newline_or_dedent}"
 
       if prioritize_fun_def && @last_was_newline_or_dedent
@@ -684,7 +687,7 @@ module Crystal
           next
 
         when :IDFR
-          break if kwd? :then, :do, :by, :step
+          break if kwd? :then, :do, :by, :step, :begins # *TODO* is_end_keyword???
 
           unexpected_token "suffix not allowed in the context" unless allow_suffix
           break
@@ -2003,14 +2006,14 @@ module Crystal
           raise "'else' is useless without 'rescue'", @token, 4
         end
 
-        nest_kind = parse_nest_start(:else)
+        nest_kind, dedent_level = parse_nest_start(:else, @indent)
 
         # next_token_skip_statement_end
         if nest_kind == :NIL_NEST
           raise "empty else clause!"
         end
 
-        add_nest :else, @indent, "", (nest_kind == :LINE_NEST), false # *TODO* flag WHAT kind of else it is (try)
+        add_nest :else, dedent_level, "", (nest_kind == :LINE_NEST), false # *TODO* flag WHAT kind of else it is (try)
 
         a_else = parse_expressions
         skip_statement_end
@@ -2018,12 +2021,12 @@ module Crystal
 
       if kwd?(:ensure)
         # next_token_skip_statement_end
-        nest_kind = parse_nest_start :generic
+        nest_kind, dedent_level = parse_nest_start(:generic, @indent)
         if nest_kind == :NIL_NEST
           raise "empty ensure clause!"
         end
 
-        add_nest :ensure, @indent, "", (nest_kind == :LINE_NEST), false
+        add_nest :ensure, dedent_level, "", (nest_kind == :LINE_NEST), false
 
         a_ensure = parse_expressions
         skip_statement_end
@@ -2064,9 +2067,9 @@ module Crystal
       end
 
       # check SemicolonOrNewLine
-      nest_kind = parse_nest_start :generic
+      nest_kind, dedent_level = parse_nest_start :generic, @indent
 
-      add_nest :rescue, @indent, "", (nest_kind == :LINE_NEST), false
+      add_nest :rescue, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       next_token_skip_space_or_newline
 
@@ -2220,8 +2223,8 @@ module Crystal
 
       dbg "check block start"
 
-      nest_kind = parse_nest_start(:generic)
-      add_nest :for, for_indent, "", (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:generic, for_indent)
+      add_nest :for, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = NilLiteral.new
@@ -2254,8 +2257,8 @@ module Crystal
 
       slash_is_regex!
       # skip_statement_end
-      nest_kind = parse_nest_start :generic
-      add_nest (klass == While ? :while : :until), while_indent, "", (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start :generic, while_indent
+      add_nest (klass == While ? :while : :until), dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = NilLiteral.new
@@ -2324,8 +2327,8 @@ module Crystal
 
       # skip_statement_end
 
-      nest_kind = parse_nest_start(:type)
-      add_nest :type, indent_level, name.to_s, (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:type, indent_level)
+      add_nest :type, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = NilLiteral.new
@@ -2366,8 +2369,8 @@ module Crystal
         base_type = parse_single_type
       end
 
-      nest_kind = parse_nest_start(:type)
-      add_nest :enum, enum_indent, name.to_s, (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:type, enum_indent)
+      add_nest :enum, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         raise "can't have an empty enum!"
@@ -2408,8 +2411,8 @@ module Crystal
       type_vars = parse_type_vars
       skip_statement_end
 
-      nest_kind = parse_nest_start(:type)
-      add_nest :trait, trait_indent, name.to_s, (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:type, trait_indent)
+      add_nest :trait, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = Nop.new
@@ -2450,8 +2453,8 @@ module Crystal
       type_vars = parse_type_vars
       skip_statement_end
 
-      nest_kind = parse_nest_start(:generic)
-      add_nest :module, mod_indent, name.to_s, (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:generic, mod_indent)
+      add_nest :module, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = Nop.new
@@ -2532,6 +2535,11 @@ module Crystal
           else
             members.concat parse_intype_def_var_or_const on_self: false
           end
+
+
+          # *TODO* handle type/class/struct/enum etc. here also???
+
+
         when :CONST
           dbg "is const - check for Self, Class or Type"
           if const? :Self, :Class, :Type
@@ -3559,7 +3567,7 @@ module Crystal
       end
 
       dbg "parse_case - check block start"
-      nest_kind = parse_nest_start(:case)
+      nest_kind, dedent_level = parse_nest_start(:case, case_indent_level)
       if nest_kind == :NIL_NEST
         raise "Can't have an empty \"case\" expression. What's the point?"
       end
@@ -3567,7 +3575,7 @@ module Crystal
       free_style = nest_kind == :FREE_WHEN_NEST
       branch_indent_level = @indent
 
-      add_nest :case, case_indent_level, "", false, free_style == false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+      add_nest :case, dedent_level, "", false, free_style == false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
 
 
       whens = [] of When
@@ -3606,9 +3614,10 @@ module Crystal
 
         case what
         when :default
-          add_nest :when, @indent, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+          nest_kind, dedent_level = parse_nest_start(:else, @indent)
+          add_nest :when, dedent_level, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
 
-          if parse_nest_start(:else) == :NIL_NEST
+          if nest_kind  == :NIL_NEST
             a_else = Expressions.new([Nop.new] of ASTNode)
           else
             if whens.size == 0
@@ -3631,9 +3640,8 @@ module Crystal
             break
           end
         when :when
-          add_nest :when, @indent, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
-
           slash_is_regex!
+          when_indent = @indent
           # next_token_skip_space_or_newline
           when_conds = [] of ASTNode
           while true
@@ -3670,7 +3678,10 @@ module Crystal
             end
           end
 
-          if parse_nest_start(:when) == :NIL_NEST
+          nest_kind, dedent_level = parse_nest_start(:when, when_indent)
+          add_nest :when, dedent_level, "", false, false # *TODO*       add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
+
+          if nest_kind == :NIL_NEST
             whens << When.new(when_conds, Expressions.new([Nop.new] of ASTNode))
           else
             slash_is_regex!
@@ -4697,14 +4708,14 @@ module Crystal
     end
 
     def parse_if_after_condition(initial_indent, cond, check_end)
-      dbg "parse_if_after_condition, at"
+      dbg "parse_if_after_condition ->"
       slash_is_regex!
 
       # skip_statement_end
 
       # "then" || "=>" || "\n"+:INDENT
-      nest_kind = parse_nest_start :if
-      add_nest :if, initial_indent, "", (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start :if, initial_indent
+      add_nest :if, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         dbg "parse_if_after_condition: was nilblock"
@@ -4729,8 +4740,8 @@ module Crystal
           else_indent = @indent
           next_token_skip_space
 
-          nest_kind = parse_nest_start :else
-          add_nest :if, else_indent, "", (nest_kind == :LINE_NEST), false # *TODO* -> :else  - we use :if now for :end–if matching...
+          nest_kind, dedent_level = parse_nest_start :else, else_indent
+          add_nest :if, dedent_level, "", (nest_kind == :LINE_NEST), false # *TODO* -> :else  - we use :if now for :end–if matching...
 
           if nest_kind == :NIL_NEST
             a_else = nil # NilLiteral.new   ?
@@ -4781,26 +4792,50 @@ module Crystal
       next_token_skip_space_or_newline
 
 
-      # *TODO* add_nest/pop_nest!?
+      # *TODO* add_nest/pop_nest!? YES! Ofcourse! BUT NOT SCOPE!
+
+      ifdef_indent = @indent
 
       cond = parse_flags_or
-      # skip_statement_end
 
-      if parse_nest_start(:if) == :NIL_NEST
+
+      # skip_statement_end
+      nest_kind, dedent_level = parse_nest_start(:if, ifdef_indent)
+      if nest_kind == :NIL_NEST
         raise "expected a body for the `ifdef` statement"
       end
 
+      add_nest :ifdef, dedent_level, "", (nest_kind == :LINE_NEST), false
+
+
       a_then = parse_ifdef_body(mode)
 
+
+      # *9*
+      # *TODO* else / continuation parsing MUST MATCH PREVIOUS INDENT - ELSE
+      # IT'S A LOWER CONSTRUCTION!!!!
+
       a_else = nil
+
       if @token.type == :IDFR
         case @token.value
         when :else
+          if @indent != ifdef_indent
+            # *TODO* get the fuck out!
+          end
+
           next_token_skip_space
-          if parse_nest_start(:if) == :NIL_NEST
+
+
+          # *TODO*
+          else_nest_kind, dedent_level = parse_nest_start(:if, ifdef_indent)
+
+          if else_nest_kind == :NIL_NEST
             raise "expected a body for the `ifdef else` statement"
           end
+
           a_else = parse_ifdef_body(mode)
+
         when :elsif, :elif
           a_else = parse_ifdef check_end: false, mode: mode
         end
@@ -4817,6 +4852,7 @@ module Crystal
       IfDef.new(cond, a_then, a_else).at_end(end_location)
     end
 
+    # *TODO* *9* - this is wrong!
     def parse_ifdef_body(mode)
       case mode
       when :lib
@@ -5505,8 +5541,8 @@ module Crystal
 
       push_scope
 
-      nest_kind = parse_nest_start(:block_start)
-      add_nest :block, block_indent, "", (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:block_start, block_indent)
+      add_nest :block, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if auto_parametrization
         dbg "auto_parametrization - so we add to nesting_stack. block_params == nil? : #{block_params == nil}".red
@@ -6391,7 +6427,12 @@ module Crystal
       TypeDef.new name, type, name_column_number
     end
 
+
+
     def parse_struct_or_union(klass)
+
+      # *TODO* indent–sensitivity
+
       next_token_skip_space_or_newline
       name = check_const
       next_token_skip_statement_end
@@ -6403,6 +6444,9 @@ module Crystal
     end
 
     def parse_struct_or_union_body
+
+      # *TODO* indent–sensitivity
+
       exps = [] of ASTNode
 
       while true
@@ -6507,7 +6551,7 @@ module Crystal
         return true
       when :IDFR
         case @token.value
-        when :else, :elsif, :elif, :when, :rescue, :ensure, :do, :then
+        when :else, :elsif, :elif, :when, :rescue, :ensure, :do, :then, :begins
           return true
         end
 
@@ -6668,7 +6712,7 @@ module Crystal
       when tok? :INDENT
         dbg "parse_def_nest_start - :INDENT"
         next_token
-        unsignify_newline
+        unsignificantify_newline
         :NEST
 
       when tok?(:DEDENT, :NEWLINE, :END)
@@ -6687,11 +6731,15 @@ module Crystal
 
     end
 
-    def parse_nest_start(kind : Symbol) : Symbol #  = :generic
+    def parse_nest_start(kind : Symbol, indent : Int32) : {Symbol, Int32} #  = :generic
       # *TODO* we don't pass the syntax used, so a stylizer would have to look at
       # the source via "location"
 
       dbg "parse_nest_start".yellow
+
+
+      dedent_level = kwd?(:begins) ? -1 : indent
+      #compare_dedent_level = dedent_level == -1 ? indent - 1 : indent
 
       # *TODO* om `~>` block starter is kept, then an additional start-token
       # should be illegal - looks crazy!
@@ -6703,7 +6751,7 @@ module Crystal
           dbg "parse_nest_start - :case :NEWLINE"
           next_token_skip_space
           if kwd?(:when) || tok?(:"|")
-            :WHEN_NEST
+            {:WHEN_NEST, dedent_level}
           else
             raise "Does this happen. Is an error right? *TODO*"
           end
@@ -6711,15 +6759,15 @@ module Crystal
           dbg "parse_nest_start - :case :INDENT"
           next_token_skip_space
           if kwd?(:when) || tok?(:"|")
-            :WHEN_NEST
+            {:WHEN_NEST, dedent_level}
           else
-            :FREE_WHEN_NEST
+            {:FREE_WHEN_NEST, dedent_level}
           end
         elsif explicit_starter
           dbg "parse_nest_start - :case explicit_starter"
           @one_line_nest += 1
           @significant_newline = true
-          :LINE_NEST
+          {:LINE_NEST, dedent_level}
         else
           dbg "parse_nest_start - :case unknown"
           raise "unexpected token, expected code-block to start"
@@ -6728,35 +6776,47 @@ module Crystal
       when kind == :if && tok?(:"?")
         dbg "parse_nest_start - :? -> TERNARY"
         next_token_skip_statement_end
-        :TERNARY
+        {:TERNARY, dedent_level}
 
       when tok? :INDENT
         dbg "parse_nest_start - :INDENT"
         next_token
-        unsignify_newline
-        :NEST
+        unsignificantify_newline
+        {:NEST, dedent_level}
 
-      when tok?(:DEDENT, :NEWLINE, :END)
-        dbg "parse_nest_start - :DEDENT, :NEWLINE, :END"
+      when tok?(:DEDENT, :END)
+        dbg "parse_nest_start - :DEDENT, :END"
         # next_token_skip_space
-        :NIL_NEST
+        {:NIL_NEST, dedent_level}
+
+      when tok?(:NEWLINE)
+        if dedent_level == -1
+          dbg "parse_nest_start - :NEWLINE when begins-block"
+          next_token
+          unsignificantify_newline
+          {:NEST, dedent_level}
+        else
+          dbg "parse_nest_start - :NEWLINE when regular block"
+          # next_token_skip_space
+          {:NIL_NEST, dedent_level}
+        end
 
       when explicit_starter && kwd?(:else, :elsif, :elif)
         dbg "parse_nest_start - explicit_starter + :else|:elsif|:elif"
-        :NIL_NEST
+        {:NIL_NEST, dedent_level}
 
       when explicit_starter, kind == :else, kind == :block_start
         dbg "parse_nest_start - explicit_starter | KIND == :else | KIND == :block_start"
         @one_line_nest += 1
         @significant_newline = true
-        :LINE_NEST
+        {:LINE_NEST, dedent_level}
       else
         raise "unexpected token, expected code-block to start"
       end
     end
 
     def parse_explicit_nest_start_token
-      if (tok?(:"=>", :":") || kwd?(:do, :then))
+      if (tok?(:"=>", :":") || kwd?(:do, :then, :begins))
         dbg "parse_explicit_nest_start_token - found explicit_starter"
         next_token_skip_space
         true
@@ -6827,18 +6887,18 @@ module Crystal
       when tok? :")"
         dbg "handle_one_line_nest_end LPAREN ')'"
         handle_definite_nest_end_
-        unsignify_newline
+        unsignificantify_newline
         return true
 
       when tok? :NEWLINE
         dbg "handle_one_line_nest_end NEWLINE"
         handle_definite_nest_end_
-        unsignify_newline
+        unsignificantify_newline
         return true
 
       when tok? :DEDENT
         dbg "handle_one_line_nest_end DEDENT"
-        unsignify_newline
+        unsignificantify_newline
         return handle_definite_nest_end_
 
       when is_explicit_end_tok?
@@ -6969,7 +7029,7 @@ module Crystal
         @one_line_nest -= 1
       end
 
-      unsignify_newline
+      unsignificantify_newline
 
       dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
       dbg @nesting_stack.dbgstack.red

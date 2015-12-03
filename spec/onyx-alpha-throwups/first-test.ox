@@ -42,11 +42,11 @@ module Djur
    end
 end
 
-module Djur
-   module Boo
-      APA = 42
-   end
-end
+-- module Djur
+--    module Boo
+--       APA = 42
+--    end
+-- end
 
 Djur::Boo::Apa.my-def
 say "Djur::Boo::Legs::TWO = {{Djur::Boo::Legs::TWO}}"
@@ -720,7 +720,9 @@ for colonv in list: say ": nest" + colonv.to_s
 
 
 for ,ix in list
-   say ix
+   if true begins
+   say "begins-block:"
+   say "  {{ix}}"
 
 for val, ix in list
    say "{{val}}, {{ix}}"
@@ -934,4 +936,13 @@ say ".~. 12 == {{~ 12}}"
 -- say "12 ^ 2 == {{12 ^ 2}}"
 
 say "All DOWN AND OUT"
+
+module AllTheRest begins
+
+type Foo
+   foo() ->
+      true
+
+
+
 
