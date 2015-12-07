@@ -32,7 +32,7 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
     + All types re-openable (aka monkey patchable)
     + Sum-types (union types)
     + Nil is a type - no weak ass C++/Java bullshit piss typing
-    + Polymorphism and function overloading - and when type is known: no cost. The code is very efficient (you can't make it faster yourself in C)
+    + Polymorphism and function overloading - and when type is known: no cost over a straight call (and it might be inlined too). The code is very efficient (you can't make it faster yourself in C)
     + Generics and type-vars - because Go is retarded.
 - Almost everything can be changed by coder
     + Most constructs in the language is changeable, just an override away
@@ -40,8 +40,8 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
     + Iterators are implemented as methods, imperative / structural notation available also because of its commonality. And no, there's no execution overhead.
 - Clean readable and writeable syntax
     + Forget about unscientific brace-semicolon hell.
-    + All the common forms of _casing_ is allowed interchangeably (without conflicts): `ENDASH—case`, `lisp-case`, `snake_case`, `camelCase`. This may change!
-    + UFCS will _likely_ be implemented. Under discussion!
+    + All the common forms of _casing_ is allowed interchangeably (without conflicts): `endash—case`, `dash-case`, `snake_case`, `camelCase`. This may change!
+    + UFCS will _likely_ be implemented. Discuss in issue!
 - FFI: Using C-API libs is piece of cake
 - Garbage Collected (_even I_, have accepted it as the way of the future - now: let's just make it even faster [post 1.0 target])
 - Macros and templating (_* in the works_)
@@ -49,7 +49,7 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
 - Fast!
     + Pretty fast compiling
     + Really fast executable
-    + Won't stop optimizing until hell freezes over. - The compiler should make things fast - you should focus on keeping your code maintainable.
+    + I won't stop optimizing until hell freezes over. - The compiler should make things fast - you should focus on keeping your code maintainable.
 
 ## Long Version ##
 
@@ -86,32 +86,33 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
 ## What do you mean with scientific approach? ##
 
 Well, there are very few quantitative - or otherwise - studies concerning coding directly. So admittedly the statement could be seen a kind of vague.
-_The focus is on the actual performance of a human being reading and writing, reasoning about, code to accomplish a task._
+_The focus is on the actual performance of a human being reading, writing and reasoning on code to accomplish a task._
 
 What is _not_ meant is "highly abstract functional lambda theory proofs from outer space when the cat is and isn't in the cradle and/or you give a shit".
 
 ### Run down: ###
 
-- Optimize for human parsing (aka "readability")- not computers parsing (_not_ lisp syntax uniformity)
+- Optimize for human parsing (aka "readability") - not computers parsing (_not_ lisp syntax uniformity)
 - Human languages has exceptions to rules, so common constructs should get sugar if warranted.
 - Any work should be enjoyable if we're smart about being human, so also coding.
 - A language has to work for several scenarios, be _elegantly out of the way when prototyping_. Be _lovingly tough on disciplined code_ when demanded by coder.
 - A language has to work for a wide range of coders. Any team bigger than one will have mixed levels of experience and requirements, while still working on the same code base.
 - Writing idiomatic clear code should be the optimized way of writing code, no "creative smart coding" to speed things up. It's the compilers job to make it run fast!
-- A bit of repeat of both above points: Not every coder, nor every _project_ suits the same syntactic style. Variations are needed to express the actual tasks of a certain implementation - DSL'ish requirements. For a given project, or even parts of project, a good style guideline should be set by/for teams. It should always be up to the developers. One (or even two variants) of an "official" Onyx style guide will be developed via discussions. Further, some _named style guides_ will be developed for different scenarios, so that some uniform choices to start off from exists - sort of "style guide templates". Sticking as close as possible to them will of course facilitate collaboration.
+- A bit of repeat of both above points: Not every coder, nor every _project_, nor every _part_ of a project, suits the same syntactic style. Variations are needed to express the actual tasks of a certain implementation - DSL'ish requirements. For a given project, or even parts of project, a good style guideline should be set by/for teams. It should always be up to the developers. One (or even two variants) of an "official" Onyx style guide will be developed via discussions. Further, some _named style guides_ will be developed for different scenarios, so that some uniform choices to start off from exists - sort of "style guide templates". Sticking as close as possible to them will of course facilitate collaboration.
 - Some basic syntactic aspects has been shown to be important for all humans _apt to math and especially coding_ (except females [!], exceptions noted) - and that is spatial cognition.
 
 ## Usages? ##
+
 * _"Scripting"_: Because it compiles quickly and you don't _need_ to explicitly type annotate anything - it could be used in place of Python, Ruby, etc, for pretty much any task.
 * _System coding_: Since binaries achieve speeds nearing C/C++, interfacing with C is dead simple, and hardening/strictening policies are available.
 * _Game coding_: As above.
 * _Business systems_: As above.
 * _Analytics and math_: As above.
-* **Well, anything really**, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx). But fingers crossed another side project of mine _might_ solve that.
+* **Well, anything really**, except hard real time applications (where you'd probably use C - however it is _fully possible_ in Onyx). But fingers crossed a side project of mine _might_ solve that.
 
 ## Relation to Crystal ##
 
-Onyx shares AST, type inference and IR generation with Crystal. There are some additional semantics for more fine-grained control in some contexts. The actual machine code generation is done by LLVM, a god sent to language loving mankind! Currently, by internally flagging AST-nodes, Onyx can compile both onyx and crystal sources in the same program.
+Onyx shares AST, most semantics and IR generation with Crystal. There are some additional semantics for more fine-grained control in some contexts. The actual machine code generation is done by LLVM, a god sent to language loving mankind! Currently, by internally flagging AST-nodes, Onyx can compile both onyx and crystal sources within the same program.
 
 It's not intended as a competitor to Crystal, different coders are attracted to the two. Crystal is a fantastic project and language, the gripe for some of us is its "stay true to Ruby" motto, which keeps it from being _the_ next generation language of choice, because of accumulated inconsistencies hindering free innovation.
 
@@ -119,14 +120,15 @@ _Without the fantastic efforts of the Crystal team and the LLVM team, Onyx would
 
 _**Crystal** is for those who do love the Ruby way._
 
-_**Onyx** is for those who simply want a language as fun, productive and secure as possible_. The path to this is by building on scientific studies on computer linguistics, and especially, humans reasoning and interaction with code (_something strangely lacking in the community!!_), inspiration from other languages created to date, the common patterns and problems faced in today's coding - and _that's where **you come in to the picture**_. _Your input is what will shape the language._
+_**Onyx** is for those who simply want a language as fun, productive and secure as possible_. The path to this is by building on scientific studies on computer linguistics, and especially, humans reasoning and interaction with code (_something strangely lacking in the industry!_), inspiration from other languages created to date, the common patterns and problems faced in today's coding - and _that's where **you come in to the picture**_. _Your input is what will shape the language._
 Because of Onyx compatibility goal with Crystal, some minor trade-offs might
-have to be done, but the gains of a greater module universe, being a
+have to be made, but the gains of a greater module universe, being a
 "language family", will likely be a much bigger pro.
 
 ## Inspiration ##
-Inspiration is taken from languages as diverse as Crystal (obviously), Haskell,
-Nim, LiveScript, Go, Rust, Lisp, Erlang, Python, Scala, C++, etc. Sometimes syntax, sometimes semantics, sometimes just an idea inspired by some concept.
+
+Inspiration is taken from languages as diverse as Crystal, Haskell,
+Nim, LiveScript, JavaScript, Go, Rust, Lisp, Erlang, Python, Scala, C++, etc. Sometimes syntax, sometimes semantics, sometimes just an idea inspired by some concept.
 
 ## Why? ##
 
@@ -142,18 +144,43 @@ Nim, LiveScript, Go, Rust, Lisp, Erlang, Python, Scala, C++, etc. Sometimes synt
 
 - You want to simply integrate C-libraries or libraries with C API's.
 
+## Why not \[language X\]? ##
+
+This section is without doubt flame-war material. Feel free to chip in and I'll revise the texts.
+
+### Why not C++? ###
+
+Oh, come on! I've coded in that for 17 years. Enough!
+
+### Why not Rust? ###
+
+It sticks with an archaic syntax: the braces style, which could be seen as a minor point of course, and debatable (the studies I interpret as supporting significant indent could be challenged).
+Rust is way to clumsy and strict for coding up prototypes in.
+It relies on manual memory management, something even I've come to believe can be replaced with full throughput and predictable latency very soon.
+There aren't yet any (afaik) statistics on time consumption working in Rust, but my guess is that you'll have to pay 10 people to do the job of 1 to reach the same deadline in Rust (ok - don't quote me on that - it was probably quite unfair!). Time that could be spent making a working solution, revising algorithms, instead of a solution never causing null exceptions but still not working. By the way, null exceptions doesn't happen in Onyx (unless you start using _pointers irresponsibly_).
+
+### Why not Go? ###
+
+Same goes for syntax here.
+It still hasn't got generics, which _really_ is a must have - I can't see how they don't realize that. The main reason not including it seems to be fear of complicating the compiler. God. With their budget? (mine is currently zero, and Crystals' about $4K for years of work).
+Further, the type inference in Go is next to non-existent. In Onyx you rarely have to type anything at all - unless you want to (it is good practise).
+Go doesn't have macros or templatish constructions - also a big fail as far as I'm concerned.
+It also (correct me if I'm wrong) allow assigning `nil` to any reference. In Onyx any variable that can be nil must also have the Nil type summed in. The type system will therefore catch any place where you access something that could be nil and ensure you handle it.
+
+### Something else? ###
+
+Any other contender you think is better? Tell us. So Onyx can be made better.
+
+
 ## What does it look like currently? ##
 
 For Crystalers, the front page example in Onyx will be very familiar:
 ```onyx
-
-*TODO* *UNTESTED* *VERIFY*
-
 -- A very basic HTTP server
 require "http/server"
 
 server = HTTP.Server 8080, |request|
-  HTTP.Response.ok "text/plain", "Hello world, got {{request.path}}!"
+  HTTP.Response.ok "text/plain", "Hello world! You called me on {{request.path}} at {{Time.now}}!"
 
 say "Listening on http://0.0.0.0:8080"
 server.listen
@@ -230,11 +257,10 @@ greeter.greet "World" --  => "Goodbye cruel World"
 * Improve low level aspects of language core
     - PR as much as is accepted directly to Crystal code base:
     - Tailor made GC for optimal throughput and lowest latency
-        + I'm already working sporadically on a conceptual GC specifically targeting 64 bit, that - if it turns out as well as I hope - might blow most other things out of the water, _both_ throughput-wise _and_ latency-wise. But don't hold your breath on this one. I'll keep it private until there's something to show for, or it turns out to be a disaster (spare time goes in to Onyx atm).
-    - Possibly tailor made co-routines low level code (_if_ LLVM reveals IR-instructions facilitating that)
-    - facilitate different levels of manual memory management when wanted
+        + I'm working very sporadically on a conceptual GC specifically targeting 64 bit, that - if it turns out as well as I hope - might blow most other things out of the water, _both_ throughput-wise _and_ latency-wise. But don't hold your breath on this one. I'll keep it private until there's something to show for, or it turns out to be a disaster (spare time primarily goes in to Onyx atm).
+    - Facilitate different levels of manual memory management when wanted
         + If above mentioned GC works out as planned, it will probably be faster and have lower latency than manual memory management - in that case this point is severely moot. But once again: long way there.
-    - => Onyx 1.2+
+* => Onyx 1.2+
 
 ## Installing ##
 
@@ -244,7 +270,7 @@ greeter.greet "World" --  => "Goodbye cruel World"
 
 - `cd` in to it and `make bootstrap` - to automatically download, install Crystal and compile and install Onyx. They're both installed into `/opt/crystal/` to keep it separated from your package-managed `/usr/local/`. A link to the binaries are made in `/usr/local/bin/`.
     + You need `git` and `wget` (`curl` can't handle GitHub redirections) on your system.
-    + Sorry, the script is linux 64bit only atm. Anyone handy with Mac OS is welcome to shape it up.
+    + The script is unfortunately Linux 64 bit only atm. Anyone handy with Mac OS etc. is welcome to shape it up.
 
 ## Documentation ##
 
@@ -253,9 +279,7 @@ greeter.greet "World" --  => "Goodbye cruel World"
 
 ## Onyx Project Code of Conduct ##
 
-Whatever you think promotes and helps the language forward is enough for code of conduct for now. If someone is offended - you've probably been an asshole;  acknowledge it and apologize. We can all stumble down that road some times. Apologizing is a strong and proud act.
-
-Cursing is ~~fucking~~ allowed, but not necessarily decreed.
+Whatever you think promotes and helps the language forward is enough for code of conduct for now. Cursing is ~~fucking~~ allowed, but not necessarily decreed. If someone is offended - you've probably been an asshole;  acknowledge it and apologize. We can all stumble down that road some times. Apologizing is a strong and proud act.
 
 If someone starts acting in a way that reduces others' happiness or
 productivity _chronically_, then we might revise this.

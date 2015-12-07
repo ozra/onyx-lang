@@ -1,5 +1,94 @@
 _debug_start_ = true
 
+\!Int=I32
+\!Real=Float32
+
+\!int-literal=I32
+\!real-literal=Float32
+
+module Djur
+   module Boo begins
+
+   APA = 47
+
+   type Apa
+      \!Int=I64
+
+      @@foo = 2
+      Type.bar = 2
+
+      @foo     Int
+      bar      Int
+      @foo’    Int   = 47
+      bar’           = 47
+      @foo’’   Int
+      bar’’    Int
+
+      -- cho   '= 1  -- *TODO* should be supported
+      foo3 'Int
+      bar3 ^Int
+      qwo3 ~Int
+
+      -- zar31 '= 1
+      -- zar32 '*= 1
+      -- zar33 'auto = 1
+
+      -- xfoo! Int = 47  -- should fail, and does
+      -- xbar? Int = 42  -- should fail, and does
+
+      Type.my-def() -> say "Hit the spot! {{ Type.foo’ }}, {{ @@bar }}"
+      inst-def() -> say "Hit the spot! {{ @foo’ }}, {{ @bar }}"
+   end
+
+   enum Legs
+      NONE
+      TWO
+      FOUR
+      SIX
+      EIGHT
+
+      Type.is-six?(v) ->
+         v == SIX
+   end
+end
+
+-- module Djur
+--    module Boo
+--       APA = 42
+--    end
+-- end
+
+-- t = Time.Span(0)
+-- t = Time.Span 0
+
+type Blk
+   init(&block) ->  -- (T) -> U - does not work for block...
+      yield 1
+      yield 2
+end
+
+blk = Blk |x|
+   say "in blk init block: {{x}}"
+   nil
+
+say "1"
+
+Djur::Boo::Apa.my-def
+say "Djur::Boo::Legs::TWO = {{Djur::Boo::Legs::TWO}}"
+
+-- say Djur.Boo.Apa.foo’ -- *NOTE* perhaps a better error message: "No method with the name `{{name}}` found, only a private variable. Make a getter and/or setter method to access it from the outside world"
+Djur.Boo.Apa.my-def
+say "Djur.Boo.Legs.TWO = {{Djur.Boo.Legs.TWO}}"
+say "Djur.Boo.Legs.is-six?(EIGHT) = {{Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}}"
+
+-- override '<<' operator on String to act as str combine (like '+' but auto-coercing)
+type String: <<(s) -> "{{self}}{{s}}"
+
+say "fdaf" + "fdsf" << "aaasd" << 47.13
+
+
+
+\!Int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
    say "{{awol}}, {{foo}}, {{bar}}"
@@ -8,7 +97,9 @@ foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, #bar = "yo"
 foo-named 3, #foo = 11, #bar = "yo"
 
-list = ["foo", "yaa"]
+list = List[Str]()
+list << "foo"
+list << "yaa"
 
 -- x = list.map
 -- x = list.map()
@@ -18,6 +109,7 @@ list = ["foo", "yaa"]
 v = list.map(|x, y| x + "1")
 w = list.map |x, y| "{{x}} 47"
 i = list.map |x, y| => "{{x}} 13"
+j = list.map ~> "{{_1}} 13"
 
 puts "{{v}}, {{w}}"
 
@@ -32,6 +124,8 @@ def say(s) -> puts s
 
 say "Let's ROCK"
 
+\!Int=I32
+
 DEBUG–SEPARATOR = 47
 
 -- Change array literal notation for typed arr (thus empty arr)!?
@@ -43,98 +137,42 @@ def f(y ()->) -> nil
 
 --   -- (Seq[Int32]()).flat_map ~>
 f () ->
-   ([] of Int32).flat_map ~>
-      [] of Int32
+   ([] of Int).flat-map ~>
+      [] of Int
 
 f(() ->
-   ([] of Int32).flat_map(~>
-      [] of Int32
+   ([] of Int).flat-map(~>
+      [] of Int
    )
 )
 
 (f () ->
-   (([] of Int32).flat_map ~>
-      [] of Int32
+   (([] of Int).flat-map ~>
+      [] of Int
    )
 )
 
 
-— alias Any = Float64 — Any just doesn't work having atm - Object disallowed
 
+\!Int=StdInt
 
--- alias Seq = Array
--- alias Map = Hash
--- alias Tag = Symbol
--- alias Str = String
--- alias I8  = Int8
--- alias I16 = Int16
--- alias I32 = Int32
--- alias I64 = Int64
--- alias U8  = UInt8
--- alias U16 = UInt16
--- alias U32 = UInt32
--- alias U64 = UInt64
--- alias F32 = Float32
--- alias F64 = Float64
--- alias Ptr = Pointer
-
--- — type Str = String   — alias
--- — type I32 = Int32
--- — type UStr < String   — "unique" (inherited)
--- — type UI32 < Int32
-
--- alias SomeInt = Int
-
--- ifdef x86_64
---    alias StdInt   = I64
---    alias StdUInt   = U64
---    alias StdReal   = F64
--- else
---    alias StdInt   = I32
---    alias StdUInt   = U32
---    alias StdReal   = F64
--- end
-
--- alias Nat         = StdInt    — *TODO* Nat should have changes to methods. It's supposed to be positive only, and shifts etc. will be done with unsigned version
--- alias Pos         = StdInt
--- alias Offs        = StdInt
--- alias Size        = StdInt
--- alias Index       = StdInt
--- alias FastInt      = StdInt
--- alias CompactInt   = I32
-
-
-— alias Rope = StringBuilder
-
-
-
-
-— type BoundPtr<T> — << Value
-—    @start–addr     Ptr<T>
-—    @addr         Ptr<T>
-— end–type
-— —end
-
-
-\default–int=StdInt
-
-— first comment
-a = 47  —another comment
+-- first comment
+a = 47  --another comment
 char = c"a"
 say "char: " + char.to–s + " (" + typeof(char).to–s + ")"
 
-—| (NO LONGER) weirdly placed comment
+--| (NO LONGER) weirdly placed comment
 
 
-— foo(a, b, c I32) ->
-—    Str(a + b) + c.to–s
+-- foo(a, b, c I32) ->
+--    Str(a + b) + c.to–s
 
 the–str = "kjhgkjh" \
    "dfghdfhgd"
 
-— how about (though that's the range–exclusive operator):
-— the–str = "kjhgkjh" ...
-—    "dfghdfhgd"
+-- how about (though that's the range–exclusive operator):
+-- the–str = "kjhgkjh" ...
+--    "dfghdfhgd"
 
 if (a == 47 &&
    a != 48
@@ -165,35 +203,35 @@ if likely true =>
       if unlikely false: say "NO" else do say "5.2a "; say "5.3a"; if true: say "5.4a"
       if false : else do say "5.2b "; say "5.3b"; if true => say "5.4b"
       if false =>
-         — comment after indent
+         -- comment after indent
          if 47 => say "NO"
-         — for i in 0..6 => p i.to–s; say "."
+         -- for i in 0..6 => p i.to–s; say "."
          if 47: say "NO"
       if true
-         — comment after indent
+         -- comment after indent
          if not false then say "6"
-         — for i in 0..6 => p i.to–s; say "."
+         -- for i in 0..6 => p i.to–s; say "."
          if 47 => say "7"
 
-   end–while — -while
+   end–while -- -while
 end–if
-— if (a == 47
-—    && a != 48
-— )
-—    say "Yeay 47 == 47"
+-- if (a == 47
+--    && a != 48
+-- )
+--    say "Yeay 47 == 47"
 
 
-— zoo( \
-—    a, \
-—    b, \
-—    c I32 \
-— ) ->
-—    Str.new(a + b) + c.to–s
-— end
+-- zoo( \
+--    a, \
+--    b, \
+--    c I32 \
+-- ) ->
+--    Str.new(a + b) + c.to–s
+-- end
 
-— def ab=(v)
-—    @prog–v = v
-— end
+-- def ab=(v)
+--    @prog–v = v
+-- end
 
 [ab, ac] = [3, 2]
 [aa, ab, ac, ad] = [1, ac, ab, 4]
@@ -201,8 +239,9 @@ say "should be 3: " + ac.to–s
 
 DEBUG–SEPARATOR
 
-— -#pure -#private
-def zoo(a, b, ...c I32) Str ->  \pure
+-- -#pure -#private
+\private
+def zoo(a, b, ...c 'Int) Str ->  \pure
    if true:
       i = 1
 
@@ -213,11 +252,15 @@ def zoo(a, b, ...c I32) Str ->  \pure
 
       while i > 0
          i -= 1
-         if true => say "9 "; say "10"     — *TODO* THIS ENDLINE IS NOT PARSED AS END!!!!!
+         if true => say "9 "; say "10"     -- *TODO* THIS ENDLINE IS NOT PARSED AS END!!!!!
          if false =>
-            — comment after indent
-            if 47 => say "NO"
-            — for i in 0..6 => p i.to–s; say "."
+            -- comment after indent
+            if 41 => say "NO"
+            elsif 42 => say "NO"
+            elif 43 => say "NO"
+            else => say "NO"
+
+            -- for i in 0..6 => p i.to–s; say "."
             if 47 => say "NO"
          else
             say "11"
@@ -225,20 +268,20 @@ def zoo(a, b, ...c I32) Str ->  \pure
                p "{{val}}, {{ix}}"
 
          if true
-            — comment after indent
+            -- comment after indent
             if 47 => say "12"
-            — for i in 0..6 => p i.to–s; say "."
+            -- for i in 0..6 => p i.to–s; say "."
 
             if !47 => say "NO" else => say "12"; end; if 1 => say "13"; end;
 
             if 47 => say "14" else say "NO"; end; if 1 => say "15";
 
-            — new idea for else syntax when symbolic style:
+            -- new idea for else syntax when symbolic style:
 
-            — if !47 => say "nop2" *> say "yup3"; end; if 1 => say "more yup3";
-         —end–while — explicit bug to test errors
+            -- if !47 => say "nop2" *> say "yup3"; end; if 1 => say "more yup3";
+         --end–while -- explicit bug to test errors
       end
-      — end–while — -while
+      -- end–while -- -while
 
    end–if
 
@@ -262,14 +305,14 @@ def foo(a, b, c Str) ->
 end
 
 
-def qwo(a I32, b ~I32) ->
+def qwo(a 'Int, b ~Int) ->
 end
 
-def qwo2(a 'I32, b I32) -> end
+def qwo2(a ^Int, b 'Int) -> end
 
-def qwo3(a I32, b mut I32) Str -> — Str
+def qwo3(a 'Int, b mut Int) Str -> -- Str
 
-def qwo4(a I32; b I32) ->
+def qwo4(a Int; b Int) ->
 end
 
 qwo2 1, 2
@@ -277,17 +320,27 @@ qwo2 1, 2
 n = 4747 >> 3
 n >>= 1
 say "n = " + n.to–s + " from " + 4747.to–s
-— say "n = " + $n + " from " + $4747
+-- say "n = " + $n + " from " + $4747
 
 
 json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
 say "json–correct–hash: {{json–hash}}"
 
--- js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
--- say "js–hash: {{js–hash}}"
 
 tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
 say "tag–hash: {{tag–hash}}"
+
+apa = #apa
+katt = "katt"
+panter = 947735
+
+-- *TODO* Yes: allow below to act just as a json-hash
+-- now it acts like arrow hash
+js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
+say "perhaps to be js–hash: {{js–hash}}"
+
+arrow–hash = {apa => "Apa", katt => "Katt", panter => "Panter"}
+say "arrow–hash: {{arrow–hash}}"
 
 tag–hash–2 = {
    #apa: "Apa",
@@ -305,7 +358,8 @@ tag–hash–2 = {
    }
    #bastard: "Bastard"
 }
-say "tag–hash–2: {{typeof(tag–hash–2)}}, {{tag–hash–2}}"
+say "tag–hash–2 type is {{typeof(tag–hash–2)}}"
+say "tag–hash–2 value is {{tag–hash–2}}"
 
 
 -- type TradeSide << Enum[Int8]
@@ -315,7 +369,7 @@ enum TradeSide Int8
    Sell
 
 
-— crystal style 1 `case ref`
+-- crystal style 1 `case ref`
 case n
 when 1, 2
    say "NOP: is 1|2"
@@ -325,7 +379,7 @@ else
    say "16:  " + n.to–s
 end
 
-— crystal style 1 `case`
+-- crystal style 1 `case`
 case
 when n == 1
    say "NOP 1"
@@ -335,7 +389,7 @@ else
    say "NOP " + n.to–s
 end
 
-— crystal style 1B `case ref`
+-- crystal style 1B `case ref`
 case n
 when 1, 2
    say "NOP: is 1|2"
@@ -344,7 +398,7 @@ when 2
 else
    say "17.1:  " + n.to–s
 
-— crystal style 1B `case`
+-- crystal style 1B `case`
 case
 when n == 1
    say "NOP 1"
@@ -353,7 +407,7 @@ when n == 47, n == 593
 else
    say "NOP " + n.to–s
 
-— crystal style 2 `case ref`
+-- crystal style 2 `case ref`
 case n
    when 1, 2
       say "NOP: is 1|2"
@@ -363,7 +417,7 @@ case n
       say "17.3: " + n.to–s
 end
 
-— crystal style 2 `case`
+-- crystal style 2 `case`
 case
    when n == 1
       say "NOP 1"
@@ -373,7 +427,7 @@ case
       say "NOP " + n.to–s
 end
 
-— onyx style 1 `case ref`
+-- onyx style 1 `case ref`
 match n
    593
       say "18"
@@ -383,7 +437,7 @@ match n
       say "NO " + n.to–s
 end
 
-— onyx style 1 `case`
+-- onyx style 1 `case`
 cond
    n == 1 =>
       say "NO is 1"
@@ -395,7 +449,7 @@ cond
       say "NO " + n.to–s
 end–case
 
-— onyx style 2 `case ref`
+-- onyx style 2 `case ref`
 branch n
    593
       say "19.1"
@@ -404,7 +458,7 @@ branch n
    *
       say "NO " + n.to–s
 
-— onyx style 2 `case`
+-- onyx style 2 `case`
 case
    n == 1
       say "NO is 1"
@@ -415,32 +469,32 @@ case
    *
       say "NO " + n.to–s
 
-— onyx style 3 `case ref`
+-- onyx style 3 `case ref`
 match n
    1 => say "is 1"
    2 => say "is 2"
    * => if false => say "NO" else say "20: " + n.to–s
 end–case
 
-— onyx style 3 `case`
+-- onyx style 3 `case`
 branch
    n == 593   => say "21"
    n == 2     => say "is 2"
    *          => say n.to–s
 
-— onyx style 4 `case ref`
+-- onyx style 4 `case ref`
 case n
    1 do say "is 1"
    2 then say "is 2"
    * do if false then say "NO" else say "22: " + n.to–s
 
-— onyx style 4 `case`
+-- onyx style 4 `case`
 branch
    n == 593   then say "23"
    n == 2     do say "is 2"
    *          then say n.to–s
 
-— onyx style 5 `case ref`
+-- onyx style 5 `case ref`
 match n
 | 593
    say "23.1"
@@ -449,7 +503,7 @@ match n
 | *
    say "NO " + n.to–s
 
-— onyx style 5 `case`
+-- onyx style 5 `case`
 branch
 | n == 1
    say "NO is 1"
@@ -458,21 +512,26 @@ branch
    else
       say "23.2"
 | *
-
    say "NO " + n.to–s
 
-— onyx style 6 `case ref`
+-- onyx style 6 `case ref`
 match n
    1: say "is 1"
    2: say "is 2"
    *: if false => say "NO" else say "20: " + n.to–s
 end–case
 
-— onyx style 6 `case`
+-- onyx style 6 `case`
 branch
-   n == 593   : say ": 23.3"
+   n == 593   : say ": 23.3a"
    n == 2     : say "is 2"
    *          : say n.to–s
+
+-- onyx style 6b `case`
+cond
+   n == 593:   say ": 23.3b"
+   n == 2:     say "is 2"
+   *:          say n.to–s
 
 for v[i] in [#apa, #katt]: say ": {{i}}: {{v}}"
 
@@ -480,18 +539,20 @@ if true: say ": true"
 
 x = foo a, 2, "3"
 
-a = (a Int32, b Int32) -> (a + b).to–s; end
-b = (a Str, _ I32, b 'Bool; c F64) ->
-   "{{a}} {{x}}" — t"{a} {x}"
+a = (a Int, b Int) -> (a + b).to–s; end
+b = (a Str, _ Int, b 'Bool; c Real) ->
+   "{{a}} {{x}}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Int32, b 'Str, c 'Int32) -> a.to–s + b + c.to–s
+c = (a ~Int, b 'Str, c 'Int) -> a.to–s + b + c.to–s
 
+-- *TODO* fix so that lambdas can be called with call syntax! And all instances
+-- with a call method! (including Functor trait well formed)
 p b.call "23.5 Closured Lambda says", 1, true, 0.47
-— p b("2 Closured Lambda says", 1, true, 0.47)
-— p b "2 Closured Lambda says", 1, true, 0.47
-— Str "47"
-— str "47"
+-- p b("2 Closured Lambda says", 1, true, 0.47)
+-- p b "2 Closured Lambda says", 1, true, 0.47
+-- Str "47"
+-- str "47"
 
 p typeof(b)
 
@@ -508,45 +569,28 @@ def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
 end
 
 
-— — a–closure–lambda1 = [&i,=v](a, b) -> do–shit(a, b, @i, @v)
+-- -- a–closure–lambda1 = [&i,=v](a, b) -> do–shit(a, b, @i, @v)
 
-— — a–closure–lambda2 = ([&i,=v]; a, b) -> do–shit(a, b, @i, @v)
+-- -- a–closure–lambda2 = ([&i,=v]; a, b) -> do–shit(a, b, @i, @v)
 
-— — a–closure–lambda3 = {&i,=v}(a, b) -> do–shit(a, b, @i, @v)
+-- -- a–closure–lambda3 = {&i,=v}(a, b) -> do–shit(a, b, @i, @v)
 
-
-— def bar() ->
-—    foo 47, 42, 13
-— end
-
-
-
-
-
-
-— *TODO*
-
-
-
-
-— 1. SOFT LAMBDA <-> LAMBDA <-> BLOCK MAGIC!
-—     breaking return  — or
-—     outer return
 
 -- Self == "this type"
--- this == "this instance" — or:
--- me == "this instance" ?
+-- this == "this instance"  -- or:
+-- me == "this instance" ?  -- or:
+-- my == -""-
 
-— 3. THE REST HERE
-— - t"str {smoother} interpolation {style}"
-— - r"reg–exp syntax instead of /fd/"
-— - raw"for raw strings"
-— - c"X"  (but this probably already works!)
+-- 3. THE REST HERE
+-- - t"str {smoother} interpolation {style}"
+-- - r"reg–exp syntax instead of /fd/"
+-- - raw"for raw strings"
+-- - c"X"  (but this probably already works!)
 
-— - bar x, y — semantic lookup of instances of types having .call method
+-- - bar x, y -- semantic lookup of instances of types having .call method
 
-— for: to_s for onyx and crystal must spit out the for–loop
-— for: while–loops for the 'stepping' case must be generated
+-- for: to_s for onyx and crystal must spit out the for–loop
+-- for: while–loops for the 'stepping' case must be generated
 
 
 
@@ -556,7 +600,7 @@ list = [#abra, #baba, #cadabra]
 say "the list: {{list}}"
 
 
-— soft lambdas
+-- soft lambdas
 -- list.each (v) ->) p v
 -- list.each (v) ->} p v
 -- list.each (v Tag) ->) p v
@@ -565,12 +609,6 @@ say "the list: {{list}}"
 -- list.each (v) -} p v
 
 for v in list => p v
--- *TODO* resolve: either
---    - change syntax for named args
---    - make parsing smarter
---    - remove python style block start token
--- for v in list : p v
--- for v in list: p v
 
 
 
@@ -613,9 +651,9 @@ list.each–with–index ~>
 
 
 
+-- for i from 0 til 10
+--    say "from til loop {{i}}"
 
--- Gremlin Code Devil Art Below
---
 
 -- -- list.each_with_index ~>
 -- --    p _1
@@ -650,7 +688,9 @@ for colonv in list: say ": nest" + colonv.to_s
 
 
 for ,ix in list
-   say ix
+   if true begins
+   say "begins-block:"
+   say "  {{ix}}"
 
 for val, ix in list
    say "{{val}}, {{ix}}"
@@ -688,7 +728,8 @@ trait TheTrait
 end–trait
 
 trait AnotherTrait[S1]
-   -- another–val = 0  - "can't use instance variables at the top level"
+   -- *TODO* should we allow member data in traits too?
+   -- another–val = 0  -- "can't use instance variables at the top level"
 
    val() -> @another–val
    valhalla() -> abstract
@@ -702,7 +743,7 @@ end–type
 
 type Bar << Qwa
    Self.my–foo Int64 = 47i64
-   Self.some–other–foo 'I32 = 42
+   Self.some–other–foo 'Int = 42
    Self.yet–a-foo = 42
 
    --  *TODO* Self.more–foo '= 42
@@ -714,11 +755,18 @@ type Bar << Qwa
    GreenBar = 8
 
    foo–a Str = ""
-   foo–b I32 = 0
-   @foo–c I32 = 0
+   foo–b Int = 0
+   @foo–c I64 = 0
+   foo-ya I32 = 0_i32
 
    Class.set–foo(v) ->
       Self.my–foo = v
+
+   Type.get–foo() ->
+      @@my–foo
+
+Bar.set-foo 4_i64
+say "Bar.get-foo = {{Bar.get-foo}}"
 
 say "declare a Foo type"
 
@@ -738,7 +786,9 @@ type Foo[S1] << Bar
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
-   fn–1aa(x) ->>  \pub  nil   -- should this be legal - looks very confusing
+   fn–1aa(x) ->>  \pub  nil   -- should this be legal? - looks very confusing!
+
+   fn–1ab(x) Nil -> \pure \pub  nil   -- should this be legal? - looks very confusing!
 
    \priv \inline
    \pure
@@ -746,10 +796,9 @@ type Foo[S1] << Bar
 
    fn–1ca(x) ->>!  \pure
 
+   -- will cause conflicts with generic blockstarts:
    -- fn–1ab(x) => nil
-
-   -- fn–1bb(x) =>! nil  - will cause conflicts with generic blockstarts
-
+   -- fn–1bb(x) =>! nil
    -- fn–1cb(x) =>!
 
    fn–1da(x) -> nil
@@ -762,20 +811,20 @@ type Foo[S1] << Bar
       say "Hey"
       say "you!"
 
-   — *TODO* this errors as it should - however the message position is wrong!
-   — fn–1h(x) String ->!
-   —    say "Hey"
-   —    say "you!"
-   —    "fdsa"
+   -- This should fail on parse because of ret-type + nil-ret flag
+   -- fn–1h(x) String ->!
+   --    say "Hey"
+   --    say "you!"
+   --    "fdsa"
 
-   — Errors on instantiation, else is untouched
-   — fn–1i(x) ->!
-   —    say "Yeay"
-   —    return "Foo"
+   -- Should Error on instantiation, because of mismatching return type
+   fn–1i(x) ->!
+      say "Yeay"
+      return "Foo"
 
    fn–a(a, b) ->> "a: {{a}}, {{b}}"
 
-   def fn–b(a S1, b I32) -> — fdsa
+   def fn–b(a S1, b Int) -> -- fdsa
       "b: {{a}}, {{b}}"
 
    \private
@@ -785,10 +834,10 @@ type Foo[S1] << Bar
    end–def
 
    \private
-   — fn–c(a, b I32) redef private ->
-   fn–c(a, b I32) -> \redef
+   -- fn–c(a, b I32) redef private ->
+   fn–c(a, b Int) -> \redef
       "c: {{a}}, {{b}}"
-      — t"c: {a}, {b}"
+      -- t"c: {a}, {b}"
 
    fn–d1(a, b) ->
       @foo–a = a
@@ -796,17 +845,17 @@ type Foo[S1] << Bar
       fn–e
    end
 
-   fn–d2(a S1, b I32) ->
+   fn–d2(a S1, b Int) ->
       @foo–a = a
       @foo–b = b
       fn–e
 
-   — fn–d3(a S1, b <IntT>) ->
-   —    @foo–a = a
-   —    c IntT
-   —    c = b
-   —    @foo–b = c
-   —    fn–e
+   -- fn–d3(a S1, b <IntT>) ->
+   --    @foo–a = a
+   --    c IntT
+   --    c = b
+   --    @foo–b = c
+   --    fn–e
 
    fn–e() -> fa = @foo–a ; "e: {{fa}}, {{@foo_b}}"
 
@@ -845,16 +894,26 @@ say bar.fn_e
 shit-sandwich =  bar.fnE
 say shitSandwich
 
-— say bar()   — needs to be done in semantics - need to see if bar has 'call' method!
-            — if so - rewrite to `bar.call()`
+-- say bar.fn-1i(1)  -- should make fn-1i fail because it has mismatching return type
+
+-- say bar()   -- needs to be done in semantics - need to see if bar has 'call' method!
+            -- if so - rewrite to `bar.call()`
 say typeof(foo)
 
-say "7 .&. 12 == {{7 .&. 12}}"
-say "12 .|. 1 == {{12 .|. 1}}"
-say ".~. 12 == {{~ 12}}"
-
--- *TODO* crashes!
--- say "12 ^ 2 == {{12 ^ 2}}"
+say "7 .&. 12 == {{ 7 .&. 12 }}"
+say "12 .|. 1 == {{ 12 .|. 1 }}"
+say "12 .^. 2 == {{ 12 .^. 2 }}"
+say ".~. 12 == {{ .~. 12 }}"
 
 say "All DOWN AND OUT"
+
+module AllTheRest begins
+
+type Foo
+   foo() ->
+      true
+
+xx = 47
+yy = 47.47
+
 

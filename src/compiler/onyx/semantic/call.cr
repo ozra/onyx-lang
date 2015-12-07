@@ -286,6 +286,8 @@ class Crystal::Call
       end
     end
 
+    dbgx "final matches.empty? check"
+
     if matches.empty?
       # For now, if the owner is a NoReturn just ignore the error (this call should be recomputed later)
       unless owner.no_return?
@@ -299,6 +301,8 @@ class Crystal::Call
         end
       end
     end
+
+    dbgx "...passed"
 
     # If this call is an implicit call to self
     if !obj && !mod_matches && !owner.is_a?(Program)

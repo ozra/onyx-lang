@@ -14,7 +14,7 @@ struct Char
 end
 
 ContinuationTokens = [
-  :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :"^", :"**", :"<<",
+  :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :".^.", :"**", :"<<",
   :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&",
   :"==="
 ]
@@ -101,7 +101,8 @@ module Crystal
 
         # all pragmas / annotations begin with small cap latin ascii for now
         # NOPE! - Added caps too - for now!
-        if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' )
+        # NOPE! - Added `!` too - for now!
+        if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' || curch == '!')
           return scan_pragma start - 1
         end
 
@@ -246,6 +247,8 @@ module Crystal
           else
             @token.type = :"=="
           end
+        when '}'
+          toktype_then_nextch :"=}"
         when '>'
           toktype_then_nextch :"=>"
         when '~'
@@ -460,6 +463,8 @@ module Crystal
           toktype_then_nextch :"{%"
         when '{'
           toktype_then_nextch :"{{"
+        when '='
+          toktype_then_nextch :"{="
         else
           @token.type = :"{"
         end
@@ -512,6 +517,13 @@ module Crystal
             toktype_then_nextch :"..."
           else
             @token.type = :".."
+          end
+
+        when '~'
+          if nextch == '.'
+            toktype_then_nextch :".~."
+          else
+            raise "Was expecting `.~.` ('bitwise complement')"
           end
 
         when '^'
@@ -792,6 +804,10 @@ module Crystal
         when 'n'
           if nc?('d')
             return check_idfr_or_token(:and, "", start)
+          end
+        when 'p'
+          if nc?('i')
+            return check_idfr_or_keyword(:api, start)
           end
         when 's'
           if peek_nextch == 'm'
@@ -1135,6 +1151,10 @@ module Crystal
         scan_idfr(start)
       when 'l'
         case nextch
+        when 'e'
+          if nc?('t')
+            return check_idfr_or_keyword(:let, start)
+          end
         when 'i'
           case nextch
           when 'b'
@@ -1223,6 +1243,8 @@ module Crystal
         case nextch
         when 'e'
           case nextch
+          when 'f'
+            return check_idfr_or_keyword(:ref, start)
           when 's'
             case nextch
             when 'c'
@@ -1338,6 +1360,11 @@ module Crystal
               return check_idfr_or_keyword(:until, start)
             end
           end
+        end
+        scan_idfr(start)
+      when 'v'
+        if nc?('a') && nc?('l')
+          return check_idfr_or_keyword(:val, start)
         end
         scan_idfr(start)
       when 'w'
@@ -1669,7 +1696,11 @@ module Crystal
       @token
     end
 
-    def scan_idfr(start, special_end_chars = true, do_magic = true) : Nil
+    def scan_idfr(start, special_end_chars = true, do_magic = true, special_start_char = false) : Nil
+      if special_start_char && curch == '!'
+        nextch
+      end
+
       while idfr_part?(curch)
         nextch
       end
@@ -1688,7 +1719,7 @@ module Crystal
         # *TODO* Highly experimental for those god damn camelCase fans!
         @token.value = String.build idfr_str.size * 2, do |str|
           idfr_str.each_char_with_index do |chr, i|
-            if 'A' <= chr <= 'Z' && (i != 0 && !(i == 1 && idfr_str[0] == '\\'))
+            if 'A' <= chr <= 'Z' && (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
               str << '_'
               str << chr.downcase
             else
@@ -1705,8 +1736,9 @@ module Crystal
     end
 
     def scan_pragma(start)
+      start += 1
       # p "scan_pragma for '#{string_range(start)}'"
-      scan_idfr start, false
+      scan_idfr start, false, special_start_char: true
       @token.type = :PRAGMA
       @token
     end
@@ -1779,10 +1811,10 @@ module Crystal
           if curch == 'f' || curch == 'F'
             suffix_size = consume_float_suffix
           else
-            @token.number_kind = :f64
+            @token.number_kind = :real
           end
         else
-          @token.number_kind = :i32
+          @token.number_kind = :int
           has_suffix = false
         end
       when 'e', 'E'
@@ -1807,7 +1839,7 @@ module Crystal
         if curch == 'f' || curch == 'F'
           suffix_size = consume_float_suffix
         else
-          @token.number_kind = :f64
+          @token.number_kind = :real
         end
       when 'f', 'F'
         is_integer = false
@@ -1818,7 +1850,7 @@ module Crystal
         suffix_size = consume_uint_suffix
       else
         has_suffix = false
-        @token.number_kind = :i32
+        @token.number_kind = :int
       end
 
       end_pos = cur_pos - suffix_size
@@ -2076,7 +2108,7 @@ module Crystal
         consume_uint_suffix
         check_integer_literal_fits_in_size string_value, name_size, negative, start
       else
-        @token.number_kind = :i32
+        @token.number_kind = :int
         deduce_integer_kind string_value, name_size, negative, start
       end
 
@@ -2436,7 +2468,7 @@ module Crystal
 
       if curch == '{'
         case nextch
-        when '{'
+        when '='
           beginning_of_line = false
           nextch
           @token.type = :MACRO_EXPRESSION_START
@@ -2451,10 +2483,11 @@ module Crystal
         end
       end
 
-      if comment || (!delimiter_state && curch == '#')
+      if comment || (!delimiter_state && curch == '-' && peek_nextch == '-')
         comment = true
         char = curch
-        char = nextch if curch == '#'
+        char = nextch if curch == '-'
+        char = nextch if curch == '-'
         while true
           case char
           when '\n'
