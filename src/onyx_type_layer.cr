@@ -28,7 +28,9 @@ require "tuple"
 
 alias Any = Object
 
-alias Seq = Array
+alias List = Array
+# alias Seq = Array
+
 alias Tup = Tuple
 alias Map = Hash
 alias Arr = StaticArray  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
