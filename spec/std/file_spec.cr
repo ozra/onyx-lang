@@ -2,7 +2,7 @@ require "spec"
 require "tempfile"
 
 private def base
-  Dir.working_directory
+  Dir.current
 end
 
 private def tmpdir
@@ -53,6 +53,24 @@ describe "File" do
 
     it "gives false" do
       File.exists?("#{__DIR__}/data/non_existing_file.txt").should be_false
+    end
+  end
+
+  describe "executable?" do
+    it "gives false" do
+      File.executable?("#{__DIR__}/data/test_file.txt").should be_false
+    end
+  end
+
+  describe "readable?" do
+    it "gives true" do
+      File.readable?("#{__DIR__}/data/test_file.txt").should be_true
+    end
+  end
+
+  describe "writable?" do
+    it "gives true" do
+      File.writable?("#{__DIR__}/data/test_file.txt").should be_true
     end
   end
 
