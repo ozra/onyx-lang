@@ -128,7 +128,7 @@ have to be made, but the gains of a greater module universe, being a
 ## Inspiration ##
 
 Inspiration is taken from languages as diverse as Crystal, Haskell,
-Nim, LiveScript, JavaScript, Go, Rust, Lisp, Erlang, Python, Scala, C++, etc. Sometimes syntax, sometimes semantics, sometimes just an idea inspired by some concept.
+Nim, LiveScript, JavaScript, Go, Rust, Lisp, Erlang, Python, Scala, C++, LLVM-IR(!), etc. Sometimes syntax, sometimes semantics, sometimes just an idea inspired by some concept.
 
 ## Why? ##
 

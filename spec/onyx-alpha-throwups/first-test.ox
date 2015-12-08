@@ -1,7 +1,11 @@
+require "wild_colors"
+-- require "./my-gmp-lib"
 
-require "./my-gmp-lib"
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 _debug_start_ = true
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 \!Int=I64
 \!Real=Float32
@@ -9,10 +13,11 @@ _debug_start_ = true
 \!int-literal=I64
 \!real-literal=Float32
 
-
 -- *TODO* *TEMP*
-alias Itr = StdInt
+alias Intd = StdInt
 alias Real = Float64
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 module Djur
    module Boo begins
@@ -25,19 +30,19 @@ module Djur
       @@foo = 2
       Type.bar = 2
 
-      @foo     Itr
-      bar      Itr
-      @foo’    Itr   = 47
+      @foo     Intd
+      bar      Intd
+      @foo’    Intd   = 47
       bar’           = 47
-      @foo’’   Itr
-      bar’’    Itr
+      @foo’’   Intd
+      bar’’    Intd
 
-      foo3 'Itr
-      bar3 ^Itr
-      qwo3 ~Itr
+      foo3 'Intd
+      bar3 ^Intd
+      qwo3 ~Intd
 
-      -- xfoo! Itr = 47  -- should fail, and does
-      -- xbar? Itr = 42  -- should fail, and does
+      -- xfoo! Intd = 47  -- should fail, and does
+      -- xbar? Intd = 42  -- should fail, and does
 
       Type.my-def() -> say "Hit the spot! {{ Type.foo’ }}, {{ @@bar }}"
       inst-def() -> say "Hit the spot! {{ @foo’ }}, {{ @bar }}"
@@ -57,27 +62,10 @@ end
 
 -- module Djur
 --    module Boo
---       APA = 42
+--       APA = 42 -- *NOTE* - should we change behaviour so that consts can be monkey overridden too?
 --    end
 -- end
 
--- t = Time.Span(0)
--- t = Time.Span 0
-
-type Blk
-   init(&block) ->  -- (T) -> U - does not work for block...
-      yield 1
-      yield 2
-end
-
-blk = Blk(|x|
-   say "in blk init block: {{x}}"
-   nil
-)
-
-blk2 = Blk |x|
-   say "in blk init block: {{x}}"
-   nil
 
 say "1"
 
@@ -89,36 +77,99 @@ Djur.Boo.Apa.my-def
 say "Djur.Boo.Legs.TWO = {{Djur.Boo.Legs.TWO}}"
 say "Djur.Boo.Legs.is-six?(EIGHT) = {{Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}}"
 
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+-- t = Time.Span(0)
+-- t = Time.Span 0
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+type Blk
+   init(x, &block) ->  -- (T) -> U - does not work for block...
+      yield x + 1
+      yield x - 2
+end
+
+blk = Blk(4, |x|
+   say "in blk init block: {{x}}"
+)
+
+blk2 = Blk 7, |x|
+   say "in blk2 init block: {{x}}"
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 -- override '<<' operator on String to act as str combine (like '+' but auto-coercing)
 type String: <<(s) -> "{{self}}{{s}}"
 
 say "fdaf" + "fdsf" << "aaasd" << 47.13
 
 
-fun-with-various-local-vars() ->!
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+fun-with-various-local-vars(a I32|I64|Real = 0) ->!
+   say "a type = {{typeof(a)}}"
+
    -- declare assign with type inference
    zar1 = 1
 
    -- *TODO* after all basic control structs are implemented
-   -- zar2 ^Itr
-   -- zar2 ~Itr
-   -- zar2 'Itr = 1
-   -- zar0 ~Itr
+   -- zar2 ^Intd
+   -- zar2 ~Intd
+   -- zar2 'Intd = 1
+   -- zar0 ~Intd
    -- zar3 '= 1
    -- zar4 '*= 1
    -- zar5 'auto = 1
 
---    begin
---       a = 1 / 0
 
---    rescue e
---       say "Rescued divizon by zero: {{e}}"
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- ensure
---    say "/fun-with-various-local-vars"
+fun-with-exception-action() ->!
+   try:
+      a = 1 / 0
 
--- say "call fun-with-various-local-vars"
--- fun-with-various-local-vars
+   rescue e IndexError | ArgumentError do
+      say "In fun: Rescued {{e}}"
+
+   rescue DivisionByZero:
+      say "In fun: Rescued divizon by zero"
+
+   rescue e =>
+      say "Rescued some kind of shit"
+
+   fulfil:
+      say "In fun: Nothing to rescue - yippie!"
+
+   ensure do
+      say "In fun: Oblivious to what happened!"
+
+   a = 1 / 1
+   nil
+
+fulfil
+   say "eof fun-with-exception-action - ONLY on SUCCESS!"
+
+ensure
+   say "eof fun-with-exception-action - EVEN on RAISE!"
+
+
+say ""
+say "call fun-with-exception-action"
+
+try
+   fun-with-exception-action
+   say "after call fun-with-exception-action"
+rescue
+   say "rescued fun-with-exception-action in Program"
+end
+
+say "after try/rescue call fun-with-exception-action"
+say ""
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
 \!Int=I64
@@ -129,6 +180,8 @@ foo-named(awol, foo = 47, bar = "fds") ->!
 foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, #bar = "yo"
 foo-named 3, #foo = 11, #bar = "yo"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 list = List[Str]()
 list << "foo"
@@ -153,7 +206,7 @@ y = ((list.each(|v| p v)).map(~> _1 * 2))
 z = list.each(|v| p v).map ~> _1 * 2
 u = list.each(|v| p v).map ~> _1 * 2
 
-def say(s) -> puts s
+-- def say(s) -> puts s
 
 say "Let's ROCK"
 
@@ -166,25 +219,28 @@ DEBUG–SEPARATOR = 47
 -- a = [:Int32]
 -- a = [] Int32
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 def f(y ()->) -> nil
 
 --   -- (Seq[Int32]()).flat_map ~>
 f () ->
-   ([] of Itr).flat-map ~>
-      [] of Itr
+   ([] of Intd).flat-map ~>
+      [] of Intd
 
 f(() ->
-   ([] of Itr).flat-map(~>
-      [] of Itr
+   ([] of Intd).flat-map(~>
+      [] of Intd
    )
 )
 
 (f () ->
-   (([] of Itr).flat-map ~>
-      [] of Itr
+   (([] of Intd).flat-map ~>
+      [] of Intd
    )
 )
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
 \!Int=StdInt
@@ -206,6 +262,8 @@ the–str = "kjhgkjh" \
 -- how about (though that's the range–exclusive operator):
 -- the–str = "kjhgkjh" ...
 --    "dfghdfhgd"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 if (a == 47 &&
    a != 48
@@ -254,7 +312,6 @@ end–if
 -- )
 --    say "Yeay 47 == 47"
 
-
 -- zoo( \
 --    a, \
 --    b, \
@@ -267,15 +324,19 @@ end–if
 --    @prog–v = v
 -- end
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 [ab, ac] = [3, 2]
 [aa, ab, ac, ad] = [1, ac, ab, 4]
 say "should be 3: " + ac.to–s
 
 DEBUG–SEPARATOR
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 -- -#pure -#private
 \private
-def zoo(a, b, ...c 'Itr) Str ->  \pure
+def zoo(a, b, ...c 'Intd) Str ->  \pure
    if true:
       i = 1
 
@@ -326,6 +387,8 @@ end
 
 p zoo 1, 2, 47, 42
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 reg–ex = /foo (ya)(.*)/i
 m1 = "asdf foo ya fdsa".match reg–ex
 m2 = "fda" =~ reg–ex
@@ -333,29 +396,29 @@ m2 = "fda" =~ reg–ex
 say "m1 = " + m1.to–s
 say "m2 = " + m2.to–s
 
-def foo(a, b, c Str) ->
-   (a + b).to–s + c
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+
+def qwo(a 'Intd, b ~Intd) ->
 end
 
+def qwo2(a ^Intd, b 'Intd) -> end
 
-def qwo(a 'Itr, b ~Itr) ->
-end
+def qwo3(a 'Intd, b mut Intd) Str -> -- Str
 
-def qwo2(a ^Itr, b 'Itr) -> end
-
-def qwo3(a 'Itr, b mut Itr) Str -> -- Str
-
-def qwo4(a Itr; b Itr) ->
+def qwo4(a Intd; b Intd) ->
 end
 
 qwo2 1, 2
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 n = 4747 >> 3
 n >>= 1
 say "n = " + n.to–s + " from " + 4747.to–s
 -- say "n = " + $n + " from " + $4747
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
 say "json–correct–hash: {{json–hash}}"
@@ -395,6 +458,7 @@ tag–hash–2 = {
 say "tag–hash–2 type is {{typeof(tag–hash–2)}}"
 say "tag–hash–2 value is {{tag–hash–2}}"
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- type TradeSide << Enum[Int8]
 enum TradeSide Int8
@@ -402,6 +466,7 @@ enum TradeSide Int8
    Buy
    Sell
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- crystal style 1 `case ref`
 case n
@@ -567,18 +632,26 @@ cond
    n == 2:     say "is 2"
    *:          say n.to–s
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 for v[i] in [#apa, #katt]: say ": {{i}}: {{v}}"
 
 if true: say ": true"
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+def foo(a, b, c Str) ->
+   (a + b).to–s + c
+end
+
 x = foo a, 2, "3"
 
-a = (a Itr, b Itr) -> (a + b).to–s; end
-b = (a Str, _ Itr, b 'Bool; c Real) ->
+a = (a Intd, b Intd) -> (a + b).to–s; end
+b = (a Str, _ Intd, b 'Bool; c Real) ->
    "{{a}} {{x}}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Itr, b 'Str, c 'Itr) -> a.to–s + b + c.to–s
+c = (a ~Intd, b 'Str, c 'Intd) -> a.to–s + b + c.to–s
 
 -- *TODO* fix so that lambdas can be called with call syntax! And all instances
 -- with a call method! (including Functor trait well formed)
@@ -588,12 +661,17 @@ p b.call "23.5 Closured Lambda says", 1, true, 0.47
 -- Str "47"
 -- str "47"
 
-p typeof(b)
+pp typeof(b), b.class
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-class Fn[T1, T2, T3]
+-- type Fn[T1, T2, T3]
+alias Fn = Proc
 
+-- two funcs with each two params taking lambdas, declared with strict type
+-- syntax and lambda-style type syntax respectively
 def booze1(f1 Fn[I32,Array<*>,Array<Array[Ptr<Int32>]>], f2 Fn[Str, Nil, Array<Bool>]) ->
+def booze2(f1 (Array<*>, Array<Array[Ptr<Int32>]>) -> I32, f2 (Nil, Array<Bool>) -> Str) ->
 
 say "Array[Array<Ptr[Int32]>] => " + Array[Array<Ptr[Int32]>].to–s
 
@@ -602,6 +680,7 @@ booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
 end
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- -- a–closure–lambda1 = [&i,=v](a, b) -> do–shit(a, b, @i, @v)
 
@@ -628,23 +707,11 @@ end
 
 
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 list = [#abra, #baba, #cadabra]
 
 say "the list: {{list}}"
-
-
--- soft lambdas
--- list.each (v) ->) p v
--- list.each (v) ->} p v
--- list.each (v Tag) ->) p v
--- list.each (v Tag) ->} p v
--- list.each (v) -) p v
--- list.each (v) -} p v
-
-for v in list => p v
-
-
 
 list = ["foo", "yaa"]
 
@@ -657,8 +724,6 @@ y = (list.each |v|
 ).map ~>
    _1 * 2
 
-
-
 list.each–with–index ~>
    p _1
    break if _2 == 4
@@ -666,8 +731,6 @@ list.each–with–index ~>
 (list.map ~> _1 + "X").each–with–index ~>
    p _1
    break if _2 == 4
-
-
 
 list.each–with–index |v, i|
    p v
@@ -677,13 +740,9 @@ list.each–with–index |v, i|
    p x
    break if y == 4
 
-
-
 list.each–with–index ~>
    p _1
    break if _2 == 4
-
-
 
 -- for i from 0 til 10
 --    say "from til loop {{i}}"
@@ -702,6 +761,7 @@ list.each–with–index ~>
 -- -- mapped–list2   = foo–list.map ~} _1 * 2
 -- -- say "Mapped list: {{mapped–list}}"
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 for val in list
    say val
@@ -715,11 +775,9 @@ for val in list =>
 
 for crux in list do say "do nest" + crux.to_s
 
-
 for arrowv in list => say "=> nest" + arrowv.to_s
 for spccolonv in list : say "\\s: nest" + spccolonv.to_s
 for colonv in list: say ": nest" + colonv.to_s
-
 
 for ,ix in list
    if true begins
@@ -756,6 +814,7 @@ for val[ix] in {"c", "b", "a"} -- by -1
 for val[ix] in ["c", "b", "a"] -- by 2
    say "{{val}}, {{ix}}"
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 trait TheTrait
    is–cool–traited?() -> true
@@ -777,7 +836,7 @@ end–type
 
 type Bar << Qwa
    Self.my–foo Int64 = 47i64
-   Self.some–other–foo 'Itr = 42
+   Self.some–other–foo 'Intd = 42
    Self.yet–a-foo = 42
 
    Type.RedFoo = 5
@@ -787,7 +846,7 @@ type Bar << Qwa
    GreenBar = 8
 
    foo–a Str = ""
-   foo–b Itr = 0
+   foo–b Intd = 0
    @foo–c I64 = 0
    foo-ya I32 = 0_i32
 
@@ -801,7 +860,6 @@ Bar.set-foo 4_i64
 say "Bar.get-foo = {{Bar.get-foo}}"
 
 say "declare a Foo type"
-
 
 
 type Foo[S1] << Bar
@@ -819,24 +877,14 @@ type Foo[S1] << Bar
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
    fn–1aa(x) ->>  \pub  nil   -- should this be legal? - looks very confusing!
-
    fn–1ab(x) Nil -> \pure \pub  nil   -- should this be legal? - looks very confusing!
 
    \priv \inline
    \pure
    fn–1ba(x) ->>! nil
-
    fn–1ca(x) ->>!  \pure
-
-   -- will cause conflicts with generic blockstarts:
-   -- fn–1ab(x) => nil
-   -- fn–1bb(x) =>! nil
-   -- fn–1cb(x) =>!
-
    fn–1da(x) -> nil
-
    fn–1ea(x) ->! nil
-
    fn–1fa(x) ->!
 
    fn–1ga(x) ->!
@@ -849,14 +897,14 @@ type Foo[S1] << Bar
    --    say "you!"
    --    "fdsa"
 
-   -- Should Error on instantiation, because of mismatching return type
+   -- Should Error if instantiated, because of mismatching return type
    fn–1i(x) ->!
       say "Yeay"
       return "Foo"
 
    fn–a(a, b) ->> "a: {{a}}, {{b}}"
 
-   def fn–b(a S1, b Itr) -> -- fdsa
+   def fn–b(a S1, b Intd) -> -- fdsa
       "b: {{a}}, {{b}}"
 
    \private
@@ -867,7 +915,7 @@ type Foo[S1] << Bar
 
    \private
    -- fn–c(a, b I32) redef private ->
-   fn–c(a, b Itr) -> \redef
+   fn–c(a, b Intd) -> \redef
       "c: {{a}}, {{b}}"
       -- t"c: {a}, {b}"
 
@@ -877,7 +925,7 @@ type Foo[S1] << Bar
       fn–e
    end
 
-   fn–d2(a S1, b Itr) ->
+   fn–d2(a S1, b Intd) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -933,12 +981,14 @@ say shitSandwich
 say typeof(foo)
 say foo.class
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 say "7 .&. 12 == {{ 7 .&. 12 }}"
 say "12 .|. 1 == {{ 12 .|. 1 }}"
 say "12 .^. 2 == {{ 12 .^. 2 }}"
 say ".~. 12 == {{ .~. 12 }}"
 
-say "All DOWN AND OUT"
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
 -- *NOTE* - perhaps it should be supported to set var in cond and it's avail in prefix then-branch
@@ -952,18 +1002,77 @@ say "All DOWN AND OUT"
 --    pointerof({=o=})
 -- end
 
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- Try some C FFI API
+
+@[Link("gmp")]
+
+api MyLibGmp
+   TEST_CONST = 47
+
+   alias Long = LibC.Long
+   alias ULong = LibC.ULong
+   alias SizeT = LibC.SizeT
+   alias Double = LibC.Double
+
+   struct Mpz
+      _mp_alloc Int32
+      _mp_size  Int32
+      _mp_d     Ptr[ULong]
+
+   alias MpzP = Ptr[Mpz]
+
+   -- # Initialization
+   fun init = __gmpz_init(x MpzP)
+   fun init_set_si = __gmpz_init_set_si(rop Ptr<Mpz>, op Long)
+
+   fun get_si = __gmpz_get_si(op MpzP) Long
+
+   fun add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP)
+
+   fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr[Void], realloc (Ptr[Void], SizeT, SizeT) -> Ptr[Void], free (Ptr[Void], SizeT) -> Void )
+
+MyLibGmp.set-memory-functions(
+   ((size) -> GC.malloc(size) ),
+   (ptr, old_size, new_size) -> GC.realloc(ptr, new_size); end,
+   ((ptr, size) -> GC.free(ptr) )
+)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+add-as-big-ints(a, b) ->
+   pp MyLibGmp.TEST_CONST
+
+   bigret 'MyLibGmp.Mpz
+   bigv1 'MyLibGmp.Mpz
+   -- bigv2 'MyLibGmp.Mpz - implicitly created with `out` arg modifier
+
+   MyLibGmp.init pointerof(bigret)
+   MyLibGmp.init-set-si pointerof(bigv1), a
+   MyLibGmp.init-set-si out bigv2, b
+   MyLibGmp.add pointerof(bigret), pointerof(bigv1), pointerof(bigv2)
+
+   say "bigint add result: {{ MyLibGmp.get-si pointerof(bigret) }}"
+
+
+add-as-big-ints 42, 47
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- This module begins here and continues to EOF
 module AllTheRest begins
-
-type Foo
-   foo() ->
+type RestFoo
+   rest-foo() ->
       true
-
 xx = 47
 yy = 47.47
 
 
-MyLibGmp.init-set-si out mpz, 47
-say "bigint -> i64: {{ MyLibGmp.get-si(pointerof(mpz)) }}"
 
-pp MyLibGmp.FOO_CONST
-
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+say "{{"foo".magenta}}, {{"bar".grey}}, {{"qwo".white}}"
+say "{{"foo".magenta2}}, {{"bar".grey2}}, {{"qwo".white}}"
+say "All DOWN ".red
+say "         AND OUT".red2

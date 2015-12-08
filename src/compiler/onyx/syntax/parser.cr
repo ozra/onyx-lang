@@ -624,8 +624,8 @@ module Crystal
 
 
       # *TODO* this is called after all kinds of things
-      # after def -> end for instance - where ofcourse ENSURE and RESCUE are ok,
-      # but no others.
+      # after def -> end for instance - where of course ENSURE and RESCUE are ok,
+      # but no others. But that is handled IN "parse_def_helper"
 
       # Look over the entire concept!
 
@@ -651,6 +651,7 @@ module Crystal
             raise "suffix `while` is not supported", @token
           when :until
             raise "suffix `until` is not supported", @token
+
 
 
           when :rescue
@@ -1582,8 +1583,8 @@ module Crystal
         #   parse_var_or_call
 
         case @token.value
-        when :begin
-          parse_begin
+        when :try # :begin
+          parse_try
         when :nil
           node_and_next_token NilLiteral.new
         when :true
@@ -2063,9 +2064,18 @@ module Crystal
 
 
 
-    def parse_begin
+    def parse_try
       slash_is_regex!
-      next_token_skip_statement_end
+      next_token_skip_space # statement_end
+
+      nest_kind, dedent_level = parse_nest_start(:try, @indent)
+
+      if nest_kind == :NIL_NEST
+        raise "empty try block!"
+      end
+
+      add_nest :try, dedent_level, "", (nest_kind == :LINE_NEST), false
+
       exps = parse_expressions
       exps2 = Expressions.new([exps] of ASTNode).at(exps)
       node, end_location = parse_exception_handler exps
@@ -2099,12 +2109,14 @@ module Crystal
         end
       end
 
-      if kwd?(:else)
-        unless rescues
-          raise "'else' is useless without 'rescue'", @token, 4
-        end
+      # *TODO* fulfil should be possible on fun–level even without rescue!
+      if kwd?(:else, :fulfil)
+        # unless rescues
+        #   raise "'else' is useless without 'rescue'", @token, 4
+        # end
+        next_token_skip_space
 
-        nest_kind, dedent_level = parse_nest_start(:else, @indent)
+        nest_kind, dedent_level = parse_nest_start(:generic, @indent)
 
         # next_token_skip_statement_end
         if nest_kind == :NIL_NEST
@@ -2118,6 +2130,7 @@ module Crystal
       end
 
       if kwd?(:ensure)
+        next_token_skip_space
         # next_token_skip_statement_end
         nest_kind, dedent_level = parse_nest_start(:generic, @indent)
         if nest_kind == :NIL_NEST
@@ -2148,35 +2161,25 @@ module Crystal
     def parse_rescue
       next_token_skip_space
 
-      case @token.type
-      when :IDFR
+      if tok? :IDFR
         name = @token.value.to_s
         add_var name
         next_token_skip_space
+      end
 
-        # *TODO* don't use colon as THE type annotater
-        if @token.type == :":"
-          next_token_skip_space_or_newline
-          check :CONST
-          types = parse_rescue_types
-        end
-      when :CONST
+      if tok? :CONST #, :"(" # should possibly support grouping the "sumtype" with parens.. minor detail. And not recommended practise. So...
         types = parse_rescue_types
       end
 
-      # check SemicolonOrNewLine
       nest_kind, dedent_level = parse_nest_start :generic, @indent
-
       add_nest :rescue, dedent_level, "", (nest_kind == :LINE_NEST), false
-
-      next_token_skip_space_or_newline
 
       if nest_kind == :NIL_NEST # kwd?("end")
         body = nil
         handle_nest_end true
       else
         body = parse_expressions
-        skip_statement_end
+        # skip_statement_end
       end
 
       Rescue.new(body, types, name)
@@ -2184,9 +2187,11 @@ module Crystal
 
     def parse_rescue_types
       types = [] of ASTNode
+
       while true
         types << parse_idfr
         skip_space
+
         if @token.type == :"|"
           next_token_skip_space
         else
@@ -4511,6 +4516,7 @@ module Crystal
           handle_nest_end true
 
         elsif is_abstract  # for prefixed `abstract`, the suffix–vers is below
+          # *TODO* remove! this is foul
           dbg "is_abstract - sets nil block"
           raise "remove prefix abstract! deprecated"
           body = Nop.new
@@ -4549,10 +4555,10 @@ module Crystal
               raise "unexpected token \"#{@token}\". Expected def to be done after 'abstract' keyword.", @token.location
             end
 
-          elsif is_explicit_end_tok?                  # *TODO* all kinds of endings
-            raise "Does this happen? When? *TODO*" # *TODO* *UGLY* TRACING WHAT HAPPENS THE RAW WAY! RAPID DEV! ;-)
-            body = Expressions.from(extra_assigns)
-            next_token_skip_space
+          # elsif is_explicit_end_tok?                  # *TODO* all kinds of endings
+          #   raise "Does this happen? When? *TODO*" # *TODO* *UGLY* TRACING WHAT HAPPENS THE RAW WAY! RAPID DEV! ;-)
+          #   body = Expressions.from(extra_assigns)
+          #   next_token_skip_space
 
           else
             dbg "before body=parse_expressions"
@@ -5098,6 +5104,7 @@ module Crystal
             end
           else
             if tok?  :"'", :"~", :"^" # , :":" # :"::"  - *TODO*, if ':' is wished to be used for this - either block-: or something else has to be ditched
+              dbg "got type prefix for var_or_call".yellow
               next_token_skip_space_or_newline
               declared_type = parse_single_type
               declare_var = DeclareVar.new(Var.new(name).at(location), declared_type).at(location)
@@ -6660,7 +6667,7 @@ module Crystal
         return true
       when :IDFR
         case @token.value
-        when :else, :elsif, :elif, :when, :rescue, :ensure, :do, :then, :begins
+        when :else, :elsif, :elif, :when, :rescue, :ensure, :fulfil, :do, :then, :begins
           return true
         end
 
@@ -6981,7 +6988,7 @@ module Crystal
 
     def handle_transition_tokens
       dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
-      if kwd? :else, :elsif, :elif, :ensure, :rescue # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
+      if kwd? :else, :elsif, :elif, :ensure, :fulfil, :rescue # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
         dbg "- handle_transition_tokens - DE-NESTS".red
         # @was_just_nest_end = true
         de_nest @indent, :"", ""
