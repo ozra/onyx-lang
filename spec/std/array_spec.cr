@@ -788,6 +788,11 @@ describe "Array" do
       [1, 2, 3].includes?(x).should be_true
     end
 
+    it "sample with random" do
+      x = [1, 2, 3]
+      x.sample(Random.new(1)).should eq(3)
+    end
+
     it "gets sample of negative count elements raises" do
       expect_raises ArgumentError do
         [1].sample(-1)
@@ -828,6 +833,12 @@ describe "Array" do
       set.each do |e|
         a.includes?(e).should be_true
       end
+    end
+
+    it "gets sample of k elements out of n, with random" do
+      a = [1, 2, 3, 4, 5]
+      b = a.sample(3, Random.new(1))
+      b.should eq([4, 3, 5])
     end
   end
 
@@ -882,6 +893,18 @@ describe "Array" do
 
       3.times { b.includes?(a.shift).should be_true }
     end
+
+    it "shuffle! with random" do
+      a = [1, 2, 3]
+      a.shuffle!(Random.new(1))
+      a.should eq([2, 1, 3])
+    end
+
+    it "shuffle with random" do
+      a = [1, 2, 3]
+      b = a.shuffle(Random.new(1))
+      b.should eq([2, 1, 3])
+    end
   end
 
   describe "sort" do
@@ -933,6 +956,13 @@ describe "Array" do
       a = ["foo", "a", "hello"]
       a.sort_by! &.size
       a.should eq(["a", "foo", "hello"])
+    end
+
+    it "calls given block exactly once for each element" do
+      calls = Hash(String, Int32).new(0)
+      a = ["foo", "a", "hello"]
+      a.sort_by! { |e| calls[e] += 1; e.size }
+      calls.should eq({"foo": 1, "a": 1, "hello": 1})
     end
   end
 
@@ -1355,6 +1385,32 @@ describe "Array" do
     end
 
     assert { expect_raises(ArgumentError, "size must be positive") { [1].each_permutation(-1) { } } }
+
+    it "returns iterator" do
+      a = [1, 2, 3]
+      perms = a.permutations
+      iter = a.each_permutation
+      perms.each do |perm|
+        iter.next.should eq(perm)
+      end
+      iter.next.should be_a(Iterator::Stop)
+
+      iter.rewind
+      iter.next.should eq(perms[0])
+    end
+
+    it "returns iterator with given size" do
+      a = [1, 2, 3]
+      perms = a.permutations(2)
+      iter = a.each_permutation(2)
+      perms.each do |perm|
+        iter.next.should eq(perm)
+      end
+      iter.next.should be_a(Iterator::Stop)
+
+      iter.rewind
+      iter.next.should eq(perms[0])
+    end
   end
 
   describe "combinations" do
@@ -1387,6 +1443,19 @@ describe "Array" do
     end
 
     assert { expect_raises(ArgumentError, "size must be positive") { [1].each_combination(-1) { } } }
+
+    it "returns iterator" do
+      a = [1, 2, 3, 4]
+      combs = a.combinations(2)
+      iter = a.each_combination(2)
+      combs.each do |comb|
+        iter.next.should eq(comb)
+      end
+      iter.next.should be_a(Iterator::Stop)
+
+      iter.rewind
+      iter.next.should eq(combs[0])
+    end
   end
 
   describe "repeated_combinations" do
@@ -1417,6 +1486,19 @@ describe "Array" do
     end
 
     assert { expect_raises(ArgumentError, "size must be positive") { [1].each_repeated_combination(-1) { } } }
+
+    it "returns iterator" do
+      a = [1, 2, 3, 4]
+      combs = a.repeated_combinations(2)
+      iter = a.each_repeated_combination(2)
+      combs.each do |comb|
+        iter.next.should eq(comb)
+      end
+      iter.next.should be_a(Iterator::Stop)
+
+      iter.rewind
+      iter.next.should eq(combs[0])
+    end
   end
 
   describe "repeated_permutations" do

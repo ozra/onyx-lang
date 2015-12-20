@@ -2522,10 +2522,10 @@ module Crystal
 
         if exp.is_a?(TupleLiteral) && @token.type != :"{"
           format_args(exp.elements, has_parentheses)
-          skip_space_or_newline if has_parentheses
+          skip_space if has_parentheses
         else
           indent(@indent, exp)
-          skip_space_or_newline
+          skip_space
         end
       end
 
@@ -2558,7 +2558,7 @@ module Crystal
     def visit(node : Case)
       slash_is_regex!
       write_keyword :case
-      skip_space_or_newline
+      skip_space
 
       if cond = node.cond
         write " "
@@ -2634,7 +2634,7 @@ module Crystal
         end
       end
       when_column_middle = @column
-      skip_space
+      indent { skip_space }
       if @token.type == :";" || @token.keyword?(:then)
         separator = @token.to_s
         slash_is_regex!
@@ -3636,7 +3636,7 @@ module Crystal
 
         begin
           formatted_comment = Formatter.format(comment)
-          formatted_lines = formatted_comment.split('\n')
+          formatted_lines = formatted_comment.lines
           formatted_lines.map! do |line|
             String.build do |str|
               sharp_index.times { str << " " }
