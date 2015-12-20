@@ -686,6 +686,7 @@ module Crystal
 
                end
 
+            # *TODO* :"}}" is no longer produced in lexing
             when :")", :",", :";", :"%}", :"=}", :"}}", :NEWLINE, :EOF, :DEDENT
                # *TODO* skip explicit end token
                break
@@ -3267,10 +3268,10 @@ module Crystal
                if @token.type != :"}"
                   raise "Unterminated string interpolation"
                end
-               next_token
-               if @token.type != :"}"
-                  raise "Unterminated string interpolation"
-               end
+               #next_token
+               # if @token.type != :"}"
+               #    raise "Unterminated string interpolation"
+               # end
 
                @token.delimiter_state = delimiter_state
                next_string_token(delimiter_state)

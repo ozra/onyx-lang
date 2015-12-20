@@ -2325,8 +2325,7 @@ module Crystal
         end
 
       when '{'
-        if delimiter_state.kind != :straight_string && peek_nextch == '{'
-          nextch
+        if delimiter_state.kind != :straight_string
           nextch
           @token.type = :INTERPOLATION_START
         else
@@ -2334,18 +2333,6 @@ module Crystal
           @token.type = :STRING
           @token.value = "{"
         end
-        # when '#'
-        #   if peek_nextch == '{'
-        #     nextch
-        #     nextch
-        #     @token.type = :INTERPOLATION_START
-#
-        #   else
-        #     nextch
-        #     @token.type = :STRING
-        #     @token.value = "#"
-#
-        #   end
 
       when '\n'
         nextch
@@ -2398,7 +2385,7 @@ module Crystal
               curch != string_nest &&
               curch != '\0' &&
               curch != '\\' &&
-              curch != '{' && # curch != '#' &&
+              !(curch == '{' && delimiter_state.kind != :straight_string) && 
               curch != '\n'
           nextch
         end

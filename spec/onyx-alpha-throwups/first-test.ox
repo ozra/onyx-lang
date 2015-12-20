@@ -6,6 +6,8 @@ require "wild_colors"
 
 say "\nLet's ROCK\n".red
 
+say %s(\nfunction(foo) { SomeJsCode(foo(\"bar}\"));}\n)
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 _debug_start_ = true
@@ -28,7 +30,7 @@ MY_CONST = do
    x = 0
    2.upto(4).each |a|
       x += a
-      say "calculating MY_CONST, {{a}}"
+      say "calculating MY_CONST, {a}"
    x
 
 pp MY_CONST
@@ -65,8 +67,8 @@ module Djur
       -- xfoo! Ints = 47  -- should fail, and does
       -- xbar? Ints = 42  -- should fail, and does
 
-      Type.my-def() -> say "Hit the spot! {{ Type.foo’ }}, {{ @@bar }}"
-      inst-def() -> say "Hit the spot! {{ @foo’ }}, {{ @bar }}"
+      Type.my-def() -> say "Hit the spot! { Type.foo’ }, { @@bar }"
+      inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
    end
 
    enum Legs
@@ -98,12 +100,12 @@ end
 say "1"
 
 Djur::Boo::Apa.my-def
-say "Djur::Boo::Legs::TWO = {{Djur::Boo::Legs::TWO}}"
+say "Djur::Boo::Legs::TWO = {Djur::Boo::Legs::TWO}"
 
--- say Djur.Boo.Apa.foo’ -- *NOTE* perhaps a better error message: "No method with the name `{{name}}` found, only a private variable. Make a getter and/or setter method to access it from the outside world"
+-- say Djur.Boo.Apa.foo’ -- *NOTE* perhaps a better error message: "No method with the name `{name}` found, only a private variable. Make a getter and/or setter method to access it from the outside world"
 Djur.Boo.Apa.my-def
-say "Djur.Boo.Legs.TWO = {{Djur.Boo.Legs.TWO}}"
-say "Djur.Boo.Legs.is-six?(EIGHT) = {{Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}}"
+say "Djur.Boo.Legs.TWO = {Djur.Boo.Legs.TWO}"
+say "Djur.Boo.Legs.is-six?(EIGHT) = {Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -121,11 +123,11 @@ type Blk
 ;
 
 blk = Blk(4, |x|
-   say "in blk init block: {{x}}"
+   say "in blk init block: {x}"
 )
 
 blk2 = Blk 7, |x|
-   say "in blk2 init block: {{x}}"
+   say "in blk2 init block: {x}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -141,7 +143,7 @@ type MyFunctor
 
    call() -> "call()"
 
-   call(a, b) -> "call {{a}}, {{b}}, {{@foo}}"
+   call(a, b) -> "call {a}, {b}, {@foo}"
 
    bar() -> true
 
@@ -160,14 +162,14 @@ my-fun-fun(f) ->
 
 pp my-fun-fun myfu
 
-my-lambda = (x Str) -> say "x: {{x}}"; end; my-lambda "47"
+my-lambda = (x Str) -> say "x: {x}"; end; my-lambda "47"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- reopen String type and override '<<' operator to act as "concat" (like '+',
 -- but auto-coercing)
-type String: <<(obj) -> "{{self}}{{obj}}"
+type String: <<(obj) -> "{self}{obj}"
 
 say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 
@@ -175,7 +177,7 @@ say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 fun-with-various-local-vars(a I32|I64|Real = 0) ->!
-   say "a type = {{typeof(a)}}"
+   say "a type = {typeof(a)}"
 
    -- declare assign with type inference
    zar1 = 1
@@ -196,7 +198,7 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
    -- when typed currently. They should _not_ be. ONLY typed for TySys!
    -- pp zar2, zar4, zar3
 
-   say "fun-with-various-local-vars {{zar1}}" -- , {{LocalConst}}"
+   say "fun-with-various-local-vars {zar1}" -- , {LocalConst}"
 
 
 fun-with-various-local-vars 47
@@ -208,7 +210,7 @@ fun-with-exception-action(x) ->!
       a = 1 / 0
 
    rescue e IndexError | ArgumentError do
-      say "In fun: Rescued {{e}}"
+      say "In fun: Rescued {e}"
 
    rescue DivisionByZero:
       say "In fun: Rescued divizon by zero"
@@ -264,7 +266,7 @@ say ""
 \!Int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
-   say "{{awol}}, {{foo}}, {{bar}}"
+   say "{awol}, {foo}, {bar}"
 
 foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, #bar = "yo"
@@ -277,11 +279,11 @@ list << "foo"
 list << "yaa"
 
 v = list.map(|x, y| x + "1")
-w = list.map |x, y| "{{x}} 47"
-i = list.map |x, y| => "{{x}} 13"
-j = list.map ~> "{{_1}} 13"
+w = list.map |x, y| "{x} 47"
+i = list.map |x, y| => "{x} 13"
+j = list.map ~> "{_1} 13"
 
-puts "{{v}}, {{w}}"
+puts "{v}, {w}"
 
 
 list = [47, 13, 42, 11]
@@ -334,14 +336,14 @@ f(() ->
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 char = %"a"
-say "char: {{char}} ({{ typeof(char) }})"
+say "char: {char} ({ typeof(char) })"
 
-straight-str = %s<no {{interpolation\t here}}\n\tOk!>
-say "straight-str: {{straight-str}} ({{ typeof(straight-str) }})"
+straight-str = %s<no {interpolation\t here}\n\tOk!>
+say "straight-str: {straight-str} ({ typeof(straight-str) })"
 
 -- *NOTE* consider this, _iff_ standard string is changed to interpolate on {/}
--- tpl-str = %t<requires heavier delimiting %{{interpolation here}}>
--- say "tpl-str: {{tpl-str}} ({{ typeof(tpl-str) }})"
+-- tpl-str = %t<requires heavier delimiting %{interpolation here}>
+-- say "tpl-str: {tpl-str} ({ typeof(tpl-str) })"
 
 the–str = "kjhgkjh" \
    "dfghdfhgd"
@@ -454,7 +456,7 @@ def zoo(a, b, ...c 'Ints) Str ->  \pure
          else
             say "11"
             for val[ix] in {"c", "b", "a"} by 2
-               p "{{val}}, {{ix}}"
+               p "{val}, {ix}"
 
          if true
             -- comment after indent
@@ -475,7 +477,7 @@ def zoo(a, b, ...c 'Ints) Str ->  \pure
    end–if
 
 
-   qwo = "{{(a + b)}} {{c.to–s}}"
+   qwo = "{(a + b)} {c.to–s}"
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
 
@@ -515,11 +517,11 @@ say "n = " + n.to–s + " from " + 4747.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
-say "json–correct–hash: {{json–hash}}"
+say "json–correct–hash: {json–hash}"
 
 
 tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
-say "tag–hash: {{tag–hash}}"
+say "tag–hash: {tag–hash}"
 
 apa = #apa
 katt = "katt"
@@ -528,10 +530,10 @@ panter = 947735
 -- *TODO* Allow below to act just as a JS-hash?
 -- now it acts like arrow hash
 js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
-say "perhaps to be js–hash: {{js–hash}}"
+say "perhaps to be js–hash: {js–hash}"
 
 arrow–hash = {apa => "Apa", katt => "Katt", panter => "Panter"}
-say "arrow–hash: {{arrow–hash}}"
+say "arrow–hash: {arrow–hash}"
 
 tag–hash–2 = {
    #apa: "Apa",
@@ -549,8 +551,8 @@ tag–hash–2 = {
    }
    #bastard: "Bastard"
 }
-say "tag–hash–2 type is {{typeof(tag–hash–2)}}"
-say "tag–hash–2 value is {{tag–hash–2}}"
+say "tag–hash–2 type is {typeof(tag–hash–2)}"
+say "tag–hash–2 value is {tag–hash–2}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -728,7 +730,7 @@ cond
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-for v[i] in [#apa, #katt]: say ": {{i}}: {{v}}"
+for v[i] in [#apa, #katt]: say ": {i}: {v}"
 
 if true: say ": true"
 
@@ -742,7 +744,7 @@ x = foo a, 2, "3"
 
 a = (a Ints, b Ints) -> (a + b).to–s; end
 b = (a Str, _ Ints, b 'Bool; c Real) ->
-   "{{a}} {{x}}" -- t"{a} {x}"
+   "{a} {x}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
 c = (a ~Ints, b 'Str, c 'Ints) -> a.to–s + b + c.to–s
@@ -788,11 +790,11 @@ end
 
 list = [#abra, #baba, #cadabra]
 
-say "the list ({{list.class}}): {{list}}"
+say "the list ({list.class}): {list}"
 
 list = ["foo", "yaa", "qwö"]
 
-say "the 2nd list ({{list.class}}): {{list}}"
+say "the 2nd list ({list.class}): {list}"
 
 -- single line block style #2
 y = list.each(|v| p v).map ~> _1 * 2
@@ -824,7 +826,7 @@ list.each–with–index ~>
    break if _2 == 4
 
 -- for i from 0 til 10
---    say "from til loop {{i}}"
+--    say "from til loop {i}"
 
 
 -- -- list.each_with_index ~>
@@ -838,7 +840,7 @@ list.each–with–index ~>
 -- -- foo–list = [1, 2, 3]
 -- -- mapped–list    = foo–list.map (x)-} x * 2
 -- -- mapped–list2   = foo–list.map ~} _1 * 2
--- -- say "Mapped list: {{mapped–list}}"
+-- -- say "Mapped list: {mapped–list}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -846,7 +848,7 @@ for val in list
    say val
 
 list.each |val|
-  say("implicit nest {{val.to_s}}")
+  say("implicit nest {val.to_s}")
 end
 
 for val in list =>
@@ -861,37 +863,37 @@ for colonv in list: say ": nest" + colonv.to_s
 for ,ix in list
    if true begins
    say "begins-block:"
-   say "  {{ix}}"
+   say "  {ix}"
 
 for val, ix in list
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for ix: val in list
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for ix:val in list
-   p "{{val}}, {{ix}}"
+   p "{val}, {ix}"
 
 for ix: in list
    say ix
 
 for val[ix] in list
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for [ix] in list
    say ix
 
 for val[ix] in ["c", "b", "a"]
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for val[ix] in {"c", "b", "a"}
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for val[ix] in {"c", "b", "a"} -- by -1
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 for val[ix] in ["c", "b", "a"] -- by 2
-   say "{{val}}, {{ix}}"
+   say "{val}, {ix}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -936,7 +938,7 @@ type Bar << Qwa
       @@my–foo
 
 Bar.set-foo 4_i64
-say "Bar.get-foo = {{Bar.get-foo}}"
+say "Bar.get-foo = {Bar.get-foo}"
 
 say "declare a Foo type"
 
@@ -1003,21 +1005,21 @@ type Foo[S1] << Bar
       say "Yeay"
       return "Foo"
 
-   fn–a(a, b) ->> "a: {{a}}, {{b}}"
+   fn–a(a, b) ->> "a: {a}, {b}"
 
    def fn–b(a S1, b Ints) -> -- fdsa
-      "b: {{a}}, {{b}}"
+      "b: {a}, {b}"
 
    \private
    fn–c(a, b S1) S1 ->>  \redef \inline
-      "c: {{a}}, {{b}}"
+      "c: {a}, {b}"
 
    end–def
 
    -- fn–c(a, b I32) redef private ->
    \private
    fn–c(a, b Ints) -> \redef
-      "c: {{a}}, {{b}}"
+      "c: {a}, {b}"
 
    fn–d1(a, b) ->
       @foo–a = a
@@ -1037,7 +1039,7 @@ type Foo[S1] << Bar
    --    @foo–b = c
    --    fn–e
 
-   fn–e() -> fa = @foo–a ; "e: {{fa}}, {{@foo_b}}"
+   fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 
    call() -> fn–e
 
@@ -1095,21 +1097,21 @@ say foo.class
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-say "7 .&. 12 == {{ 7 .&. 12 }}"
-say "12 .|. 1 == {{ 12 .|. 1 }}"
-say "12 .^. 2 == {{ 12 .^. 2 }}"
-say ".~. 12 == {{ .~. 12 }}"
+say "7 .&. 12 == { 7 .&. 12 }"
+say "12 .|. 1 == { 12 .|. 1 }"
+say "12 .^. 2 == { 12 .^. 2 }"
+say ".~. 12 == { .~. 12 }"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- Suffix-if - possible change:
 -- *NOTE* - perhaps it should be supported to set var in cond and it's avail in prefix then-branch
 
--- say "Yes indeed we got {{if-var}}" if if-var = 47
+-- say "Yes indeed we got {if-var}" if if-var = 47
 
 -- tmp(x) ->
 --    return a if (a = x)
---    say "Got a {{a}}"
+--    say "Got a {a}"
 
 -- tmp 4747
 
@@ -1195,7 +1197,7 @@ add-as-big-ints(a, b) ->
    MyLibGmp.add pointerof(bigret), pointerof(bigv1), pointerof(bigv2)
    result = Str MyLibGmp.get-str nil, 10, pointerof(bigret)
 
-   say "bigint add result: {{ result }}"
+   say "bigint add result: { result }"
 
 
 pp MyLibGmp.TEST_CONST
@@ -1256,7 +1258,7 @@ yy = 47.47
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-say "{{"foo".magenta}}, {{"bar".grey}}, {{"qwo".white}}"
-say "{{"foo".magenta2}}, {{"bar".grey2}}, {{"qwo".white}}"
+say "{"foo".magenta}, {"bar".grey}, {"qwo".white}"
+say "{"foo".magenta2}, {"bar".grey2}, {"qwo".white}"
 say "All DOWN ".red
 say "         AND OUT".red2
