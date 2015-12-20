@@ -5,18 +5,34 @@ module Crystal
     @onyx_node = false
   end
 
-  # Assign expression.
-  #
-  #     target '=' value
-  #
-  class Assign < ASTNode
-    @declare_composite = false
-    property :declare_composite
+  # Moved to DeclareVar
+  # # Assign expression.
+  # #
+  # #     target '=' value
+  # #
+  # class Assign < ASTNode
+  #   @declare_composite = false
+  #   property :declare_composite
 
-    def initialize(@target, @value, @declare_composite = false)
+  #   def initialize(@target, @value, @declare_composite = false)
+  #   end
+
+  #   def_equals_and_hash @target, @value, @declare_composite
+  # end
+
+  class DeclareVar < ASTNode
+    property :var
+    property :declared_type
+    property :is_assign_composite
+
+    def initialize(@var, @declared_type, @is_assign_composite = false)
     end
 
-    def_equals_and_hash @target, @value, @declare_composite
+    def clone_without_location
+      DeclareVar.new(@var.clone, @declared_type.clone, @is_assign_composite)
+    end
+
+    def_equals_and_hash @var, @declared_type, @is_assign_composite
   end
 
   # A method call.

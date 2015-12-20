@@ -1,5 +1,10 @@
+-- Test all possible constructs in one go
+say "\n\nBefore requires!\n\n"
+
+require "./crystal-scopes"
 require "wild_colors"
--- require "./my-gmp-lib"
+
+say "\nLet's ROCK\n".red
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -14,8 +19,24 @@ _debug_start_ = true
 \!real-literal=Float32
 
 -- *TODO* *TEMP*
-alias Intd = StdInt
+alias Ints = StdInt
 alias Real = Float64
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+MY_CONST = do
+   x = 0
+   2.upto(4).each |a|
+      x += a
+      say "calculating MY_CONST, {{a}}"
+   x
+
+pp MY_CONST
+-- *TODO* $.say / Program.say ?
+pp ::say "blargh"
+-- *TODO* $.MY_CONST / Program.MY_CONST ?
+pp ::MY_CONST
+-- pp Program.MY_CONST
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -27,22 +48,22 @@ module Djur
    type Apa
       \!Int=I64
 
-      @@foo = 2
+      Self.foo = 1
       Type.bar = 2
 
-      @foo     Intd
-      bar      Intd
-      @foo’    Intd   = 47
+      @foo     Ints
+      bar      Ints
+      @foo’    Ints  = 47
       bar’           = 47
-      @foo’’   Intd
-      bar’’    Intd
+      @foo’’   Ints
+      bar’’    Ints
 
-      foo3 'Intd
-      bar3 ^Intd
-      qwo3 ~Intd
+      foo3 'Ints
+      bar3 ^Ints
+      qwo3 ~Ints
 
-      -- xfoo! Intd = 47  -- should fail, and does
-      -- xbar? Intd = 42  -- should fail, and does
+      -- xfoo! Ints = 47  -- should fail, and does
+      -- xbar? Ints = 42  -- should fail, and does
 
       Type.my-def() -> say "Hit the spot! {{ Type.foo’ }}, {{ @@bar }}"
       inst-def() -> say "Hit the spot! {{ @foo’ }}, {{ @bar }}"
@@ -54,6 +75,13 @@ module Djur
       FOUR
       SIX
       EIGHT
+
+      -- ERRORS - UNDEFINED CONSTANT WHEN USED!!!
+      -- ifdef x86_64
+      --    EIGHT
+      --    TUSEN
+      -- else
+      --    EIGHT
 
       Type.is-six?(v) ->
          v == SIX
@@ -89,7 +117,8 @@ type Blk
    init(x, &block) ->  -- (T) -> U - does not work for block...
       yield x + 1
       yield x - 2
-end
+   ;
+;
 
 blk = Blk(4, |x|
    say "in blk init block: {{x}}"
@@ -101,10 +130,46 @@ blk2 = Blk 7, |x|
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- override '<<' operator on String to act as str combine (like '+' but auto-coercing)
-type String: <<(s) -> "{{self}}{{s}}"
+trait Functor
+--   call() -> abstract
+end
 
-say "fdaf" + "fdsf" << "aaasd" << 47.13
+type MyFunctor
+   mixin Functor
+
+   foo = 47
+
+   call() -> "call()"
+
+   call(a, b) -> "call {{a}}, {{b}}, {{@foo}}"
+
+   bar() -> true
+
+end
+
+myfu = MyFunctor()
+
+pp myfu.bar
+pp myfu.call "ctest", "cfooo"
+say myfu "test", "fooo"
+say myfu
+say myfu()
+
+my-fun-fun(f) ->
+   f "testing", "it"
+
+pp my-fun-fun myfu
+
+my-lambda = (x Str) -> say "x: {{x}}"; end; my-lambda "47"
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+-- reopen String type and override '<<' operator to act as "concat" (like '+',
+-- but auto-coercing)
+type String: <<(obj) -> "{{self}}{{obj}}"
+
+say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -116,18 +181,29 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
    zar1 = 1
 
    -- *TODO* after all basic control structs are implemented
-   -- zar2 ^Intd
-   -- zar2 ~Intd
-   -- zar2 'Intd = 1
-   -- zar0 ~Intd
-   -- zar3 '= 1
-   -- zar4 '*= 1
-   -- zar5 'auto = 1
+   zar2 ^Ints
+   zar4 'Real
+   zar3 ~Str
+   -- zar4 'Ints = 1
+   -- zar5 ~Ints = 1
+   -- zar6 ^Ints = 1
+   -- zar7 '= 1
+   -- zar8 '*= 1
+   -- zar9 'auto = 1
 
+   pp zar2.class, zar4.class, zar3.class
+   -- May currently crash - all values are undefined becaused they're alloca'd
+   -- when typed currently. They should _not_ be. ONLY typed for TySys!
+   -- pp zar2, zar4, zar3
+
+   say "fun-with-various-local-vars {{zar1}}" -- , {{LocalConst}}"
+
+
+fun-with-various-local-vars 47
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-fun-with-exception-action() ->!
+fun-with-exception-action(x) ->!
    try:
       a = 1 / 0
 
@@ -146,7 +222,7 @@ fun-with-exception-action() ->!
    ensure do
       say "In fun: Oblivious to what happened!"
 
-   a = 1 / 1
+   a = 1 / x
    nil
 
 fulfil
@@ -157,10 +233,23 @@ ensure
 
 
 say ""
-say "call fun-with-exception-action"
+say "call fun-with-exception-action 1"
 
 try
-   fun-with-exception-action
+   fun-with-exception-action 1
+   say "after call fun-with-exception-action"
+rescue
+   say "rescued fun-with-exception-action in Program"
+end
+
+say "after try/rescue call fun-with-exception-action"
+say ""
+
+say ""
+say "call fun-with-exception-action 0"
+
+try
+   fun-with-exception-action 0
    say "after call fun-with-exception-action"
 rescue
    say "rescued fun-with-exception-action in Program"
@@ -187,11 +276,6 @@ list = List[Str]()
 list << "foo"
 list << "yaa"
 
--- x = list.map
--- x = list.map()
--- y = list.map 1
--- z = list.map apa
--- u = list.map(apa)
 v = list.map(|x, y| x + "1")
 w = list.map |x, y| "{{x}} 47"
 i = list.map |x, y| => "{{x}} 13"
@@ -208,67 +292,72 @@ u = list.each(|v| p v).map ~> _1 * 2
 
 -- def say(s) -> puts s
 
-say "Let's ROCK"
-
 \!Int=I32
 
 DEBUG–SEPARATOR = 47
 
+
 -- Change array literal notation for typed arr (thus empty arr)!?
--- a = [32, 47 : Int32]
--- a = [:Int32]
+
+-- a = [32, 47 'Int32]
+--  or
+-- a = [Int32: 32, 47]
+
+-- a = [Int32:]
+--  or
 -- a = [] Int32
+
+-- a = [200 x Int32]  -- static array literal
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 def f(y ()->) -> nil
+g(y ()->) -> nil
 
 --   -- (Seq[Int32]()).flat_map ~>
 f () ->
-   ([] of Intd).flat-map ~>
-      [] of Intd
+   ([] of Ints).flat-map ~>
+      [] of Ints
 
 f(() ->
-   ([] of Intd).flat-map(~>
-      [] of Intd
+   ([] of Ints).flat-map(~>
+      [] of Ints
    )
 )
 
 (f () ->
-   (([] of Intd).flat-map ~>
-      [] of Intd
+   (([] of Ints).flat-map ~>
+      [] of Ints
    )
 )
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+char = %"a"
+say "char: {{char}} ({{ typeof(char) }})"
+
+straight-str = %s<no {{interpolation\t here}}\n\tOk!>
+say "straight-str: {{straight-str}} ({{ typeof(straight-str) }})"
+
+-- *NOTE* consider this, _iff_ standard string is changed to interpolate on {/}
+-- tpl-str = %t<requires heavier delimiting %{{interpolation here}}>
+-- say "tpl-str: {{tpl-str}} ({{ typeof(tpl-str) }})"
+
+the–str = "kjhgkjh" \
+   "dfghdfhgd"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 \!Int=StdInt
 
 -- first comment
 a = 47  --another comment
-char = c"a"
-say "char: {{char}} ({{ typeof(char) }})"
-
---| (NO LONGER) weirdly placed comment
-
-
--- foo(a, b, c I32) ->
---    Str(a + b) + c.to–s
-
-the–str = "kjhgkjh" \
-   "dfghdfhgd"
-
--- how about (though that's the range–exclusive operator):
--- the–str = "kjhgkjh" ...
---    "dfghdfhgd"
-
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 if (a == 47 &&
    a != 48
 )
    say "1"
+;
 
 if (a is 48 - 1 and
    a isnt 49
@@ -293,7 +382,7 @@ if likely true =>
       if true do say "3.4"
       if true then say "4 "; say "5"; if true then say "5.1"
       if unlikely false: say "NO" else do say "5.2a "; say "5.3a"; if true: say "5.4a"
-      if false : else do say "5.2b "; say "5.3b"; if true => say "5.4b"
+      if false: else do say "5.2b "; say "5.3b"; if true => say "5.4b"
       if false =>
          -- comment after indent
          if 47 => say "NO"
@@ -324,6 +413,7 @@ end–if
 --    @prog–v = v
 -- end
 
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 [ab, ac] = [3, 2]
@@ -336,11 +426,15 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 \private
-def zoo(a, b, ...c 'Intd) Str ->  \pure
+def zoo(a, b, ...c 'Ints) Str ->  \pure
    if true:
       i = 1
 
       if (a == 1 &&
+         a >
+          0 &&
+         a <
+          9999 &&
          a != 2
       ) =>
          say "8"
@@ -399,14 +493,14 @@ say "m2 = " + m2.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-def qwo(a 'Intd, b ~Intd) ->
+def qwo(a 'Ints, b ~Ints) ->
 end
 
-def qwo2(a ^Intd, b 'Intd) -> end
+def qwo2(a ^Ints, b 'Ints) -> end
 
-def qwo3(a 'Intd, b mut Intd) Str -> -- Str
+def qwo3(a 'Ints, b mut Ints) Str -> -- Str
 
-def qwo4(a Intd; b Intd) ->
+def qwo4(a Ints; b Ints) ->
 end
 
 qwo2 1, 2
@@ -646,34 +740,28 @@ end
 
 x = foo a, 2, "3"
 
-a = (a Intd, b Intd) -> (a + b).to–s; end
-b = (a Str, _ Intd, b 'Bool; c Real) ->
+a = (a Ints, b Ints) -> (a + b).to–s; end
+b = (a Str, _ Ints, b 'Bool; c Real) ->
    "{{a}} {{x}}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Intd, b 'Str, c 'Intd) -> a.to–s + b + c.to–s
+c = (a ~Ints, b 'Str, c 'Ints) -> a.to–s + b + c.to–s
 
--- *TODO* fix so that lambdas can be called with call syntax! And all instances
--- with a call method! (including Functor trait well formed)
-p b.call "23.5 Closured Lambda says", 1, true, 0.47
--- p b("2 Closured Lambda says", 1, true, 0.47)
--- p b "2 Closured Lambda says", 1, true, 0.47
--- Str "47"
--- str "47"
+p b.call "23.5a Closured Lambda says", 0, true, 0.42
+p b "23.5b Closured Lambda says", 1, true, 0.47
 
 pp typeof(b), b.class
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- type Fn[T1, T2, T3]
 alias Fn = Proc
 
--- two funcs with each two params taking lambdas, declared with strict type
+-- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
-def booze1(f1 Fn[I32,Array<*>,Array<Array[Ptr<Int32>]>], f2 Fn[Str, Nil, Array<Bool>]) ->
-def booze2(f1 (Array<*>, Array<Array[Ptr<Int32>]>) -> I32, f2 (Nil, Array<Bool>) -> Str) ->
+def booze1(f1 Fn[I32,List<*>,List<List[Ptr<Int32>]>], f2 Fn[Str, Nil, List<Bool>]) ->
+def booze2(f1 (List<*>, List<List[Ptr<Int32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
 
-say "Array[Array<Ptr[Int32]>] => " + Array[Array<Ptr[Int32]>].to–s
+say "List[List<Ptr[Int32]>] => " + List[List<Ptr[Int32]>].to–s
 
 booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 
@@ -682,38 +770,29 @@ end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- *TODO* (OR NOT)
+
 -- -- a–closure–lambda1 = [&i,=v](a, b) -> do–shit(a, b, @i, @v)
-
 -- -- a–closure–lambda2 = ([&i,=v]; a, b) -> do–shit(a, b, @i, @v)
-
 -- -- a–closure–lambda3 = {&i,=v}(a, b) -> do–shit(a, b, @i, @v)
-
 
 -- Self == "this type"
 -- this == "this instance"  -- or:
 -- me == "this instance" ?  -- or:
 -- my == -""-
 
--- 3. THE REST HERE
--- - t"str {smoother} interpolation {style}"
--- - r"reg–exp syntax instead of /fd/"
--- - raw"for raw strings"
--- - c"X"  (but this probably already works!)
-
--- - bar x, y -- semantic lookup of instances of types having .call method
-
 -- for: to_s for onyx and crystal must spit out the for–loop
 -- for: while–loops for the 'stepping' case must be generated
-
-
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 list = [#abra, #baba, #cadabra]
 
-say "the list: {{list}}"
+say "the list ({{list.class}}): {{list}}"
 
-list = ["foo", "yaa"]
+list = ["foo", "yaa", "qwö"]
+
+say "the 2nd list ({{list.class}}): {{list}}"
 
 -- single line block style #2
 y = list.each(|v| p v).map ~> _1 * 2
@@ -767,7 +846,7 @@ for val in list
    say val
 
 list.each |val|
-  say("do nest" + val.to_s)
+  say("implicit nest {{val.to_s}}")
 end
 
 for val in list =>
@@ -836,7 +915,7 @@ end–type
 
 type Bar << Qwa
    Self.my–foo Int64 = 47i64
-   Self.some–other–foo 'Intd = 42
+   Self.some–other–foo 'Ints = 42
    Self.yet–a-foo = 42
 
    Type.RedFoo = 5
@@ -846,11 +925,11 @@ type Bar << Qwa
    GreenBar = 8
 
    foo–a Str = ""
-   foo–b Intd = 0
+   foo–b Ints = 0
    @foo–c I64 = 0
    foo-ya I32 = 0_i32
 
-   Class.set–foo(v) ->
+   Self.set–foo(v) ->
       Self.my–foo = v
 
    Type.get–foo() ->
@@ -864,13 +943,33 @@ say "declare a Foo type"
 
 type Foo[S1] << Bar
    mixin AnotherTrait[S1]
+   -- << AnotherTrait[S1]
 
+   -- "free" notation at member declaration
    foo–x I64 = 47_i64  \get \set
-   foo–y = 48  \prop         -- better to use `\get \set` then `\prop`
+   foo–y = 48
    foo–z = "bongo"  \get
+   foo–u Ints = 47  \get \set
+   foo–w = 47       \set
 
-   init(a S1) ->@
-      @foo–a = a
+   -- at-notation at declaration too?
+   ifdef x86_64
+      @bar–x I64 = 47_i64  \get \set
+   else
+      @bar–x I32 = 47_i32  \get \set
+
+   @bar–y = 48
+   @bar–z = "bongo"  \get
+   @bar–u Ints = 47  \get \set
+   @bar–w = 47       \get
+
+   ifdef x86_64
+      init(a S1) ->@
+         @foo–a = a
+   else
+      init(b S1) ->@
+         @foo–a = b
+   end
 
    init() ->@
 
@@ -888,9 +987,11 @@ type Foo[S1] << Bar
    fn–1fa(x) ->!
 
    fn–1ga(x) ->!
-      say "Hey"
-      say "you!"
-
+      ifdef x86_64
+         say "Hey"
+      else
+         say "you!"
+   ;
    -- This should fail on parse because of ret-type + nil-ret flag
    -- fn–1h(x) String ->!
    --    say "Hey"
@@ -904,7 +1005,7 @@ type Foo[S1] << Bar
 
    fn–a(a, b) ->> "a: {{a}}, {{b}}"
 
-   def fn–b(a S1, b Intd) -> -- fdsa
+   def fn–b(a S1, b Ints) -> -- fdsa
       "b: {{a}}, {{b}}"
 
    \private
@@ -913,11 +1014,10 @@ type Foo[S1] << Bar
 
    end–def
 
-   \private
    -- fn–c(a, b I32) redef private ->
-   fn–c(a, b Intd) -> \redef
+   \private
+   fn–c(a, b Ints) -> \redef
       "c: {{a}}, {{b}}"
-      -- t"c: {a}, {b}"
 
    fn–d1(a, b) ->
       @foo–a = a
@@ -925,7 +1025,7 @@ type Foo[S1] << Bar
       fn–e
    end
 
-   fn–d2(a S1, b Intd) ->
+   fn–d2(a S1, b Ints) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -949,7 +1049,10 @@ end–type
 say "create a Foo instance"
 foo = Foo[Str]()
 
--- foo.valhalla  -- should fail - abstract
+pp foo.foo-x
+pp foo.foo-w = 46
+-- pp foo.foo-y -- should fail
+-- pp foo.foo-w -- should fail
 
 say "done"
 say foo.fn–a "24 blargh", 47
@@ -967,17 +1070,26 @@ bar = Foo.new "No Blargh"
 bar = Foo[Str].new "29 Blargh"
 say "done"
 say bar.fn–e
+say "functor call"
+say bar()
 bar.fn–d2 "30 blargh", 47
+
+say "varying word-delimiters"
 say bar.fn–e
 say bar.fn-e
 say bar.fn_e
+say bar.fnE
+
+say "shit-sandwich"
 shit-sandwich =  bar.fnE
 say shitSandwich
 
+say bar.call()
+say bar()
+
+-- foo.valhalla  -- should fail - abstract
 -- say bar.fn-1i(1)  -- should make fn-1i fail because it has mismatching return type
 
--- say bar()   -- needs to be done in semantics - need to see if bar has 'call' method!
-            -- if so - rewrite to `bar.call()`
 say typeof(foo)
 say foo.class
 
@@ -990,49 +1102,66 @@ say ".~. 12 == {{ .~. 12 }}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-
+-- Suffix-if - possible change:
 -- *NOTE* - perhaps it should be supported to set var in cond and it's avail in prefix then-branch
+
 -- say "Yes indeed we got {{if-var}}" if if-var = 47
+
 -- tmp(x) ->
 --    return a if (a = x)
 --    say "Got a {{a}}"
+
 -- tmp 4747
-
--- macro ptr(o)
---    pointerof({=o=})
--- end
-
-
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- Try some C FFI API
+
+-- NOTE! This is already available wrapped in the BigInt-type - which implements
+-- all operators so it can be used like any other number type. This example is
+-- just to show how c-lib interfacing works.
 
 @[Link("gmp")]
 
 api MyLibGmp
    TEST_CONST = 47
 
+   alias Int = LibC.Int
    alias Long = LibC.Long
    alias ULong = LibC.ULong
    alias SizeT = LibC.SizeT
    alias Double = LibC.Double
 
+   ifdef x86_64
+      alias TestT = UInt64
+   else
+      alias TestT = UInt32
+   end
+
    struct Mpz
       _mp_alloc Int32
       _mp_size  Int32
-      _mp_d     Ptr[ULong]
+
+      -- Just testing ifdef in all contexts
+      ifdef x86_64
+         _mp_d     Ptr[ULong]
+      else
+         _mp_d     Ptr<ULong>
+      end
+   end
 
    alias MpzP = Ptr[Mpz]
 
-   -- # Initialization
    fun init = __gmpz_init(x MpzP)
    fun init_set_si = __gmpz_init_set_si(rop Ptr<Mpz>, op Long)
+   fun init_set_str = __gmpz_init_set_str(rop MpzP, str Ptr[UInt8], base Int)
 
    fun get_si = __gmpz_get_si(op MpzP) Long
+   fun get_str = __gmpz_get_str(str Ptr[UInt8], base Int, op MpzP) Ptr[UInt8]
 
    fun add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP)
-
    fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr[Void], realloc (Ptr[Void], SizeT, SizeT) -> Ptr[Void], free (Ptr[Void], SizeT) -> Void )
+
+end
 
 MyLibGmp.set-memory-functions(
    ((size) -> GC.malloc(size) ),
@@ -1042,33 +1171,88 @@ MyLibGmp.set-memory-functions(
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- add-as-big-ints(a T, b T) ->
 add-as-big-ints(a, b) ->
-   pp MyLibGmp.TEST_CONST
-
-   bigret 'MyLibGmp.Mpz
+   -- bigret 'MyLibGmp.Mpz
    bigv1 'MyLibGmp.Mpz
    -- bigv2 'MyLibGmp.Mpz - implicitly created with `out` arg modifier
 
-   MyLibGmp.init pointerof(bigret)
-   MyLibGmp.init-set-si pointerof(bigv1), a
-   MyLibGmp.init-set-si out bigv2, b
+   MyLibGmp.init out bigret
+
+   -- if T == Str
+   if a.is-a? Str
+      MyLibGmp.init-set-str pointerof(bigv1), a, 10
+   else
+      MyLibGmp.init-set-si pointerof(bigv1), a
+   end
+
+   if b.of? Str
+      MyLibGmp.init-set-str out bigv2, b, 10
+   else
+      MyLibGmp.init-set-si pointerof(bigv2), b
+   end
+
    MyLibGmp.add pointerof(bigret), pointerof(bigv1), pointerof(bigv2)
+   result = Str MyLibGmp.get-str nil, 10, pointerof(bigret)
 
-   say "bigint add result: {{ MyLibGmp.get-si pointerof(bigret) }}"
+   say "bigint add result: {{ result }}"
 
+
+pp MyLibGmp.TEST_CONST
 
 add-as-big-ints 42, 47
+add-as-big-ints "42", "47"
+add-as-big-ints "42", 47
+add-as-big-ints(
+   "42543453146456243561345431543513451345245643256257798063244",
+   "47098098432409798761098750982709854959543145346542564256245"
+)
 
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- Reaching, scopes and visibility:
+
+-- Onyx cleaner hierarchical access syntax handles all Crystal constructables
+
+-- # Should work:
+pp CrystalModule
+pp CrystalModule.ROOT_CONST
+pp CrystalModule.CrystalClass
+pp CrystalModule.CrystalClass.CLASS_ROOT_CONST
+pp CrystalModule.self_def
+pp CrystalModule.CrystalClass.class_func
+
+-- # Should not work
+-- pp CrystalModule.MODULE_CONST
+-- pp CrystalModule.CrystalClass.CLASS_CONST
+-- pp CrystalModule.root_def
+-- pp CrystalModule::CrystalClass.memb_func
+
+-- # Should work if `extend self`:
+pp CrystalModule2
+pp CrystalModule2.ROOT_CONST
+pp CrystalModule2.CrystalClass
+pp CrystalModule2.CrystalClass.CLASS_ROOT_CONST
+pp CrystalModule2.self_def
+pp CrystalModule2.CrystalClass.class_func
+pp CrystalModule2.root_def
+
+-- # Should not work despite `extend self`:
+-- pp CrystalModule.MODULE_CONST
+-- pp CrystalModule.CrystalClass.CLASS_CONST
+-- pp CrystalModule::CrystalClass.memb_func
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- This module begins here and continues to EOF
 module AllTheRest begins
+
 type RestFoo
    rest-foo() ->
       true
+;
+
 xx = 47
 yy = 47.47
-
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

@@ -9,8 +9,12 @@ require "value"
 require "struct"
 require "proc"
 require "thread"
-require "gc"
-require "gc/boehm"
+
+ifdef !gc_cc47
+   require "gc"
+   require "gc/boehm"
+end
+
 require "class"
 require "comparable"
 require "enumerable"
@@ -23,6 +27,15 @@ require "number"
 require "int"
 require "float"
 require "pointer"
+
+require "onyx_type_primitives_layer"
+
+ifdef gc_cc47
+   require "ext/gc-cc47"
+   require "gc"
+end
+
+
 require "slice"
 require "range"
 require "char/reader"
@@ -51,6 +64,6 @@ require "signal"
 require "kernel"
 require "main"
 
-# Onyx specifics
-require "onyx_type_layer"
+require "onyx_type_additionals_layer"
 require "onyx_corner_stone_layer"
+

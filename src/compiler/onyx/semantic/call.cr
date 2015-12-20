@@ -14,7 +14,7 @@ class Crystal::Call
   end
 
   def target_def
-    dbgx "target_def"
+    # dbgx "target_def"
 
     if defs = @target_defs
       if defs.size == 1
@@ -32,7 +32,7 @@ class Crystal::Call
   end
 
   def recalculate
-    dbgx "recalculate call"
+    # dbgx "recalculate call"
 
     obj = @obj
     obj_type = obj.type? if obj
@@ -95,7 +95,7 @@ class Crystal::Call
   end
 
   def lookup_matches
-    dbgx "lookup_matches"
+    # dbgx "lookup_matches"
 
     if args.any? &.is_a?(Splat)
       lookup_matches_with_splat
@@ -125,7 +125,7 @@ class Crystal::Call
   end
 
   def lookup_matches_without_splat(arg_types)
-    dbgx "lookup_matches_without_splat"
+    # dbgx "lookup_matches_without_splat"
     if obj = @obj
       lookup_matches_in(obj.type, arg_types)
     elsif name == "super"
@@ -146,27 +146,27 @@ class Crystal::Call
   end
 
   def lookup_matches_in(owner : AliasType, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in AliasType"
+    # dbgx "lookup_matches_in AliasType"
     lookup_matches_in(owner.remove_alias, arg_types, search_in_parents: search_in_parents)
   end
 
   def lookup_matches_in(owner : UnionType, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in UnionType"
+    # dbgx "lookup_matches_in UnionType"
     owner.union_types.flat_map { |type| lookup_matches_in(type, arg_types, search_in_parents: search_in_parents) }
   end
 
   def lookup_matches_in(owner : Program, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in Program"
+    # dbgx "lookup_matches_in Program"
     lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
   end
 
   def lookup_matches_in(owner : FileModule, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in FileModule"
+    # dbgx "lookup_matches_in FileModule"
     lookup_matches_in mod, arg_types, search_in_parents: search_in_parents
   end
 
   def lookup_matches_in(owner : NonGenericModuleType, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in NonGenericModuleType"
+    # dbgx "lookup_matches_in NonGenericModuleType"
     attach_subclass_observer owner
 
     including_types = owner.including_types
@@ -178,7 +178,7 @@ class Crystal::Call
   end
 
   def lookup_matches_in(owner : GenericClassType, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in GenericClassType"
+    # dbgx "lookup_matches_in GenericClassType"
     including_types = owner.including_types
     if including_types
       attach_subclass_observer owner
@@ -190,17 +190,17 @@ class Crystal::Call
   end
 
   def lookup_matches_in(owner : LibType, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in LibType"
+    # dbgx "lookup_matches_in LibType"
     raise "lib fun call is not supported in dispatch"
   end
 
   def lookup_matches_in(owner : Type, arg_types, self_type = nil, def_name = self.name, search_in_parents = true)
-    dbgx "lookup_matches_in Type"
+    # dbgx "lookup_matches_in Type"
     lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
   end
 
   def lookup_matches_in_with_scope(owner, arg_types)
-    dbgx "lookup_matches_in_with_scope"
+    # dbgx "lookup_matches_in_with_scope"
     signature = CallSignature.new(name, arg_types, block, named_args)
 
     matches = check_tuple_indexer(owner, name, args, arg_types)
@@ -224,7 +224,7 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
-    dbgx "lookup_matches_in_type"
+    # dbgx "lookup_matches_in_type"
 
     signature = CallSignature.new(def_name, arg_types, block, named_args)
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
@@ -286,7 +286,7 @@ class Crystal::Call
       end
     end
 
-    dbgx "final matches.empty? check"
+    # dbgx "final matches.empty? check"
 
     if matches.empty?
       # For now, if the owner is a NoReturn just ignore the error (this call should be recomputed later)
@@ -302,7 +302,7 @@ class Crystal::Call
       end
     end
 
-    dbgx "...passed"
+    # dbgx "...passed"
 
     # If this call is an implicit call to self
     if !obj && !mod_matches && !owner.is_a?(Program)

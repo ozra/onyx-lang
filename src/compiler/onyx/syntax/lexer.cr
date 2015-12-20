@@ -15,8 +15,8 @@ end
 
 ContinuationTokens = [
   :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :".^.", :"**", :"<<",
-  :"<", :"<=", :"==", :"!=", :"=~", :">>", :">", :">=", :"<=>", :"||", :"&&",
-  :"==="
+  :"<", :"<=", :"==", :"!=", :"=~", :">>", :">=", :"<=>", :"||", :"&&",
+  :"===" # :">", - has to be handles contextually - can be generic delimiter
 ]
 
 module Crystal
@@ -417,6 +417,45 @@ module Crystal
           toktype_then_nextch :"%="
         when '(', '[', '{', '<'
           delimited_pair :string, curch, closing_char, start
+
+        when '"'
+          line = @line_number
+          column = @column_number
+          @token.type = :CHAR
+          case char1 = nextch
+          when '\\'
+            case char2 = nextch
+            when 'b'
+              @token.value = '\b'
+            when 'e'
+              @token.value = '\e'
+            when 'f'
+              @token.value = '\f'
+            when 'n'
+              @token.value = '\n'
+            when 'r'
+              @token.value = '\r'
+            when 't'
+              @token.value = '\t'
+            when 'v'
+              @token.value = '\v'
+            when 'u'
+              value = consume_char_unicode_escape
+              @token.value = value.chr
+            when '0', '1', '2', '3', '4', '5', '6', '7'
+              char_value = consume_octal_escape(char2)
+              @token.value = char_value.chr
+            else
+              @token.value = char2
+            end
+          else
+            @token.value = char1
+          end
+          if nextch != '"'
+            raise "unterminated char literal, use double quotes for strings", line, column
+          end
+          nextch
+
         when 'i'
           case peek_nextch
           when '(', '{', '[', '<'
@@ -433,6 +472,15 @@ module Crystal
           else
             raise "unknown %r char"
           end
+
+        when 's'
+          case nextch
+          when '(', '[', '{', '<'
+            delimited_pair :straight_string, curch, closing_char, start
+          else
+            raise "unknown %s char"
+          end
+
         when 'x'
           case nextch
           when '(', '[', '{', '<'
@@ -877,43 +925,6 @@ module Crystal
             end
           end
           scan_idfr(start)
-        when '"'
-          line = @line_number
-          column = @column_number
-          @token.type = :CHAR
-          case char1 = nextch
-          when '\\'
-            case char2 = nextch
-            when 'b'
-              @token.value = '\b'
-            when 'e'
-              @token.value = '\e'
-            when 'f'
-              @token.value = '\f'
-            when 'n'
-              @token.value = '\n'
-            when 'r'
-              @token.value = '\r'
-            when 't'
-              @token.value = '\t'
-            when 'v'
-              @token.value = '\v'
-            when 'u'
-              value = consume_char_unicode_escape
-              @token.value = value.chr
-            when '0', '1', '2', '3', '4', '5', '6', '7'
-              char_value = consume_octal_escape(char2)
-              @token.value = char_value.chr
-            else
-              @token.value = char2
-            end
-          else
-            @token.value = char1
-          end
-          if nextch != '"'
-            raise "unterminated char literal, use double quotes for strings", line, column
-          end
-          nextch
         else
           scan_idfr(start)
         end
@@ -1079,8 +1090,15 @@ module Crystal
             end
           end
         when 'x'
-          if nc?('t') && nc?('e') && nc?('n') && nc?('d')
-            return check_idfr_or_keyword(:extend, start)
+          case nextch
+          when 't'
+            if nc?('e') && nc?('n') && nc?('d')
+              return check_idfr_or_keyword(:extend, start)
+            end
+          when 'p'
+            if nc?('o') && nc?('r') && nc?('t')
+              return check_idfr_or_keyword(:export, start)
+            end
           end
         end
         scan_idfr(start)
@@ -1719,24 +1737,26 @@ module Crystal
       end
       @token.type = :IDFR
 
-      # *TODO* this can be incorporated below if kept
-      idfr_str = string_range(start).tr("-–", "__")
+      # idfr_str = string_range(start).tr("-–", "__")
+      idfr_str = string_range start
 
-      if do_magic
-        # *TODO* Highly experimental for those god damn camelCase fans!
-        @token.value = String.build idfr_str.size * 2, do |str|
-          idfr_str.each_char_with_index do |chr, i|
-            if 'A' <= chr <= 'Z' && (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
-              str << '_'
-              str << chr.downcase
-            else
-              str << chr
-            end
+      # if do_magic
+      # *TODO* Highly experimental for those fashionista camelCase fans!
+      @token.value = String.build idfr_str.size * 2, do |str|
+        idfr_str.each_char_with_index do |chr, i|
+          if chr == '-' || chr == '–'
+            str << '_'
+          elsif do_magic && 'A' <= chr <= 'Z' && (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
+            str << '_'
+            str << chr.downcase
+          else
+            str << chr
           end
         end
-      else
-        @token.value = idfr_str
       end
+      # else
+      #   @token.value = idfr_str
+      # end
 
       # p "scanned idfr: '#{@token.value}'"
       nil
@@ -2303,8 +2323,9 @@ module Crystal
             nextch
           end
         end
+
       when '{'
-        if peek_nextch == '{'
+        if delimiter_state.kind != :straight_string && peek_nextch == '{'
           nextch
           nextch
           @token.type = :INTERPOLATION_START
@@ -2325,6 +2346,7 @@ module Crystal
         #     @token.value = "#"
 #
         #   end
+
       when '\n'
         nextch
         @column_number = 1
@@ -2377,8 +2399,7 @@ module Crystal
               curch != '\0' &&
               curch != '\\' &&
               curch != '{' && # curch != '#' &&
-
- curch != '\n'
+              curch != '\n'
           nextch
         end
 

@@ -6,8 +6,9 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
 ## Index ##
 
 - Distilled Version
-- Long Version
+- Philosophical Version
 - What do you mean with scientific approach?
+- Run Down
 - Usages?
 - Relation to Crystal
 - Inspiration
@@ -39,7 +40,6 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
     + Operator overloading - of course
     + Iterators are implemented as methods, imperative / structural notation available also because of its commonality. And no, there's no execution overhead.
 - Clean readable and writeable syntax
-    + Forget about unscientific brace-semicolon hell.
     + All the common forms of _casing_ is allowed interchangeably (without conflicts): `endash—case`, `dash-case`, `snake_case`, `camelCase`. This may change!
     + UFCS will _likely_ be implemented. Discuss in issue!
 - FFI: Using C-API libs is piece of cake
@@ -51,7 +51,7 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
     + Really fast executable
     + I won't stop optimizing until hell freezes over. - The compiler should make things fast - you should focus on keeping your code maintainable.
 
-## Long Version ##
+## Philosophical Version ##
 
 - **Use scientific findings** for aspects of programming linguistics where research is available - focused on the human interaction and performance - in order to obtain:
     - _Highest possible productivity_ (which according to findings seem to require "enjoying the process")
@@ -90,7 +90,9 @@ _The focus is on the actual performance of a human being reading, writing and re
 
 What is _not_ meant is "highly abstract functional lambda theory proofs from outer space when the cat is and isn't in the cradle and/or you give a shit".
 
-### Run down: ###
+Now, I've posted my share of dis-attributed "Einsten"-quotes in social media, so I can hardly claim to be a scientist. I rely on you helping out in interpreting studies and verifying sources, if you feel so inclined.
+
+### Run Down ###
 
 - Optimize for human parsing (aka "readability") - not computers parsing (_not_ lisp syntax uniformity)
 - Human languages has exceptions to rules, so common constructs should get sugar if warranted.
@@ -175,6 +177,7 @@ Any other contender you think is better? Tell us. So Onyx can be made better.
 ## What does it look like currently? ##
 
 For Crystalers, the front page example in Onyx will be very familiar:
+
 ```onyx
 -- A very basic HTTP server
 require "http/server"
@@ -187,9 +190,12 @@ server.listen
 ```
 
 A rather contrived example, just to show some basic constructs:
+
 ```onyx
 
 *TODO* *UNTESTED* *VERIFY*
+
+*TODO* split up in "clean version", and "explained version"
 
 -- types inherits `Class` by default if nothing else specified
 
@@ -201,7 +207,7 @@ type Greeter
         -- do nothing - just keep defaults
 
     init(@greeting–phrase) ->
-        -- do nothing here. Sugar for assigning a member did all we need!
+        -- do nothing in body. Sugar for assigning a member did all we need!
 
     -- above could have been written more verbose; in many different levels.
     -- def init(greeting–phrase Str) ->
@@ -211,6 +217,7 @@ type Greeter
     -- define a method that greets someone
     greet(who–or–what) ->!  -- returns nothing
         say make–greeting who–or–what
+        -- separator (-|–|_|aA) completely interchangable
         -- say(make–greeting(who–or–what)) -- parentheses or "juxtapos-calls"
 
     -- a method that constructs the message
@@ -228,8 +235,7 @@ type HelloWorldishGreeter << Greeter
 end
 
 greeter = HelloWorldishGreeter("Goodbye cruel")
-greeter.greet "World" --  => "Goodbye cruel World"
--- greeter.greet_someone "World" -- separator (-|–|_) completely interchangable
+greeter.greet "world" --  => "Goodbye cruel world"
 
 ```
 
@@ -237,9 +243,8 @@ greeter.greet "World" --  => "Goodbye cruel World"
 ## Status ##
 
 * Onyx is in "design stage"/"RFC stage"/alpha while settling it. Input (RFC's) on the syntax and language in general are **highly welcomed**!
-* Currently the basic first syntax ideas are implemented, it only has about two weeks total time of coding on it yet you see. Several keywords to do the same thing are available many times, until agreement on what to keep and what to ditch comes up.
+* Currently the basic first syntax ideas are implemented, it only has about two weeks total full time of coding on it yet (spare time...). Several keywords to do the same thing are available many times, until agreement on what to keep and what to ditch comes up.
 * Some syntax doesn't have semantics yet, until it gets carved deeper in the onyx. For example declaring func's `pure`, `method`, `lenient`. And mutable/immutable modifiers on parameters and variables. Value vs ref control also.
-* Macros and templates syntax has not been worked on at all yet. Semantics are in place via Crystal AST, so all that's needed is forming a suitable syntax for it and implement parsing of that.
 * The "AST-core" maintained in Crystal is in alpha, close to beta.
 
 ## Roadmap ##
@@ -264,18 +269,18 @@ greeter.greet "World" --  => "Goodbye cruel World"
 
 ## Installing ##
 
-- You might want the highlighter for Sublime Text: `git clone https://github.com/ozra/sublime-onyx.git` (it should be easily ported to Atom, TextMate, etc., please think about if you're prepared to maintain it, if deciding to do so, or leave it to someone who wants too - it's annoying with out-of-date add-ons for everyone). The Sublime highlighter will be kept up to date with changing language constructs.
+- You will want the highlighter for Sublime Text: `git clone https://github.com/ozra/sublime-onyx.git` (it should be easily ported to Atom, TextMate, etc., if you want to - please think about if you're prepared to maintain it, if deciding to do so, or leave it to someone who wants too - it's annoying with out-of-date add-ons for everyone). The Sublime highlighter will be kept up to date with changing language constructs.
 
 - Clone the source tree: `git clone https://github.com/ozra/onyx-lang.git`
 
-- `cd` in to it and `make bootstrap` - to automatically download, install Crystal and compile and install Onyx. They're both installed into `/opt/crystal/` to keep it separated from your package-managed `/usr/local/`. A link to the binaries are made in `/usr/local/bin/`.
-    + You need `git` and `wget` (`curl` can't handle GitHub redirections) on your system.
+- `cd` in to it and `make bootstrap` - to automatically download, install Crystal and compile and install Onyx. It's installed into `/opt/onyx/` to keep it separated from your package-managed `/usr/local/`. A link to the binary is made in `/usr/local/bin/`.
+    + You need `git` and `wget` on your system.
     + The script is unfortunately Linux 64 bit only atm. Anyone handy with Mac OS etc. is welcome to shape it up.
 
 ## Documentation ##
 
-- For the language itself - follow the issues in GitHub. Since the language is taking shape and changing - that serves both as current documentation and a way of chipping in. Syntax constructs are described there.
-- For the standard library, refer to Crystals docs for now - the lib is shared.
+- For the language itself - see the issues in GitHub. Since the language is taking shape and changing - that serves both as current documentation and a way of chipping in. Syntax constructs are described there.
+- For the standard library, refer to Crystals docs for now - the lib is shared. There are some planned preferred de facto deviations, but they will be compatible.
 
 ## Onyx Project Code of Conduct ##
 
