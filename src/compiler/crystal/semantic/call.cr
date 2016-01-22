@@ -623,7 +623,7 @@ class Crystal::Call
 
     macros ||= yield mod
 
-    if !macros && (location = self.location) && (filename = location.original_filename).is_a?(String) && (file_module = mod.file_module(filename))
+    if !macros && (location = self.location) && (filename = location.original_filename).is_a?(String) && (file_module = mod.file_module?(filename))
       macros ||= yield file_module
     end
 
@@ -702,7 +702,10 @@ class Crystal::Call
             raise "wrong number of block arguments (#{block.args.size} for #{fun_args.size})"
           end
 
-          fun_literal = FunLiteral.new(Def.new("->", fun_args, block.body))
+          a_def = Def.new("->", fun_args, block.body)
+          a_def.captured_block = true
+
+          fun_literal = FunLiteral.new(a_def)
           fun_literal.force_void = true unless block_arg_restriction_output
           fun_literal.accept parent_visitor
         end
@@ -902,7 +905,7 @@ class Crystal::Call
     # named arguments, we create another def that sets ups everything for the real call.
     if arg_types.size != untyped_def.args.size || untyped_def.splat_index || named_args
       named_args_names = named_args.try &.map &.name
-      untyped_def = untyped_def.expand_default_arguments(arg_types.size, named_args_names)
+      untyped_def = untyped_def.expand_default_arguments(mod, arg_types.size, named_args_names)
     end
 
     args_start_index = 0

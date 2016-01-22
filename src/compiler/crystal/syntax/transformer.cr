@@ -237,7 +237,7 @@ module Crystal
     end
 
     def transform(node : Generic)
-      node.name = node.name.transform(self)
+      node.name = node.name.transform(self) as Path
       transform_many node.type_vars
       node
     end
@@ -500,7 +500,13 @@ module Crystal
       node
     end
 
-    def transform(node : DeclareVar)
+    def transform(node : TypeDeclaration)
+      node.var = node.var.transform(self)
+      node.declared_type = node.declared_type.transform(self)
+      node
+    end
+
+    def transform(node : UninitializedVar)
       node.var = node.var.transform(self)
       node.declared_type = node.declared_type.transform(self)
       node
@@ -569,6 +575,11 @@ module Crystal
 
     def transform(node : AsmOperand)
       node.exp = node.exp.transform self
+      node
+    end
+
+    def transform(node : FileNode)
+      node.node = node.node.transform self
       node
     end
 

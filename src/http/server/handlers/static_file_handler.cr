@@ -1,12 +1,22 @@
 require "ecr/macros"
+require "html"
+require "uri"
 
 class HTTP::StaticFileHandler < HTTP::Handler
-  def initialize(@publicdir)
+  def initialize(publicdir)
+    @publicdir = File.expand_path publicdir
   end
 
   def call(request)
-    request_path = request.path.not_nil!
-    file_path = @publicdir + request_path
+    request_path = URI.unescape(request.path.not_nil!)
+
+    # File path cannot contains '\0' (NUL) because all filesystem I know
+    # don't accept '\0' character as file name.
+    return HTTP::Response.new(400) if request_path.includes? '\0'
+
+    expanded_path = File.expand_path(request_path, "/")
+
+    file_path = File.join(@publicdir, expanded_path)
     if Dir.exists?(file_path)
       HTTP::Response.new(200, directory_listing(request_path, file_path), HTTP::Headers{"Content-Type": "text/html"})
     elsif File.exists?(file_path)
@@ -27,6 +37,14 @@ class HTTP::StaticFileHandler < HTTP::Handler
   end
 
   record DirectoryListing, request_path, path do
+    def escaped_request_path
+      @escaped_request_path ||= begin
+        esc_path = request_path.split('/').map { |path| URI.escape path }.join('/')
+        esc_path = esc_path[0..-2] if !esc_path.empty? && esc_path[-1] == '/'
+        esc_path
+      end
+    end
+
     ecr_file "#{__DIR__}/static_file_handler.html"
   end
 

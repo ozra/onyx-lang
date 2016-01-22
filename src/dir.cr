@@ -49,7 +49,7 @@ class Dir
 
   # Returns a new directory object for the named directory.
   def initialize(@path)
-    @dir = LibC.opendir(@path)
+    @dir = LibC.opendir(@path.check_no_null_byte)
     unless @dir
       raise Errno.new("Error opening directory '#{@path}'")
     end
@@ -145,7 +145,7 @@ class Dir
 
   # Changes the current working directory of the process to the given string.
   def self.cd(path)
-    if LibC.chdir(path) != 0
+    if LibC.chdir(path.check_no_null_byte) != 0
       raise Errno.new("Error while changing directory to #{path.inspect}")
     end
   end
@@ -182,8 +182,9 @@ class Dir
     entries
   end
 
+  # Returns true if the given path exists and is a directory
   def self.exists?(path)
-    if LibC.stat(path, out stat) != 0
+    if LibC.stat(path.check_no_null_byte, out stat) != 0
       if LibC.errno == Errno::ENOENT
         return false
       else
@@ -193,13 +194,18 @@ class Dir
     File::Stat.new(stat).directory?
   end
 
+  # Creates a new directory at the given path. The linux-style permission mode
+  # can be specified, with a default of 777 (0o777).
   def self.mkdir(path, mode = 0o777)
-    if LibC.mkdir(path, mode) == -1
+    if LibC.mkdir(path.check_no_null_byte, mode) == -1
       raise Errno.new("Unable to create directory '#{path}'")
     end
     0
   end
 
+  # Creates a new directory at the given path, including any non-existing
+  # intermediate directories. The linux-style permission mode can be specified,
+  # with a default of 777 (0o777).
   def self.mkdir_p(path, mode = 0o777)
     return 0 if Dir.exists?(path)
 
@@ -219,8 +225,9 @@ class Dir
     0
   end
 
+  # Removes the directory at the given path.
   def self.rmdir(path)
-    if LibC.rmdir(path) == -1
+    if LibC.rmdir(path.check_no_null_byte) == -1
       raise Errno.new("Unable to remove directory '#{path}'")
     end
     0

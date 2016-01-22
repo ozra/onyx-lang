@@ -4,6 +4,7 @@ struct BigInt < Int
   include Comparable(Int::Signed)
   include Comparable(Int::Unsigned)
   include Comparable(BigInt)
+  include Comparable(Float)
 
   def initialize
     LibGMP.init(out @mpz)
@@ -60,6 +61,10 @@ struct BigInt < Int
     else
       self <=> BigInt.new(other)
     end
+  end
+
+  def <=>(other : Float)
+    LibGMP.cmp_d(mpz, other)
   end
 
   def +(other : BigInt)
@@ -194,6 +199,10 @@ struct BigInt < Int
     ary
   end
 
+  def popcount
+    LibGMP.popcount(self)
+  end
+
   def to_i
     to_i32
   end
@@ -311,6 +320,12 @@ struct Int
 end
 
 struct Float
+  include Comparable(BigInt)
+
+  def <=>(other : BigInt)
+    -(other <=> self)
+  end
+
   def to_big_i
     BigInt.new(self)
   end

@@ -263,6 +263,21 @@ module Crystal
       false
     end
 
+    def visit(node : FileNode)
+      old_vars = context.vars
+      context.vars = LLVMVars.new
+
+      file_module = @mod.file_module(node.filename)
+      if vars = file_module.vars?
+        alloca_vars vars, file_module
+      end
+      node.node.accept self
+
+      context.vars = old_vars
+
+      false
+    end
+
     def visit(node : Nop)
       @last = llvm_nil
     end
@@ -414,6 +429,12 @@ module Crystal
     def visit(node : Return)
       node_type = accept_control_expression(node)
 
+      codegen_return_node(node, node_type)
+
+      false
+    end
+
+    def codegen_return_node(node, node_type)
       old_last = @last
 
       execute_ensures_until(node.target as Def)
@@ -425,8 +446,6 @@ module Crystal
       else
         codegen_return node_type
       end
-
-      false
     end
 
     def codegen_return(type : NoReturnType | Nil)
@@ -640,7 +659,9 @@ module Crystal
         execute_ensures_until(node.target as While)
         br while_block
       else
-        node.raise "Bug: unknown exit for next"
+        # The only possibility is that we are in a captured block,
+        # so this is the same as a return
+        codegen_return_node(node, node_type)
       end
 
       false
@@ -782,7 +803,18 @@ module Crystal
       "#{node.owner}#{node.var.name.gsub('@', ':')}"
     end
 
-    def visit(node : DeclareVar)
+    def visit(node : TypeDeclaration)
+      var = node.var
+      if var.is_a?(Var)
+        declare_var var
+      end
+
+      @last = llvm_nil
+
+      false
+    end
+
+    def visit(node : UninitializedVar)
       var = node.var
       if var.is_a?(Var)
         declare_var var

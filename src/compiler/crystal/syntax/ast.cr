@@ -1331,7 +1331,7 @@ module Crystal
     def_equals_and_hash @name, @type_vars
   end
 
-  class DeclareVar < ASTNode
+  class TypeDeclaration < ASTNode
     property :var
     property :declared_type
 
@@ -1356,7 +1356,38 @@ module Crystal
     end
 
     def clone_without_location
-      DeclareVar.new(@var.clone, @declared_type.clone)
+      TypeDeclaration.new(@var.clone, @declared_type.clone)
+    end
+
+    def_equals_and_hash @var, @declared_type
+  end
+
+  class UninitializedVar < ASTNode
+    property :var
+    property :declared_type
+
+    def initialize(@var, @declared_type)
+    end
+
+    def accept_children(visitor)
+      var.accept visitor
+      declared_type.accept visitor
+    end
+
+    def name_size
+      var = @var
+      case var
+      when Var
+        var.name.size
+      when InstanceVar
+        var.name.size
+      else
+        raise "can't happen"
+      end
+    end
+
+    def clone_without_location
+      UninitializedVar.new(@var.clone, @declared_type.clone)
     end
 
     def_equals_and_hash @var, @declared_type
@@ -2159,6 +2190,25 @@ module Crystal
     end
 
     def_equals_and_hash type
+  end
+
+  # Fictitious node that means "all these nodes come from this file"
+  class FileNode < ASTNode
+    property node
+    property filename
+
+    def initialize(@node, @filename)
+    end
+
+    def accept_children(visitor)
+      @node.accept visitor
+    end
+
+    def clone_without_location
+      self
+    end
+
+    def_equals_and_hash node, filename
   end
 end
 

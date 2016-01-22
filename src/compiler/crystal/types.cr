@@ -797,6 +797,10 @@ module Crystal
       end
     end
 
+    def raw_including_types
+      @including_types
+    end
+
     def add_to_including_types(type : GenericType, all_types)
       type.generic_types.each_value do |generic_type|
         all_types << generic_type unless all_types.includes?(generic_type)
@@ -843,6 +847,14 @@ module Crystal
 
   # A module that is related to a file and contains its private defs.
   class FileModule < NonGenericModuleType
+    def vars
+      @vars ||= MetaVars.new
+    end
+
+    def vars?
+      @vars
+    end
+
     def passed_as_self?
       false
     end
@@ -1382,6 +1394,17 @@ module Crystal
         parent.notify_subclass_added if parent.is_a?(NonGenericModuleType)
         notify_parent_modules_subclass_added parent
       end
+    end
+
+    def add_instance_var_initializer(name, value, meta_vars)
+      initializer = super
+
+      # Make sure to type the initializer for existing instantiations
+      generic_types.each_value do |instance|
+        run_instance_var_initializer(initializer, instance)
+      end
+
+      initializer
     end
 
     def run_instance_vars_initializers(real_type, type : GenericClassType | ClassType, instance)
@@ -2129,11 +2152,12 @@ module Crystal
   end
 
   class AliasType < NamedType
-    property! :aliased_type
+    getter? value_processed
 
-    def initialize(program, container, name)
+    def initialize(program, container, name, @value)
       super(program, container, name)
       @simple = true
+      @value_processed = false
     end
 
     delegate lookup_defs, aliased_type
@@ -2148,7 +2172,17 @@ module Crystal
     delegate cover_size, aliased_type
     delegate passed_by_value?, aliased_type
 
+    def aliased_type
+      aliased_type?.not_nil!
+    end
+
+    def aliased_type?
+      process_value
+      @aliased_type
+    end
+
     def remove_alias
+      process_value
       if aliased_type = @aliased_type
         aliased_type.remove_alias
       else
@@ -2158,6 +2192,7 @@ module Crystal
     end
 
     def remove_alias_if_simple
+      process_value
       if @simple
         remove_alias
       else
@@ -2166,11 +2201,25 @@ module Crystal
     end
 
     def allowed_in_generics?
+      process_value
       if aliased_type = @aliased_type
         aliased_type.remove_alias.allowed_in_generics?
       else
         true
       end
+    end
+
+    def process_value
+      return if @value_processed
+      @value_processed = true
+
+      visitor = FirstPassVisitor.new(@program)
+      visitor.types.push(container)
+      visitor.processing_types do
+        @value.accept visitor
+      end
+
+      @aliased_type = @value.type.instance_type
     end
 
     def type_desc

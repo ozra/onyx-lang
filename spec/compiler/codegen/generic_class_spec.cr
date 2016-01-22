@@ -79,7 +79,7 @@ describe "Code gen: generic class type" do
 
       class Generic(T)
         def initialize
-          @value :: T
+          @value = uninitialized T
         end
 
         def value=(@value)
@@ -94,5 +94,20 @@ describe "Code gen: generic class type" do
       generic.value = Foo.new
       generic.value.foo
       )).to_i.should eq(1)
+  end
+
+  it "codegens statis array size after instantiating" do
+    run(%(
+      struct StaticArray(T, N)
+        def size
+          N
+        end
+      end
+
+      alias Foo = Int32[3]
+
+      x = uninitialized Int32[3]
+      x.size
+      )).to_i.should eq(3)
   end
 end

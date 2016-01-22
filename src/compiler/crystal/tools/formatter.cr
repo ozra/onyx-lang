@@ -54,6 +54,7 @@ module Crystal
       @def_indent = 0
       @last_write = ""
       @exp_needs_indent = true
+      @inside_def = 0
 
       # This stores the column number (if any) of each comment in every line
       @when_infos = [] of AlignInfo
@@ -62,6 +63,10 @@ module Crystal
       @doc_comments = [] of CommentInfo
       @current_doc_comment = nil
       @hash_in_same_line = Set(typeof(object_id)).new
+    end
+
+    def visit(node : FileNode)
+      true
     end
 
     def visit(node : Expressions)
@@ -699,7 +704,7 @@ module Crystal
         last_info = @hash_infos.last?
         if last_info && last_info.line == @line
           found_in_same_line = true
-        else
+        elsif hash
           number = key.is_a?(NumberLiteral)
           @hash_infos << AlignInfo.new(hash.object_id, @line, start_column, middle_column, end_column, number)
         end
@@ -1019,6 +1024,7 @@ module Crystal
 
     def visit(node : Def)
       @def_indent = @indent
+      @inside_def += 1
 
       if node.abstract
         write_keyword :abstract, " "
@@ -1060,27 +1066,27 @@ module Crystal
 
       if node.macro_def?
         format_macro_body node
-
-        return false
-      end
-
-      body = node.body
-
-      if to_skip > 0
+      else
         body = node.body
-        if body.is_a?(Expressions)
-          body.expressions = body.expressions[to_skip..-1]
-          if body.expressions.empty?
+
+        if to_skip > 0
+          body = node.body
+          if body.is_a?(Expressions)
+            body.expressions = body.expressions[to_skip..-1]
+            if body.expressions.empty?
+              body = Nop.new
+            end
+          else
             body = Nop.new
           end
-        else
-          body = Nop.new
+        end
+
+        unless node.abstract
+          format_nested_with_end body
         end
       end
 
-      unless node.abstract
-        format_nested_with_end body
-      end
+      @inside_def -= 1
 
       false
     end
@@ -2484,13 +2490,34 @@ module Crystal
       false
     end
 
-    def visit(node : DeclareVar)
+    def visit(node : TypeDeclaration)
       accept node.var
       skip_space_or_newline
-      write_token " ", :"::", " "
-      skip_space_or_newline
+      case @token.type
+      when :"::", :":"
+        # OK
+      else
+        raise "expecting `::` or `:`, not `#{@token.type}, #{@token.value}`, at #{@token.location}"
+      end
+      next_token_skip_space_or_newline
+      if node.var.is_a?(Var) || @inside_def > 0
+        write " = uninitialized "
+      else
+        write " : "
+      end
       accept node.declared_type
 
+      false
+    end
+
+    def visit(node : UninitializedVar)
+      accept node.var
+      skip_space_or_newline
+      write_token " ", :"=", " "
+      skip_space_or_newline
+      write_keyword :"uninitialized", " "
+      skip_space_or_newline
+      accept node.declared_type
       false
     end
 
@@ -3087,26 +3114,27 @@ module Crystal
       skip_space_or_newline
 
       if @token.type == :"::"
-        write " : : "
+        write " ::"
         next_token_skip_space_or_newline
       elsif @token.type == :":"
         dot_column = @column + 1
-        space_after_output = false
+        space_after_output = true
 
-        write " : "
+        write " :"
         next_token
 
         skip_space_or_newline
 
         output = node.output
         if output
+          write " "
           accept output
           skip_space
           if @token.type == :NEWLINE
             if node.inputs
               consume_newlines
               write_indent(dot_column)
-              space_after_output = true
+              space_after_output = false
             else
               skip_space_or_newline
             end
@@ -3114,31 +3142,61 @@ module Crystal
         end
 
         if @token.type == :":"
-          write " " if output && !space_after_output
-          write ": "
+          write " " if output && space_after_output
+          write ":"
           next_token_skip_space_or_newline
+        end
+      end
 
-          if inputs = node.inputs
-            input_column = @column
-            inputs.each_with_index do |input, i|
-              accept input
-              skip_space
+      if inputs = node.inputs
+        write " "
+        input_column = @column
+        inputs.each_with_index do |input, i|
+          accept input
+          skip_space
 
-              if @token.type == :","
-                write "," unless last?(i, inputs)
-                next_token_skip_space
+          if @token.type == :","
+            write "," unless last?(i, inputs)
+            next_token_skip_space
 
-                unless last?(i, inputs)
-                  if @token.type == :NEWLINE
-                    consume_newlines
-                    write_indent(input_column)
-                  else
-                    write " " unless last?(i, inputs)
-                  end
-                  skip_space_or_newline
-                end
+            unless last?(i, inputs)
+              if @token.type == :NEWLINE
+                consume_newlines
+                write_indent(input_column)
+              else
+                write " " unless last?(i, inputs)
               end
+              skip_space_or_newline
             end
+          end
+        end
+      end
+
+      if clobbers = node.clobbers
+        write_token :":"
+        write " "
+        skip_space_or_newline
+        clobbers.each_with_index do |clobber, i|
+          accept StringLiteral.new(clobber)
+          skip_space_or_newline
+          if @token.type == :","
+            write ", " unless last?(i, clobbers)
+            next_token_skip_space_or_newline
+          end
+        end
+      end
+
+      if @token.type == :"::" || @token.type == :":"
+        write " " if @token.type == :":"
+        write @token.type
+        write " "
+        next_token_skip_space_or_newline
+        while @token.type == :DELIMITER_START
+          accept StringLiteral.new("")
+          skip_space_or_newline
+          if @token.type == :","
+            write ", "
+            next_token_skip_space_or_newline
           end
         end
       end

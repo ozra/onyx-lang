@@ -886,9 +886,16 @@ module Crystal
       false
     end
 
-    def visit(node : DeclareVar)
+    def visit(node : TypeDeclaration)
       node.var.accept self
-      @str << " :: "
+      @str << " : "
+      node.declared_type.accept self
+      false
+    end
+
+    def visit(node : UninitializedVar)
+      node.var.accept self
+      @str << " = uninitialized "
       node.declared_type.accept self
       false
     end
@@ -1328,6 +1335,14 @@ module Crystal
       @str << '('
       node.exp.accept self
       @str << ')'
+      false
+    end
+
+    def visit(node : FileNode)
+      @str.puts
+      @str << "# " << node.filename
+      @str.puts
+      node.node.accept self
       false
     end
 

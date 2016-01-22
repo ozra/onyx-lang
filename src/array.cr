@@ -1021,7 +1021,7 @@ class Array(T)
   #
   # See `Object#hash`.
   def hash
-    inject(31 * @size) do |memo, elem|
+    reduce(31 * @size) do |memo, elem|
       31 * memo + elem.hash
     end
   end
@@ -1469,11 +1469,12 @@ class Array(T)
   end
 
   # Append multiple values. The same as `push`, but takes an arbitrary number
-  # of values to push into the array.
+  # of values to push into the array. Returns `self`.
   def push(*values : T)
     values.each do |value|
       self << value
     end
+    self
   end
 
   def replace(other : Array)

@@ -1,48 +1,6 @@
 require "../../spec_helper"
 
-describe "Code gen: declare var" do
-  it "codegens declare var and read it" do
-    # Using :: is unsafe and returns uninitialized memory
-    run("a :: Int32; a")
-  end
-
-  it "codegens declare var and changes it" do
-    run("a :: Int32; while a != 10; a = 10; end; a").to_i.should eq(10)
-  end
-
-  it "codegens declare instance var" do
-    run("
-      class Foo
-        def initialize
-          @x :: Int32
-        end
-
-        def x
-          @x
-        end
-      end
-
-      Foo.new.x
-      ").to_i.should eq(0)
-  end
-
-  it "codegens declare instance var with static array type" do
-    run("
-      class Foo
-        def initialize
-          @x :: Int32[4]
-        end
-
-        def x
-          @x
-        end
-      end
-
-      Foo.new.x
-      nil
-      ")
-  end
-
+describe "Code gen: type declaration" do
   it "codegens initialize instance var" do
     run("
       class Foo
@@ -91,11 +49,54 @@ describe "Code gen: declare var" do
       ").to_i.should eq(1)
   end
 
+  # TODO: remove these after 0.11
+
+  it "codegens declare var and read it" do
+    # Using :: is unsafe and returns uninitialized memory
+    run("a :: Int32; a")
+  end
+
+  it "codegens declare var and changes it" do
+    run("a :: Int32; while a != 10; a = 10; end; a").to_i.should eq(10)
+  end
+
+  it "codegens declare instance var" do
+    run("
+      class Foo
+        def initialize
+          @x :: Int32
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      ").to_i.should eq(0)
+  end
+
+  it "codegens declare instance var with static array type" do
+    run("
+      class Foo
+        def initialize
+          @x :: Int32[4]
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      nil
+      ")
+  end
+
   it "doesn't break on inherited declared var (#390)" do
     run(%(
       class Foo
         def initialize
-          # @x :: Int32
           @x = 1
         end
       end

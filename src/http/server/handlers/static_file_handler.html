@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Directory listing for <%= request_path %></title>
+    <title>Directory listing for <%= HTML.escape request_path %></title>
   </head>
   <body>
-    <h2>Directory listing for <%= request_path %></h2>
+    <h2>Directory listing for <%= HTML.escape request_path %></h2>
     <hr/>
     <ul>
       <% Dir.foreach(path) do |entry| %>
         <% next if entry == "." || entry == ".." %>
         <li>
-          <a href="<%= request_path == "/" ? "" : request_path %>/<%= entry %>"><%= entry %></a>
+          <a href="<%= request_path == "/" ? "" : escaped_request_path %>/<%= URI.escape entry %>"><%= entry %></a>
         </li>
       <% end %>
     </ul>

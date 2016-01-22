@@ -792,6 +792,12 @@ class String
     to_unsafe[index]
   end
 
+  # Returns a new string with each uppercase letter replaced with its lowercase
+  # counterpart.
+  #
+  # ```
+  # "hEllO".downcase # => "hello"
+  # ```
   def downcase
     String.build(bytesize) do |io|
       each_char do |char|
@@ -800,6 +806,12 @@ class String
     end
   end
 
+  # Returns a new string with each lowercase letter replaced with its uppercase
+  # counterpart.
+  #
+  # ```
+  # "hEllO".upcase # => "HELLO"
+  # ```
   def upcase
     String.build(bytesize) do |io|
       each_char do |char|
@@ -808,6 +820,12 @@ class String
     end
   end
 
+  # Returns a new string with the first letter converted to uppercase and every
+  # subsequent letter converted to lowercase.
+  #
+  # ```
+  # "hEllO".capitalize # => "Hello"
+  # ```
   def capitalize
     return self if bytesize == 0
 
@@ -822,6 +840,18 @@ class String
     end
   end
 
+  # Returns a new String with the last carriage return removed (that is, it
+  # will remove \n, \r, and \r\n).
+  #
+  # ```
+  # "string\r\n".chomp # => "string"
+  # "string\n\r".chomp # => "string\n"
+  # "string\n".chomp   # => "string"
+  # "string".chomp     # => "string"
+  # "x".chomp.chmop    # => "x"
+  # ```
+  #
+  # See also: `#chop`
   def chomp
     return self if bytesize == 0
 
@@ -839,33 +869,29 @@ class String
     end
   end
 
+  # Returns a new String with *char* removed if the string ends with it.
+  #
+  # ```
+  # "hello".chomp('o') # => "hell"
+  # "hello".chomp('a') # => "hello"
+  # ```
   def chomp(char : Char)
     if ends_with?(char)
-      count = 0
-      char.each_byte do |byte|
-        count += 1
-      end
-      String.new(unsafe_byte_slice(0, bytesize - count))
+      String.new(unsafe_byte_slice(0, bytesize - char.bytesize))
     else
       self
     end
   end
 
-  def chomp(string : String)
-    if string.empty?
-      return self if empty?
-
-      pos = bytesize - 1
-      while pos > 0 && to_unsafe[pos] === '\n'
-        if pos > 1 && to_unsafe[pos - 1] === '\r'
-          pos -= 2
-        else
-          pos -= 1
-        end
-      end
-      String.new(unsafe_byte_slice(0, pos + 1))
-    elsif ends_with?(string)
-      String.new(unsafe_byte_slice(0, bytesize - string.bytesize))
+  # Returns a new String with *str* removed if the string ends with it.
+  #
+  # ```
+  # "hello".chomp("llo") # => "he"
+  # "hello".chomp("ol")  # => "hello"
+  # ```
+  def chomp(str : String)
+    if ends_with?(str)
+      String.new(unsafe_byte_slice(0, bytesize - str.bytesize))
     else
       self
     end
@@ -898,20 +924,19 @@ class String
     self[0, size - 1]
   end
 
+  # Returns a new string with leading and trailing whitespace removed.
+  #
+  # ```
+  # "    hello    ".strip # => "hello"
+  # "\tgoodbye\r\n".strip # => "goodbye"
+  # ```
   def strip
-    excess_right = 0
-    while to_unsafe[bytesize - 1 - excess_right].chr.whitespace?
-      excess_right += 1
-    end
-
+    excess_right = calc_excess_right
     if excess_right == bytesize
       return ""
     end
 
-    excess_left = 0
-    while to_unsafe[excess_left].chr.whitespace?
-      excess_left += 1
-    end
+    excess_left = calc_excess_left
 
     if excess_right == 0 && excess_left == 0
       self
@@ -920,11 +945,14 @@ class String
     end
   end
 
+  # Returns a new string with trailing whitespace removed.
+  #
+  # ```
+  # "    hello    ".strip # => "    hello"
+  # "\tgoodbye\r\n".strip # => "\tgoodbye"
+  # ```
   def rstrip
-    excess_right = 0
-    while to_unsafe[bytesize - 1 - excess_right].chr.whitespace?
-      excess_right += 1
-    end
+    excess_right = calc_excess_right
 
     if excess_right == 0
       self
@@ -933,11 +961,14 @@ class String
     end
   end
 
+  # Returns a new string with leading whitespace removed.
+  #
+  # ```
+  # "    hello    ".strip # => "hello    "
+  # "\tgoodbye\r\n".strip # => "goodbye\r\n"
+  # ```
   def lstrip
-    excess_left = 0
-    while to_unsafe[excess_left].chr.whitespace?
-      excess_left += 1
-    end
+    excess_left = calc_excess_left
 
     if excess_left == 0
       self
@@ -946,6 +977,31 @@ class String
     end
   end
 
+  private def calc_excess_right
+    excess_right = 0
+    while to_unsafe[bytesize - 1 - excess_right].chr.whitespace?
+      excess_right += 1
+    end
+    excess_right
+  end
+
+  private def calc_excess_left
+    excess_left = 0
+    while to_unsafe[excess_left].chr.whitespace?
+      excess_left += 1
+    end
+    excess_left
+  end
+
+  # Returns a new string _tr_anslating characters using *from* and *to* as a
+  # map. If *to* is shorter than *from*, the last character in *to* is used for
+  # the rest.
+  #
+  # ```
+  # "aabbcc".tr("abc", "xyz") # => "xxyyzz"
+  # "aabbcc".tr("abc", "x")   # => "xxxxxx"
+  # "aabbcc".tr("a", "xyz")   # => "xxbbcc"
+  # ```
   def tr(from : String, to : String)
     multi = nil
     table = StaticArray(Int32, 256).new(-1)
@@ -2670,6 +2726,14 @@ class String
 
   def unsafe_byte_slice(byte_offset)
     Slice.new(to_unsafe + byte_offset, bytesize - byte_offset)
+  end
+
+  # Raises an `ArgumentError` if `self` has null bytes. Returns `self` otherwise.
+  #
+  # This method should sometimes be called before passing a String to a C function.
+  def check_no_null_byte
+    raise ArgumentError.new("string contains null byte") if byte_index(0)
+    self
   end
 
   # :nodoc:

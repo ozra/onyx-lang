@@ -25,6 +25,12 @@ module HTTP
       end
     end
 
+    it "parses response with streamed body, huge content-length" do
+      Response.from_io(MemoryIO.new("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: #{UInt64::MAX}\r\n\r\nhelloworld")) do |response|
+        response.headers["content-length"].should eq("#{UInt64::MAX}")
+      end
+    end
+
     it "parses response with body without \\r" do
       response = Response.from_io(MemoryIO.new("HTTP/1.1 200 OK\nContent-Type: text/plain\nContent-Length: 5\n\nhelloworld"))
       response.version.should eq("HTTP/1.1")
@@ -57,6 +63,14 @@ module HTTP
       response.status_message.should eq("Continue")
       response.headers.size.should eq(0)
       response.body?.should be_nil
+    end
+
+    it "parses response without status message" do
+      response = Response.from_io(MemoryIO.new("HTTP/1.1 200\r\n\r\n"))
+      response.status_code.should eq(200)
+      response.status_message.should eq("")
+      response.headers.size.should eq(0)
+      response.body.should eq("")
     end
 
     it "parses response with duplicated headers" do

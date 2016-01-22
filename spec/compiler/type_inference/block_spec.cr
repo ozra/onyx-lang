@@ -693,7 +693,7 @@ describe "Block inference" do
         fun foo(func : -> Void)
       end
 
-      def foo &block : -> Void
+      def foo(&block : -> Void)
         Fake.foo block
       end
 
@@ -705,7 +705,7 @@ describe "Block inference" do
 
   it "ignores void return type (2) (#427)" do
     assert_type(%(
-      def foo &block : Int32 -> Void
+      def foo(&block : Int32 -> Void)
         yield 1
       end
 
@@ -719,7 +719,7 @@ describe "Block inference" do
     assert_type(%(
       alias Alias = Int32 -> Void
 
-      def foo &block : Alias
+      def foo(&block : Alias)
         yield 1
       end
 
@@ -974,5 +974,81 @@ describe "Block inference" do
 
       yielder { 1 }
       )) { int32.metaclass }
+  end
+
+  it "returns from proc literal" do
+    assert_type(%(
+      foo = ->{
+        if 1 == 1
+          return 1
+        end
+
+        1.5
+      }
+
+      foo.call
+      )) { union_of int32, float64 }
+  end
+
+  it "errors if returns from captured block" do
+    assert_error %(
+      def foo(&block)
+        block
+      end
+
+      def bar
+        foo do
+          return
+        end
+      end
+
+      bar
+      ),
+      "can't return from captured block, use next"
+  end
+
+  it "errors if breaks from captured block" do
+    assert_error %(
+      def foo(&block)
+        block
+      end
+
+      def bar
+        foo do
+          break
+        end
+      end
+
+      bar
+      ),
+      "can't break from captured block"
+  end
+
+  it "errors if doing next in proc literal" do
+    assert_error %(
+      foo = ->{
+        next
+      }
+      foo.call
+      ),
+      "Invalid next"
+  end
+
+  it "does next from captured block" do
+    assert_type(%(
+      def foo(&block : -> T)
+        block
+      end
+
+      f = foo do
+        if 1 == 1
+          next 1
+        end
+
+        next 1.5
+      end
+
+      f.call
+      )) { union_of int32, float64 }
   end
 end

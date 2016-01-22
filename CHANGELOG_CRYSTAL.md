@@ -1,5 +1,17 @@
-## Next
+## 0.10.2 (2016-01-13)
 
+* Fixed Directory Traversal Vulnerability in HTTP::StaticFileHandler (thanks @MakeNowJust)
+
+## 0.10.1 (2016-01-08)
+
+* Added `Int#popcount` (thanks @rmosolgo)
+* Added `@[Naked]` attribute for ommiting a method's prelude
+* Check that abstract methods are implemented by subtypes
+* Some bug fixes
+
+## 0.10.0 (2015-12-23)
+
+* **(breaking change)** `def` arguments must always be enclosed in parentheses
 * **(breaking change)** A space is now required before and after def return type restriction
 * **(breaking change)** Renamed `Dir.working_dir` to `Dir.current`
 * **(breaking change)** Moved `HTML::Builder` to [its own shard](https://github.com/crystal-lang/html_builder)
