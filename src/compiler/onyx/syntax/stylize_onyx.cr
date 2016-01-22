@@ -1,38 +1,7 @@
-require "../../crystal/syntax/to_s"
-
 module Crystal
 
-class ASTNode
-   # def inspect(io)
-   #    to_s(io)
-   # end
-
-   def to_s(io, as_kind = :auto)
-      # *TODO* depends of _if_ in crystal and macro
-      # 1. Macro / Template situation - render same as source
-
-      if (as_kind == :auto && @onyx_node) || as_kind == :onyx
-         visitor = ToOnyxSVisitor.new(io)
-         self.accept visitor
-
-      else
-         visitor = ToSVisitor.new(io)
-         self.accept visitor
-      end
-   end
-end
-
-class ToSVisitor < Visitor
-
-   # *TODO* this node is just needed for type fullness - it will never happen
-   # in crystal code, and thus this can be empty!
-   def visit(node : For)
-      raise "Shouldn't possibly happen!"
-   end
-end
-
-class ToOnyxSVisitor < Visitor
-   def initialize(@str = MemoryIO.new)
+class StylizeOnyxVisitor < Visitor
+   def initialize(@str = MemoryIO.new, conf = Tuple.new)
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
@@ -59,8 +28,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : CharLiteral)
-      # node.value.inspect(@str)
-      @str << "%\"#{node.value}\"" # *TODO* must ofc handle \n, \x{...} etc. for non std's
+      @str << "%\"#{node.value}\""
    end
 
    def visit(node : SymbolLiteral)
@@ -75,16 +43,22 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : StringLiteral)
-      # *TODO* - will       
-      # node.value.inspect(@str)
-      # suffice yet again - since we're not doing stylizing here? or is this non-DRY needed for string-literal-variations?
-      @str << "\""
+      @str << case node.string_literal_style
+      when :straight_quoted then    "%s\""
+      when :straight_paren then     "%s("
+      when :straight_brace then     "%s{"
+      when :straight_bracket then   "%s["
+      when :paren then              "%("
+      when :brace then              "%{"
+      when :bracket then            "%["
+      else                          "\""#:quoted
+      end
 
       reader = Char::Reader.new(node.value as String)
       while reader.has_next?
          current_char = reader.current_char
          case current_char
-         when '"' then   @str << "\\\""
+         when '"' then  @str << "\\\""
          when '\\' then @str << "\\\\"
          when '\b' then @str << "\\b"
          when '\e' then @str << "\\e"
@@ -430,8 +404,7 @@ class ToOnyxSVisitor < Visitor
       end
 
       if block
-         @str << "," if node.args.size > 0
-         @str << " "
+         @str << ", " if node.args.size > 0
          block.accept self
       end
 
@@ -490,8 +463,6 @@ class ToOnyxSVisitor < Visitor
    end
 
    def stylize_idfr(str, literal_style : Symbol)
-      # *TODO* since we don't stylize here, we can hardcode to one style
-
       case literal_style
       when :dash
          # *TODO* initial and trailing underscore should reasonably be left be
@@ -537,27 +508,27 @@ class ToOnyxSVisitor < Visitor
    end
 
    def decorate_singleton(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def decorate_call(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def decorate_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def decorate_arg(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def decorate_instance_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def decorate_class_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, node.literal_style
    end
 
    def is_alpha(string)
@@ -681,7 +652,7 @@ class ToOnyxSVisitor < Visitor
          obj.accept self
          @str << "."
       end
-      @str << def_name(node.name, :dash) # node.literal_style)
+      @str << def_name(node.name, node.literal_style)
 
       if node.args.size > 0
          @str << "("
@@ -703,7 +674,7 @@ class ToOnyxSVisitor < Visitor
       # @str << " "
 
       if node_receiver = node.receiver
-         puts ":::receiver = '#{node_receiver.to_s}  DBG"
+         puts ":::receiver = '#{node_receiver.to_s}"
 
          if node_receiver.to_s == "self"
             @str << "Type"
@@ -716,7 +687,7 @@ class ToOnyxSVisitor < Visitor
       if node.name == "initialize"
          @str << def_name("init", :snake)
       else
-         @str << def_name(node.name, :dash) # node.literal_style)
+         @str << def_name(node.name, node.literal_style)
       end
 
       @str << "("
@@ -1626,5 +1597,3 @@ class ToOnyxSVisitor < Visitor
 end
 
 end # module
-
-require "./stylize_onyx"

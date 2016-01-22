@@ -2,10 +2,10 @@
 
 echo "Checks for required utils"
 
-which wget || echo "Sorry mate - you need to install 'wget' to continue. Use you package-manager and get it."
+which wget || echo "Sorry mate - you need to install 'wget' to continue. Use your package-manager and get it."
 which wget || exit 1
 
-which git || echo "Sorry mate - you need to install 'git' to continue. Use you package-manager and get it."
+which git || echo "Sorry mate - you need to install 'git' to continue. Use your package-manager and get it."
 which git || exit 1
 
 

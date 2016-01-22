@@ -20,7 +20,7 @@ type Greeter
 
     -- a method that constructs the message
     make–greeting(who–or–what) ->
-        "{{@greeting–phrase}} {{who–or–what}}"  -- returns last expression
+        "{@greeting–phrase} {who–or–what}"  -- returns last expression
     end  -- you can explicitly end code block at will
 
     -- All on one line works too of course:
@@ -28,7 +28,7 @@ type Greeter
 
 end–type -- you can be even more explicit about end–tokens at will
 
-type HelloWorldishGreeter << Greeter
+type HelloWorldishGreeter < Greeter
     greeting–phrase = "Hello"
 end
 

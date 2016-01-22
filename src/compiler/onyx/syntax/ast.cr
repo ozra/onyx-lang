@@ -1,38 +1,59 @@
 module Crystal
   # Base class for nodes in the grammar.
   abstract class ASTNode
-    property onyx_node # perhaps this should go only on specific nodes?
+    property onyx_node
     @onyx_node = false
+
   end
 
-  # Moved to DeclareVar
-  # # Assign expression.
-  # #
-  # #     target '=' value
-  # #
-  # class Assign < ASTNode
-  #   @declare_composite = false
-  #   property :declare_composite
+  # A def argument.
+  class Arg < ASTNode
+    property :name
+    property :default_value
+    property :restriction
+    property :mutability
+    property :doc
+    @mutability :: Symbol
+    @mutability = :auto
 
-  #   def initialize(@target, @value, @declare_composite = false)
-  #   end
+    def initialize(@name, @default_value = nil, @restriction = nil, @type = nil, @mutability = :auto)
+    end
 
-  #   def_equals_and_hash @target, @value, @declare_composite
-  # end
+    def accept_children(visitor)
+      @default_value.try &.accept visitor
+      @restriction.try &.accept visitor
+    end
+
+    def clone_without_location
+      arg = Arg.new @name, @default_value.clone, @restriction.clone, nil, @mutability.clone
+
+      # An arg's type can sometimes be used as a restriction,
+      # and must be preserved when cloned
+      arg.set_type @type
+
+      arg
+    end
+
+    def_equals_and_hash name, default_value, restriction, mutability
+  end
 
   class DeclareVar < ASTNode
     property :var
     property :declared_type
     property :is_assign_composite
 
-    def initialize(@var, @declared_type, @is_assign_composite = false)
+    property :mutability
+    @mutability :: Symbol
+    @mutability = :auto
+
+    def initialize(@var, @declared_type, @is_assign_composite = false, @mutability = :auto)
     end
 
     def clone_without_location
-      DeclareVar.new(@var.clone, @declared_type.clone, @is_assign_composite)
+      DeclareVar.new(@var.clone, @declared_type.clone, @is_assign_composite.clone, @mutability.clone)
     end
 
-    def_equals_and_hash @var, @declared_type, @is_assign_composite
+    def_equals_and_hash @var, @declared_type, @is_assign_composite, @mutability
   end
 
   # A method call.

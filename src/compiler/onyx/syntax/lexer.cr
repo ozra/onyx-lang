@@ -55,13 +55,13 @@ module Crystal
 
     def dbg_lex(s)
       ifdef !release
-        puts s
+        puts "## #{s} @#{@line_number}:#{@column_number - 1}"
       end
     end
 
     def dbg_ind(s)
       ifdef !release
-        puts s
+        puts "## #{s} @#{@line_number}:#{@column_number - 1}"
       end
     end
 
@@ -87,12 +87,13 @@ module Crystal
 
 
       when '\\'
-        # p "root level backslash"
+        dbg_lex "root level backslash"
 
         # can be:
-        # \\some-pragma             (a "pragma" / "annotation")
-        # \\ # optional comment \n  (a "slash-line")
-        # "foo" \\ \n "blargh"      (a "slash-line for strings" - still needed?)
+        # \\some-pragma               (a "pragma" / "annotation")
+        # \\ some pragmas here=47 \n  (multiple "pragmas")
+        # \\ # optional comment \n    (a "slash-line")
+        # "foo" \\ \n "blargh"        (a "slash-line for strings" - still needed?)
 
         backed_type = @token.type
 
@@ -108,15 +109,19 @@ module Crystal
 
         # p "nextch after backslash = " + curch
         if curch == ' ' || curch == '\t'
+          dbg_lex "in backslash: got spc or tab - consume_whitespace"
           consume_whitespace
         end
         # p "curch after consume_whitespace = " + curch
 
         # p "skip comments"
-        skip_comment # *TODO* skip / consume / handle_comment ??
+        dbg_lex "in backslash: skip_comment"
+        # skip_comment # *TODO* skip / consume / handle_comment ??
+        handle_comment
 
         # p "curch after skip_comment = " + curch
         if curch == '\n'
+          dbg_lex "in backslash: got newline '#{curch}'"
           @line_number += 1
           @column_number = 1
 
@@ -127,13 +132,14 @@ module Crystal
           reset_regex_flags = false
           @token.type = backed_type
         else
-          unknown_token
+          dbg_lex "must be a solo mystic backslash"
+          # unknown_token
+          @token.type = :BACKSLASH # :"\\" is unparsable by Crystal...
         end
 
 
 
       when '\n'
-        dbg_ind  "Got into \\n"
         nextch
 
         back_line = @line_number
@@ -141,6 +147,8 @@ module Crystal
 
         @line_number += 1
         @column_number = 1
+
+        dbg_ind  "Got into \\n"
 
         while true
           indent_start = cur_pos - 1
@@ -159,7 +167,7 @@ module Crystal
           end
         end
 
-        # p "Collected pure ' '"
+        dbg_lex "Collected pure ws"
 
         # if curch == '\n'
         #   p "Got a new :NEWLINE - do nothing special"
@@ -172,7 +180,7 @@ module Crystal
         # #   p "got next newline - now we just handle it like old days"
 
         if (curch == '-' && peek_nextch == '-') || curch == '—' # a comment
-          p "Got comment"
+          dbg_lex "Got comment"
 
           # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
           # ONLY DOC–COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
@@ -809,6 +817,9 @@ module Crystal
         start = cur_pos
         nextch
         case curch
+        when '.'
+          nextch
+          @token.type = :"$." # "global" prefix, instead of `::`
         when '~'
           nextch
           @token.type = :"$~"
@@ -1108,6 +1119,8 @@ module Crystal
           if nc?('l') && nc?('s') && nc?('e')
             return check_idfr_or_keyword(:false, start)
           end
+        when 'n'
+          return check_idfr_or_keyword(:fn, start)
         when 'o'
           if nc?('r')
             return check_idfr_or_keyword(:for, start)
@@ -1124,6 +1137,8 @@ module Crystal
             if nc?('f') && nc?('i') && nc?('l')
               return check_idfr_or_keyword(:fulfil, start)
             end
+          # else
+          #   return check_idfr_or_keyword(:fu, start)
           end
         end
         scan_idfr(start)
@@ -1536,17 +1551,17 @@ module Crystal
 
     def handle_comment
       # Comments to skip or consume?
-      p "Is it '-'?"
+      dbg_lex "Is it '-'?"
       return false if !(curch == '-' || curch == '—')
-      p "Is it 2nd '-'?"
+      dbg_lex "Is it 2nd '-'?"
       return false if !(peek_nextch == '-' || curch == '—')
-      p "Was prev SPC?"
+      dbg_lex "Was prev SPC?"
       if cur_pos > 1
         prevc = unsafe_char_at(cur_pos - 1)
-        p "It is '" + prevc + "'"
+        dbg_lex "It is '" + prevc + "'"
         return false if !(prevc == ' ' || prevc == '\n' || prevc == '\t') # We know '-' and ' ' are one byte each...
       end
-      p "Yep - comment!"
+      dbg_lex "Yep - comment!"
 
       # possible_comment_start = cur_pos
       # nextch
@@ -1737,15 +1752,16 @@ module Crystal
       end
       @token.type = :IDFR
 
-      # idfr_str = string_range(start).tr("-–", "__")
       idfr_str = string_range start
 
-      # if do_magic
-      # *TODO* Highly experimental for those fashionista camelCase fans!
       @token.value = String.build idfr_str.size * 2, do |str|
         idfr_str.each_char_with_index do |chr, i|
-          if chr == '-' || chr == '–'
+          if chr == '-'
             str << '_'
+
+          elsif chr == '–'
+            str << '_'
+
           elsif do_magic && 'A' <= chr <= 'Z' && (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
             str << '_'
             str << chr.downcase
@@ -1754,9 +1770,6 @@ module Crystal
           end
         end
       end
-      # else
-      #   @token.value = idfr_str
-      # end
 
       # p "scanned idfr: '#{@token.value}'"
       nil
@@ -2259,12 +2272,14 @@ module Crystal
           @token.type = :DELIMITER_END
         else
           @token.type = :STRING
+          # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
           @token.value = string_end.to_s
           @token.delimiter_state = @token.delimiter_state.with_open_count_delta(-1)
         end
       when string_nest
         nextch
         @token.type = :STRING
+        # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
         @token.value = string_nest.to_s
         @token.delimiter_state = @token.delimiter_state.with_open_count_delta(+1)
       when '\\'
@@ -2272,6 +2287,7 @@ module Crystal
           char = nextch
           nextch
           @token.type = :STRING
+          # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
           @token.value = "\\#{char}"
         else
           case char = nextch
@@ -2293,11 +2309,13 @@ module Crystal
             value = consume_string_unicode_escape
             nextch
             @token.type = :STRING
+            # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
             @token.value = value
           when '0', '1', '2', '3', '4', '5', '6', '7'
             char_value = consume_octal_escape(char)
             nextch
             @token.type = :STRING
+            # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
             @token.value = char_value.chr.to_s
           when '\n'
             @line_number += 1
@@ -2319,6 +2337,7 @@ module Crystal
             next_string_token delimiter_state
           else
             @token.type = :STRING
+            # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
             @token.value = curch.to_s
             nextch
           end
@@ -2331,6 +2350,7 @@ module Crystal
         else
           nextch
           @token.type = :STRING
+          # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
           @token.value = "{"
         end
 
@@ -2372,10 +2392,12 @@ module Crystal
             @reader.pos = old_pos
             @column_number = old_column
             @token.type = :STRING
+            # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
             @token.value = "\n"
           end
         else
           @token.type = :STRING
+          # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
           @token.value = "\n"
         end
       else
@@ -2391,6 +2413,7 @@ module Crystal
         end
 
         @token.type = :STRING
+        # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
         @token.value = string_range(start)
       end
 
@@ -2483,7 +2506,7 @@ module Crystal
 
       if curch == '{'
         case nextch
-        when '='
+        when '{'
           beginning_of_line = false
           nextch
           @token.type = :MACRO_EXPRESSION_START

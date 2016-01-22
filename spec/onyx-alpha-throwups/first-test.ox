@@ -6,11 +6,36 @@ require "wild_colors"
 
 say "\nLet's ROCK\n".red
 
-say %s(\nfunction(foo) { SomeJsCode(foo(\"bar}\"));}\n)
+say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 _debug_start_ = true
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+-- *TODO* maddafuckin templates and macros!
+--
+-- -- template pow2-round-up(v, r) =
+-- -- template pow2-round-up(v, r) ->
+-- macro pow2-round-up(v, r) =
+--    {% if r != 2 || r != 4 || r != 8 || r != 16 || r != 32 || r != 64 ||
+--          r != 128 || r != 256 || r != 512 || r != 1024 || r != 2048 ||
+--          r != 4096 || r != 8192 || r != 16378 || r != 32768 || r != 65536
+--    %}
+--       raise "pow2-round-up requires a single power-of-two value as rounding ref"
+--    {% else %}
+--       (
+--          -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
+--          %ref-v = {{r}} - 1
+--          ({{v}} + %ref-v) .&. (.~. %ref-v)
+--       )
+--    {% end %}
+-- end
+
+-- pp 4096 == pow2-round-up 3027, 4096
+-- pp 8192 == pow2-round-up 4097, 4096
+-- pp 8192 == pow2-round-up 4097, 4093 -- Should fail!
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -35,8 +60,9 @@ MY_CONST = do
 
 pp MY_CONST
 -- *TODO* $.say / Program.say ?
-pp ::say "blargh"
+pp $.say "blargh"
 -- *TODO* $.MY_CONST / Program.MY_CONST ?
+pp $.MY_CONST
 pp ::MY_CONST
 -- pp Program.MY_CONST
 
@@ -154,7 +180,7 @@ myfu = MyFunctor()
 pp myfu.bar
 pp myfu.call "ctest", "cfooo"
 say myfu "test", "fooo"
-say myfu
+say myfu  -- should NOT result in a call!
 say myfu()
 
 my-fun-fun(f) ->
@@ -313,7 +339,15 @@ DEBUG–SEPARATOR = 47
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- *TODO*
+-- fn f(y ()->) nil - func general def (context determined / analyzed mode)
+-- fu f(y ()->) nil - pure function (NO s-fx
+-- fx f(y ()->) nil - explicitly procedural func, any s-fx
+-- fi f(y ()->) nil - member function, instance mutating s-fx only
+-- mf f(y ()->) nil - member function, instance mutating s-fx only
+
 def f(y ()->) -> nil
+fn g(y ()->) -> nil
 g(y ()->) -> nil
 
 --   -- (Seq[Int32]()).flat_map ~>
@@ -332,6 +366,18 @@ f(() ->
       [] of Ints
    )
 )
+
+-- f(() ->
+--    ([0 x Ints]).flat-map(~>
+--       [0 x Ints]
+--    )
+-- )
+
+-- (f () ->
+--    ((['Ints]).flat-map ~>
+--       ['Ints]
+--    )
+-- )
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -354,6 +400,10 @@ the–str = "kjhgkjh" \
 
 -- first comment
 a = 47  --another comment
+
+if a == 47 &&
+   a != 48
+   say "0 - a tricky one"
 
 if (a == 47 &&
    a != 48
@@ -427,8 +477,8 @@ DEBUG–SEPARATOR
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- -#pure -#private
-\private
-def zoo(a, b, ...c 'Ints) Str ->  \pure
+# private
+def zoo(a; b; ...c 'Ints) Str ->  # pure
    if true:
       i = 1
 
@@ -556,7 +606,7 @@ say "tag–hash–2 value is {tag–hash–2}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- type TradeSide << Enum[Int8]
+-- type TradeSide < Enum[Int8]
 enum TradeSide Int8
    Unknown
    Buy
@@ -915,7 +965,7 @@ type Qwa
    mixin TheTrait
 end–type
 
-type Bar << Qwa
+type Bar < Qwa
    Self.my–foo Int64 = 47i64
    Self.some–other–foo 'Ints = 42
    Self.yet–a-foo = 42
@@ -942,48 +992,54 @@ say "Bar.get-foo = {Bar.get-foo}"
 
 say "declare a Foo type"
 
-
-type Foo[S1] << Bar
+--| The "normal" Foo which is expressed with arrow function syntax
+type Foo[S1] < Bar
    mixin AnotherTrait[S1]
-   -- << AnotherTrait[S1]
+   -- < AnotherTrait[S1]
 
    -- "free" notation at member declaration
    foo–x I64 = 47_i64  \get \set
    foo–y = 48
    foo–z = "bongo"  \get
-   foo–u Ints = 47  \get \set
-   foo–w = 47       \set
+   foo–u Ints = 47  \ get set
+   foo–w = 47       \ set
 
    -- at-notation at declaration too?
    ifdef x86_64
-      @bar–x I64 = 47_i64  \get \set
+    bar–x  I64  = 47_i64  # get set
    else
-      @bar–x I32 = 47_i32  \get \set
+    @bar–x I32  = 47_i32  # get set
 
-   @bar–y = 48
-   @bar–z = "bongo"  \get
-   @bar–u Ints = 47  \get \set
-   @bar–w = 47       \get
+   bar–y        = 48
+   bar–z        = "bongo"  # get
+   @bar–u  Ints = 47  # get set
+   @bar–w       = 47  # get
 
    ifdef x86_64
-      init(a S1) ->@
-         @foo–a = a
+    init(a S1) ->
+       @foo–a = a
    else
-      init(b S1) ->@
-         @foo–a = b
+    init(b S1) ->
+       @foo–a = b
    end
 
-   init() ->@
+   init() ->
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
-   fn–1aa(x) ->>  \pub  nil   -- should this be legal? - looks very confusing!
-   fn–1ab(x) Nil -> \pure \pub  nil   -- should this be legal? - looks very confusing!
-
-   \priv \inline
+   -- *TODO* pragma "blocks"!
+   -- \ pure
+   --    fn–1aa(x) -> nil \public   -- should this be legal? - looks very confusing!
+   --    fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
+   \ pure
+   fn–1aa(x) -> nil  \public   -- should this be legal? - looks very confusing!
    \pure
-   fn–1ba(x) ->>! nil
-   fn–1ca(x) ->>!  \pure
+   fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
+
+   \ private inline
+   \ pure
+   fn–1ba(x) ->! nil
+   fn–1ca(x) ->!  \pure
    fn–1da(x) -> nil
    fn–1ea(x) ->! nil
    fn–1fa(x) ->!
@@ -1000,25 +1056,35 @@ type Foo[S1] << Bar
    --    say "you!"
    --    "fdsa"
 
-   -- Should Error if instantiated, because of mismatching return type
+   -- Should Error _iff_ instantiated, because of mismatching return type
    fn–1i(x) ->!
       say "Yeay"
       return "Foo"
 
-   fn–a(a, b) ->> "a: {a}, {b}"
+   fn–a(a, b) -> "a: {a}, {b}" # pure
 
    def fn–b(a S1, b Ints) -> -- fdsa
       "b: {a}, {b}"
 
-   \private
-   fn–c(a, b S1) S1 ->>  \redef \inline
+   -- # private
+   --    fn–c(a, b S1) S1 -> # redef inline
+   --       "c: {a}, {b}"
+
+   --    end–def
+
+   --    -- fn–c(a, b I32) redef private ->
+   --    fn–c(a, b Ints) -> # redef
+   --       "c: {a}, {b}"
+
+   # private
+   fn–c(a, b S1) S1 -> # redef inline
       "c: {a}, {b}"
 
    end–def
 
+   # private
    -- fn–c(a, b I32) redef private ->
-   \private
-   fn–c(a, b Ints) -> \redef
+   fn–c(a, b Ints) -> # redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1041,11 +1107,167 @@ type Foo[S1] << Bar
 
    fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 
+   # flatten
    call() -> fn–e
 
    [](i) -> @foo–b + i
 
 end–type
+
+-- *TODO* type level 'pure'/'mepure' spec - should be possible to "make" the
+-- type that (all monkey patches obey it), and also a LEXICAL variant which
+-- rules only in the specific lexical declaration context (for adding a bunch of
+-- pure funcs to Program for instance
+
+--| A Foo type in style 2 (non-arrow function defs)
+--| <S1> is primary variable type
+type FooStyle2<S1> < Bar
+   mixin AnotherTrait<S1>
+
+   -- "free" notation at member declaration
+   @foo–x I64 = 47_i64  # get set
+   @foo–y = 48
+   @foo–z = "bongo"  # get
+   @foo–u Ints = 47  | get set
+   @foo–w = 47       |set
+
+   -- at-notation at declaration too?
+   ifdef x86_64
+      @bar–x I64 = 47_i64  | get set
+   else
+      @bar–x I32 = 47_i32  |get |set
+
+   @bar–y = 48
+   @bar–z = "bongo"  |get
+   @bar–u Ints = 47  | get set
+   @bar–w = 47       |get
+
+   --| Initialize with primary variable type
+   ifdef x86_64
+      -- fn init(a S1)
+      fn init(a S1) ->
+         @foo–a = a
+   else
+      -- fn init(b S1)
+      fn init(b S1) ->
+         @foo–a = b
+   end
+
+   -- fn init()
+   fn init() ->
+
+   -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
+
+
+   -- |pure
+   --    fn fn–1aa(x) ->  |public;  nil   -- should this be legal? - looks very confusing!
+   --    fn fn–1ab(x) Nil -> |public;  nil   -- should this be legal? - looks very confusing!
+
+   -- |private |inline:
+   --    fn fn–1ba(x)! -> nil
+   --    fn fn–1ca(x)! ->
+   --    fn fn–1da(x) -> nil | pure
+   --    fn fn–1ea(x)! -> nil | pure
+
+   --| Do some 1aa action!
+   |pure
+   fn fn–1aa(x) ->  |public;  nil   -- should this be legal? - looks very confusing!
+   fn fn–1ab(x) Nil -> | pure public;  nil   -- should this be legal? - looks very confusing!
+
+   |private |inline
+   fn fn–1ba(x) ->! nil
+   fn fn–1ca(x) ->!
+   fn fn–1da(x) -> nil | pure
+   fn fn–1ea(x) ->! nil | pure
+
+   -- fn fn–1fa(x)!
+
+   -- fn fn–1ga(x)!
+   --    ifdef x86_64
+   --       say "Hey"
+   --    else
+   --       say "you!"
+   -- ;
+
+   fn fn–1fa(x) ->!
+
+   fn fn–1ga(x) ->!
+      ifdef x86_64
+         say "Hey"
+      else
+         say "you!"
+   ;
+
+   -- This should fail on parse because of ret-type + nil-ret flag
+   -- fn–1h(x) String ->!
+   --    say "Hey"
+   --    say "you!"
+   --    "fdsa"
+
+   -- Should Error _iff_ instantiated, because of mismatching return type
+   -- fn fn–1i(x)!
+   fn fn–1i(x) ->!
+      say "Yeay"
+      return "Foo"
+
+   fn fn–a(a, b) -> "a: {a}, {b}"
+
+   -- fn fn–b(a S1, b Ints) -- fdsa
+   fn fn–b(a S1, b Ints) -> -- fdsa
+      "b: {a}, {b}"
+
+   -- | private
+   --    fn fn–c(a, b S1) S1 | redef inline
+   --       "c: {a}, {b}"
+   --    end–fn
+
+   --    -- fn–c(a, b I32) redef private ->
+   --    fn fn–c(a, b Ints) |redef
+   --       "c: {a}, {b}"
+
+   | private
+   fn fn–c(a, b S1) S1 -> | redef inline
+      "c: {a}, {b}"
+   end–fn
+
+   -- fn–c(a, b I32) redef private ->
+   fn fn–c(a, b Ints) -> |redef
+      "c: {a}, {b}"
+
+   -- fn fn–d1(a, b)
+   fn fn–d1(a, b) ->
+      @foo–a = a
+      @foo–b = b
+      fn–e
+   end
+
+   -- fn fn–d2(a S1, b Ints)
+   fn fn–d2(a S1, b Ints) ->
+      @foo–a = a
+      @foo–b = b
+      fn–e
+
+   -- fn–d3(a S1, b <IntT>) ->
+   --    @foo–a = a
+   --    c IntT
+   --    c = b
+   --    @foo–b = c
+   --    fn–e
+
+   fn fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
+
+   |flatten
+   fn call() -> fn–e
+
+   fn [](i) -> @foo–b + i
+
+end–type
+
+-- *TODO* Anonymous types!
+-- anon-typed = new Bar
+--    mixin AnotherTrait<I64>
+
+--    fn-x(x) -> "I am Anon"
 
 
 say "create a Foo instance"
@@ -1084,6 +1306,7 @@ say bar.fnE
 
 say "shit-sandwich"
 shit-sandwich =  bar.fnE
+shitSandwich = "arghh"
 say shitSandwich
 
 say bar.call()
@@ -1166,8 +1389,9 @@ api MyLibGmp
 end
 
 MyLibGmp.set-memory-functions(
-   ((size) -> GC.malloc(size) ),
-   (ptr, old_size, new_size) -> GC.realloc(ptr, new_size); end,
+   (size) ->
+      GC.malloc(size)
+   , (ptr, old_size, new_size) -> GC.realloc(ptr, new_size); end,
    ((ptr, size) -> GC.free(ptr) )
 )
 
@@ -1251,14 +1475,14 @@ module AllTheRest begins
 type RestFoo
    rest-foo() ->
       true
-;
+
 
 xx = 47
 yy = 47.47
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-say "{"foo".magenta}, {"bar".grey}, {"qwo".white}"
-say "{"foo".magenta2}, {"bar".grey2}, {"qwo".white}"
+say "{ "foo".magenta }, { "bar".grey }, { "qwo".white }"
+say "{ "foo".magenta2 }, { "bar".grey2 }, { "qwo".white }"
 say "All DOWN ".red
 say "         AND OUT".red2
