@@ -6951,6 +6951,9 @@ class OnyxParser < OnyxLexer
 
       dbg "check for callable variations"
 
+      # *TODO* these variations look like shit - ditch. replace with pragmas and
+      # grouping pragmas
+
       case
       when tok? :"@"
          callable_type = :strict_method

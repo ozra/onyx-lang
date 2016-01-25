@@ -978,7 +978,7 @@ type Bar < Qwa
 
    foo–a Str = ""
    foo–b Ints = 0
-   @foo–c I64 = 0
+   foo–c I64 = 0
    foo-ya I32 = 0_i32
 
    Self.set–foo(v) ->
