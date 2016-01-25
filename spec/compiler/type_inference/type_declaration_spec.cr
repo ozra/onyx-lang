@@ -87,7 +87,9 @@ describe "Type inference: type declaration" do
       class Foo(T)
       end
 
-      x : Foo
+      class Baz
+        @x : Foo
+      end
       ),
       "can't declare variable of generic non-instantiated type Foo"
   end
@@ -120,7 +122,7 @@ describe "Type inference: type declaration" do
 
       Foo.x = true
       ),
-      "type must be Int32, not Bool"
+      "type must be Int32, not Nil"
   end
 
   it "declares class variable (2)" do
@@ -138,73 +140,59 @@ describe "Type inference: type declaration" do
       "type must be Int32, not Nil"
   end
 
-  # TODO: remove these after 0.11
-
-  it "declares as uninitialized" do
-    assert_type("a :: Int32") { |mod| mod.nil }
+  it "errors (for now) when typing a local variable" do
+    assert_error %(
+      x : Int32
+      ),
+      "declaring the type of a local variable is not yet supported"
   end
 
-  it "declares as uninitialized and reads it" do
-    assert_type("a :: Int32; a") { int32 }
+  it "errors when typing an instance variable inside a method" do
+    assert_error %(
+      def foo
+        @x : Int32
+      end
+
+      foo
+      ),
+      "declaring the type of an instance variable must be done at the class level"
   end
 
-  it "declares an instance variable in initialize as uninitialized" do
+  it "errors when typing a class variable inside a method" do
+    assert_error %(
+      def foo
+        @@x : Int32
+      end
+
+      foo
+      ),
+      "declaring the type of a class variable must be done at the class level"
+  end
+
+  it "errors when typing a global variable inside a method" do
+    assert_error %(
+      def foo
+        $x : Int32
+      end
+
+      foo
+      ),
+      "declaring the type of a global variable must be done at the class level"
+  end
+
+  it "declares instance var with union type with a virtual member" do
     assert_type("
+      class Parent; end
+      class Child < Parent; end
+
       class Foo
-        def initialize
-          @x :: Int32
-        end
+        @x : Parent?
 
         def x
           @x
         end
       end
 
-      Foo.new.x
-      ") { int32 }
-  end
-
-  it "errors if declaring generic type without type vars (with instance var)" do
-    assert_error %(
-      class Foo(T)
-      end
-
-      class Bar
-        def initialize
-          @x :: Foo
-        end
-      end
-
-      Bar.new
-      ),
-      "can't declare variable of generic non-instantiated type Foo"
-  end
-
-  it "errors if declares var and then assigns other type" do
-    assert_error %(
-      x :: Int32
-      x = 1_i64
-      ),
-      "type must be Int32, not (Int32 | Int64)"
-  end
-
-  it "errors if declaring variable multiple times with different types (#917)" do
-    assert_error %(
-      if 1 == 0
-        buf :: Int32
-      else
-        buf :: Float64
-      end
-      ),
-      "variable 'buf' already declared with type Int32"
-  end
-
-  %w(Object Value Reference Number Int Float Struct Class Enum).each do |type|
-    it "disallows declaring var of type #{type}" do
-      assert_error %(
-        x :: #{type}
-        ),
-        "use a more specific type"
-    end
+      Foo.new.x") { |mod| mod.union_of(mod.types["Parent"].virtual_type!, mod.nil) }
   end
 end

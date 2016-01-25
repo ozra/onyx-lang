@@ -399,6 +399,8 @@ module Crystal
           end
           next_string_token
         else
+          skip_strings
+
           check :INTERPOLATION_START
           write "\#{"
           delimiter_state = @token.delimiter_state
@@ -412,12 +414,23 @@ module Crystal
         end
       end
 
+      skip_strings
+
       check :DELIMITER_END
       write @token.raw
       format_regex_modifiers if is_regex
       next_token
 
       false
+    end
+
+    private def skip_strings
+      # Heredocs might indice some spaces that are removed
+      # because of indentation
+      while @token.type == :STRING
+        write @token.raw
+        next_string_token
+      end
     end
 
     def visit(node : RegexLiteral)
@@ -2493,18 +2506,9 @@ module Crystal
     def visit(node : TypeDeclaration)
       accept node.var
       skip_space_or_newline
-      case @token.type
-      when :"::", :":"
-        # OK
-      else
-        raise "expecting `::` or `:`, not `#{@token.type}, #{@token.value}`, at #{@token.location}"
-      end
+      check :":"
       next_token_skip_space_or_newline
-      if node.var.is_a?(Var) || @inside_def > 0
-        write " = uninitialized "
-      else
-        write " : "
-      end
+      write " : "
       accept node.declared_type
 
       false

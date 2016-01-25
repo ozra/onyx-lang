@@ -3,15 +3,16 @@ module Zlib
     include IO
 
     def initialize(@input : IO, wbits = LibZ::MAX_BITS)
-      @buf :: UInt8[8192] # input buffer used by zlib
+      @buf = uninitialized UInt8[8192] # input buffer used by zlib
       @stream = LibZ::ZStream.new
+      @stream.zalloc = LibZ::AllocFunc.new { |opaque, items, size| GC.malloc(items * size) }
+      @stream.zfree = LibZ::FreeFunc.new { |opaque, address| GC.free(address) }
       ret = LibZ.inflateInit2(pointerof(@stream), wbits, LibZ.zlibVersion, sizeof(LibZ::ZStream))
       check_error(ret)
     end
 
-    private def check_error(err)
-      msg = @stream.msg ? String.new(@stream.msg) : nil
-      ZlibError.check_error(err, msg)
+    def self.gzip(input)
+      new input, wbits: GZIP
     end
 
     def write(slice : Slice(UInt8))
@@ -19,6 +20,8 @@ module Zlib
     end
 
     def read(slice : Slice(UInt8))
+      raise IO::Error.new "closed stream" if closed?
+
       prepare_input_data
 
       @stream.avail_out = slice.size.to_u32
@@ -33,7 +36,18 @@ module Zlib
     end
 
     def close
+      return if @closed
+      @closed = true
+
       @input.close
+    end
+
+    def closed?
+      @closed
+    end
+
+    def inspect(io)
+      to_s(io)
     end
 
     private def prepare_input_data
@@ -47,6 +61,11 @@ module Zlib
       ret = LibZ.inflate(pointerof(@stream), flush)
       check_error(ret)
       ret
+    end
+
+    private def check_error(err)
+      msg = @stream.msg ? String.new(@stream.msg) : nil
+      ZlibError.check_error(err, msg)
     end
   end
 end

@@ -132,7 +132,7 @@ module Crystal
 
       @in_lib = false
       @strings = {} of StringKey => LLVM::Value
-      @symbols = {} of String    => Int32
+      @symbols = {} of String => Int32
       @symbol_table_values = [] of LLVM::Value
       mod.symbols.each_with_index do |sym, index|
         @symbols[sym] = index
@@ -177,6 +177,10 @@ module Crystal
 
     class CodegenWellKnownFunctions < Visitor
       def initialize(@codegen)
+      end
+
+      def visit(node : FileNode)
+        true
       end
 
       def visit(node : Expressions)
@@ -264,16 +268,13 @@ module Crystal
     end
 
     def visit(node : FileNode)
-      old_vars = context.vars
-      context.vars = LLVMVars.new
-
-      file_module = @mod.file_module(node.filename)
-      if vars = file_module.vars?
-        alloca_vars vars, file_module
+      with_context(Context.new(context.fun, context.type)) do
+        file_module = @mod.file_module(node.filename)
+        if vars = file_module.vars?
+          alloca_vars vars, file_module
+        end
+        node.node.accept self
       end
-      node.node.accept self
-
-      context.vars = old_vars
 
       false
     end

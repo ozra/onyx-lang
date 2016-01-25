@@ -277,14 +277,14 @@ module Enumerable(T)
   #     [1, 2, 3].in_groups_of(2, 0) #=> [[1, 2], [3, 0]]
   #     [1, 2, 3].in_groups_of(2) #=> [[1, 2], [3, nil]]
   #
-  def in_groups_of(size : Int, filled_up_with = nil)
+  def in_groups_of(size : Int, filled_up_with = nil : U)
     raise ArgumentError.new("size must be positive") if size <= 0
 
     # TODO: this consumes the enumerable twice, fix
     parts_count = (self.size.to_f / size).ceil.to_i
-    ary = Array(Array(T | typeof(filled_up_with))).new(parts_count)
+    ary = Array(Array(T | U)).new(parts_count)
     parts_count.times do |i|
-      ary << Array(T | typeof(filled_up_with)).new(size, filled_up_with)
+      ary << Array(T | U).new(size, filled_up_with)
     end
 
     each_with_index do |e, i|
@@ -300,9 +300,9 @@ module Enumerable(T)
   #     #=> 3
   #     #=> 4
   #
-  def in_groups_of(size : Int, filled_up_with = nil)
+  def in_groups_of(size : Int, filled_up_with = nil : U)
     raise ArgumentError.new("size must be positive") if size <= 0
-    ary = Array(T | typeof(filled_up_with)).new(size, filled_up_with)
+    ary = Array(T | U).new(size, filled_up_with)
 
     # TODO: this consumes the enumerable twice, fix
     count = self.size
@@ -311,7 +311,7 @@ module Enumerable(T)
       ary[i % size] = e
       if i % size == size - 1 || i == count - 1
         yield ary
-        ary = Array(T | typeof(filled_up_with)).new(size, filled_up_with)
+        ary = Array(T | U).new(size, filled_up_with)
       end
     end
   end
@@ -376,7 +376,7 @@ module Enumerable(T)
   #     [1, 2, 3, 4, 5].reduce { |acc, i| acc + i }  #=> 15
   #
   def reduce
-    memo :: T
+    memo = uninitialized T
     found = false
 
     each do |elem|
@@ -507,8 +507,8 @@ module Enumerable(T)
   end
 
   private def max_by_internal(&block : T -> U)
-    max :: U
-    obj :: T
+    max = uninitialized U
+    obj = uninitialized T
     found = false
 
     each_with_index do |elem, i|
@@ -540,7 +540,7 @@ module Enumerable(T)
   end
 
   private def max_of_internal(&block : T -> U)
-    max :: U
+    max = uninitialized U
     found = false
 
     each_with_index do |elem, i|
@@ -591,8 +591,8 @@ module Enumerable(T)
   end
 
   private def min_by_internal(&block : T -> U)
-    min :: U
-    obj :: T
+    min = uninitialized U
+    obj = uninitialized T
     found = false
 
     each_with_index do |elem, i|
@@ -624,7 +624,7 @@ module Enumerable(T)
   end
 
   private def min_of_internal(&block : T -> U)
-    min :: U
+    min = uninitialized U
     found = false
 
     each_with_index do |elem, i|
@@ -670,10 +670,10 @@ module Enumerable(T)
   end
 
   private def minmax_by_internal(&block : T -> U)
-    min :: U
-    max :: U
-    objmin :: T
-    objmax :: T
+    min = uninitialized U
+    max = uninitialized U
+    objmin = uninitialized T
+    objmax = uninitialized T
     found = false
 
     each_with_index do |elem, i|
@@ -711,8 +711,8 @@ module Enumerable(T)
   end
 
   private def minmax_of_internal(&block : T -> U)
-    min :: U
-    max :: U
+    min = uninitialized U
+    max = uninitialized U
     found = false
 
     each_with_index do |elem, i|
