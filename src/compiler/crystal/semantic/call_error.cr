@@ -153,7 +153,7 @@ class Crystal::Call
         end
         str << ")\n"
         str << "Overloads are:"
-        append_matches(owner, defs, str)
+        append_matches(defs, str)
       end)
     end
 
@@ -180,20 +180,22 @@ class Crystal::Call
     message = String.build do |msg|
       msg << "no overload matches '#{full_name(owner, def_name)}'"
       unless args.empty?
-        msg << " with types "
-        args.each_with_index do |arg, index|
-          msg << ", " if index > 0
+        types = [] of Type
+        args.each_with_index do |arg|
           arg_type = arg.type
 
           if arg.is_a?(Splat) && arg_type.is_a?(TupleInstanceType)
             arg_type.tuple_types.each_with_index do |tuple_type, sub_index|
-              msg << ", " if sub_index > 0
-              msg << tuple_type
+              types << tuple_type
             end
           else
-            msg << arg_type
+            types << arg_type
           end
         end
+        msg << " with type"
+        msg << "s" if types.size > 1
+        msg << " "
+        types.join(", ", msg)
       end
       msg << "\n"
 
@@ -202,7 +204,7 @@ class Crystal::Call
       end
 
       msg << "Overloads are:"
-      append_matches(owner, defs, msg)
+      append_matches(defs, msg)
 
       if matches
         cover = matches.cover
@@ -253,10 +255,10 @@ class Crystal::Call
     end
   end
 
-  def append_matches(owner, defs, str, matched_def = nil, argument_name = nil)
+  def append_matches(defs, str, matched_def = nil, argument_name = nil)
     defs.each do |a_def|
       str << "\n - "
-      append_def_full_name owner, a_def, str
+      append_def_full_name a_def.owner, a_def, str
       if defs.size > 1 && a_def.same?(matched_def)
         str << colorize(" (trying this one)").blue
       end
@@ -373,7 +375,7 @@ class Crystal::Call
 
           str << "\n"
           str << "Matches are:"
-          append_matches owner, defs, str, matched_def: a_def, argument_name: named_arg.name
+          append_matches defs, str, matched_def: a_def, argument_name: named_arg.name
         end
         named_arg.raise msg
       end

@@ -14,6 +14,6 @@ all_spec
 /doc/
 /src/llvm/ext/llvm_ext.o
 .local-scripts/
-/src/ext
-/src/ext/
-
+/src/ext/gc-cc47
+/src/ext/*.o
+/src/ext/libcrystal.a

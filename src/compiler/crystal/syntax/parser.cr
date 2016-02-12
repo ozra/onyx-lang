@@ -1792,14 +1792,21 @@ module Crystal
       pieces.each do |piece|
         value = piece.value
         if value.is_a?(String)
-          # A single '\n' always ends a line in heredoc, according to the lexer
-          if value == "\n"
+          if value == "\n" || value == "\r\n"
             current_line << value
             line = current_line.to_s
             line = remove_heredoc_from_line(line, indent, piece.line_number - 1) if remove_indent
             new_pieces << StringLiteral.new(line)
             current_line.clear
             remove_indent = true
+          elsif (slash_n = value.starts_with?("\n")) || value.starts_with?("\r\n")
+            current_line << (slash_n ? "\n" : "\r\n")
+            line = current_line.to_s
+            line = remove_heredoc_from_line(line, indent, piece.line_number - 1) if remove_indent
+            new_pieces << StringLiteral.new(line)
+            current_line.clear
+            remove_indent = true
+            current_line << value.byte_slice(slash_n ? 1 : 2)
           else
             current_line << value
           end
@@ -4414,8 +4421,10 @@ module Crystal
             next_token_skip_space
           end
 
+          def_location = @token.location
+
           if @token.value == :def
-            member = parse_def
+            member = parse_def.at(def_location)
             member = VisibilityModifier.new(visibility, member) if visibility
             members << member
           else

@@ -4,40 +4,47 @@ require "../types"
 
 module Crystal
   class Program
-    def after_type_inference(node)
-      node = node.transform(AfterTypeInferenceTransformer.new(self))
+    def cleanup(node)
+      node = node.transform(CleanupTransformer.new(self))
       puts node if ENV["AFTER"]? == "1"
       node
     end
 
-    def finish_types
-      transformer = AfterTypeInferenceTransformer.new(self)
+    def cleanup_types
+      transformer = CleanupTransformer.new(self)
       after_inference_types.each do |type|
-        finish_type type, transformer
+        cleanup_type type, transformer
       end
     end
 
-    def finish_type(type, transformer)
+    def cleanup_type(type, transformer)
       case type
       when GenericClassInstanceType
-        finish_single_type(type, transformer)
+        cleanup_single_type(type, transformer)
       when GenericClassType
         type.generic_types.each_value do |instance|
-          finish_type instance, transformer
+          cleanup_type instance, transformer
         end
       when ClassType
-        finish_single_type(type, transformer)
+        cleanup_single_type(type, transformer)
       end
     end
 
-    def finish_single_type(type, transformer)
+    def cleanup_single_type(type, transformer)
       type.instance_vars_initializers.try &.each do |initializer|
         initializer.value = initializer.value.transform(transformer)
       end
     end
   end
 
-  class AfterTypeInferenceTransformer < Transformer
+  # This visitor runs at the end and does some simplifications to the resulting AST node.
+  #
+  # For example, it rewrites and `if true; 1; else; 2; end` to a single `1`. It does
+  # so for other "always true conditions", such as `x.is_a?(Foo)` where `x` can only
+  # be of type `Foo`. These simplications are needed because the codegen would have no
+  # idea on how to generate code for unreachable branches, because they have no type,
+  # and for now the codegen only deals with typed nodes.
+  class CleanupTransformer < Transformer
     def initialize(@program)
       @transformed = Set(typeof(object_id)).new
       @def_nest_count = 0
@@ -187,7 +194,8 @@ module Crystal
     def transform(node : Path)
       if target_const = node.target_const
         if target_const.used && !target_const.initialized?
-          if const_node = @const_being_initialized
+          value = target_const.value
+          if (const_node = @const_being_initialized) && !simple_constant?(value)
             const_being_initialized = const_node.target_const.not_nil!
             const_node.raise "constant #{const_being_initialized} requires initialization of #{target_const}, \
                                         which is initialized later. Initialize #{target_const} before #{const_being_initialized}"
@@ -489,7 +497,7 @@ module Crystal
 
     def build_raise(msg)
       call = Call.global("raise", StringLiteral.new(msg))
-      call.accept TypeVisitor.new(@program)
+      call.accept MainVisitor.new(@program)
       call
     end
 
@@ -676,6 +684,8 @@ module Crystal
         unless to_type.pointer? || to_type.reference_like?
           node.raise "can't cast #{obj_type} to #{to_type}"
         end
+      elsif obj_type.no_return?
+        node.type = @program.no_return
       else
         resulting_type = obj_type.filter_by(to_type)
         unless resulting_type
@@ -802,6 +812,42 @@ module Crystal
         true_literal.set_type(@program.bool)
         true_literal
       end
+    end
+
+    def simple_constant?(node)
+      simple_constant?(node, [] of Const)
+    end
+
+    def simple_constant?(node, consts)
+      case node
+      when NilLiteral, BoolLiteral, CharLiteral, NumberLiteral, StringLiteral
+        return true
+      when Call
+        obj = node.obj
+        return false unless obj
+
+        case node.args.size
+        when 0
+          case node.name
+          when "+", "-", "~"
+            return simple_constant?(obj, consts)
+          end
+        when 1
+          case node.name
+          when "+", "-", "*", "/", "&", "|"
+            return simple_constant?(obj, consts) && simple_constant?(node.args.first, consts)
+          end
+        end
+      when Path
+        if target_const = node.target_const
+          return false if consts.includes?(target_const)
+
+          consts << target_const
+          return simple_constant?(target_const.value, consts)
+        end
+      end
+
+      false
     end
   end
 end

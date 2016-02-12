@@ -52,7 +52,7 @@ module Crystal
 
       expected_type = target_def.type
 
-      type_visitor = TypeVisitor.new(@program, vars, target_def)
+      type_visitor = MainVisitor.new(@program, vars, target_def)
       type_visitor.scope = owner
       type_visitor.types << owner
       generated_nodes.accept type_visitor
@@ -455,12 +455,12 @@ module Crystal
       def visit(node : Yield)
         if block = @block
           if node.exps.empty?
-            @last = block.body
+            @last = block.body.clone
           else
             block_vars = {} of String => ASTNode
             node.exps.each_with_index do |exp, i|
               if block_arg = block.args[i]?
-                block_vars[block_arg.name] = exp
+                block_vars[block_arg.name] = exp.clone
               end
             end
             @last = replace_block_vars block.body.clone, block_vars
@@ -622,11 +622,7 @@ module Crystal
         original_filanme = filename
 
         begin
-          relative_to = @location.try &.filename
-          if relative_to.is_a?(VirtualFile)
-            relative_to = relative_to.expanded_location.try(&.filename)
-          end
-
+          relative_to = @location.try &.original_filename
           found_filenames = @mod.find_in_path(filename, relative_to)
         rescue ex
           node.raise "error executing macro run: #{ex.message}"

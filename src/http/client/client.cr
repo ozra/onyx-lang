@@ -13,6 +13,8 @@
 # response.body.lines.first # => "<!doctype html>"
 # ```
 #
+# ### Streaming
+#
 # With a block, an `HTTP::Client::Response` body is returned and the response's body
 # is available as an `IO` by invoking `HTTP::Client::Response#body_io`.
 #
@@ -41,9 +43,15 @@
 #
 # ### Compression
 #
-# If `compress` isn't set to false, and no `Accept-Encoding` header is explicitly specified,
+# If `compress` isn't set to `false`, and no `Accept-Encoding` header is explicitly specified,
 # an HTTP::Client will add an `"Accept-Encoding": "gzip, deflate"` header, and automatically decompress
 # the response body/body_io.
+#
+# ### Encoding
+#
+# If a response has a `Content-Type` header with a charset, that charset is set as the encoding
+# of the returned IO (or used for creating a String for the body). Invalid bytes in the given encoding
+# are silently ignored when reading text content.
 class HTTP::Client
   # Returns the target host.
   #
@@ -165,6 +173,36 @@ class HTTP::Client
   # ```
   def connect_timeout=(connect_timeout : Time::Span)
     self.connect_timeout = connect_timeout.total_seconds
+  end
+
+  # Set the number of seconds to wait when resolving a name, before raising an `IO::Timeout`.
+  #
+  # ```
+  # client = HTTP::Client.new("example.org")
+  # client.dns_timeout = 1.5
+  # begin
+  #   response = client.get("/")
+  # rescue IO::Timeout
+  #   puts "Timeout!"
+  # end
+  # ```
+  def dns_timeout=(dns_timeout : Number)
+    @dns_timeout = dns_timeout.to_f
+  end
+
+  # Set the number of seconds to wait when resolving a name with a `Time::Span`, before raising an `IO::Timeout`.
+  #
+  # ```
+  # client = HTTP::Client.new("example.org")
+  # client.dns_timeout = 1.5.seconds
+  # begin
+  #   response = client.get("/")
+  # rescue IO::Timeout
+  #   puts "Timeout!"
+  # end
+  # ```
+  def dns_timeout=(dns_timeout : Time::Span)
+    self.dns_timeout = dns_timeout.total_seconds
   end
 
   # Adds a callback to execute before each request. This is usually
@@ -416,7 +454,7 @@ class HTTP::Client
   end
 
   private def socket
-    socket = @socket ||= TCPSocket.new @host, @port, nil, @connect_timeout
+    socket = @socket ||= TCPSocket.new @host, @port, @dns_timeout, @connect_timeout
     socket.read_timeout = @read_timeout if @read_timeout
     socket.sync = false
     if @ssl
@@ -434,27 +472,43 @@ class HTTP::Client
     end
   end
 
-  private def self.exec(uri)
-    uri = URI.parse(uri) if uri.is_a?(String)
+  private def self.exec(string : String)
+    uri = URI.parse(string)
 
-    unless uri.scheme
-      raise ArgumentError.new %(Request URI must have schema. Possibly add "http://" to the request URI?)
+    unless uri.scheme && uri.host
+      # Assume http if no scheme and host are specified
+      uri = URI.parse("http://#{string}")
     end
 
-    host = uri.host.not_nil!
+    exec(uri) do |client, path|
+      yield client, path
+    end
+  end
+
+  private def self.exec(uri : URI)
+    scheme = uri.scheme
+    unless scheme
+      raise ArgumentError.new %(Request URI must have scheme. Possibly add "http://" to the request URI? (URI is: #{uri}))
+    end
+
+    host = uri.host
+    unless host
+      raise ArgumentError.new %(Request URI must have host (URI is: #{uri}))
+    end
+
     port = uri.port
     path = uri.full_path
     user = uri.user
     password = uri.password
     ssl = false
 
-    case uri.scheme
+    case scheme
     when "http"
       # Nothing
     when "https"
       ssl = true
     else
-      raise "Unsuported scheme: #{uri.scheme}"
+      raise "Unsuported scheme: #{scheme}"
     end
 
     HTTP::Client.new(host, port, ssl) do |client|

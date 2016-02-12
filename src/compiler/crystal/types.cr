@@ -215,6 +215,8 @@ module Crystal
         other_type.union_types.any? do |union_type|
           implements?(union_type)
         end
+      when VirtualMetaclassType
+        implements?(other_type.base_type.metaclass)
       else
         self == other_type
       end
@@ -1435,7 +1437,7 @@ module Crystal
 
     def run_instance_var_initializer(initializer, instance)
       meta_vars = MetaVars.new
-      visitor = TypeVisitor.new(program, vars: meta_vars, meta_vars: meta_vars)
+      visitor = MainVisitor.new(program, vars: meta_vars, meta_vars: meta_vars)
       visitor.scope = instance
       value = initializer.value.clone
       value.accept visitor
@@ -1528,7 +1530,7 @@ module Crystal
 
         ivar = MetaInstanceVar.new(name, visitor.type)
         ivar.bind_to ivar
-        ivar.freeze_type = visitor.type
+        ivar.freeze_type = visitor.type.virtual_type
         instance.instance_vars[name] = ivar
       end
     end
@@ -2221,7 +2223,7 @@ module Crystal
       return if @value_processed
       @value_processed = true
 
-      visitor = FirstPassVisitor.new(@program)
+      visitor = TopLevelVisitor.new(@program)
       visitor.types.push(container)
       visitor.processing_types do
         @value.accept visitor

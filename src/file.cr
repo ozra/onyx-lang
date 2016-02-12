@@ -5,6 +5,7 @@ lib LibC
   fun symlink(oldpath : Char*, newpath : Char*) : Int
   fun unlink(filename : Char*) : Int
   fun ftruncate(fd : Int, size : OffT) : Int
+  fun realpath(filename : Char*, realpath : Char*) : Char*
 
   F_OK = 0
   X_OK = 1 << 0
@@ -30,7 +31,7 @@ class File < IO::FileDescriptor
   # :nodoc:
   DEFAULT_CREATE_MODE = LibC::S_IRUSR | LibC::S_IWUSR | LibC::S_IRGRP | LibC::S_IROTH
 
-  def initialize(filename, mode = "r", perm = DEFAULT_CREATE_MODE)
+  def initialize(filename, mode = "r", perm = DEFAULT_CREATE_MODE, encoding = nil, invalid = nil)
     oflag = open_flag(mode) | LibC::O_CLOEXEC
 
     fd = LibC.open(filename.check_no_null_byte, oflag, perm)
@@ -39,6 +40,7 @@ class File < IO::FileDescriptor
     end
 
     @path = filename
+    self.set_encoding(encoding, invalid: invalid) if encoding
     super(fd, blocking: true)
   end
 
@@ -172,7 +174,7 @@ class File < IO::FileDescriptor
   # ```
   def self.file?(path)
     if LibC.stat(path.check_no_null_byte, out stat) != 0
-      if LibC.errno == Errno::ENOENT
+      if Errno.value == Errno::ENOENT
         return false
       else
         raise Errno.new("stat")
@@ -194,6 +196,11 @@ class File < IO::FileDescriptor
     Dir.exists?(path)
   end
 
+  # Returns all components of the given filename except the last one
+  #
+  # ```
+  # File.dirname("/foo/bar/file.cr")  # => "/foo/bar"
+  # ```
   def self.dirname(filename)
     filename.check_no_null_byte
     index = filename.rindex SEPARATOR
@@ -208,6 +215,11 @@ class File < IO::FileDescriptor
     end
   end
 
+  # Returns the last component of the given filename
+  #
+  # ```
+  # File.basename("/foo/bar/file.cr") # => "file.cr"
+  # ```
   def self.basename(filename)
     return "" if filename.bytesize == 0
     return SEPARATOR_STRING if filename == SEPARATOR_STRING
@@ -225,6 +237,12 @@ class File < IO::FileDescriptor
     end
   end
 
+  # Returns the last component of the given filename
+  # If the given suffix is present at the end of filename, it is removed
+  #
+  # ```
+  # File.basename("/foo/bar/file.cr", ".cr")  # => "file"
+  # ```
   def self.basename(filename, suffix)
     suffix.check_no_null_byte
     basename = basename(filename)
@@ -304,6 +322,13 @@ class File < IO::FileDescriptor
     end
   end
 
+  # Resolves the real path of the file by following symbolic links
+  def self.real_path(path)
+    real_path_ptr = LibC.realpath(path, nil)
+    raise Errno.new("Error resolving real path of #{path}") unless real_path_ptr
+    String.new(real_path_ptr).tap { LibC.free(real_path_ptr as Void*) }
+  end
+
   # Creates a new link (also known as a hard link) to an existing file.
   def self.link(old_path, new_path)
     ret = LibC.symlink(old_path.check_no_null_byte, new_path.check_no_null_byte)
@@ -321,7 +346,7 @@ class File < IO::FileDescriptor
   # Returns true if the pointed file is a symlink.
   def self.symlink?(filename)
     if LibC.lstat(filename.check_no_null_byte, out stat) != 0
-      if LibC.errno == Errno::ENOENT
+      if Errno.value == Errno::ENOENT
         return false
       else
         raise Errno.new("stat")
@@ -330,12 +355,12 @@ class File < IO::FileDescriptor
     (stat.st_mode & LibC::S_IFMT) == LibC::S_IFLNK
   end
 
-  def self.open(filename, mode = "r", perm = DEFAULT_CREATE_MODE)
-    new filename, mode, perm
+  def self.open(filename, mode = "r", perm = DEFAULT_CREATE_MODE, encoding = nil, invalid = nil)
+    new filename, mode, perm, encoding, invalid
   end
 
-  def self.open(filename, mode = "r", perm = DEFAULT_CREATE_MODE)
-    file = File.new filename, mode, perm
+  def self.open(filename, mode = "r", perm = DEFAULT_CREATE_MODE, encoding = nil, invalid = nil)
+    file = File.new filename, mode, perm, encoding, invalid
     begin
       yield file
     ensure
@@ -350,12 +375,17 @@ class File < IO::FileDescriptor
   # File.read("./bar")
   # # => foo
   # ```
-  def self.read(filename)
+  def self.read(filename, encoding = nil, invalid = nil)
     File.open(filename, "r") do |file|
-      size = file.size.to_i
-      String.new(size) do |buffer|
-        file.read Slice.new(buffer, size)
-        {size.to_i, 0}
+      if encoding
+        file.set_encoding(encoding, invalid: invalid)
+        file.gets_to_end
+      else
+        size = file.size.to_i
+        String.new(size) do |buffer|
+          file.read Slice.new(buffer, size)
+          {size.to_i, 0}
+        end
       end
     end
   end
@@ -367,8 +397,8 @@ class File < IO::FileDescriptor
   #   # loop
   # end
   # ```
-  def self.each_line(filename)
-    File.open(filename, "r") do |file|
+  def self.each_line(filename, encoding = nil, invalid = nil)
+    File.open(filename, "r", encoding: encoding, invalid: invalid) do |file|
       file.each_line do |line|
         yield line
       end
@@ -383,9 +413,9 @@ class File < IO::FileDescriptor
   # File.read_lines("./foobar")
   # # => ["foo\n","bar\n"]
   # ```
-  def self.read_lines(filename)
+  def self.read_lines(filename, encoding = nil, invalid = nil)
     lines = [] of String
-    each_line(filename) do |line|
+    each_line(filename, encoding: encoding, invalid: invalid) do |line|
       lines << line
     end
     lines
@@ -397,8 +427,8 @@ class File < IO::FileDescriptor
   # ```crystal
   # File.write("./foo", "bar")
   # ```
-  def self.write(filename, content, perm = DEFAULT_CREATE_MODE)
-    File.open(filename, "w", perm) do |file|
+  def self.write(filename, content, perm = DEFAULT_CREATE_MODE, encoding = nil, invalid = nil)
+    File.open(filename, "w", perm, encoding: encoding, invalid: invalid) do |file|
       file.print(content)
     end
   end

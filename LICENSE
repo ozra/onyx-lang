@@ -1,17 +1,18 @@
-## LICENSE AND LEGAL MUMBO JUMBO ##
+# LICENSE AND LEGAL MUMBO JUMBO #
 
 ## Onyx ##
 
-As far as is possible by law, considering below dependency, all Onyx code is licensed under MIT/EXPAT license. Google it!
+Copyright 2015-2016 Oscar Campbell - apart from derived sources.
 
-Further details on these boring parts of life will be elaborated.
+  As far as is possible by law, considering below dependency (Crystal @ Apache 2.0 license), all Onyx code is licensed under MIT/EXPAT license. Google it!
 
-Copyright 2015 Oscar Campbell.
+  Further details on these boring parts of life will be elaborated.
+
 
 
 ## Crystal has the following license ##
 
-Copyright 2012-2013 Manas Technology Solutions.
+Copyright 2012-2016 Manas Technology Solutions.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.

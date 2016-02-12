@@ -275,4 +275,56 @@ describe "Restrictions" do
       bar(h1)
       )) { char }
   end
+
+  it "restricts class union type to overloads with classes" do
+    assert_type(%(
+      def foo(x : Int32.class)
+        1_u8
+      end
+
+      def foo(x : String.class)
+        1_u16
+      end
+
+      def foo(x : Bool.class)
+        1_u32
+      end
+
+      a = 1 || "foo" || true
+      foo(a.class)
+      )) { union_of([uint8, uint16, uint32] of Type) }
+  end
+
+  it "restricts class union type to overloads with classes (2)" do
+    assert_type(%(
+      def foo(x : Int32.class)
+        1_u8
+      end
+
+      def foo(x : String.class)
+        1_u16
+      end
+
+      def foo(x : Bool.class)
+        1_u32
+      end
+
+      a = 1 || "foo"
+      foo(a.class)
+      )) { union_of([uint8, uint16] of Type) }
+  end
+
+  it "makes metaclass subclass pass parent metaclass restriction (#2079)" do
+    assert_type(%(
+      class A; end
+
+      class B < A; end
+
+      def foo : A.class # offending return type restriction
+        B
+      end
+
+      foo
+      )) { types["B"].metaclass }
+  end
 end

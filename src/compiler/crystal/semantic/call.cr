@@ -17,6 +17,9 @@ class Crystal::Call
   getter? uses_with_scope
   @uses_with_scope = false
 
+  property? raises
+  @raises = false
+
   def mod
     scope.program
   end
@@ -86,6 +89,7 @@ class Crystal::Call
 
     if (parent_visitor = @parent_visitor) && matches
       if parent_visitor.typed_def? && matches.any?(&.raises)
+        @raises = true
         parent_visitor.typed_def.raises = true
       end
 
@@ -308,7 +312,7 @@ class Crystal::Call
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
     location = self.location
-    if location && (filename = location.filename).is_a?(String)
+    if location && (filename = location.original_filename)
       matches = owner.lookup_private_matches filename, signature
     end
 
@@ -386,7 +390,7 @@ class Crystal::Call
 
           check_recursive_splat_call match.def, typed_def_args do
             bubbling_exception do
-              visitor = TypeVisitor.new(mod, typed_def_args, typed_def)
+              visitor = MainVisitor.new(mod, typed_def_args, typed_def)
               visitor.yield_vars = yield_vars
               visitor.free_vars = match.context.free_vars
               visitor.untyped_def = match.def
@@ -434,7 +438,7 @@ class Crystal::Call
   def check_return_type(typed_def, typed_def_return_type, match, match_owner)
     self_type = match_owner.instance_type
     root_type = self_type.ancestors.find(&.instance_of?(match.def.owner.instance_type)) || self_type
-    return_type = TypeLookup.lookup(root_type, typed_def_return_type, match_owner.instance_type)
+    return_type = TypeLookup.lookup(root_type, typed_def_return_type, match_owner.instance_type).virtual_type
     typed_def.freeze_type = return_type
   end
 
@@ -503,7 +507,7 @@ class Crystal::Call
         vars << arg
         args << arg
       end
-      block = Block.new(vars, Call.new(block_arg, "call", args))
+      block = Block.new(vars, Call.new(block_arg.clone, "call", args))
       block.vars = self.before_vars
       self.block = block
     else
@@ -650,7 +654,7 @@ class Crystal::Call
       if inputs = block_arg_restriction.inputs
         yield_vars = inputs.map_with_index do |input, i|
           arg_type = ident_lookup.lookup_node_type(input)
-          TypeVisitor.check_type_allowed_as_proc_argument(input, arg_type)
+          MainVisitor.check_type_allowed_as_proc_argument(input, arg_type)
 
           Var.new("var#{i}", arg_type.virtual_type)
         end
@@ -705,7 +709,7 @@ class Crystal::Call
           a_def = Def.new("->", fun_args, block.body)
           a_def.captured_block = true
 
-          fun_literal = FunLiteral.new(a_def)
+          fun_literal = FunLiteral.new(a_def).at(self)
           fun_literal.force_void = true unless block_arg_restriction_output
           fun_literal.accept parent_visitor
         end
@@ -990,5 +994,15 @@ class Crystal::Call
 
   def detach_subclass_observer
     @subclass_notifier.try &.remove_subclass_observer(self)
+  end
+
+  def raises=(value)
+    if @raises != value
+      @raises = value
+      typed_def = parent_visitor.typed_def?
+      if typed_def
+        typed_def.raises = value
+      end
+    end
   end
 end
