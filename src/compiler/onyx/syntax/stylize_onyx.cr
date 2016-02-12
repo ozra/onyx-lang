@@ -1036,7 +1036,7 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
-   def visit(node : DeclareVar)
+   def visit(node : TypeDeclaration)
       node.var.accept self
       @str << " "
       to_s_mutability node.mutability

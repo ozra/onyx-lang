@@ -37,7 +37,6 @@ USAGE
 Usage: onyx tool [tool] [switches] [program file] [--] [arguments]
 
 Tool:
-    browser                  open an http server to browse program file
     context                  show context for given location
     hierarchy                show type hierarchy
     implementations          show implementations for given call in location
@@ -135,9 +134,6 @@ USAGE
     tool = options.first?
     if tool
       case
-      when "browser".starts_with?(tool)
-        options.shift
-        browser
       when "context".starts_with?(tool)
         options.shift
         context
@@ -150,6 +146,7 @@ USAGE
       when "types".starts_with?(tool)
         options.shift
         types
+
       when "upgrade".starts_with?(tool) # a convenience util for upgrading code to refactor depreceated constructs
         options.shift
         stylize :upgrade
@@ -162,6 +159,7 @@ USAGE
       when "crystallize".starts_with?(tool)
         options.shift
         crystallize
+
       when "--help" == tool, "-h" == tool
         puts COMMANDS_USAGE
         exit
@@ -193,11 +191,6 @@ USAGE
     end
 
     config.compile
-  end
-
-  private def browser
-    config, result = compile_no_codegen "tool browser"
-    Browser.open result.original_node
   end
 
   private def eval

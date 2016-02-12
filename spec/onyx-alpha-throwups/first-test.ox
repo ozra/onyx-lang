@@ -68,6 +68,13 @@ pp ::MY_CONST
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+$my-global = 47
+$my-typed-global 'I32 = 47
+$.other-global = 47
+$.other-typed-global 'I32 = 47
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 module Djur
    module Boo begins
 

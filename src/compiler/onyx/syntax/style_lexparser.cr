@@ -229,7 +229,7 @@ class StyleParseVisitor < Visitor
    def visit(node : TupleLiteral)
    end
 
-   def visit(node : DeclareVar)
+   def visit(node : TypeDeclaration)
    end
 
    def visit(node : Block)

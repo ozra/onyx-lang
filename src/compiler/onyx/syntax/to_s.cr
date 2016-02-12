@@ -1065,11 +1065,19 @@ class ToOnyxSVisitor < Visitor
       false
    end
 
-   def visit(node : DeclareVar)
+   def visit(node : TypeDeclaration)
       node.var.accept self
       @str << " "
       to_s_mutability node.mutability
       node.declared_type.accept self
+      false
+   end
+
+   def visit(node : UninitializedVar)
+      node.var.accept self
+      @str << " = "
+      node.declared_type.accept self
+      @str << ".alloca"
       false
    end
 
@@ -1552,6 +1560,14 @@ class ToOnyxSVisitor < Visitor
       @str << '('
       node.exp.accept self
       @str << ')'
+      false
+   end
+
+   def visit(node : FileNode)
+      @str.puts
+      @str << "-- " << node.filename
+      @str.puts
+      node.node.accept self
       false
    end
 

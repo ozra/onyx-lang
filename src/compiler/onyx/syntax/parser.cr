@@ -1506,8 +1506,9 @@ class OnyxParser < OnyxLexer
          node_and_next_token TagLiteral.new(@token.value.to_s)
 
       when :GLOBAL
-         @wants_regex = false
-         node_and_next_token Global.new(@token.value.to_s)
+         new_node_check_type_declaration Global
+         # @wants_regex = false
+         # node_and_next_token Global.new(@token.value.to_s)
 
       # Magic vars for last regexp match and process return status respectively
       when :"$~", :"$?"
@@ -1712,7 +1713,7 @@ class OnyxParser < OnyxLexer
          # if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !is_end_token
          #    dbg "found type declaration"
          #    ivar_type = parse_single_type
-         #    DeclareVar.new(ivar, ivar_type).at(ivar.location)
+         #    TypeDeclaration.new(ivar, ivar_type).at(ivar.location)
          # else
          ivar
          # end
@@ -1731,6 +1732,31 @@ class OnyxParser < OnyxLexer
    ensure
       dbg "/parse_atomic_without_location"
       ret
+   end
+
+   def new_node_check_type_declaration(klass)
+      new_node_check_type_declaration(klass) { }
+   end
+
+   def new_node_check_type_declaration(klass)
+      name = @token.value.to_s
+      yield name
+      var = klass.new(name).at(@token.location)
+      var.end_location = token_end_location
+      @wants_regex = false
+      next_token_skip_space
+
+      # if  check if we need qualifier symbol in this context (boolean arg to us) else check immediately for single–type alike to determine if we have a typing or not
+      if next_is_any_modifier?
+         #next_token_skip_space
+         #var_type = parse_single_type
+         mutability, storage, var_type = parse_qualifer_and_type
+         # *TODO* storage
+         # *TODO* is_assign_composite
+         TypeDeclaration.new(var, var_type, mutability: mutability).at(var.location)
+      else
+         var
+      end
    end
 
    def parse_idfr_or_literal
@@ -2889,7 +2915,7 @@ class OnyxParser < OnyxLexer
          if var_type
             dbg "add type declaration"
             is_assign_composite = assign_value != nil
-            rets << DeclareVar.new(var, var_type, is_assign_composite, mutability: mutability).at(var.location)
+            rets << TypeDeclaration.new(var, var_type, is_assign_composite, mutability: mutability).at(var.location)
          end
 
          if assign_value
@@ -5260,7 +5286,7 @@ class OnyxParser < OnyxLexer
                   # next_token_skip_space_or_newline
                   # declared_type = # parse_single_type
                   mutability, storage, declared_type = parse_qualifer_and_type
-                  declare_var = DeclareVar.new(Var.new(name).at(location), declared_type, mutability: mutability).at(location)
+                  declare_var = TypeDeclaration.new(Var.new(name).at(location), declared_type, mutability: mutability).at(location)
                   add_var declare_var
                   declare_var
                elsif (!force_call && is_var)
@@ -6138,6 +6164,12 @@ class OnyxParser < OnyxLexer
       TypeOf.new(exps).at_end(end_location)
    end
 
+   def next_is_any_modifier?
+      next_is_generic_annotator? ||
+      next_is_mut_modifier? ||
+      next_is_immut_modifier?
+   end
+
    def next_is_generic_annotator?
       dbg "next_is_generic_annotator? ->"
 
@@ -6889,7 +6921,7 @@ class OnyxParser < OnyxLexer
       nil
    end
 
-   def add_var(var : DeclareVar) : Nil
+   def add_var(var : TypeDeclaration) : Nil
       var_var = var.var
       case var_var
       when Var

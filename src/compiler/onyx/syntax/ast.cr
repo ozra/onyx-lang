@@ -37,7 +37,7 @@ module Crystal
     def_equals_and_hash name, default_value, restriction, mutability
   end
 
-  class DeclareVar < ASTNode
+  class TypeDeclaration < ASTNode
     property :var
     property :declared_type
     property :is_assign_composite
@@ -50,7 +50,7 @@ module Crystal
     end
 
     def clone_without_location
-      DeclareVar.new(@var.clone, @declared_type.clone, @is_assign_composite.clone, @mutability.clone)
+      TypeDeclaration.new(@var.clone, @declared_type.clone, @is_assign_composite.clone, @mutability.clone)
     end
 
     def_equals_and_hash @var, @declared_type, @is_assign_composite, @mutability

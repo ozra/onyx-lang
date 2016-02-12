@@ -50,8 +50,9 @@ module Crystal
 
       @next_token_continuation_state = :AUTO
 
-    end
+      skip_shebang
 
+    end
 
     def dbg_lex(s)
       ifdef !release
@@ -67,6 +68,18 @@ module Crystal
 
     def filename=(filename)
       @filename = filename
+    end
+
+    def skip_shebang
+      return unless curch == '#' && peek_nextch == '!'
+
+      while nextch != '\0'
+        if curch == '\n'
+          @line_number += 1
+          nextch
+          return
+        end
+      end
     end
 
     def next_token
