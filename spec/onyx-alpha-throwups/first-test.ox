@@ -46,8 +46,25 @@ _debug_start_ = true
 \!literal-real=Float32
 
 -- *TODO* *TEMP*
-alias Ints = StdInt
-alias Real = Float64
+type Ints = StdInt
+type Real = Float64
+
+type MoreInts = Int32 | Int64 | I8
+
+say MoreInts
+
+type SomeFacts < flags U8
+   AppleLover
+   PearLover
+   CoolDude
+end
+
+facts = SomeFacts.flags AppleLover, CoolDude
+say "facts: {facts}"
+say typeof(facts)
+
+facts = facts.|. SomeFacts.PearLover
+say "facts: {facts}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -85,7 +102,7 @@ module Djur
 
    APA = 47
 
-   type Apa
+   type Apa < object Reference
       \!literal-int=I64
 
       Self.foo = 1
@@ -109,8 +126,8 @@ module Djur
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
    end
 
-   -- type Legs < enum
-   enum Legs
+   --enum Legs
+   type Legs < enum
       NONE
       TWO
       FOUR
@@ -624,7 +641,8 @@ say "tag–hash–2 value is {tag–hash–2}"
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- type TradeSide < Enum[Int8]
-enum TradeSide Int8
+-- enum TradeSide Int8
+type TradeSide < enum Int8
    Unknown
    Buy
    Sell
@@ -824,7 +842,7 @@ pp typeof(b), b.class
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-alias Fn = Proc
+type Fn = Proc
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
@@ -969,6 +987,7 @@ trait TheTrait
    is–cool–traited?() -> true
 end–trait
 
+-- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
 trait AnotherTrait[S1]
    -- *NOTE* should we allow member data in traits too?
    -- another–val = 0  -- "can't use instance variables at the top level"
@@ -979,7 +998,7 @@ trait AnotherTrait[S1]
    valhalla3() -> abstract
 end
 
-type Qwa
+type Qwa < abstract
    mixin TheTrait
 end–type
 
@@ -1161,7 +1180,7 @@ type FooStyle2<S1> < Bar
    @bar–y = 48
    @bar–z = "bongo"  |get
    @bar–u Ints = 47  | get set
-   @bar–w = 47       |get
+   getter @bar–w = 47
 
    --| Initialize with primary variable type
    ifdef x86_64
@@ -1508,7 +1527,7 @@ pp CrystalModule2.root_def
 -- This module begins here and continues to EOF
 module AllTheRest begins
 
-type RestFoo
+type RestFoo < value
    rest-foo() ->
       true
 

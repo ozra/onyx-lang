@@ -1643,17 +1643,17 @@ class OnyxParser < OnyxLexer
                parse_extend
             end
          when :type
-            check_not_inside_def("can't define class inside def") do
+            check_not_inside_def("can't define type inside def") do
                parse_type_def
             end
-         when :class
-            check_not_inside_def("can't define class inside def") do
-               parse_type_def
-            end
-         when :struct
-            check_not_inside_def("can't define struct inside def") do
-               parse_type_def is_struct: true
-            end
+         # when :class
+         #    check_not_inside_def("can't define class inside def") do
+         #       parse_type_def
+         #    end
+         # when :struct
+         #    check_not_inside_def("can't define struct inside def") do
+         #       parse_type_def is_struct: true
+         #    end
          when :module
             check_not_inside_def("can't define module inside def") do
                parse_module_def
@@ -1663,10 +1663,10 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define trait inside def") do
                parse_trait_def
             end
-         when :enum
-            check_not_inside_def("can't define enum inside def") do
-               parse_enum_def
-            end
+         # when :enum
+         #    check_not_inside_def("can't define enum inside def") do
+         #       parse_enum_def
+         #    end
          when :for, :each
             parse_for
          when :while
@@ -1687,10 +1687,10 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define fun inside def") do
                parse_fun_def require_body: true
             end
-         when :alias
-            check_not_inside_def("can't define alias inside def") do
-               parse_alias
-            end
+         # when :alias
+         #    check_not_inside_def("can't define alias inside def") do
+         #       parse_alias
+         #    end
          when :pointerof
             parse_pointerof
          when :sizeof
@@ -2493,11 +2493,20 @@ class OnyxParser < OnyxLexer
 
 
 
-   def parse_type_def(is_abstract = false, is_struct = false, doc = nil) : ASTNode
+   def parse_type_def() : ASTNode
       dbg "parse_type_def ->"
       @type_nest += 1
 
-      doc ||= @token.doc
+
+      # *TODO* former params
+      is_abstract = false
+      is_struct = false
+      # *TODO* former params
+
+      base_type = nil
+
+
+      doc = @token.doc
 
       indent_level = @indent
 
@@ -2505,7 +2514,10 @@ class OnyxParser < OnyxLexer
       name_column_number = @token.column_number
 
       name = parse_idfr allow_type_vars: false
-      # skip_space
+
+      # *TODO* below was in "parse_alias" - COMPARE!!!
+      # name = check_const
+
 
       # *TODO* add scope???
 
@@ -2514,11 +2526,79 @@ class OnyxParser < OnyxLexer
       type_vars = parse_type_vars
       skip_space
 
-      superclass = nil
 
-      if @token.type == :"<<" || @token.type == :"<" # (@token.type == :"<" && current_char == ' ')
-         next_token_skip_space_or_newline
-         superclass = parse_idfr
+      unless tok? :"=", :"<", :"<<"
+         base_type = nil #Path-or-something "Reference" # class
+         builder = :object
+
+      else
+         if tok? :"="
+            relation = :"="
+         else
+            relation = :"<"
+         end
+
+         next_token_skip_space
+
+         if kwd? :abstract
+            # builder_modifier = :abstract
+            is_abstract = true
+            next_token_skip_space
+         end
+
+         if tok? :IDFR
+            case @token.value
+            when :reference
+               explicit_builder = :object
+            when :object, :value, :enum, :flags, :sum, :alias
+               explicit_builder = @token.value
+
+            when :typeof
+               # do nothing
+
+            else
+               raise "unexpected token - expected type-builder-name or base_type"
+            end
+
+            next_token_skip_space
+         end
+
+         if tok? :typeof
+            base_type = parse_typeof
+
+         elsif tok? :CONST, :"'", :"(" # most likely a type!
+            base_type = parse_type false # parse_type_union-or-single-type-(fun-type-also-then)
+            # *NOTE* - BEFORE 'supertype' was parsed with `parse_idfr`
+
+         else
+            base_type = nil
+         end
+
+         if base_type == nil
+            raise "sum types and aliases needs right hand side types " if (explicit_builder == :sum || explicit_builder == :alias)
+            builder = explicit_builder || :object
+
+         elsif base_type.is_a? Union
+            raise "A sum type is assigned to name from type builder, not inherited " if relation != :"="
+            raise "Can't declare sum type for an explictly non sum type!" if (explicit_builder != nil && explicit_builder != :sum)
+            builder = :sum
+
+         else # if base_type == SomeSimpleType
+            if relation == :"="
+               raise "only works for a type alias" if (explicit_builder != nil && explicit_builder != :alias)
+               builder = :alias
+
+            else
+               raise "can't mark inheritance for sum or alias types - they're associated with '=' " if (explicit_builder == :sum || explicit_builder == :alias)
+               builder = explicit_builder || :object
+            end
+         end
+
+      end
+
+      if type_vars
+         raise "alias name can't have typevars" if builder == :alias
+         raise "sum type name can't have typevars" if builder == :sum
       end
 
       skip_space
@@ -2530,24 +2610,47 @@ class OnyxParser < OnyxLexer
          pragmas = [] of Attribute
       end
 
+      case builder
+      when :alias, :sum
+         alias_node = Alias.new(name.to_s, base_type.not_nil!)
+         alias_node.doc = doc
+         return alias_node
+      end
 
       dbg "- parse_type_def - before body"
-
       # skip_statement_end
-
       nest_kind, dedent_level = parse_nest_start(:type, indent_level)
       add_nest :type, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
-         body = NilLiteral.new
+         raise "can't have empty enum! '#{name}'" if builder == :enum
+         raise "can't have empty flags! '#{name}'" if builder == :flags
+         body = nil
          handle_nest_end true
+
       else
-         body = parse_type_def_body :TYPE_DEF
+         case builder
+         when :enum, :flags
+            body = parse_type_def_body :ENUM_DEF
+
+         else
+            body = parse_type_def_body :TYPE_DEF
+         end
+
+         body = case
+         when body.is_a? Expressions
+            body.expressions
+         when body.is_a? Array(ASTNode+)
+            body
+         else
+            [body]
+         end
+
       end
 
       dbg "- parse_type_def - after body"
 
-      end_location = body.end_location # token_end_location
+      end_location = @token.location # body.end_location # token_end_location
       # check_idfr "end"
       # next_token_skip_space
 
@@ -2555,14 +2658,36 @@ class OnyxParser < OnyxLexer
 
       @type_nest -= 1
 
-      class_def = ClassDef.new name, body, superclass, type_vars, is_abstract, is_struct, name_column_number
-      class_def.doc = doc
-      class_def.end_location = end_location
-      class_def
+      case builder
+      when :enum
+         raise "Bug: `enum` name can only be a Path" unless name.is_a?(Path)
+         type_def = EnumDef.new name, body.not_nil!, base_type
+
+      when :flags
+         raise "Bug: `flags` name can only be a Path" unless name.is_a?(Path)
+         type_def = EnumDef.new name, body.not_nil!, base_type
+         type_def.attributes = [Attribute.new "Flags", [] of ASTNode, nil]
+
+      when :value
+         is_struct = true
+         type_def = ClassDef.new name, body || NilLiteral.new, base_type, type_vars, is_abstract, is_struct, name_column_number
+
+      when :object
+         type_def = ClassDef.new name, body || NilLiteral.new, base_type, type_vars, is_abstract, is_struct, name_column_number
+
+      else
+         raise "internal error - type builder == '#{builder}'"
+      end
+
+      type_def.doc = doc
+      type_def.end_location = end_location
+      type_def
    ensure
       dbg "/parse_type_def"
    end
 
+
+   # *TODO* used only by C–Lib now
    def parse_enum_def
       doc = @token.doc
 
@@ -6695,6 +6820,7 @@ class OnyxParser < OnyxLexer
       dbg "/parse_fun_def".red
    end
 
+   # *TODO* just used by C-Lib now
    def parse_alias
       doc = @token.doc
 

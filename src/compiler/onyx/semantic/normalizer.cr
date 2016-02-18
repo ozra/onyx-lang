@@ -29,7 +29,8 @@ module Crystal
       if node.name.size > 0 && node.name[0] == '!' # *TODO* more fine–grained might be needed later
         Nop.new
       else
-        node.name = case node.name.downcase.gsub(/_/, "")
+        node.name =
+        case node.name.downcase.gsub(/_/, "")
         when "link"
           "Link"
 

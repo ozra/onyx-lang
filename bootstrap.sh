@@ -19,18 +19,18 @@ echo ""
 echo "If shit happens - create an issue at https://github.com/ozra/onyx-lang/issues (first make sure it's not already reported!)"
 echo ""
 
-echo "Gets Crystal 0.11.1"
+echo "Gets Crystal 0.12.0"
 
 # curl can't handle the redirect to data-store!
-wget 'https://github.com/manastech/crystal/releases/download/0.11.1/crystal-0.11.1-1-linux-x86_64.tar.gz' -O - | tar zx
-echo "Installs Crystal 0.11.1 at /opt/crystal/"
+wget 'https://github.com/manastech/crystal/releases/download/0.12.0/crystal-0.12.0-1-linux-x86_64.tar.gz' -O - | tar zx
+echo "Installs Crystal 0.12.0 at /opt/crystal/"
 
 sudo mkdir -p /opt
 sudo rm -rf /opt/crystal
-sudo cp -a crystal-0.11.1-1/ /opt/crystal
+sudo cp -a crystal-0.12.0-1/ /opt/crystal
 sudo ln -fs /opt/crystal/bin/crystal /usr/local/bin/crystal
 
-rm -rf crystal-0.11.1-1
+rm -rf crystal-0.12.0-1
 # echo "Get Onyx latest"
 
 # git clone --depth 1 --branch master https://github.com/ozra/onyx-lang

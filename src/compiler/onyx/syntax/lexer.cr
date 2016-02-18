@@ -1132,6 +1132,10 @@ module Crystal
           if nc?('l') && nc?('s') && nc?('e')
             return check_idfr_or_keyword(:false, start)
           end
+        when 'l'
+          if nc?('a') && nc?('g') && nc?('s')
+            return check_idfr_or_keyword(:flags, start)
+          end
         when 'n'
           return check_idfr_or_keyword(:fn, start)
         when 'o'
@@ -1261,6 +1265,10 @@ module Crystal
         scan_idfr(start)
       when 'o'
         case nextch
+        when 'b'
+          if nc?('j') && nc?('e') && nc?('c') && nc?('t')
+            return check_idfr_or_keyword(:object, start)
+          end
         when 'f'
           return check_idfr_or_keyword(:of, start)
         when 'r'
@@ -1344,8 +1352,13 @@ module Crystal
             end
           end
         when 'u'
-          if nc?('p') && nc?('e') && nc?('r')
-            return check_idfr_or_keyword(:super, start)
+          case nextch
+          when 'p'
+            if  nc?('e') && nc?('r')
+              return check_idfr_or_keyword(:super, start)
+            end
+          when 'm'
+            return check_idfr_or_keyword(:sum, start)
           end
         end
         scan_idfr(start)
@@ -1421,7 +1434,11 @@ module Crystal
         scan_idfr(start)
       when 'v'
         if nc?('a') && nc?('l')
-          return check_idfr_or_keyword(:val, start)
+          if (peek_next_char == 'u') && nc?('u') && nc?('e')
+            return check_idfr_or_keyword(:value, start)
+          else
+            return check_idfr_or_keyword(:val, start)
+          end
         end
         scan_idfr(start)
       when 'w'
