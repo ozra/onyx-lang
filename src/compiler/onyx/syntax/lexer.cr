@@ -1292,6 +1292,10 @@ module Crystal
         scan_idfr(start)
       when 'r'
         case nextch
+        when 'a'
+          if nc?('w')
+            return check_idfr_or_keyword(:raw, start)
+          end
         when 'e'
           case nextch
           when 'f'
@@ -1775,7 +1779,9 @@ module Crystal
           elsif chr == '–'
             str << '_'
 
-          elsif do_magic && 'A' <= chr <= 'Z' && (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
+          elsif do_magic && 
+                  'A' <= chr <= 'Z' && 
+                  (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
             str << '_'
             str << chr.downcase
           else

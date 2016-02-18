@@ -13,7 +13,7 @@ module Crystal
     property :restriction
     property :mutability
     property :doc
-    @mutability :: Symbol
+    @mutability : Symbol
     @mutability = :auto
 
     def initialize(@name, @default_value = nil, @restriction = nil, @type = nil, @mutability = :auto)
@@ -43,7 +43,7 @@ module Crystal
     property :is_assign_composite
 
     property :mutability
-    @mutability :: Symbol
+    @mutability : Symbol
     @mutability = :auto
 
     def initialize(@var, @declared_type, @is_assign_composite = false, @mutability = :auto)

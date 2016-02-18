@@ -39,17 +39,21 @@ _debug_start_ = true
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-\!Int=I64
-\!Real=Float32
+-- \!Int=I64
+-- \!Real=Float32
 
-\!int-literal=I64
-\!real-literal=Float32
+\!literal-int=I64
+\!literal-real=Float32
 
 -- *TODO* *TEMP*
 alias Ints = StdInt
 alias Real = Float64
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+-- *TODO*
+-- change soft lambda syntax?
+-- /\|([\w, ]+?)\|/   =>   "($1) ~>"
 
 MY_CONST = do
    x = 0
@@ -69,9 +73,10 @@ pp ::MY_CONST
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 $my-global = 47
-$my-typed-global 'I32 = 47
-$.other-global = 47
-$.other-typed-global 'I32 = 47
+$my-typed-global 'I32
+\!literal-int=Int32
+$my-typed-and-assigned-global 'I32 = 47
+$my-global = $my-typed-and-assigned-global
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -81,7 +86,7 @@ module Djur
    APA = 47
 
    type Apa
-      \!Int=I64
+      \!literal-int=I64
 
       Self.foo = 1
       Type.bar = 2
@@ -104,6 +109,7 @@ module Djur
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
    end
 
+   -- type Legs < enum
    enum Legs
       NONE
       TWO
@@ -195,7 +201,8 @@ my-fun-fun(f) ->
 
 pp my-fun-fun myfu
 
-my-lambda = (x Str) -> say "x: {x}"; end; my-lambda "47"
+my-lambda = (x Str) -> say "x: {x}"
+my-lambda "47"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -215,21 +222,24 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
    -- declare assign with type inference
    zar1 = 1
 
-   -- *TODO* after all basic control structs are implemented
-   zar2 ^Ints
-   zar4 'Real
-   zar3 ~Str
-   -- zar4 'Ints = 1
-   -- zar5 ~Ints = 1
-   -- zar6 ^Ints = 1
-   -- zar7 '= 1
-   -- zar8 '*= 1
-   -- zar9 'auto = 1
 
-   pp zar2.class, zar4.class, zar3.class
-   -- May currently crash - all values are undefined becaused they're alloca'd
-   -- when typed currently. They should _not_ be. ONLY typed for TySys!
-   -- pp zar2, zar4, zar3
+   -- -- *TODO* after all basic control structs are implemented
+
+   -- zar2 ^Ints
+   -- zar4 'Real
+   -- zar3 ~Str
+
+   -- -- zar4 'Ints = 1
+   -- -- zar5 ~Ints = 1
+   -- -- zar6 ^Ints = 1
+   -- -- zar7 '= 1
+   -- -- zar8 '*= 1
+   -- -- zar9 'auto = 1
+
+   -- pp zar2.class, zar4.class, zar3.class
+   -- -- May currently crash - all values are undefined becaused they're alloca'd
+   -- -- when typed currently. They should _not_ be. ONLY typed for TySys!
+   -- -- pp zar2, zar4, zar3
 
    say "fun-with-various-local-vars {zar1}" -- , {LocalConst}"
 
@@ -296,7 +306,7 @@ say ""
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-\!Int=I64
+\!literal-int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
    say "{awol}, {foo}, {bar}"
@@ -327,7 +337,7 @@ u = list.each(|v| p v).map ~> _1 * 2
 
 -- def say(s) -> puts s
 
-\!Int=I32
+\!literal-int=I32
 
 DEBUG–SEPARATOR = 47
 
@@ -403,7 +413,7 @@ the–str = "kjhgkjh" \
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-\!Int=StdInt
+\!literal-int=StdInt
 
 -- first comment
 a = 47  --another comment
@@ -484,8 +494,8 @@ DEBUG–SEPARATOR
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- -#pure -#private
-# private
-def zoo(a; b; ...c 'Ints) Str ->  # pure
+-- # private
+def zoo*(a; b; ...c 'Ints) Str ->  # pure
    if true:
       i = 1
 
@@ -806,6 +816,7 @@ b = (a Str, _ Ints, b 'Bool; c Real) ->
 say "23.4 def lambda c"
 c = (a ~Ints, b 'Str, c 'Ints) -> a.to–s + b + c.to–s
 
+\!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
 p b "23.5b Closured Lambda says", 1, true, 0.47
 
@@ -977,6 +988,8 @@ type Bar < Qwa
    Self.some–other–foo 'Ints = 42
    Self.yet–a-foo = 42
 
+   \!literal-int=Int32
+
    Type.RedFoo = 5
    Type.GreenFoo = 7
 
@@ -984,9 +997,9 @@ type Bar < Qwa
    GreenBar = 8
 
    foo–a Str = ""
-   foo–b Ints = 0
-   foo–c I64 = 0
-   foo-ya I32 = 0_i32
+   foo–b Ints = 0_i64
+   foo–c I64 = 0_i64
+   foo-ya I32 = 0
 
    Self.set–foo(v) ->
       Self.my–foo = v
@@ -994,7 +1007,7 @@ type Bar < Qwa
    Type.get–foo() ->
       @@my–foo
 
-Bar.set-foo 4_i64
+Bar.set-foo 4
 say "Bar.get-foo = {Bar.get-foo}"
 
 say "declare a Foo type"
@@ -1039,13 +1052,14 @@ type Foo[S1] < Bar
    --    fn–1aa(x) -> nil \public   -- should this be legal? - looks very confusing!
    --    fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
    \ pure
-   fn–1aa(x) -> nil  \public   -- should this be legal? - looks very confusing!
+   fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
    \pure
-   fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
+   fn–1ab(x) Nil -> nil  \ pure -- public   -- should this be legal? - looks very confusing!
 
-   \ private inline
+   -- \ private inline
+   \ inline
    \ pure
-   fn–1ba(x) ->! nil
+   fn–1ba*(x) ->! nil
    fn–1ca(x) ->!  \pure
    fn–1da(x) -> nil
    fn–1ea(x) ->! nil
@@ -1083,15 +1097,15 @@ type Foo[S1] < Bar
    --    fn–c(a, b Ints) -> # redef
    --       "c: {a}, {b}"
 
-   # private
-   fn–c(a, b S1) S1 -> # redef inline
+   -- # private
+   fn–c*(a, b S1) S1 -> # redef inline
       "c: {a}, {b}"
 
    end–def
 
-   # private
-   -- fn–c(a, b I32) redef private ->
-   fn–c(a, b Ints) -> # redef
+   --# protected
+   -- fn–c(a, b I32) redef protected ->
+   fn–c**(a, b Ints) -> # redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1178,11 +1192,12 @@ type FooStyle2<S1> < Bar
 
    --| Do some 1aa action!
    |pure
-   fn fn–1aa(x) ->  |public;  nil   -- should this be legal? - looks very confusing!
-   fn fn–1ab(x) Nil -> | pure public;  nil   -- should this be legal? - looks very confusing!
+   fn fn–1aa(x) ->  |pure;  nil   -- should this be legal? - looks very confusing!
+   fn fn–1ab(x) Nil -> | pure;  nil   -- should this be legal? - looks very confusing!
 
-   |private |inline
-   fn fn–1ba(x) ->! nil
+   -- |private |inline
+   |inline |pure
+   fn fn–1ba*(x) ->! nil
    fn fn–1ca(x) ->!
    fn fn–1da(x) -> nil | pure
    fn fn–1ea(x) ->! nil | pure
@@ -1232,13 +1247,13 @@ type FooStyle2<S1> < Bar
    --    fn fn–c(a, b Ints) |redef
    --       "c: {a}, {b}"
 
-   | private
-   fn fn–c(a, b S1) S1 -> | redef inline
+   -- | private
+   fn fn–c*(a, b S1) S1 -> | redef inline
       "c: {a}, {b}"
    end–fn
 
    -- fn–c(a, b I32) redef private ->
-   fn fn–c(a, b Ints) -> |redef
+   fn fn–c**(a, b Ints) -> |redef
       "c: {a}, {b}"
 
    -- fn fn–d1(a, b)
@@ -1288,10 +1303,18 @@ pp foo.foo-w = 46
 say "done"
 say foo.fn–a "24 blargh", 47
 say foo.fn–b "25 blargh", 47
-say foo.fn–c "26 blargh", 47
+-- say foo.fn–c "26 blargh", 47   -- should fail: private
 say foo.fn–d1 "27 blargh", 47
 foo.fn–d2 "28 blargh", 47
 say foo.fn–e
+
+boo = Foo[Str]()
+boo = Foo[Str].new
+boo = Foo[Str].new()
+
+boo = Foo<Str>()
+boo = Foo<Str>.new
+boo = Foo<Str>.new()
 
 bar = Foo<Str>("No Blargh")
 bar = Foo("No Blargh")
@@ -1299,6 +1322,7 @@ bar = Foo "No Blargh"
 bar = Foo[Str] "No Blargh"
 bar = Foo.new "No Blargh"
 bar = Foo[Str].new "29 Blargh"
+
 say "done"
 say bar.fn–e
 say "functor call"
@@ -1352,7 +1376,7 @@ say ".~. 12 == { .~. 12 }"
 -- all operators so it can be used like any other number type. This example is
 -- just to show how c-lib interfacing works.
 
-@[Link("gmp")]
+|link("gmp")
 
 api MyLibGmp
    TEST_CONST = 47
@@ -1407,8 +1431,13 @@ MyLibGmp.set-memory-functions(
 -- add-as-big-ints(a T, b T) ->
 add-as-big-ints(a, b) ->
    -- bigret 'MyLibGmp.Mpz
-   bigv1 'MyLibGmp.Mpz
+   bigv1 = raw MyLibGmp.Mpz
+   -- bigv1 = MyLibGmp.Mpz.alloc
+   -- bigv1 'MyLibGmp.Mpz
    -- bigv2 'MyLibGmp.Mpz - implicitly created with `out` arg modifier
+   -- y = MyLibGmp.Mpz.raw  -- optimally only like this - and escape analysis takes care of stack|heap choice
+   -- y '= raw MyLibGmp.Mpz  -- optimally only like this - and escape analysis takes care of stack|heap choice
+   -- z = ?MyLibGmp.Mpz  -- optimally only like this - and escape analysis takes care of stack|heap choice
 
    MyLibGmp.init out bigret
 

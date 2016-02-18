@@ -26,6 +26,7 @@ wget 'https://github.com/manastech/crystal/releases/download/0.11.1/crystal-0.11
 echo "Installs Crystal 0.11.1 at /opt/crystal/"
 
 sudo mkdir -p /opt
+sudo rm -rf /opt/crystal
 sudo cp -a crystal-0.11.1-1/ /opt/crystal
 sudo ln -fs /opt/crystal/bin/crystal /usr/local/bin/crystal
 
@@ -56,8 +57,10 @@ CRYSTAL_CONFIG_PATH=`pwd`/src ./bin/crystal build --release -o .build/onyx src/c
 echo "Installs Onyx at /opt/onyx/"
 echo ""
 
+sudo rm -rf /opt/onyx
 sudo mkdir -p /opt/onyx/bin
 sudo cp -a /opt/crystal/embedded/ /opt/onyx/
+sudo cp -a src /opt/onyx/
 sudo cp .build/onyx /opt/onyx/embedded/bin/onyx
 
 echo '#!/usr/bin/env bash
@@ -70,7 +73,6 @@ export LIBRARY_PATH="$INSTALL_DIR/embedded/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
 sudo chmod 755 /opt/onyx/bin/onyx
 sudo ln -fs /opt/onyx/bin/onyx /usr/local/bin/onyx
-sudo cp -a src /opt/onyx/
 
 echo "All done! Enjoy, and don't let the beta-bugs bite!"
 echo ""

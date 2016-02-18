@@ -23,6 +23,44 @@ module Crystal
   end
 
   class Normalizer < Transformer
+
+    # Remove pragmas used at parsing stage
+    def transform(node : Attribute) : ASTNode
+      if node.name.size > 0 && node.name[0] == '!' # *TODO* more fine–grained might be needed later
+        Nop.new
+      else
+        node.name = case node.name.downcase.gsub(/_/, "")
+        when "link"
+          "Link"
+
+        when "pure"
+          "TODO_take_care_of_this!" # *TODO*
+        when "flatten"
+          "TODO_flatten_is_not_in_llvm_arsenal" # *TODO*
+        when "inline"
+          "AlwaysInline"
+        when "noinline"
+          "NoInline"
+        when "raises"
+          "Raises"
+        when "returnstwice"
+          "ReturnsTwice"
+        when "naked"
+          "Naked"
+
+        when "threadbound"
+          "ThreadLocal"
+        when "programbound"
+          "TODO_This_should_just_be_noped" # *TODO*
+
+        else
+          node.name
+        end
+
+        node
+      end
+    end
+
     # Convert For to expr.each*:
     #
     # From:
@@ -46,7 +84,7 @@ module Crystal
     #     end
 
     def transform(node : For) : ASTNode
-      method_name :: String
+      # method_name uninitialized String
 
       # if !(node.stepping && node.stepping != 1)
       if (v = node.value_id) && (i = node.index_id)

@@ -522,7 +522,7 @@ module Crystal
       if attributes = @attributes
         attributes.each do |attr|
           unless valid_attributes.includes?(attr.name)
-            attr.raise "illegal attribute for #{desc}, valid attributes are: #{valid_attributes.join ", "}"
+            attr.raise "illegal attribute '#{attr.name}' for #{desc}, valid attributes are: #{valid_attributes.join ", "}"
           end
 
           if !attr.args.empty? || attr.named_args

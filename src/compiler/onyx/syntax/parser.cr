@@ -137,21 +137,25 @@ class Nesting
    property require_end_token
    @auto_parametrization = false
    #property auto_parametrization
-   block_params :: Array(Var)?
+   @block_params : Array(Var)?
    property block_params
    property location
    property single_line
 
-   property int_type_mapping
-   property real_type_mapping
+   property int_type_mapping : String
+   property real_type_mapping : String
 
-   @@std_int = Token.new
-   @@std_real = Token.new
+   @@std_int : String
+   @@std_int = "StdInt"
+   # @@std_int = Token.new
+   # @@std_int.type = :CONST
+   # @@std_int.value = "StdInt"
 
-   @@std_int.type = :CONST
-   @@std_int.value = "StdInt"
-   @@std_real.type = :CONST
-   @@std_real.value = "StdReal"
+   @@std_real : String
+   @@std_real = "StdReal"
+   # @@std_real = Token.new
+   # @@std_real.type = :CONST
+   # @@std_real.value = "StdReal"
 
    @@nesting_keywords = %w(
       program
@@ -202,7 +206,7 @@ end
 
 
 class NestingStack
-   @stack :: Array(Nesting)
+   @stack : Array(Nesting)
 
    def initialize
       @stack = [Nesting.new(:program, -1, "", Location.new(0, 0, ""), false, false)]
@@ -328,7 +332,7 @@ end
 class OnyxParser < OnyxLexer
    record Unclosed, name, location
 
-   property visibility
+   # property visibility
    property def_nest
    property type_nest
    getter? wants_doc
@@ -490,7 +494,7 @@ class OnyxParser < OnyxLexer
       # Nil–blocks should be taken care of BEFORE calling parse_expressions
 
       # *TODO* continue watching this
-      # happened on time: EMPTY FILE
+      # happened one time: EMPTY FILE
       # now added to "top parse"
       if is_end_token # "stop tokens" - not _nest_end tokens_ - unless explicit
          raise "parse_expressions - Does this happen?"
@@ -554,7 +558,10 @@ class OnyxParser < OnyxLexer
       possible_def_context = @last_was_newline_or_dedent
       can_be_arrow_func_def = possible_def_context && (
          # kwd?(:def, :fn, :fu, :mf, :fun, :own, :me, :func, :meth, :pure, :proc) ||
-         (tok?(DefOrMacroCheck1) && curch == '(')
+         (
+            tok?(DefOrMacroCheck1) &&
+            (curch == '(' || (curch == '*' && peek_next_char == '('))
+         )
       )
 
       chars_snap_pos = current_pos
@@ -676,11 +683,18 @@ class OnyxParser < OnyxLexer
          #    break
 
          else
-            if pragmas?
+            # _just_ Pragmas (being the atomic part)
+            if (atomic.is_a?(Expressions) && atomic.expressions.first.is_a?(Attribute))
+               break
+
+            # Suffic Pragmas?
+            elsif pragmas?
                pragmas = parse_pragma_grouping
                # *TODO* use the maddafaggas
+
             elsif is_end_token || tok? :INDENT
                break
+
             else
                unexpected_token "while parsing expression suffix"
             end
@@ -783,15 +797,26 @@ class OnyxParser < OnyxLexer
                end
 
                push_fresh_scope if needs_new_scope
-               value = parse_op_assign_no_control
-               pop_scope if needs_new_scope
 
-               add_var atomic
+               if kwd?(:raw) && (atomic.is_a?(Var) || atomic.is_a?(InstanceVar))
+                  pop_scope if needs_new_scope
+                  add_var atomic
+                  next_token_skip_space
+                  type = parse_single_type
+                  atomic = UninitializedVar.new(atomic, type).at(location)
+                  return atomic
+               else
+                  value = parse_op_assign_no_control
+                  pop_scope if needs_new_scope
+                  add_var atomic
 
-               dbg "creates Assign"
-               atomic = Assign.new(atomic, value).at(location)
-               atomic.doc = doc
+                  dbg "creates Assign"
+                  atomic = Assign.new(atomic, value).at(location)
+                  atomic.doc = doc
+               end
+
                atomic
+
             end
 
          when :"+=", :"-=", :"*=", :"/=", :"%=", :".|.=", :".&.=", :".^.=",
@@ -894,34 +919,6 @@ class OnyxParser < OnyxLexer
    ensure
       dbg "/parse_op_assign"
    end
-
-   # *TODO* - remove ternary!!!
-
-   # ColonOrNewline = [:":", :NEWLINE]
-
-   # def parse_question_colon
-   #    cond = parse_range
-
-   #    while @token.type == :"?"
-   #       location = @token.location
-
-   #       check_void_value cond, location
-
-   #       next_token_skip_space_or_newline
-   #       next_token_skip_space_or_newline if @token.type == :":"
-   #       true_val = parse_question_colon
-
-   #       check ColonOrNewline
-
-   #       next_token_skip_space_or_newline
-   #       next_token_skip_space_or_newline if @token.type == :":"
-   #       false_val = parse_question_colon
-
-   #       cond = If.new(cond, true_val, false_val)
-#
-   #    end
-   #    cond
-   # end
 
    def parse_range
       location = @token.location
@@ -1408,6 +1405,7 @@ class OnyxParser < OnyxLexer
 
 
       # *TODO* *9* LEXICAL LEVEL REWRITE - REALLY MOVE THIS PoC *TODO*!
+      # While the lang is in volatile state this is OK
       # Could actually be done already in the Lexer! (for to_s / formatting -
       # always use source as reference for construct kind
       if @token.type == :CONST && ([:Self, :Type, :Class].includes? @token.value)
@@ -1417,6 +1415,7 @@ class OnyxParser < OnyxLexer
 
             next_token # to the :"." TOKEN
             next_token # to next token
+
             # rewrite token in–place - *UGLY*!
             @token.type = :CLASS_VAR
             @token.value = ensure_atat_prefix @token.value.to_s
@@ -1432,9 +1431,22 @@ class OnyxParser < OnyxLexer
          pragmas = parse_pragma_cluster
          dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
 
-         # *TODO* parse_expression very likely should NOT BE DONE HERE (see
-         # - GHOST IMPLEMENTATION -
-         return parse_expression
+         # places it at the actual parsing stage for now...
+         # pragmas.each do |pragma|
+         #    raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
+
+         #    case pragma.name
+         #    when "!lit-int", "!int-lit", "!literal-int", "!int-literal"
+         #       dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+         #       @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
+
+         #    when "!lit-real", "!real-lit", "!literal-real", "!real-literal"
+         #       dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+         #       @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
+         #    end
+         # end
+
+         return Expressions.new pragmas
       end
 
       ret = case @token.type
@@ -1466,15 +1478,17 @@ class OnyxParser < OnyxLexer
             unexpected_token_in_atomic
          end
 
-      when :"$.", :"::" # *TODO* - obviously `$` and `.` separate tokes...   # :"::"
+      when :"$.", :"::"
          dbg "got '::' branch".red
          parse_idfr_or_global_call
 
       # when :"->"
       #   parse_fun_literal
 
-      when :"@["
-         parse_attribute
+
+      # when :"@["
+      #    parse_attribute
+
 
       # when :PRAGMA
       #    #*TODO* GHOST IMPLEMENTATION ATM
@@ -1506,7 +1520,7 @@ class OnyxParser < OnyxLexer
          node_and_next_token TagLiteral.new(@token.value.to_s)
 
       when :GLOBAL
-         new_node_check_type_declaration Global
+         new_node_check_type_declaration Global, true
          # @wants_regex = false
          # node_and_next_token Global.new(@token.value.to_s)
 
@@ -1573,7 +1587,7 @@ class OnyxParser < OnyxLexer
          when :with
             parse_yield_with_scope
          when :abstract
-            unexpected_token "abstract can only be used in place of of a func body, or as attribute on types."
+            unexpected_token "abstract can only be used in place of of a func body, or as modifer on types."
             # check_not_inside_def("can't use abstract inside def") do
             #    doc = @token.doc
 
@@ -1685,15 +1699,16 @@ class OnyxParser < OnyxLexer
             parse_instance_sizeof
          when :typeof
             parse_typeof
-         when :private
-            parse_visibility_modifier :private
-         when :protected
-            parse_visibility_modifier :protected
+         # when :private
+         #    parse_visibility_modifier :private
+         # when :protected
+         #    parse_visibility_modifier :protected
          when :asm
             parse_asm
 
          else
-            set_visibility parse_var_or_call   # *TODO* this _can_ be a def
+            # set_visibility parse_var_or_call   # *TODO* this _can_ be a def
+            parse_var_or_call   # *TODO* this _can_ be a def
          end
 
       when :CONST
@@ -1734,11 +1749,11 @@ class OnyxParser < OnyxLexer
       ret
    end
 
-   def new_node_check_type_declaration(klass)
-      new_node_check_type_declaration(klass) { }
+   def new_node_check_type_declaration(klass, check_assign)
+      new_node_check_type_declaration(klass, check_assign) { }
    end
 
-   def new_node_check_type_declaration(klass)
+   def new_node_check_type_declaration(klass, check_assign)
       name = @token.value.to_s
       yield name
       var = klass.new(name).at(@token.location)
@@ -1746,17 +1761,44 @@ class OnyxParser < OnyxLexer
       @wants_regex = false
       next_token_skip_space
 
+      rets = [] of ASTNode
+
       # if  check if we need qualifier symbol in this context (boolean arg to us) else check immediately for single–type alike to determine if we have a typing or not
       if next_is_any_modifier?
-         #next_token_skip_space
-         #var_type = parse_single_type
+         dbg "found type declaration"
+         # *TODO* we must take care of the type qualifiers
          mutability, storage, var_type = parse_qualifer_and_type
-         # *TODO* storage
-         # *TODO* is_assign_composite
-         TypeDeclaration.new(var, var_type, mutability: mutability).at(var.location)
       else
-         var
+         mutability = :auto
+         var_type = nil
+         dbg "found NO type"
       end
+
+      # if check_assign && tok? :"="
+      if tok? :"="
+         dbg "found assign to idfr"
+         next_token_skip_space_or_newline
+         assign_value = parse_op_assign
+         dbg "/found assign to idfr"
+      else
+         assign_value = nil
+      end
+
+      if var_type
+         dbg "add type declaration"
+         is_assign_composite = assign_value != nil
+         rets << TypeDeclaration.new(var, var_type, is_assign_composite, mutability: mutability).at(var.location)
+      end
+
+      if assign_value
+         if var_type
+            var = var.clone
+         end
+         rets << Assign.new(var, assign_value).at(var)
+      end
+
+      Expressions.new rets
+
    end
 
    def parse_idfr_or_literal
@@ -1794,7 +1836,8 @@ class OnyxParser < OnyxLexer
 
       case @token.type
       when :IDFR
-         set_visibility parse_var_or_call global: true
+         # set_visibility parse_var_or_call global: true
+         parse_var_or_call global: true
       when :CONST
          parse_idfr_after_colons(location, true, true)
       else
@@ -1981,7 +2024,7 @@ class OnyxParser < OnyxLexer
    # The correct receiver also gets the pragmas associated immediately too!
    # (nodes are only for source generation, the info is connected directly)
 
-   def parse_pragma_cluster() : Array(Attribute)
+   def parse_pragma_cluster() : Array(ASTNode)
       if pragma_starter?
          parse_pragma_cluster_style2
       else
@@ -1989,7 +2032,7 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   def parse_pragma_grouping() : Array(Attribute)
+   def parse_pragma_grouping() : Array(ASTNode)
       if pragma_starter?
          parse_pragma_grouping_style2
       else
@@ -1998,9 +2041,9 @@ class OnyxParser < OnyxLexer
    end
 
 
-   def parse_pragma_cluster_style1() : Array(Attribute)
+   def parse_pragma_cluster_style1() : Array(ASTNode)
       dbg "parse_pragma_cluster_style1 ->"
-      pragmas = [] of Attribute
+      pragmas = [] of ASTNode
 
       while tok? :PRAGMA
          pragmas.concat parse_pragma_grouping_style1
@@ -2009,9 +2052,9 @@ class OnyxParser < OnyxLexer
       pragmas
    end
 
-   def parse_pragma_grouping_style1() : Array(Attribute)
+   def parse_pragma_grouping_style1() : Array(ASTNode)
       dbg "parse_pragma_grouping_style1 ->"
-      pragmas = [] of Attribute
+      pragmas = [] of ASTNode
 
       # while tok? :PRAGMA
       while tok? :PRAGMA
@@ -2022,9 +2065,9 @@ class OnyxParser < OnyxLexer
    end
 
 
-   def parse_pragma_cluster_style2() : Array(Attribute)
+   def parse_pragma_cluster_style2() : Array(ASTNode)
       dbg "parse_pragma_cluster_style2 ->"
-      pragmas = [] of Attribute
+      pragmas = [] of ASTNode
 
       #while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
       while pragma_starter?
@@ -2047,9 +2090,9 @@ class OnyxParser < OnyxLexer
       pragmas
    end
 
-   def parse_pragma_grouping_style2() : Array(Attribute)
+   def parse_pragma_grouping_style2() : Array(ASTNode)
       dbg "parse_pragma_grouping_style2 ->"
-      pragmas = [] of Attribute
+      pragmas = [] of ASTNode
 
       next_token
       skip_space
@@ -2071,47 +2114,21 @@ class OnyxParser < OnyxLexer
       dbg "parse_pragma ->"
       doc = @token.doc
 
-      # *TODO* *TODOOOOO*
-
       name = @token.value.to_s
       next_token #_skip_space
 
       args = [] of ASTNode
-      named_args = nil
+      named_args = nil # [] of ASTNode
 
-      # *TODO* format for params etc.
       if tok? :"="
          next_token #_skip_space
-         # and then take the value...
          args << Arg.new @token.value.to_s
          next_token_skip_space
-      end
 
-      skip_space # _or_newline
-
-      dbg "- parse_pragma #{name}, #{args}"
-      attr = Attribute.new(name, args, named_args)
-      attr.doc = doc
-      attr
-
-   ensure
-      dbg "/parse_pragma"
-   end
-
-
-   def parse_attribute
-      doc = @token.doc
-
-      next_token_skip_space
-      name = check_const
-      next_token_skip_space
-
-      args = [] of ASTNode
-      named_args = nil
-
-      if @token.type == :"("
+      elsif tok? :"("
          open("attribute") do
             next_token_skip_space_or_newline
+
             while @token.type != :")"
                if @token.type == :IDFR && current_char == ':'
                   named_args = parse_named_args(allow_newline: true)
@@ -2122,23 +2139,39 @@ class OnyxParser < OnyxLexer
                end
 
                skip_statement_end
+
                if @token.type == :","
                   next_token_skip_space_or_newline
                end
             end
+
             next_token_skip_space
          end
       end
-      check :"]"
-      next_token_skip_space
 
-      attr = Attribute.new(name, args, named_args)
-      attr.doc = doc
-      attr
+      skip_space # _or_newline
+
+      dbg "- parse_pragma #{name}, #{args}"
+
+
+      pragma = Attribute.new(name, args, named_args)
+      pragma.doc = doc
+
+      case pragma.name
+      when "!lit_int", "!int_lit", "!literal_int", "!int_literal"
+         dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+         @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
+
+      when "!lit_real", "!real_lit", "!literal_real", "!real_literal"
+         dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+         @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
+      end
+
+      pragma
+
+   ensure
+      dbg "/parse_pragma"
    end
-
-
-
 
    def parse_try
       slash_is_regex!
@@ -2668,11 +2701,6 @@ class OnyxParser < OnyxLexer
       until handle_nest_end # tok?(:END)
          dbg "in parse_type_def body loop: #{@token}"
 
-         # *TODO*
-         # \public       - pub
-         # \private      - rel | fam
-         # \protected   - mine
-
          # case @token.type
          # when :NEWLINE
          if tok? :NEWLINE
@@ -2681,6 +2709,10 @@ class OnyxParser < OnyxLexer
          # *TODO* moved this check down to "else" and re–structure this as case again!
          elsif pragmas? # when :PRAGMA
             # *TODO* use the pragmas
+            # *TODO*
+            # \public               - pub
+            # \private|family       - rel | fam
+            # \protected|internal   - mine
             pragmas = parse_pragma_grouping
             dbg "Got pragma in type-def root level - apply to next item! #{pragmas}"
 
@@ -2846,7 +2878,13 @@ class OnyxParser < OnyxLexer
                name = @token.value.to_s
             end
 
-            if current_char == '('   # method def?
+            # method def?
+            if (current_char == '(' ||
+               (
+                  current_char == '*' &&
+                  (peek_next_char == '(' || peek_next_char == '*')
+               )
+            )
                dbg "NOPE! Found def"
 
 
@@ -2941,6 +2979,8 @@ class OnyxParser < OnyxLexer
             naked_name = name[((name.rindex('@')||-1)+1)..-1]
 
             pragmas.select! do |pragma|
+               raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
+
                case pragma.name
                when "get"
                   rets << Def.new naked_name, [] of Arg, var.clone
@@ -4487,6 +4527,16 @@ class OnyxParser < OnyxLexer
          raise "initialize is a reserved internal method name. Use 'init' for constructor code.", name_line_number, name_column_number
       end
 
+      marked_visibility =  if tok? :"*"
+                              next_token
+                              :private
+                           elsif tok? :"**"
+                              next_token
+                              :protected
+                           else
+                              :public
+                           end
+
       if tok?(:".")
          unless receiver
             if name
@@ -4650,7 +4700,7 @@ class OnyxParser < OnyxLexer
          # *TODO* use add_def_nest!
          add_nest (is_macro_def ? :macro : :def), def_indent, name.to_s, (nest_kind == :LINE_NEST), false
 
-         pragmas = [] of Attribute
+         pragmas = [] of ASTNode
          pragmas.concat suffix_pragmas
 
          dbg "found pragmas for def: #{pragmas}"
@@ -4765,7 +4815,7 @@ class OnyxParser < OnyxLexer
 
       node = Def.new name, arg_list, body, receiver, explicit_block_param, return_type, is_macro_def, @yields, is_abstract, splat_index
       node.name_column_number = name_column_number
-      node.visibility = @visibility
+      node.visibility = marked_visibility # @visibility
       node.end_location = end_location
 
       # dbg "set node.literal_style to #{name_literal_style}"
@@ -5154,12 +5204,12 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   def set_visibility(node)
-      if visibility = @visibility
-         node.visibility = visibility
-      end
-      node
-   end
+   # def set_visibility(node)
+   #    if visibility = @visibility
+   #       node.visibility = visibility
+   #    end
+   #    node
+   # end
 
 
 
@@ -6216,17 +6266,17 @@ class OnyxParser < OnyxLexer
       Generic.new(Path.global("Tuple"), types)
    end
 
-   def parse_visibility_modifier(modifier)
-      doc = @token.doc
+   # def parse_visibility_modifier(modifier)
+   #    doc = @token.doc
 
-      next_token_skip_space
-      exp = parse_op_assign
+   #    next_token_skip_space
+   #    exp = parse_op_assign
 
-      modifier = VisibilityModifier.new(modifier, exp)
-      modifier.doc = doc
-      exp.doc = doc
-      modifier
-   end
+   #    modifier = VisibilityModifier.new(modifier, exp)
+   #    modifier.doc = doc
+   #    exp.doc = doc
+   #    modifier
+   # end
 
    def parse_asm
       next_token_skip_space
@@ -6464,8 +6514,9 @@ class OnyxParser < OnyxLexer
       end
 
       case @token.type
-      when :"@["
-         parse_attribute
+
+      # when :"@["
+      #    parse_attribute
 
       # when :PRAGMA
       #    parse_pragma
@@ -6964,7 +7015,7 @@ class OnyxParser < OnyxLexer
       value
    end
 
-   def parse_def_nest_start() : {Symbol, Symbol, Bool, Array(Attribute)}
+   def parse_def_nest_start() : {Symbol, Symbol, Bool, Array(ASTNode)}
       # *TODO* we don't pass the syntax used, so a stylizer would have to look
       # at the source via "location"
 
@@ -7016,7 +7067,7 @@ class OnyxParser < OnyxLexer
       if pragmas? # tok? :PRAGMA
          pragmas = parse_pragma_grouping
       else
-         pragmas = [] of Attribute
+         pragmas = [] of ASTNode
       end
 
       # handle one–line vs multi–line vs nil–nest etc.
@@ -7440,7 +7491,7 @@ class OnyxParser < OnyxLexer
       dbg "new_num_lit ->"
 
       if kind == :int
-         confed_type = @nesting_stack.last.int_type_mapping.value.to_s
+         confed_type = @nesting_stack.last.int_type_mapping #.value.to_s
 
          dbg "- new_num_lit - int -> #{confed_type}"
 
@@ -7467,7 +7518,7 @@ class OnyxParser < OnyxLexer
          end
 
       elsif kind == :real
-         confed_type = @nesting_stack.last.real_type_mapping.value.to_s
+         confed_type = @nesting_stack.last.real_type_mapping #.value.to_s
 
          dbg "- new_num_lit - real -> #{confed_type}"
 

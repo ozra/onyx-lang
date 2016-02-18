@@ -19,33 +19,35 @@ class Crystal::OnyxCommand
   USAGE = <<-USAGE
 Usage: onyx [command] [switches] [program file] [--] [arguments]
 
-Command:
-    init                     generate new Onyx project
+Commands:
+
+  Compilation:
     devel                    compile development program file
     release                  compile release program file
-    deps                     install project dependencies
-    docs                     generate documentation
+    run  (default)           compile and run program file
     eval                     eval code from args or standard input
-    run (default)            compile and run program file
     spec                     compile and run specs (in spec directory)
-    tool                     run a tool
-    --help, -h               show this help
-    --version, -v            show version
-USAGE
+    docs                     generate documentation
 
-  COMMANDS_USAGE = <<-USAGE
-Usage: onyx tool [tool] [switches] [program file] [--] [arguments]
-
-Tool:
+  Analytics:
     context                  show context for given location
     hierarchy                show type hierarchy
     implementations          show implementations for given call in location
     types                    show type of main variables
-    stylize                  reformat source according to specs
+
+  Source:
+    init                     generate new Onyx project
+    deps                     install project dependencies
+    stylize                  reformat source according to preferences
     onyxify                  convert crystal sources to onyx
-    crystallize              convert onyx sources to crystal
+
+  Other:
     --help, -h               show this help
+    --version, -v            show version
+
 USAGE
+#    crystallize              convert onyx sources to crystal
+
 
   VALID_EMIT_VALUES = %w(asm llvm-bc llvm-ir obj)
 
@@ -93,9 +95,33 @@ USAGE
       when "spec/".starts_with?(command)
         options.shift
         run_specs
-      when "tool".starts_with?(command)
+
+      when "context".starts_with?(command)
         options.shift
-        tool
+        context
+      when "hierarchy".starts_with?(command)
+        options.shift
+        hierarchy
+      when "implementations".starts_with?(command)
+        options.shift
+        implementations
+      when "types".starts_with?(command)
+        options.shift
+        types
+
+      when "upgrade".starts_with?(command) # a convenience util for upgrading code to refactor depreceated constructs
+        options.shift
+        stylize :upgrade
+      when "stylize".starts_with?(command)
+        options.shift
+        stylize
+      when "onyxify".starts_with?(command)
+        options.shift
+        onyxify
+      when "crystallize".starts_with?(command)
+        options.shift
+        crystallize
+
       when "--help" == command, "-h" == command
         puts USAGE
         exit
@@ -128,48 +154,6 @@ USAGE
     end
     puts
     error "You've found a bug in the Onyx compiler. Please open an issue, including source code that will allow us to reproduce the bug: https://github.com/ozra/onyx-lang/issues"
-  end
-
-  private def tool
-    tool = options.first?
-    if tool
-      case
-      when "context".starts_with?(tool)
-        options.shift
-        context
-      when "hierarchy".starts_with?(tool)
-        options.shift
-        hierarchy
-      when "implementations".starts_with?(tool)
-        options.shift
-        implementations
-      when "types".starts_with?(tool)
-        options.shift
-        types
-
-      when "upgrade".starts_with?(tool) # a convenience util for upgrading code to refactor depreceated constructs
-        options.shift
-        stylize :upgrade
-      when "stylize".starts_with?(tool)
-        options.shift
-        stylize
-      when "onyxify".starts_with?(tool)
-        options.shift
-        onyxify
-      when "crystallize".starts_with?(tool)
-        options.shift
-        crystallize
-
-      when "--help" == tool, "-h" == tool
-        puts COMMANDS_USAGE
-        exit
-      else
-        error "unknown tool: #{tool}"
-      end
-    else
-      puts COMMANDS_USAGE
-      exit
-    end
   end
 
   private def init(base_lang)
@@ -421,124 +405,124 @@ USAGE
     output_format = nil
 
     option_parser = OptionParser.parse(options) do |opts|
-                      opts.banner = "Usage: crystal #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
+      opts.banner = "Usage: crystal #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
 
-                      unless no_codegen
-                        unless run
-                          opts.on("--cross-compile flags", "cross-compile") do |cross_compile|
-                            compiler.cross_compile_flags = cross_compile
-                          end
-                        end
-                        opts.on("-d", "--debug", "Add symbolic debug info") do
-                          compiler.debug = true
-                        end
-                      end
+      unless no_codegen
+        unless run
+          opts.on("--cross-compile flags", "cross-compile") do |cross_compile|
+            compiler.cross_compile_flags = cross_compile
+          end
+        end
+        opts.on("-d", "--debug", "Add symbolic debug info") do
+          compiler.debug = true
+        end
+      end
 
-                      opts.on("-D FLAG", "--define FLAG", "Define a compile-time flag") do |flag|
-                        compiler.add_flag flag
-                      end
+      opts.on("-D FLAG", "--define FLAG", "Define a compile-time flag") do |flag|
+        compiler.add_flag flag
+      end
 
-                      unless no_codegen
-                        opts.on("--emit [#{VALID_EMIT_VALUES.join("|")}]", "Comma separated list of types of output for the compiler to emit") do |emit_values|
-                          compiler.emit = validate_emit_values(emit_values.split(',').map(&.strip))
-                        end
-                      end
+      unless no_codegen
+        opts.on("--emit [#{VALID_EMIT_VALUES.join("|")}]", "Comma separated list of types of output for the compiler to emit") do |emit_values|
+          compiler.emit = validate_emit_values(emit_values.split(',').map(&.strip))
+        end
+      end
 
-                      if hierarchy
-                        opts.on("-e NAME", "Filter types by NAME regex") do |exp|
-                          hierarchy_exp = exp
-                        end
-                      end
+      if hierarchy
+        opts.on("-e NAME", "Filter types by NAME regex") do |exp|
+          hierarchy_exp = exp
+        end
+      end
 
-                      if cursor_command
-                        opts.on("-c LOC", "--cursor LOC", "Cursor location with LOC as path/to/file.cr:line:column") do |cursor|
-                          cursor_location = cursor
-                        end
-                      end
+      if cursor_command
+        opts.on("-c LOC", "--cursor LOC", "Cursor location with LOC as path/to/file.cr:line:column") do |cursor|
+          cursor_location = cursor
+        end
+      end
 
-                      opts.on("-f text|json", "--format text|json", "Output format text (default) or json") do |f|
-                        output_format = f
-                      end
+      opts.on("-f text|json", "--format text|json", "Output format text (default) or json") do |f|
+        output_format = f
+      end
 
-                      opts.on("-h", "--help", "Show this message") do
-                        puts opts
-                        exit 1
-                      end
+      opts.on("-h", "--help", "Show this message") do
+        puts opts
+        exit 1
+      end
 
-                      unless no_codegen
-                        opts.on("--ll", "Dump ll to .crystal directory") do
-                          compiler.dump_ll = true
-                        end
-                        opts.on("--link-flags FLAGS", "Additional flags to pass to the linker") do |some_link_flags|
-                          link_flags << some_link_flags
-                        end
-                        opts.on("--mcpu CPU", "Target specific cpu type") do |cpu|
-                          compiler.mcpu = cpu
-                        end
-                      end
+      unless no_codegen
+        opts.on("--ll", "Dump ll to .crystal directory") do
+          compiler.dump_ll = true
+        end
+        opts.on("--link-flags FLAGS", "Additional flags to pass to the linker") do |some_link_flags|
+          link_flags << some_link_flags
+        end
+        opts.on("--mcpu CPU", "Target specific cpu type") do |cpu|
+          compiler.mcpu = cpu
+        end
+      end
 
-                      opts.on("--no-color", "Disable colored output") do
-                        @color = false
-                        compiler.color = false
-                      end
+      opts.on("--no-color", "Disable colored output") do
+        @color = false
+        compiler.color = false
+      end
 
-                      unless no_codegen
-                        opts.on("--no-codegen", "Don't do code generation") do
-                          compiler.no_codegen = true
-                        end
-                        opts.on("-o ", "Output filename") do |an_output_filename|
-                          opt_output_filename = an_output_filename
-                          specified_output = true
-                        end
-                      end
+      unless no_codegen
+        opts.on("--no-codegen", "Don't do code generation") do
+          compiler.no_codegen = true
+        end
+        opts.on("-o ", "Output filename") do |an_output_filename|
+          opt_output_filename = an_output_filename
+          specified_output = true
+        end
+      end
 
-                      opts.on("--prelude ", "Use given file as prelude") do |prelude|
-                        compiler.prelude = prelude
-                      end
+      opts.on("--prelude ", "Use given file as prelude") do |prelude|
+        compiler.prelude = prelude
+      end
 
-                      unless no_codegen
-                        # debug_release_flags = 0
-                        # opts.on("--devel", "Compile in devel mode") do
-                        #   compiler.release = false
-                        #   p "Got --devel"
-                        #   debug_release_flags += 1
-                        # end
-                        # opts.on("--release", "Compile in release mode") do
-                        #   compiler.release = true
-                        #   p "Got --release"
-                        #   debug_release_flags += 1
-                        # end
-                        opts.on("-s", "--stats", "Enable statistics output") do
-                          compiler.stats = true
-                        end
-                        opts.on("--single-module", "Generate a single LLVM module") do
-                          compiler.single_module = true
-                        end
-                        opts.on("--threads ", "Maximum number of threads to use") do |n_threads|
-                          compiler.n_threads = n_threads.to_i
-                        end
-                        unless run
-                          opts.on("--target TRIPLE", "Target triple") do |triple|
-                            compiler.target_triple = triple
-                          end
-                        end
-                        opts.on("--verbose", "Display executed commands") do
-                          compiler.verbose = true
-                        end
+      unless no_codegen
+        # debug_release_flags = 0
+        # opts.on("--devel", "Compile in devel mode") do
+        #   compiler.release = false
+        #   p "Got --devel"
+        #   debug_release_flags += 1
+        # end
+        # opts.on("--release", "Compile in release mode") do
+        #   compiler.release = true
+        #   p "Got --release"
+        #   debug_release_flags += 1
+        # end
+        opts.on("-s", "--stats", "Enable statistics output") do
+          compiler.stats = true
+        end
+        opts.on("--single-module", "Generate a single LLVM module") do
+          compiler.single_module = true
+        end
+        opts.on("--threads ", "Maximum number of threads to use") do |n_threads|
+          compiler.n_threads = n_threads.to_i
+        end
+        unless run
+          opts.on("--target TRIPLE", "Target triple") do |triple|
+            compiler.target_triple = triple
+          end
+        end
+        opts.on("--verbose", "Display executed commands") do
+          compiler.verbose = true
+        end
 
-                        # if debug_release_flags > 1  # both debug and release (!?)
-                        #   error "can't supply both --debug and --release - pick one!"
+        # if debug_release_flags > 1  # both debug and release (!?)
+        #   error "can't supply both --debug and --release - pick one!"
 
-                        # elsif debug_release_flags == 0 && run == false  # neither
-                        #   error "either --debug or --release must be specified"
-                        # end
-                      end
+        # elsif debug_release_flags == 0 && run == false  # neither
+        #   error "either --debug or --release must be specified"
+        # end
+      end
 
-                      opts.unknown_args do |before, after|
-                        opt_filenames = before
-                        opt_arguments = after
-                      end
-                    end
+      opts.unknown_args do |before, after|
+        opt_filenames = before
+        opt_arguments = after
+      end
+    end
 
     compiler.link_flags = link_flags.join(" ") unless link_flags.empty?
     do_link_flags_rationalism! compiler

@@ -63,6 +63,7 @@ require "concurrent"
 require "signal"
 require "kernel"
 require "main"
+require "ext"
 
 require "onyx_type_additionals_layer"
 require "onyx_corner_stone_layer"
