@@ -113,12 +113,13 @@ module Crystal
         nextch
         start = cur_pos
 
-        # all pragmas / annotations begin with small cap latin ascii for now
-        # NOPE! - Added caps too - for now!
-        # NOPE! - Added `!` too - for now!
-        if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' || curch == '!')
-          return scan_pragma start - 1
-        end
+        # We do everything PRAGMA with pure parsing - no specific lexing tokens
+        # # all pragmas / annotations begin with small cap latin ascii for now
+        # # NOPE! - Added caps too - for now!
+        # # NOPE! - Added `!` too - for now!
+        # if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' || curch == '!')
+        #   return scan_pragma start - 1
+        # end
 
         # p "nextch after backslash = " + curch
         if curch == ' ' || curch == '\t'
@@ -146,8 +147,7 @@ module Crystal
           @token.type = backed_type
         else
           dbg_lex "must be a solo mystic backslash"
-          # unknown_token
-          @token.type = :BACKSLASH # :"\\" is unparsable by Crystal...
+          @token.type = :BACKSLASH
         end
 
 
@@ -1811,13 +1811,13 @@ module Crystal
       nil
     end
 
-    def scan_pragma(start)
-      start += 1
-      # p "scan_pragma for '#{string_range(start)}'"
-      scan_idfr start, false, special_start_char: true
-      @token.type = :PRAGMA
-      @token
-    end
+    # def scan_pragma(start)
+    #   start += 1
+    #   # p "scan_pragma for '#{string_range(start)}'"
+    #   scan_idfr start, false, special_start_char: true
+    #   @token.type = :PRAGMA
+    #   @token
+    # end
 
     def symbol_then_nextch(value)
       nextch

@@ -2025,103 +2025,51 @@ class OnyxParser < OnyxLexer
    # (nodes are only for source generation, the info is connected directly)
 
    def parse_pragma_cluster() : Array(ASTNode)
-      if pragma_starter?
-         parse_pragma_cluster_style2
-      else
-         parse_pragma_cluster_style1
-      end
-   end
-
-   def parse_pragma_grouping() : Array(ASTNode)
-      if pragma_starter?
-         parse_pragma_grouping_style2
-      else
-         parse_pragma_grouping_style1
-      end
-   end
-
-
-   def parse_pragma_cluster_style1() : Array(ASTNode)
       dbg "parse_pragma_cluster_style1 ->"
       pragmas = [] of ASTNode
 
-      while tok? :PRAGMA
-         pragmas.concat parse_pragma_grouping_style1
+      while pragma_starter?
+         pragmas.concat parse_pragma_grouping
          skip_space_or_newline
       end
+
+      next_token if tok? :";"
+      skip_space_or_newline
+
       pragmas
    end
 
-   def parse_pragma_grouping_style1() : Array(ASTNode)
+   def parse_pragma_grouping() : Array(ASTNode)
       dbg "parse_pragma_grouping_style1 ->"
       pragmas = [] of ASTNode
 
-      # while tok? :PRAGMA
-      while tok? :PRAGMA
-         pragmas << parse_pragma
-      end
-
-      pragmas
-   end
-
-
-   def parse_pragma_cluster_style2() : Array(ASTNode)
-      dbg "parse_pragma_cluster_style2 ->"
-      pragmas = [] of ASTNode
-
-      #while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
       while pragma_starter?
-         next_token
-         skip_space
-
-         while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
-            pragmas << parse_pragma
-         end
-
-         if tok? :DEDENT
-            return pragmas
-         elsif tok? :INDENT
-            raise "indented pragmas blocks not implemented yet! /ozra"
-         end
-
-         next_token if tok? :";"
-         skip_space_or_newline
-      end
-      pragmas
-   end
-
-   def parse_pragma_grouping_style2() : Array(ASTNode)
-      dbg "parse_pragma_grouping_style2 ->"
-      pragmas = [] of ASTNode
-
-      next_token
-      skip_space
-
-      # while tok? :PRAGMA
-      while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
          pragmas << parse_pragma
       end
 
       next_token if tok? :";"
       skip_space
-      # skip_space_or_newline
 
       pragmas
    end
-
 
    def parse_pragma()
       dbg "parse_pragma ->"
       doc = @token.doc
 
+      next_token # skip the pragma symbol `'`
+      while tok? :"!"
+         next_token
+      end
+
       name = @token.value.to_s
-      next_token #_skip_space
+      next_token_skip_space
 
       args = [] of ASTNode
       named_args = nil # [] of ASTNode
 
       if tok? :"="
-         next_token #_skip_space
+         next_token_skip_space
          args << Arg.new @token.value.to_s
          next_token_skip_space
 
@@ -2158,11 +2106,13 @@ class OnyxParser < OnyxLexer
       pragma.doc = doc
 
       case pragma.name
-      when "!lit_int", "!int_lit", "!literal_int", "!int_literal"
+      when "lit_int", "int_lit", "literal_int", "int_literal"
+         pragma.name = "int_literal"
          dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
          @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
 
-      when "!lit_real", "!real_lit", "!literal_real", "!real_literal"
+      when "lit_real", "real_lit", "literal_real", "real_literal"
+         pragma.name = "real_literal"
          dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
          @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
       end
@@ -2172,6 +2122,157 @@ class OnyxParser < OnyxLexer
    ensure
       dbg "/parse_pragma"
    end
+
+
+
+   # def parse_pragma_cluster() : Array(ASTNode)
+   #    if pragma_starter?
+   #       parse_pragma_cluster_style2
+   #    else
+   #       parse_pragma_cluster_style1
+   #    end
+   # end
+
+   # def parse_pragma_grouping() : Array(ASTNode)
+   #    if pragma_starter?
+   #       parse_pragma_grouping_style2
+   #    else
+   #       parse_pragma_grouping_style1
+   #    end
+   # end
+
+
+   # def parse_pragma_cluster_style1() : Array(ASTNode)
+   #    dbg "parse_pragma_cluster_style1 ->"
+   #    pragmas = [] of ASTNode
+
+   #    while tok? :PRAGMA
+   #       pragmas.concat parse_pragma_grouping_style1
+   #       skip_space_or_newline
+   #    end
+   #    pragmas
+   # end
+
+   # def parse_pragma_grouping_style1() : Array(ASTNode)
+   #    dbg "parse_pragma_grouping_style1 ->"
+   #    pragmas = [] of ASTNode
+
+   #    # while tok? :PRAGMA
+   #    while tok? :PRAGMA
+   #       pragmas << parse_pragma
+   #    end
+
+   #    pragmas
+   # end
+
+
+   # def parse_pragma_cluster_style2() : Array(ASTNode)
+   #    dbg "parse_pragma_cluster_style2 ->"
+   #    pragmas = [] of ASTNode
+
+   #    #while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
+   #    while pragma_starter?
+   #       next_token
+   #       skip_space
+
+   #       while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
+   #          pragmas << parse_pragma
+   #       end
+
+   #       if tok? :DEDENT
+   #          return pragmas
+   #       elsif tok? :INDENT
+   #          raise "indented pragmas blocks not implemented yet! /ozra"
+   #       end
+
+   #       next_token if tok? :";"
+   #       skip_space_or_newline
+   #    end
+   #    pragmas
+   # end
+
+   # def parse_pragma_grouping_style2() : Array(ASTNode)
+   #    dbg "parse_pragma_grouping_style2 ->"
+   #    pragmas = [] of ASTNode
+
+   #    next_token
+   #    skip_space
+
+   #    # while tok? :PRAGMA
+   #    while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
+   #       pragmas << parse_pragma
+   #    end
+
+   #    next_token if tok? :";"
+   #    skip_space
+   #    # skip_space_or_newline
+
+   #    pragmas
+   # end
+
+
+   # def parse_pragma()
+   #    dbg "parse_pragma ->"
+   #    doc = @token.doc
+
+   #    name = @token.value.to_s
+   #    next_token #_skip_space
+
+   #    args = [] of ASTNode
+   #    named_args = nil # [] of ASTNode
+
+   #    if tok? :"="
+   #       next_token #_skip_space
+   #       args << Arg.new @token.value.to_s
+   #       next_token_skip_space
+
+   #    elsif tok? :"("
+   #       open("attribute") do
+   #          next_token_skip_space_or_newline
+
+   #          while @token.type != :")"
+   #             if @token.type == :IDFR && current_char == ':'
+   #                named_args = parse_named_args(allow_newline: true)
+   #                check :")"
+   #                break
+   #             else
+   #                args << parse_call_arg
+   #             end
+
+   #             skip_statement_end
+
+   #             if @token.type == :","
+   #                next_token_skip_space_or_newline
+   #             end
+   #          end
+
+   #          next_token_skip_space
+   #       end
+   #    end
+
+   #    skip_space # _or_newline
+
+   #    dbg "- parse_pragma #{name}, #{args}"
+
+
+   #    pragma = Attribute.new(name, args, named_args)
+   #    pragma.doc = doc
+
+   #    case pragma.name
+   #    when "lit_int", "int_lit", "literal_int", "int_literal"
+   #       dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+   #       @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
+
+   #    when "lit_real", "real_lit", "literal_real", "real_literal"
+   #       dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+   #       @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
+   #    end
+
+   #    pragma
+
+   # ensure
+   #    dbg "/parse_pragma"
+   # end
 
    def parse_try
       slash_is_regex!
@@ -7041,11 +7142,12 @@ class OnyxParser < OnyxLexer
    end
 
    def pragmas?()
-      tok?(:PRAGMA, :"#", :BACKSLASH, :"|")
+      tok?(:"'") && !('A' <= current_char <= 'Z') # (:BACKSLASH, :"|", :"#", :"'")
+      # tok?(:BACKSLASH, :"|", :"#", :"'")
    end
 
    def pragma_starter?()
-      tok?(:BACKSLASH, :"|", :"#")
+      tok?(:"'") && !('A' <= current_char <= 'Z') # (:BACKSLASH, :"|", :"#", :"'")
    end
 
    def can_be_assigned?(node) : Bool

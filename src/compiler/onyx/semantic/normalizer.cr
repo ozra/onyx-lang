@@ -26,7 +26,7 @@ module Crystal
 
     # Remove pragmas used at parsing stage
     def transform(node : Attribute) : ASTNode
-      if node.name.size > 0 && node.name[0] == '!' # *TODO* more fine–grained might be needed later
+      if ["int_literal", "real_literal"].includes? node.name
         Nop.new
       else
         node.name =

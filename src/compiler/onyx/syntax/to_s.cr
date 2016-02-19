@@ -703,7 +703,7 @@ class ToOnyxSVisitor < Visitor
       # @str << " "
 
       if node_receiver = node.receiver
-         puts ":::receiver = '#{node_receiver.to_s}  DBG"
+         puts ">>>receiver = '#{node_receiver.to_s}  DBG"
 
          if node_receiver.to_s == "self"
             @str << "Type"

@@ -39,18 +39,17 @@ _debug_start_ = true
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- \!Int=I64
--- \!Real=Float32
+-- '!Int=I64
+-- '!Real=Float32
 
-\!literal-int=I64
-\!literal-real=Float32
+'!literal-int = I64
+'!literal-real = Float32
 
 -- *TODO* *TEMP*
 type Ints = StdInt
 type Real = Float64
 
 type MoreInts = Int32 | Int64 | I8
-
 say MoreInts
 
 type SomeFacts < flags U8
@@ -63,7 +62,7 @@ facts = SomeFacts.flags AppleLover, CoolDude
 say "facts: {facts}"
 say typeof(facts)
 
-facts = facts.|. SomeFacts.PearLover
+facts = facts .|. SomeFacts.PearLover
 say "facts: {facts}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -89,9 +88,10 @@ pp ::MY_CONST
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- *TODO* ' should not be needed before I32!
 $my-global = 47
 $my-typed-global 'I32
-\!literal-int=Int32
+'!literal-int=Int32
 $my-typed-and-assigned-global 'I32 = 47
 $my-global = $my-typed-and-assigned-global
 
@@ -103,7 +103,7 @@ module Djur
    APA = 47
 
    type Apa < object Reference
-      \!literal-int=I64
+      '!literal-int=I64
 
       Self.foo = 1
       Type.bar = 2
@@ -220,6 +220,9 @@ pp my-fun-fun myfu
 
 my-lambda = (x Str) -> say "x: {x}"
 my-lambda "47"
+my-lambda("47")
+my-lambda.call "47"
+my-lambda.call("47")
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -323,7 +326,7 @@ say ""
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-\!literal-int=I64
+'!literal-int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
    say "{awol}, {foo}, {bar}"
@@ -354,7 +357,7 @@ u = list.each(|v| p v).map ~> _1 * 2
 
 -- def say(s) -> puts s
 
-\!literal-int=I32
+'!literal-int=I32
 
 DEBUG–SEPARATOR = 47
 
@@ -430,7 +433,7 @@ the–str = "kjhgkjh" \
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-\!literal-int=StdInt
+'!literal-int=StdInt
 
 -- first comment
 a = 47  --another comment
@@ -512,7 +515,7 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
-def zoo*(a; b; ...c 'Ints) Str ->  # pure
+def zoo*(a; b; ...c 'Ints) Str ->  'pure
    if true:
       i = 1
 
@@ -834,7 +837,7 @@ b = (a Str, _ Ints, b 'Bool; c Real) ->
 say "23.4 def lambda c"
 c = (a ~Ints, b 'Str, c 'Ints) -> a.to–s + b + c.to–s
 
-\!real-literal=Float64
+'!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
 p b "23.5b Closured Lambda says", 1, true, 0.47
 
@@ -1007,7 +1010,7 @@ type Bar < Qwa
    Self.some–other–foo 'Ints = 42
    Self.yet–a-foo = 42
 
-   \!literal-int=Int32
+   '!literal-int=Int32
 
    Type.RedFoo = 5
    Type.GreenFoo = 7
@@ -1037,22 +1040,22 @@ type Foo[S1] < Bar
    -- < AnotherTrait[S1]
 
    -- "free" notation at member declaration
-   foo–x I64 = 47_i64  \get \set
+   foo–x I64 = 47_i64  'get 'set
    foo–y = 48
-   foo–z = "bongo"  \get
-   foo–u Ints = 47  \ get set
-   foo–w = 47       \ set
+   foo–z = "bongo"  'get
+   foo–u Ints = 47  'get 'set
+   foo–w = 47       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
-    bar–x  I64  = 47_i64  # get set
+    bar–x  I64  = 47_i64  'get 'set
    else
-    @bar–x I32  = 47_i32  # get set
+    @bar–x I32  = 47_i32  'get 'set
 
    bar–y        = 48
-   bar–z        = "bongo"  # get
-   @bar–u  Ints = 47  # get set
-   @bar–w       = 47  # get
+   bar–z        = "bongo"  'get
+   @bar–u  Ints = 47  'get 'set
+   @bar–w       = 47  'get
 
    ifdef x86_64
     init(a S1) ->
@@ -1070,16 +1073,15 @@ type Foo[S1] < Bar
    -- \ pure
    --    fn–1aa(x) -> nil \public   -- should this be legal? - looks very confusing!
    --    fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
-   \ pure
+   'pure
    fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
-   \pure
-   fn–1ab(x) Nil -> nil  \ pure -- public   -- should this be legal? - looks very confusing!
+   'pure
+   fn–1ab(x) Nil -> nil  'pure -- public   -- should this be legal? - looks very confusing!
 
    -- \ private inline
-   \ inline
-   \ pure
+   'inline 'pure
    fn–1ba*(x) ->! nil
-   fn–1ca(x) ->!  \pure
+   fn–1ca(x) ->!  'pure
    fn–1da(x) -> nil
    fn–1ea(x) ->! nil
    fn–1fa(x) ->!
@@ -1101,7 +1103,7 @@ type Foo[S1] < Bar
       say "Yeay"
       return "Foo"
 
-   fn–a(a, b) -> "a: {a}, {b}" # pure
+   fn–a(a, b) -> "a: {a}, {b}" 'pure
 
    def fn–b(a S1, b Ints) -> -- fdsa
       "b: {a}, {b}"
@@ -1117,14 +1119,14 @@ type Foo[S1] < Bar
    --       "c: {a}, {b}"
 
    -- # private
-   fn–c*(a, b S1) S1 -> # redef inline
+   fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
 
    end–def
 
    --# protected
    -- fn–c(a, b I32) redef protected ->
-   fn–c**(a, b Ints) -> # redef
+   fn–c**(a, b Ints) -> 'redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1147,7 +1149,7 @@ type Foo[S1] < Bar
 
    fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 
-   # flatten
+   'flatten
    call() -> fn–e
 
    [](i) -> @foo–b + i
@@ -1165,22 +1167,23 @@ type FooStyle2<S1> < Bar
    mixin AnotherTrait<S1>
 
    -- "free" notation at member declaration
-   @foo–x I64 = 47_i64  # get set
+   @foo–x I64 = 47_i64  'get 'set
    @foo–y = 48
-   @foo–z = "bongo"  # get
-   @foo–u Ints = 47  | get set
-   @foo–w = 47       |set
+   @foo–z = "bongo"  'get
+   @foo–u Ints = 47  'get 'set
+   @foo–w = 47       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
-      @bar–x I64 = 47_i64  | get set
+      @bar–x I64 = 47_i64  'get 'set
    else
-      @bar–x I32 = 47_i32  |get |set
+      @bar–x I32 = 47_i32  'get 'set
 
    @bar–y = 48
-   @bar–z = "bongo"  |get
-   @bar–u Ints = 47  | get set
-   getter @bar–w = 47
+   @bar–z = "bongo"  'get
+   @bar–u Ints = 47  'get 'set
+   -- getter @bar–w = 47
+   @bar–w = 47       'get
 
    --| Initialize with primary variable type
    ifdef x86_64
@@ -1210,16 +1213,16 @@ type FooStyle2<S1> < Bar
    --    fn fn–1ea(x)! -> nil | pure
 
    --| Do some 1aa action!
-   |pure
-   fn fn–1aa(x) ->  |pure;  nil   -- should this be legal? - looks very confusing!
-   fn fn–1ab(x) Nil -> | pure;  nil   -- should this be legal? - looks very confusing!
+   'pure
+   fn fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
+   fn fn–1ab(x) Nil -> 'pure;  nil   -- should this be legal? - looks very confusing!
 
    -- |private |inline
-   |inline |pure
+   'inline 'pure
    fn fn–1ba*(x) ->! nil
    fn fn–1ca(x) ->!
-   fn fn–1da(x) -> nil | pure
-   fn fn–1ea(x) ->! nil | pure
+   fn fn–1da(x) -> nil 'pure
+   fn fn–1ea(x) ->! nil 'pure
 
    -- fn fn–1fa(x)!
 
@@ -1267,12 +1270,12 @@ type FooStyle2<S1> < Bar
    --       "c: {a}, {b}"
 
    -- | private
-   fn fn–c*(a, b S1) S1 -> | redef inline
+   fn fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
    end–fn
 
    -- fn–c(a, b I32) redef private ->
-   fn fn–c**(a, b Ints) -> |redef
+   fn fn–c**(a, b Ints) -> 'redef
       "c: {a}, {b}"
 
    -- fn fn–d1(a, b)
@@ -1297,7 +1300,7 @@ type FooStyle2<S1> < Bar
 
    fn fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 
-   |flatten
+   'flatten
    fn call() -> fn–e
 
    fn [](i) -> @foo–b + i
@@ -1395,7 +1398,7 @@ say ".~. 12 == { .~. 12 }"
 -- all operators so it can be used like any other number type. This example is
 -- just to show how c-lib interfacing works.
 
-|link("gmp")
+'link("gmp")
 
 api MyLibGmp
    TEST_CONST = 47
@@ -1496,32 +1499,34 @@ add-as-big-ints(
 -- Onyx cleaner hierarchical access syntax handles all Crystal constructables
 
 -- # Should work:
-pp CrystalModule
-pp CrystalModule.ROOT_CONST
-pp CrystalModule.CrystalClass
-pp CrystalModule.CrystalClass.CLASS_ROOT_CONST
-pp CrystalModule.self_def
-pp CrystalModule.CrystalClass.class_func
+say "Non self-extended:".white
+p "CrystalModule", CrystalModule
+p "CrystalModule.ROOT_CONST", CrystalModule.ROOT_CONST
+p "CrystalModule.CrystalClass", CrystalModule.CrystalClass
+p "CrystalModule.CrystalClass.CLASS_ROOT_CONST", CrystalModule.CrystalClass.CLASS_ROOT_CONST
+p "CrystalModule.self_def", CrystalModule.self_def
+p "CrystalModule.CrystalClass.class_func", CrystalModule.CrystalClass.class_func
 
 -- # Should not work
--- pp CrystalModule.MODULE_CONST
--- pp CrystalModule.CrystalClass.CLASS_CONST
--- pp CrystalModule.root_def
--- pp CrystalModule::CrystalClass.memb_func
+-- pp "CrystalModule.MODULE_CONST", CrystalModule.MODULE_CONST
+-- pp "CrystalModule.CrystalClass.CLASS_CONST", CrystalModule.CrystalClass.CLASS_CONST
+-- pp "CrystalModule.root_def", CrystalModule.root_def
+-- pp "CrystalModule::CrystalClass.memb_func", CrystalModule::CrystalClass.memb_func
 
 -- # Should work if `extend self`:
-pp CrystalModule2
-pp CrystalModule2.ROOT_CONST
-pp CrystalModule2.CrystalClass
-pp CrystalModule2.CrystalClass.CLASS_ROOT_CONST
-pp CrystalModule2.self_def
-pp CrystalModule2.CrystalClass.class_func
-pp CrystalModule2.root_def
+say "self-extended (includes root_def):".white
+p "CrystalModule2", CrystalModule2
+p "CrystalModule2.ROOT_CONST", CrystalModule2.ROOT_CONST
+p "CrystalModule2.CrystalClass", CrystalModule2.CrystalClass
+p "CrystalModule2.CrystalClass.CLASS_ROOT_CONST", CrystalModule2.CrystalClass.CLASS_ROOT_CONST
+p "CrystalModule2.self_def", CrystalModule2.self_def
+p "CrystalModule2.CrystalClass.class_func", CrystalModule2.CrystalClass.class_func
+p "CrystalModule2.root_def", CrystalModule2.root_def
 
 -- # Should not work despite `extend self`:
--- pp CrystalModule.MODULE_CONST
--- pp CrystalModule.CrystalClass.CLASS_CONST
--- pp CrystalModule::CrystalClass.memb_func
+-- pp "CrystalModule.MODULE_CONST", CrystalModule.MODULE_CONST
+-- pp "CrystalModule.CrystalClass.CLASS_CONST", CrystalModule.CrystalClass.CLASS_CONST
+-- pp "CrystalModule::CrystalClass.memb_func", CrystalModule::CrystalClass.memb_func
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- This module begins here and continues to EOF
