@@ -79,13 +79,13 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
 - **Further**:
     - Dead _simple to call C code_ by writing bindings to it in Onyx.
     - Full _compatibility with Crystal_ modules - the language AST core - (any Crystal module can be used seamlessly in the same project) to enlarge the module universe.
-        - It's hard for novel new-kid-on-the-block languages to get established when there are no libs (well, even then). Sharing a module universe with another language facilitates both's usage in the real world.
+        - It's hard for novel new-kid-on-the-block languages to get established when there are no libs (well, even then). Sharing a module universe with another language facilitates usage of both in the real world.
     - During development, we'll _try_ to build "upgrade" functionality into the
     compiler to upgrade user code when syntax changes / gets deprecated. That way more serious code can be written without worrying about completely rewriting it. (I'm using it for side-projects in order to get "real-world testing" of it)
 
 ## What do you mean with scientific approach? ##
 
-Well, there are very few quantitative - or otherwise - studies concerning coding directly. So admittedly the statement could be seen a kind of vague.
+Well, there are very few quantitative - or otherwise - studies concerning coding directly. So admittedly the statement could be seen as kind of vague.
 _The focus is on the actual performance of a human being reading, writing and reasoning on code to accomplish a task._
 
 What is _not_ meant is "highly abstract functional lambda theory proofs from outer space when the cat is and isn't in the cradle and/or you give a shit".
@@ -176,6 +176,8 @@ Any other contender you think is better? Tell us. So Onyx can be made better.
 
 ## What does it look like currently? ##
 
+GitHub doesn't accept highlighters until there are hundreds of repositories using it, so to view these with highlighting you currently have to resort to _Sublime Text_.
+
 For Crystalers, the front page example in Onyx will be very familiar:
 
 ```onyx
@@ -183,7 +185,7 @@ For Crystalers, the front page example in Onyx will be very familiar:
 require "http/server"
 
 server = HTTP.Server 8080, |request|
-  HTTP.Response.ok "text/plain", "Hello world! You called me on {{request.path}} at {{Time.now}}!"
+  HTTP.Response.ok "text/plain", "Hello world! You called me on {request.path} at {Time.now}!"
 
 say "Listening on http://0.0.0.0:8080"
 server.listen
@@ -193,48 +195,88 @@ A rather contrived example, just to show some basic constructs:
 
 ```onyx
 
-*TODO* *UNTESTED* *VERIFY*
-
-*TODO* split up in "clean version", and "explained version"
-
--- types inherits `Class` by default if nothing else specified
+-- *TODO* *UNTESTED* *VERIFY*
 
 type Greeter
     greeting–phrase = "Greetings,"
-    -- greeting–phrase Str = "Greetings," -- a more explicit way
 
     init() ->
-        -- do nothing - just keep defaults
 
     init(@greeting–phrase) ->
-        -- do nothing in body. Sugar for assigning a member did all we need!
+
+    greet(who–or–what) ->!
+        say make–greeting who–or–what
+
+    make–greeting(who–or–what) ->
+        "{@greeting–phrase} {who–or–what}"
+    end
+end
+
+type HelloWorldishGreeter < Greeter
+    greeting–phrase = "Hello"
+end-type
+
+greeter = HelloWorldishGreeter "Goodbye cruel"
+greeter.greet "world"  -- => "Goodbye cruel world"
+
+```
+
+And with some added explanations:
+```onyx
+
+-- *TODO* *UNTESTED* *VERIFY*
+
+-- comments are started with two dashes - rather natural
+-- types inherits `Reference` by default if nothing else specified
+-- all types begin with a capital
+
+type Greeter
+    greeting–phrase = "Greetings,"  -- can prefix with `@` (like usage syntax)
+    -- @greeting–phrase Str = "Greetings," -- typing it explicitly
+    -- separator (-|–|_|aA) completely interchangable so above can be referred
+    -- to as @greeting_phrase, @greetingPhrase etc. from _your_ code - should
+    -- you prefer a different style than a lib-author
+
+    init() ->        -- does nothing - just keep defaults
+
+    init(@greeting–phrase) ->
+        -- does nothing in body. Sugar for assigning a member in the parameter
+        -- did all we need! (the `@` prefix to parameter name)
 
     -- above could have been written more verbose; in many different levels.
-    -- def init(greeting–phrase Str) ->
+    -- init(greeting–phrase Str) ->
     --     @greeting–phrase = greeting–phrase
-    -- end–def
+    -- end–def  -- ending expressions blocks, is implicit, but can be done
+                -- explicitly. Here it even designates the type of block (def)
 
     -- define a method that greets someone
-    greet(who–or–what) ->!  -- returns nothing
+    greet(who–or–what) ->!  -- `->!` is a short cut for methods that returns
+                            -- "nothing", it's ensured that return value is nil
         say make–greeting who–or–what
-        -- separator (-|–|_|aA) completely interchangable
         -- say(make–greeting(who–or–what)) -- parentheses or "juxtapos-calls"
 
     -- a method that constructs the message
     make–greeting(who–or–what) ->
-        "{{@greeting–phrase}} {{who–or–what}}"  -- returns last expression
-    end  -- you can explicitly end code block at will
+        -- interpolation of exprs within strings is done with simple braces
+        "{@greeting–phrase} {who–or–what}"  -- last expression is returned
+    end  -- as mentioned, you can explicitly end code block at will
 
     -- All on one line works too of course:
-    -- make–greeting(who–or–what) -> "{{@greeting–phrase}} {{who–or–what}}"
+    -- make–greeting(who–or–what) -> "{@greeting–phrase} {who–or–what}"
 
 end–type -- you can be even more explicit about end–tokens at will
 
-type HelloWorldishGreeter << Greeter
+type HelloWorldishGreeter < Greeter
     greeting–phrase = "Hello"
 end
 
-greeter = HelloWorldishGreeter("Goodbye cruel")
+greeter = HelloWorldishGreeter "Goodbye cruel"
+-- Some variations of writing the same thing (call syntax on a type is sugar
+-- for calling a `new` function defined on the type):
+-- greeter = HelloWorldishGreeter("Goodbye cruel")
+-- greeter = HelloWorldishGreeter.new("Goodbye cruel")
+-- greeter = HelloWorldishGreeter.new "Goodbye cruel"
+
 greeter.greet "world" --  => "Goodbye cruel world"
 
 ```
