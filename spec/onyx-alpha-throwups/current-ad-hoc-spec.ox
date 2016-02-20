@@ -73,7 +73,7 @@ say "facts: {facts}"
 
 MY_CONST = do
    x = 0
-   2.upto(4).each |a|
+   2.upto(4).each (a) ~>
       x += a
       say "calculating MY_CONST, {a}"
    x
@@ -83,7 +83,7 @@ pp MY_CONST
 pp $.say "blargh"
 -- *TODO* $.MY_CONST / Program.MY_CONST ?
 pp $.MY_CONST
-pp ::MY_CONST
+-- pp ::MY_CONST
 -- pp Program.MY_CONST
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -155,8 +155,8 @@ end
 
 say "1"
 
-Djur::Boo::Apa.my-def
-say "Djur::Boo::Legs::TWO = {Djur::Boo::Legs::TWO}"
+-- Djur::Boo::Apa.my-def
+-- say "Djur::Boo::Legs::TWO = {Djur::Boo::Legs::TWO}"
 
 -- say Djur.Boo.Apa.foo’ -- *NOTE* perhaps a better error message: "No method with the name `{name}` found, only a private variable. Make a getter and/or setter method to access it from the outside world"
 Djur.Boo.Apa.my-def
@@ -178,11 +178,11 @@ type Blk
    ;
 ;
 
-blk = Blk(4, |x|
+blk = Blk(4, (x) ~>
    say "in blk init block: {x}"
 )
 
-blk2 = Blk 7, |x|
+blk2 = Blk 7, (x) ~>
    say "in blk2 init block: {x}"
 
 
@@ -341,19 +341,41 @@ list = List[Str]()
 list << "foo"
 list << "yaa"
 
-v = list.map(|x, y| x + "1")
-w = list.map |x, y| "{x} 47"
-i = list.map |x, y| => "{x} 13"
+v = list.map((x, y) ~> x + "1")
+w = list.map (x, y) ~> "{x} 47"
+
+i = list.map (x, y) ~> "{x} 13"
+-- i = list.map (x, y) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
+
 j = list.map ~> "{_1} 13"
 
 puts "{v}, {w}"
 
 
 list = [47, 13, 42, 11]
-x = list.each(|v| p v).map(~> _1 * 2)
-y = ((list.each(|v| p v)).map(~> _1 * 2))
-z = list.each(|v| p v).map ~> _1 * 2
-u = list.each(|v| p v).map ~> _1 * 2
+say " x:"
+x = list.each((v) ~> p v).map(~> _1 * 2)
+say " y:"
+y = ( ( list.each((v) ~> p v) ).map(~> _1 * 2) )
+say " z:"
+z = list.each((v) ~> p v).map ~> _1 * 2
+say " u:"
+u = list.each((v) ~> p v).map ~> _1 * 2
+say " v:"
+v = ( ( list.each((v) ~> p v) ).map ~.* 2 )
+say " w:"
+w = ( ( list.each((v) ~> p v) ).map(~.* 2))
+say " pw:"
+pw = (list.each ~> p _1).map ~.* 2
+
+say "All lists should equal [94, 26, 84, 22]"
+say x
+say y
+say z
+say u
+say v
+say w
+say pw
 
 -- def say(s) -> puts s
 
@@ -886,10 +908,10 @@ list = ["foo", "yaa", "qwö"]
 say "the 2nd list ({list.class}): {list}"
 
 -- single line block style #2
-y = list.each(|v| p v).map ~> _1 * 2
+y = list.each((v) ~> p v).map ~.* 2
 
 -- multiline block style #2
-y = (list.each |v|
+y = (list.each (v) ~>
    p v
 ).map ~>
    _1 * 2
@@ -902,11 +924,11 @@ list.each–with–index ~>
    p _1
    break if _2 == 4
 
-list.each–with–index |v, i|
+list.each–with–index (v, i) ~>
    p v
    break if i == 4
 
-(list.map |x| x + "X").each–with–index |x,y|
+(list.map (x) ~> x + "X").each–with–index (x, y) ~>
    p x
    break if y == 4
 
@@ -936,7 +958,7 @@ list.each–with–index ~>
 for val in list
    say val
 
-list.each |val|
+list.each (val) ~>
   say("implicit nest {val.to_s}")
 end
 
@@ -1206,7 +1228,7 @@ type FooStyle2<S1> < Bar
    --    fn fn–1aa(x) ->  |public;  nil   -- should this be legal? - looks very confusing!
    --    fn fn–1ab(x) Nil -> |public;  nil   -- should this be legal? - looks very confusing!
 
-   -- |private |inline:
+   -- (private ) ~>inline:
    --    fn fn–1ba(x)! -> nil
    --    fn fn–1ca(x)! ->
    --    fn fn–1da(x) -> nil | pure
@@ -1217,7 +1239,7 @@ type FooStyle2<S1> < Bar
    fn fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
    fn fn–1ab(x) Nil -> 'pure;  nil   -- should this be legal? - looks very confusing!
 
-   -- |private |inline
+   -- (private ) ~>inline
    'inline 'pure
    fn fn–1ba*(x) ->! nil
    fn fn–1ca(x) ->!

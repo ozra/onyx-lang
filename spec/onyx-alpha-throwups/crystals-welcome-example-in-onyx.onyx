@@ -1,7 +1,7 @@
 -- A very basic HTTP server
 require "http/server"
 
-server = HTTP.Server 8080, |request|
+server = HTTP.Server 8080, (request) ~>
   HTTP.Response.ok "text/plain", "Hello world! You called me on {request.path} at {Time.now}!"
 
 say "Listening on http://0.0.0.0:8080"

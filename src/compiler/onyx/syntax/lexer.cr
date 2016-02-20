@@ -570,6 +570,8 @@ module Crystal
         end
       when '~'
         case nextch
+        when '.'
+          toktype_then_nextch :"~."
         when '>'
           toktype_then_nextch :"~>"
         when '='
