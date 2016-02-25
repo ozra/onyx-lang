@@ -19,16 +19,21 @@ echo ""
 echo "If shit happens - create an issue at https://github.com/ozra/onyx-lang/issues (first make sure it's not already reported!)"
 echo ""
 
+echo "Let's sudo you first, so that's done:"
+sudo mkdir -p /opt
+
+
 echo "Gets Crystal 0.12.0"
 
 # curl can't handle the redirect to data-store!
 wget 'https://github.com/manastech/crystal/releases/download/0.12.0/crystal-0.12.0-1-linux-x86_64.tar.gz' -O - | tar zx
-echo "Installs Crystal 0.12.0 at /opt/crystal/"
+echo "Installs Crystal 0.12.0 at /opt/cr-ox/"
 
 sudo mkdir -p /opt
-sudo rm -rf /opt/crystal
-sudo cp -a crystal-0.12.0-1/ /opt/crystal
-sudo ln -fs /opt/crystal/bin/crystal /usr/local/bin/crystal
+sudo rm -rf /opt/cr-ox
+sudo cp -a crystal-0.12.0-1/ /opt/cr-ox
+sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox
+sudo ln -fs /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox
 
 rm -rf crystal-0.12.0-1
 # echo "Get Onyx latest"
@@ -39,7 +44,8 @@ rm -rf crystal-0.12.0-1
 cd $onyx_repo
 
 echo ""
-echo "Compiles Onyx Compiler. This may take a while - meanwhile you have some options:"
+echo "Compiles Onyx compiler in release mode."
+echo "This may take a while - meanwhile you have some options:"
 echo ""
 echo "  - stretch your legs and grab a coffee."
 echo "  - or a cigar."
@@ -52,14 +58,14 @@ echo ""
 
 # LIBRARY_PATH="/opt/crystal/embedded/lib/;$LIBRARY_PATH"
 # CRYSTAL_CONFIG_PATH=`pwd`/src crystal build --release --link-flags "-L/opt/crystal/embedded/lib" -o .build/onyx src/compiler/onyx.cr
-CRYSTAL_CONFIG_PATH=`pwd`/src ./bin/crystal build --release -o .build/onyx src/compiler/onyx.cr
+CRYSTAL_CONFIG_PATH=`pwd`/src ./bin/cr-ox build --release -o .build/onyx src/compiler/onyx.cr
 
 echo "Installs Onyx at /opt/onyx/"
 echo ""
 
 sudo rm -rf /opt/onyx
 sudo mkdir -p /opt/onyx/bin
-sudo cp -a /opt/crystal/embedded/ /opt/onyx/
+sudo cp -a /opt/cr-ox/embedded/ /opt/onyx/
 sudo cp -a src /opt/onyx/
 sudo cp .build/onyx /opt/onyx/embedded/bin/onyx
 

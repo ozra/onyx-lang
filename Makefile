@@ -23,7 +23,7 @@ bootstrap:
 spec: all_spec
 	$(O)/all_spec
 doc:
-	$(BUILD_PATH) ./bin/crystal doc docs/main.cr
+	$(BUILD_PATH) ./bin/cr-ox doc docs/main.cr
 
 onyx: $(O)/onyx
 
@@ -35,11 +35,11 @@ deps: llvm_ext libcrystal
 
 $(O)/all_spec: deps $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) ./bin/crystal build $(FLAGS) -o $@ spec/all_spec.cr
+	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/all_spec.cr
 
 $(O)/onyx: deps $(SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) $(EXPORTS) ./bin/crystal build $(FLAGS) -o $@ src/compiler/onyx.cr
+	$(BUILD_PATH) $(EXPORTS) ./bin/cr-ox build $(FLAGS) -o $@ src/compiler/onyx.cr
 
 $(LLVM_EXT_OBJ): $(LLVM_EXT_DIR)/llvm_ext.cc
 	$(CXX) -c -o $@ $< `$(LLVM_CONFIG) --cxxflags`
