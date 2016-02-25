@@ -155,7 +155,7 @@ module Crystal
         end
         @dot_column = nil
 
-        skip_space
+        found_comment = skip_space
 
         if @token.type == :";"
           if needs_two_lines
@@ -185,9 +185,11 @@ module Crystal
           skip_space_or_newline last: true
         else
           if needs_two_lines
-            skip_space_write_line
-            found_comment = skip_space_or_newline last: true, at_least_one: true
-            write_line unless found_comment
+            unless found_comment
+              skip_space_write_line
+              found_comment = skip_space_or_newline last: true, at_least_one: true
+              write_line unless found_comment
+            end
           else
             consume_newlines
           end
@@ -1878,8 +1880,8 @@ module Crystal
         skip_space_or_newline
       end
 
-      # This is for foo &.[bar] and &.[bar]?
-      if !obj && (node.name == "[]" || node.name == "[]?") && @token.type == :"["
+      # This is for foo &.[bar] and &.[bar]?, or foo.[bar] and foo.[bar]?
+      if (node.name == "[]" || node.name == "[]?") && @token.type == :"["
         write "["
         next_token_skip_space_or_newline
         format_call_args(node, false)
@@ -2437,7 +2439,12 @@ module Crystal
     end
 
     def visit(node : VisibilityModifier)
-      write_keyword node.modifier, " "
+      case node.modifier
+      when .private?
+        write_keyword :private, " "
+      when .protected?
+        write_keyword :protected, " "
+      end
       accept node.exp
 
       false

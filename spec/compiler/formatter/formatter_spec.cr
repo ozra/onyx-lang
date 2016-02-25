@@ -799,4 +799,9 @@ describe Crystal::Formatter do
   assert_format "foo &.[]?(  1, 2  )", "foo &.[]?(1, 2)"
   assert_format "foo &.[]=(1, 2)"
   assert_format "foo &.[]=(  1, 2  )", "foo &.[]=(1, 2)"
+
+  assert_format "foo.[]"
+  assert_format "foo.[1]"
+
+  assert_format "@foo : Int32 # comment\n\ndef foo\nend"
 end

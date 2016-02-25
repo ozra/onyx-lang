@@ -38,11 +38,10 @@ module Crystal
       @metaclass = metaclass
     end
 
-    def type_id
-      @type_id ||= program.next_type_id
-    end
-
-    def type_id=(@type_id)
+    # An opaque id of every type. 0 for Nil, non zero for others, so we can
+    # sort types by opaque_id and have Nil in the begining.
+    def opaque_id
+      self.is_a?(NilType) ? 0_u64 : object_id
     end
 
     def passed_as_self?
@@ -609,8 +608,8 @@ module Crystal
     def add_def(a_def)
       a_def.owner = self
 
-      if !a_def.visibility && a_def.name == "initialize"
-        a_def.visibility = :protected
+      if a_def.visibility.public? && a_def.name == "initialize"
+        a_def.visibility = Visibility::Protected
       end
 
       item = DefWithMetadata.new(a_def)
@@ -1279,10 +1278,6 @@ module Crystal
   end
 
   class NilType < PrimitiveType
-    def type_id
-      0
-    end
-
     def nil_type?
       true
     end
@@ -2580,11 +2575,15 @@ module Crystal
     end
 
     def to_s_with_options(io : IO, skip_union_parens = false : Bool, generic_args = true : Bool)
-      io << "(" unless skip_union_parens
-      @union_types.each_with_index do |union_type, i|
-        io << " | " if i > 0
-        union_type.to_s(io)
+      # Use T? if this is a nilable type with just two types inside it
+      if @union_types.size == 2 && @union_types.last.is_a?(NilType)
+        io << @union_types.first
+        io << "?"
+        return
       end
+
+      io << "(" unless skip_union_parens
+      names = @union_types.join(" | ", io)
       io << ")" unless skip_union_parens
     end
 

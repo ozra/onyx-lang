@@ -177,9 +177,9 @@ describe "Parser" do
   it_parses ":foo", "foo".symbol
   it_parses ":[]=", "[]=".symbol
   it_parses ":[]?", "[]?".symbol
-  it_parses ":\"\\\\foo\"", "\\\\foo".symbol
-  it_parses ":\"\\\"foo\"", "\\\"foo".symbol
-  it_parses ":\"\\\"foo\\\"\"", "\\\"foo\\\"".symbol
+  it_parses %(:"\\\\foo"), "\\foo".symbol
+  it_parses %(:"\\\"foo"), "\"foo".symbol
+  it_parses %(:"\\\"foo\\\""), "\"foo\"".symbol
 
   it_parses "[1, 2]", ([1.int32, 2.int32] of ASTNode).array
   it_parses "[\n1, 2]", ([1.int32, 2.int32] of ASTNode).array
@@ -367,6 +367,9 @@ describe "Parser" do
   it_parses "foo(&.responds_to?(:foo))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], RespondsTo.new(Var.new("__arg0"), "foo")))
   it_parses "foo &.each {\n}", Call.new(nil, "foo", block: Block.new(["__arg0".var], Call.new("__arg0".var, "each", block: Block.new)))
   it_parses "foo &.each do\nend", Call.new(nil, "foo", block: Block.new(["__arg0".var], Call.new("__arg0".var, "each", block: Block.new)))
+
+  it_parses "foo.[0]", Call.new("foo".call, "[]", 0.int32)
+  it_parses "foo.[0] = 1", Call.new("foo".call, "[]=", [0.int32, 1.int32] of ASTNode)
 
   it_parses "foo(a: 1, b: 2)", Call.new(nil, "foo", named_args: [NamedArgument.new("a", 1.int32), NamedArgument.new("b", 2.int32)])
   it_parses "foo(1, a: 1, b: 2)", Call.new(nil, "foo", [1.int32] of ASTNode, named_args: [NamedArgument.new("a", 1.int32), NamedArgument.new("b", 2.int32)])
@@ -1001,8 +1004,8 @@ describe "Parser" do
   it_parses "foo[*baz]", Call.new("foo".call, "[]", "baz".call.splat)
   it_parses "foo[*baz] = 1", Call.new("foo".call, "[]=", ["baz".call.splat, 1.int32] of ASTNode)
 
-  it_parses "private def foo; end", VisibilityModifier.new(:private, Def.new("foo"))
-  it_parses "protected def foo; end", VisibilityModifier.new(:protected, Def.new("foo"))
+  it_parses "private def foo; end", VisibilityModifier.new(Visibility::Private, Def.new("foo"))
+  it_parses "protected def foo; end", VisibilityModifier.new(Visibility::Protected, Def.new("foo"))
 
   it_parses "`foo`", Call.new(nil, "`", "foo".string)
   it_parses "`foo\#{1}bar`", Call.new(nil, "`", StringInterpolation.new(["foo".string, 1.int32, "bar".string] of ASTNode))
@@ -1067,8 +1070,8 @@ describe "Parser" do
 
   it_parses "enum Foo; @@foo = 1\n A \n end", EnumDef.new("Foo".path, [Assign.new("@@foo".class_var, 1.int32), Arg.new("A")] of ASTNode)
 
-  it_parses "enum Foo; private def foo; 1; end; end", EnumDef.new("Foo".path, [VisibilityModifier.new(:private, Def.new("foo", body: 1.int32))] of ASTNode)
-  it_parses "enum Foo; protected def foo; 1; end; end", EnumDef.new("Foo".path, [VisibilityModifier.new(:protected, Def.new("foo", body: 1.int32))] of ASTNode)
+  it_parses "enum Foo; private def foo; 1; end; end", EnumDef.new("Foo".path, [VisibilityModifier.new(Visibility::Private, Def.new("foo", body: 1.int32))] of ASTNode)
+  it_parses "enum Foo; protected def foo; 1; end; end", EnumDef.new("Foo".path, [VisibilityModifier.new(Visibility::Protected, Def.new("foo", body: 1.int32))] of ASTNode)
 
   it_parses "1.[](2)", Call.new(1.int32, "[]", 2.int32)
   it_parses "1.[]?(2)", Call.new(1.int32, "[]?", 2.int32)

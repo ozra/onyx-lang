@@ -28,6 +28,55 @@ describe "YAML" do
       doc.should eq(["foo", "foo"])
       doc[0].raw.should be(doc[1].raw)
     end
+
+    describe "merging with << key" do
+      it "merges other mapping" do
+        doc = YAML.parse(%(---
+          foo: bar
+          <<:
+            baz: foobar
+          ))
+        doc["baz"]?.should eq("foobar")
+      end
+
+      it "raises if merging with missing alias" do
+        expect_raises do
+          YAML.parse(%(---
+            foo:
+              <<: *bar
+          ))
+        end
+      end
+
+      it "doesn't merge explicit string key <<" do
+        doc = YAML.parse(%(---
+          foo: &foo
+            hello: world
+          bar:
+            !!str '<<': *foo
+        ))
+        doc.should eq({"foo": {"hello": "world"}, "bar": {"<<": {"hello": "world"}}})
+      end
+
+      it "doesn't merge empty mapping" do
+        doc = YAML.parse(%(---
+          foo: &foo
+          bar:
+            <<: *foo
+        ))
+        doc["bar"].should eq({"<<": ""})
+      end
+
+      it "doesn't merge arrays" do
+        doc = YAML.parse(%(---
+          foo: &foo
+            - 1
+          bar:
+            <<: *foo
+        ))
+        doc["bar"].should eq({"<<": ["1"]})
+      end
+    end
   end
 
   describe "dump" do

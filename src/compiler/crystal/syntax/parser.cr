@@ -6,7 +6,7 @@ module Crystal
   class Parser < Lexer
     record Unclosed, name, location
 
-    property visibility
+    property visibility : Visibility?
     property def_nest
     property type_nest
     getter? wants_doc
@@ -550,7 +550,7 @@ module Crystal
 
     parse_operator :pow, :atomic_with_method, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
 
-    AtomicWithMethodCheck = [:IDENT, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"!=", :"=~", :"!~", :">>", :">", :">=", :"<=>", :"||", :"&&", :"===", :"[]", :"[]=", :"[]?", :"!"]
+    AtomicWithMethodCheck = [:IDENT, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"!=", :"=~", :"!~", :">>", :">", :">=", :"<=>", :"||", :"&&", :"===", :"[]", :"[]=", :"[]?", :"[", :"!"]
 
     def parse_atomic_with_method
       location = @token.location
@@ -620,6 +620,8 @@ module Crystal
             atomic = parse_is_a(atomic).at(location)
           elsif @token.value == :responds_to?
             atomic = parse_responds_to(atomic).at(location)
+          elsif @token.type == :"["
+            return parse_atomic_method_suffix(atomic, location)
           else
             name = @token.type == :IDENT ? @token.value.to_s : @token.type.to_s
             end_location = token_end_location
@@ -1004,9 +1006,9 @@ module Crystal
         when :typeof
           parse_typeof
         when :private
-          parse_visibility_modifier :private
+          parse_visibility_modifier Visibility::Private
         when :protected
-          parse_visibility_modifier :protected
+          parse_visibility_modifier Visibility::Protected
         when :asm
           parse_asm
         else
@@ -1289,6 +1291,8 @@ module Crystal
         next_token_skip_space
 
         location = @token.location
+
+        check AtomicWithMethodCheck
 
         if @token.value == :is_a?
           call = parse_is_a(obj).at(location)
@@ -2782,7 +2786,7 @@ module Crystal
 
       node = Def.new name, args, body, receiver, block_arg, return_type, is_macro_def, @yields, is_abstract, splat_index
       node.name_column_number = name_column_number
-      node.visibility = @visibility
+      set_visibility node
       node.end_location = end_location
       node
     end
@@ -4414,10 +4418,10 @@ module Crystal
 
           case @token.value
           when :private
-            visibility = :private
+            visibility = Visibility::Private
             next_token_skip_space
           when :protected
-            visibility = :protected
+            visibility = Visibility::Protected
             next_token_skip_space
           end
 

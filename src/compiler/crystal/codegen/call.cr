@@ -57,10 +57,17 @@ class Crystal::CodeGenVisitor
     call_args = Array(LLVM::Value).new(node.args.size + 1)
     old_needs_value = @needs_value
 
-    # First self.
-    if (obj = node.obj) && obj.type.passed_as_self?
+    obj = node.obj
+
+    # Always accept obj: even if it's not passed as self this might
+    # involve intermerdiate calls with side effects.
+    if obj
       @needs_value = true
       accept obj
+    end
+
+    # First self.
+    if obj && obj.type.passed_as_self?
       call_args << downcast(@last, target_def.owner, obj.type, true)
     elsif owner.passed_as_self?
       if node.uses_with_scope? && (yield_scope = context.vars["%scope"]?)
@@ -230,8 +237,9 @@ class Crystal::CodeGenVisitor
         context.reset_closure
 
         target_def = node.target_def
-        node.ensure_exception_handler = current_ensure_exception_handler
-        target_def.ensure_exception_handler = current_ensure_exception_handler
+
+        set_ensure_exception_handler(node)
+        set_ensure_exception_handler(target_def)
 
         alloca_vars target_def.vars, target_def
         create_local_copy_of_block_args(target_def, self_type, call_args)
@@ -279,7 +287,7 @@ class Crystal::CodeGenVisitor
     obj_type_id = type_id(obj_type_id, owner)
 
     # Create self var if available
-    if node_obj && node_obj.type.passed_as_self?
+    if node_obj
       new_vars["%self"] = LLVMVar.new(@last, node_obj.type, true)
     end
 

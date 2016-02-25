@@ -25,17 +25,16 @@ module Crystal
       super(self, self, "main")
 
       @symbols = Set(String).new
-      @global_vars = {} of String => Var
+      @global_vars = {} of String => Global
       @requires = Set(String).new
       @temp_var_counter = 0
-      @type_id_counter = 1
       @crystal_path = CrystalPath.new
       @vars = MetaVars.new
       @def_macros = [] of Def
       @splat_expansions = {} of Def => Type
       @initialized_global_vars = Set(String).new
       @file_modules = {} of String => FileModule
-      @unions = {} of Array(Int32) => Type
+      @unions = {} of Array(UInt64) => Type
       @wants_doc = false
       @color = true
       @after_inference_types = Set(Type).new
@@ -95,7 +94,6 @@ module Crystal
       @types["String"] = string = @string = NonGenericClassType.new self, self, "String", reference
       string.instance_vars_in_initialize = Set.new(["@bytesize", "@length", "@c"])
       string.allocated = true
-      string.type_id = String::TYPE_ID
 
       string.lookup_instance_var("@bytesize").set_type(@int32)
       string.lookup_instance_var("@length").set_type(@int32)
@@ -169,7 +167,7 @@ module Crystal
     end
 
     def check_private(node)
-      return nil unless node.visibility == :private
+      return nil unless node.visibility.private?
 
       location = node.location
       return nil unless location
@@ -198,10 +196,6 @@ module Crystal
       false
     end
 
-    def next_type_id
-      @type_id_counter += 1
-    end
-
     def array_of(type)
       array.instantiate [type] of TypeVar
     end
@@ -217,15 +211,17 @@ module Crystal
       when 1
         types.first
       else
-        types = types.sort_by! &.type_id
-        types_ids = types.map(&.type_id)
-        @unions[types_ids] ||= make_union_type(types, types_ids)
+        types.sort_by! &.opaque_id
+        opaque_ids = types.map(&.opaque_id)
+        @unions[opaque_ids] ||= make_union_type(types, opaque_ids)
       end
     end
 
-    def make_union_type(types, types_ids)
-      # NilType has type_id == 0
-      if types_ids.first == 0
+    def make_union_type(types, opaque_ids)
+      # NilType has opaque_id == 0
+      has_nil = opaque_ids.first == 0
+
+      if has_nil
         # Check if it's a Nilable type
         if types.size == 2
           other_type = types[1]
@@ -241,7 +237,19 @@ module Crystal
           end
         end
 
-        if types.all? &.reference_like?
+        # Remove the Nil type now and later insert it at the end
+        nil_type = types.shift
+      end
+
+      # Sort by name so a same union type, say `Int32 | String`, always is named that
+      # way, regardless of the actual order of the types. However, we always put
+      # Nil at the end, inside the `nil_type` check.
+      types.sort_by! &.to_s
+
+      if nil_type
+        types.push nil_type
+
+        if types.all?(&.reference_like?)
           return NilableReferenceUnionType.new(self, types)
         else
           return MixedUnionType.new(self, types)
