@@ -129,7 +129,7 @@ facts = SomeFacts.flags AppleLover, CoolDude
 say "facts: {facts}"
 say typeof(facts)
 
-facts = facts .|. SomeFacts.PearLover
+facts .|.= SomeFacts.PearLover
 say "facts: {facts}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -731,8 +731,6 @@ apa = #apa
 katt = "katt"
 panter = 947735
 
--- *TODO* Allow below to act just as a JS-hash?
--- now it acts like arrow hash
 js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
 say "perhaps to be js–hash: {js–hash}"
 
@@ -769,9 +767,9 @@ say json-hash:katt, json-hash:panter
 
 if json-hash:katt: say "Yeeeaaaah"
 
-say json-hash:fuck?
-json-hash:fuck = "47777777"
-say json-hash:fuck
+say json-hash:neat-literal?
+json-hash:neat-literal = "47777777"
+say json-hash:neat-literal
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

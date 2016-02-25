@@ -4085,29 +4085,34 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
          new_hash_literal([] of HashLiteral::Entry, line, column, end_location)
       else
-
-
-         first_key = parse_op_assign
-         case @token.type
-         when :":"
-            # It's a hash!
-
-         when :",", :NEWLINE, :INDENT, :DEDENT
-            parse_item_separator
+         if tok?(:IDFR) && (parser_peek_non_ws_char == ':')
+            first_key = StringLiteral.new @token.value.to_s
+            next_token_skip_space_or_newline
             slash_is_regex!
-            # next_token_skip_space_or_newline
-            return parse_tuple first_key, location
-         when :"}"
-            return parse_tuple first_key, location
+            next_token_skip_space_or_newline  # skips :":"
+            return parse_hash_literal first_key, location, allow_of
+
          else
-            check :"=>"
-            # check :":"
+            first_key = parse_op_assign
+            case @token.type
+            when :":", :"=>"
+               slash_is_regex!
+               next_token_skip_space_or_newline
+               return parse_hash_literal first_key, location, allow_of
+
+            when :",", :NEWLINE, :INDENT, :DEDENT
+               parse_item_separator
+               slash_is_regex!
+               # next_token_skip_space_or_newline
+               return parse_tuple first_key, location
+
+            when :"}"
+               return parse_tuple first_key, location
+            else
+               raise "expected to parse hash or tuple literal - but now I'm lost"
+               # check :":"
+            end
          end
-
-
-         slash_is_regex!
-         next_token_skip_space_or_newline
-         parse_hash_literal first_key, location, allow_of
       end
    end
 
@@ -4123,26 +4128,29 @@ class OnyxParser < OnyxLexer
       open("hash literal", location) do
          entries << HashLiteral::Entry.new(first_key, parse_op_assign)
 
-         # *TODO* should use same as below *DRY*!
          skip_statement_end
 
-         if @token.type == :","
+         if tok? :",", :NEWLINE, :INDENT, :DEDENT
+            parse_item_separator
             slash_is_regex!
-            next_token_skip_space_or_newline
+            # next_token_skip_space_or_newline
          end
 
          while @token.type != :"}"
             dbg "HASH: key token is?"
 
-            key = parse_op_assign
+            if tok?(:IDFR) && (parser_peek_non_ws_char == ':')
+               key = StringLiteral.new @token.value.to_s
+               next_token_skip_space_or_newline
+            else
+               key = parse_op_assign
+            end
 
             slash_is_regex!
 
             dbg "HASH: value token is?"
 
-            # *TODO* check if ':', then plain idfr is string instead, if '=>'
-            # then it's handled as is (var, func or whatever)
-            next_token_skip_space_or_newline
+            next_token_skip_space_or_newline  # skips :":" | :"=>"
 
             entries << HashLiteral::Entry.new(key, parse_op_assign)
 
@@ -6054,7 +6062,7 @@ class OnyxParser < OnyxLexer
             :CLASS_VAR, :CONST, :GLOBAL, :"$.", :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX,
             :REGEX, :"(", :"!", :not, :"[", :"[]", :".~.", :"&", :"->",
             :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE,   :"~>", :"~."
-            # *TODO* these conflicts with when below (which normally has precedance - both routes can never take:   :"+", :"-", 
+            # *TODO* these conflicts with when below (which normally has precedance - both routes can never take:   :"+", :"-",
          dbg "- parse_call_args_spaced_any_non_call_hints? - one of the WANTED token.types "
          # Nothing - because these are the ones we WANT to handle
 
