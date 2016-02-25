@@ -764,10 +764,14 @@ say "ACCESS TERSECUTS!".yellow
 list = [47, 13, 42, 11]
 say list.1, list.2?, list.4?
 
--- say tag-hash-2#katt
--- say json-hash:katt, json-hash:panter
+say tag-hash-2#katt
+say json-hash:katt, json-hash:panter
 
--- if json-hash:katt: say "Yeeeaaaah"
+if json-hash:katt: say "Yeeeaaaah"
+
+say json-hash:fuck?
+json-hash:fuck = "47777777"
+say json-hash:fuck
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

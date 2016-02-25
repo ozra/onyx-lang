@@ -1111,13 +1111,17 @@ class OnyxParser < OnyxLexer
    def parse_atomic_method_suffix(atomic, location)
       dbg "parse_atomic_method_suffix"
 
+      # Must not be spaced:
+      if tok?(:"#", :":", :SYMBOL)
+         return parse_atomic_method_suffix_terse_literal_subscript atomic, location
+      end
+
       while true
          maybe_mutate_gt_op_to_bigger_op
 
          case @token.type
          when :SPACE
             next_token
-
          # when :"\""
          #    # *TODO* string–literal–type–creation
          #    # etc. user implemented (?)
@@ -1210,6 +1214,60 @@ class OnyxParser < OnyxLexer
       atomic
    end
 
+   def parse_atomic_method_suffix_terse_literal_subscript(atomic, location)
+      if tok? :SYMBOL
+         klass = TagLiteral
+      else
+         return atomic if current_char == ' '
+         return atomic if current_char == '-'
+         return atomic if current_char == '\n'
+
+         klass = tok?(:":") ? StringLiteral : TagLiteral
+         next_token
+
+         if !tok? :IDFR
+            dbgtail_off!
+            raise "Expected identifer!"
+         end
+      end
+
+      # check_void_value atomic, location
+      column_number = @token.column_number
+      key = @token.value.to_s
+
+      if key[-1] == '?'
+         key = key[0..-1]
+         is_nilly = true
+      else
+         is_nilly = false
+      end
+
+      args = [] of ASTNode
+      # args << klass.new @token.value.to_s   -- not working cause of 'Nop' - think above klass becomas ASTNode+...
+      if klass == TagLiteral
+         args << TagLiteral.new key
+      else
+         args << StringLiteral.new key
+      end
+      next_token
+
+      if @token.type == :"?"
+         is_nilly = true
+         next_token_skip_space
+      else
+         skip_space
+      end
+
+      method_name = is_nilly ? "[]?" : "[]"
+
+      atomic = Call.new(atomic, method_name, args,
+                                              name_column_number: column_number
+                                             ).at(location)
+      atomic.name_size = 0
+
+      return atomic
+   end
+
    def parse_atomic_method_suffix_dot(atomic, location)
       dbg "parse_atomic_method_suffix_dot".green
       check_void_value atomic, location
@@ -1248,7 +1306,7 @@ class OnyxParser < OnyxLexer
 
       elsif tok? :NUMBER
          args = [] of ASTNode
-         args << NumberLiteral.new(@token.value as String, :i32)
+         args << NumberLiteral.new(@token.value.to_s, :i32)
          next_token
 
          if @token.type == :"?"
