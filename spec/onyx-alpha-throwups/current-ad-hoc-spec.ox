@@ -1,3 +1,4 @@
+
 -- Test all possible constructs in one go
 say "\n\nBefore requires!\n\n"
 
@@ -10,7 +11,73 @@ say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+
 _debug_start_ = true
+
+pp 1..2
+pp 1 .. 2
+
+
+
+-- a-function(messages List<Str>, pairs {String => String}) ->
+
+
+say "
+    ...
+    asdfaASDF FDSAsd
+FDF
+".downcase
+
+say %<
+   ...
+   fasfd FDSAF
+FDSA
+>.downcase
+
+
+the-function(a Int64? = nil, b Int64? = nil) ->
+the-function         -- a is nil, #b is nil
+the-function 1       -- a is 1, #b is nil
+the-function #b = 2  -- a is nil, #b is 2
+the-function 1, 2    -- error, #b must be assigned by name
+
+
+
+my-foo(x, y, opts Hash<Str, Str|I64|Nil>) ->
+   say "csx { opts["magic_port"]?.class }"
+   say "csx { opts["x"]?.class }"
+   say "csx { typeof(opts["x"]?) }"
+   -- host = opts["host_name"] as Str? || "default_host"
+   -- magic-port = opts["magic_port"] as Int64? || 47
+   -- p x, y, host, magic-port
+end
+my-foo 1, 2, Map[Str, Str|I64|Nil]{
+   "my_name_is": "Totally irrelevant"
+   "host_name": "da_host.yo"
+   --   "x": 1
+}
+
+
+
+
+type Xoo
+   Type.my-instance-count = 0
+
+   Type.get-count() ->
+      Type.my-instance-count
+
+   Type.my-new() ->
+      say "My own new function"
+      Self.my-instance-count += 1
+      return new()
+   end
+end
+
+say Xoo.get-count     --> 0
+foox = Xoo.my-new
+barx = Xoo.my-new
+say foox.class
+say Xoo.get-count     --> 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -269,10 +336,10 @@ fun-with-various-local-vars 47
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 fun-with-exception-action(x) ->!
-   try:
+   try
       a = 1 / 0
 
-   rescue e IndexError | ArgumentError do
+   rescue e IndexError | ArgumentError
       say "In fun: Rescued {e}"
 
    rescue DivisionByZero:
@@ -281,10 +348,10 @@ fun-with-exception-action(x) ->!
    rescue e =>
       say "Rescued some kind of shit"
 
-   fulfil:
+   fulfil
       say "In fun: Nothing to rescue - yippie!"
 
-   ensure do
+   ensure
       say "In fun: Oblivious to what happened!"
 
    a = 1 / x
@@ -440,18 +507,46 @@ f(() ->
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+
+n = 3
+do-something(x) -> say "do-something {x}"
+
+match n
+   1
+      do-something 1
+   n == 5
+      do-something 2
+   .< 10
+      do-something 3
+   *
+      do-something 4
+
+
+
 char = %"a"
 say "char: {char} ({ typeof(char) })"
 
 straight-str = %s<no {interpolation\t here}\n\tOk!>
 say "straight-str: {straight-str} ({ typeof(straight-str) })"
 
+-- *TODO* %{...{x} } - doesn't interpolate
+say %(char: "{char}" ({ typeof(char) }))
+
 -- *NOTE* consider this, _iff_ standard string is changed to interpolate on {/}
 -- tpl-str = %t<requires heavier delimiting %{interpolation here}>
 -- say "tpl-str: {tpl-str} ({ typeof(tpl-str) })"
 
-the–str = "kjhgkjh" \
-   "dfghdfhgd"
+the–str = "111kjhgkjh" \
+   "222dfghdfhgd"
+
+yet-a–str = "111kjhgkjh
+   222dfghdfhgd
+   333asdfdf
+"
+
+say "the broken str: {the-str}"
+
+say "the 2nd broken str: {yet-a-str}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -662,6 +757,18 @@ tag–hash–2 = {
 }
 say "tag–hash–2 type is {typeof(tag–hash–2)}"
 say "tag–hash–2 value is {tag–hash–2}"
+
+
+say "ACCESS TERSECUTS!".yellow
+
+list = [47, 13, 42, 11]
+say list.1, list.2?, list.4?
+
+-- say tag-hash-2#katt
+-- say json-hash:katt, json-hash:panter
+
+-- if json-hash:katt: say "Yeeeaaaah"
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -915,6 +1022,15 @@ y = (list.each (v) ~>
    p v
 ).map ~>
    _1 * 2
+
+
+y = list
+.each ~>
+   p _1
+.map ~>
+   _1 * 2
+
+say "mega fettma y = {y}"
 
 list.each–with–index ~>
    p _1

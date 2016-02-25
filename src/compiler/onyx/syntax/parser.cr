@@ -1092,7 +1092,7 @@ class OnyxParser < OnyxLexer
 
    parse_operator :pow, :atomic_with_method, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
 
-   AtomicWithMethodCheck = [:IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"===", :"[]", :"[]=", :"[]?", :"!", :"not"]
+   AtomicWithMethodCheck = [:NUMBER, :IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"===", :"[]", :"[]=", :"[]?", :"!", :"not"]
 
    def parse_atomic_with_method
       dbg "parse_atomic_with_method"
@@ -1163,10 +1163,7 @@ class OnyxParser < OnyxLexer
             atomic = Call.new(atomic, "[]",
                                                     name_column_number: column_number
                                                    ).at(location)
-
-            # *TODO* next line can't be anything but Call!??
-            atomic.name_size = 0 if atomic.is_a?(Call)
-
+            atomic.name_size = 0
             atomic
 
          when :"["
@@ -1202,8 +1199,7 @@ class OnyxParser < OnyxLexer
             atomic = Call.new(atomic, method_name, args,
                                                     name_column_number: column_number
                                                    ).at(location)
-            # *TODO* next line can't be anything but Call!??
-            atomic.name_size = 0 if atomic.is_a?(Call)
+            atomic.name_size = 0
             atomic
 
          else
@@ -1246,8 +1242,27 @@ class OnyxParser < OnyxLexer
 
       if @token.value == "is_a?" || @token.value == "of?" # :is_a?
          atomic = parse_is_a(atomic).at(location)
+
       elsif @token.value == :responds_to?
          atomic = parse_responds_to(atomic).at(location)
+
+      elsif tok? :NUMBER
+         args = [] of ASTNode
+         args << NumberLiteral.new(@token.value as String, :i32)
+         next_token
+
+         if @token.type == :"?"
+            method_name = "[]?"
+            next_token_skip_space
+         else
+            method_name = "[]"
+            skip_space
+         end
+
+         atomic = Call.new(atomic, method_name, args,
+                            name_column_number: name_column_number
+                           ).at(location)
+
       else
          dbg "parse_atomic_method_suffix_dot else"
 
@@ -4918,12 +4933,12 @@ class OnyxParser < OnyxLexer
 
       marked_visibility =  if tok? :"*"
                               next_token
-                              :private
+                              Visibility::Private
                            elsif tok? :"**"
                               next_token
-                              :protected
+                              Visibility::Protected
                            else
-                              :public
+                              Visibility::Public
                            end
 
       if tok?(:".")
