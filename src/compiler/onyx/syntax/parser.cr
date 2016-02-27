@@ -7603,6 +7603,15 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
       end
 
+
+
+      # if tok?(:",")
+      #    return true
+      # end
+
+
+
+
       # *TODO*
       if tok?(:EOF)
          return true
@@ -7644,7 +7653,7 @@ class OnyxParser < OnyxLexer
 
    def handle_transition_tokens
       dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
-      # *TODO* add more reasonable ones here - possibly strengthen up with 
+      # *TODO* add more reasonable ones here - possibly strengthen up with
       # "expectation" (based on nesting context)
       if tok?(:":") || kwd?(:else, :elsif, :elif, :ensure, :fulfil, :rescue)
       # if kwd?(:else, :elsif, :elif, :ensure, :fulfil, :rescue)
@@ -7659,6 +7668,15 @@ class OnyxParser < OnyxLexer
 
    def handle_one_line_nest_end : Bool
       case
+      # *TODO* clean up belows after indent–parsing has solidified
+
+      # `,` was added so `foo( ()->1, ()->2; 3, ()->4) - ie lambdas as args can be used smoothly
+      when tok? :","
+         dbg "handle_one_line_nest_end COMMA ','"
+         handle_definite_nest_end_
+         unsignificantify_newline
+         return true
+
       when tok? :")"
          dbg "handle_one_line_nest_end LPAREN ')'"
          handle_definite_nest_end_
@@ -7699,7 +7717,7 @@ class OnyxParser < OnyxLexer
       dbg "handle_definite_nest_end_".yellow
 
       backed = backup_tok
-      next_token if ! tok? :")"
+      next_token if ! tok?(:")", :",")  # `,` was added so `foo( ()->1, ()->2; 3, ()->4) - ie lambdas as args can be used smoothly
 
       indent_level = @indent
 
