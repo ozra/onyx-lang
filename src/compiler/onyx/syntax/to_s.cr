@@ -1075,9 +1075,9 @@ class ToOnyxSVisitor < Visitor
 
    def visit(node : UninitializedVar)
       node.var.accept self
-      @str << " = "
+      @str << " = raw "
       node.declared_type.accept self
-      @str << ".alloca"
+      # @str << ".alloca"
       false
    end
 
