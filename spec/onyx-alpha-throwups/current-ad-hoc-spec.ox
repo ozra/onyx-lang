@@ -182,9 +182,9 @@ module Djur
       @foo’’   Ints
       bar’’    Ints
 
-      foo3 'Ints
-      bar3 ^Ints
-      qwo3 ~Ints
+      foo3     'Ints
+      bar3     ^Ints
+      qwo3     ~Ints
 
       -- xfoo! Ints = 47  -- should fail, and does
       -- xbar? Ints = 42  -- should fail, and does

@@ -111,7 +111,7 @@ module Crystal
                  block
                ).at(node)
 
-      p result.to_s
+      # p result.to_s
       # dump foo.to_s
 
       # else

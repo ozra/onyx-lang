@@ -3475,10 +3475,22 @@ class OnyxParser < OnyxLexer
          end
       end
 
-      #   *NOTE* - if a paren expr returns a callable it should be possible to call! Then again, such confuzing constructs could simply be disallowed...
-      unexpected_token "(" if @token.type == :"("
+      ret = Expressions.new exps
 
-      Expressions.new exps
+      # Check if a call is being made directly upon the grouped expression
+      if tok? :"("
+         name_column_number = @token.column_number
+         has_parens, call_args = parse_call_args()
+         call_args = call_args.not_nil!
+         args = call_args.args
+         block = call_args.block
+         explicit_block_param = call_args.explicit_block_param
+         named_args = call_args.named_args
+
+         Call.new(ret, "call", args, block, explicit_block_param, named_args, false, name_column_number, has_parens)
+      else
+         ret
+      end
 
    ensure
       dbgdec
