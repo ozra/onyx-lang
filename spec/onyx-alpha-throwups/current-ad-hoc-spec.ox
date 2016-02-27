@@ -12,7 +12,7 @@ say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-_debug_start_ = true
+_debug_compiler_start_ = true
 
 pp 1..2
 pp 1 .. 2
@@ -765,7 +765,7 @@ say list.1, list.2?, list.4?
 say tag-hash-2#katt
 say json-hash:katt, json-hash:panter
 
-if json-hash:katt: say "Yeeeaaaah"
+if json-hash:katt: say "Yeeeaaaah"  -- syntactic test for the colon discrepancy
 
 say json-hash:neat-literal?
 json-hash:neat-literal = "47777777"

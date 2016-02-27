@@ -30,9 +30,13 @@ module Crystal
     getter token
     getter line_number
 
+    property prev_token_type
+
     def initialize(string)
       @reader = Char::Reader.new(string)
       @token = Token.new
+      @token.type = :ACTUAL_BOF
+      @prev_token_type = :ACTUAL_BOF
       @line_number = 1
       @column_number = 1
       @filename = ""
@@ -84,7 +88,9 @@ module Crystal
 
     def next_token
       dbg_lex "next_token() - curch ='#{curch.ord}'"
-      prev_type = @token.type
+
+      prev_token_type = @token.type
+
       reset_token
 
       start = cur_pos
@@ -98,28 +104,12 @@ module Crystal
         consume_whitespace
         reset_regex_flags = false
 
-
       when '\\'
         dbg_lex "root level backslash"
-
-        # can be:
-        # \\some-pragma               (a "pragma" / "annotation")
-        # \\ some pragmas here=47 \n  (multiple "pragmas")
-        # \\ # optional comment \n    (a "slash-line")
-        # "foo" \\ \n "blargh"        (a "slash-line for strings" - still needed?)
-
         backed_type = @token.type
 
         nextch
         start = cur_pos
-
-        # We do everything PRAGMA with pure parsing - no specific lexing tokens
-        # # all pragmas / annotations begin with small cap latin ascii for now
-        # # NOPE! - Added caps too - for now!
-        # # NOPE! - Added `!` too - for now!
-        # if ('a' <= curch <= 'z'  || 'A' <= curch <= 'Z' || curch == '!')
-        #   return scan_pragma start - 1
-        # end
 
         # p "nextch after backslash = " + curch
         if curch == ' ' || curch == '\t'
@@ -139,18 +129,15 @@ module Crystal
           @line_number += 1
           @column_number = 1
 
-          # *TODO* if token is DELIMITER_START or some do below - else generic slash–line
-
           @token.passed_backslash_newline = true
           consume_whitespace
           reset_regex_flags = false
           @token.type = backed_type
+
         else
           dbg_lex "must be a solo mystic backslash"
           @token.type = :BACKSLASH
         end
-
-
 
       when '\n'
         nextch
@@ -215,7 +202,7 @@ module Crystal
 
           is_continuation = @next_token_continuation_state == :CONTINUATION ||
                                     (@next_token_continuation_state == :AUTO &&
-                                      ContinuationTokens.includes?(prev_type)
+                                      ContinuationTokens.includes?(prev_token_type)
                                     )
 
           dbg_ind "is_continuation == #{is_continuation}, cont_state == #{@next_token_continuation_state}"
@@ -1514,6 +1501,9 @@ module Crystal
         if 'A' <= curch <= 'Z'
           start = cur_pos
 
+
+          # *TODO* Int, Real, Class should be removed again
+
           case curch
           when 'C'
             if nc?('l') && nc?('a') && nc?('s') && nc?('s')
@@ -1798,8 +1788,8 @@ module Crystal
           elsif chr == '–'
             str << '_'
 
-          elsif do_magic && 
-                  'A' <= chr <= 'Z' && 
+          elsif do_magic &&
+                  'A' <= chr <= 'Z' &&
                   (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
             str << '_'
             str << chr.downcase
@@ -2445,7 +2435,7 @@ module Crystal
               curch != string_nest &&
               curch != '\0' &&
               curch != '\\' &&
-              !(curch == '{' && delimiter_state.kind != :straight_string) && 
+              !(curch == '{' && delimiter_state.kind != :straight_string) &&
               curch != '\n'
           nextch
         end
