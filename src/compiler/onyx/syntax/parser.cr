@@ -369,7 +369,6 @@ class OnyxParser < OnyxLexer
       @wants_doc = false
 
       @one_line_nest = 0
-      @last_was_newline_or_dedent = false
       @was_just_nest_end = false
       @significant_newline = false
 
@@ -424,26 +423,19 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   # # FUUUL LÖSNING!
+   # DEBUG INTERVENTION *TEMP*
    def next_token
-
-
       # dbg_on
       if (v = @token.value).is_a?(String)
          case v
-         when "_debug_start_"
+         when "_debug_compiler_start_"
             dbg_on
-         when "_debug_stop_"
+         when "_debug_compiler_stop_"
             dbg_off
          end
       end
 
-      @last_was_newline_or_dedent = tok?(:NEWLINE, :DEDENT)
       super()
-      # if !was_nl && !tok?(:NEWLINE)
-      #    @was_just_nest_end = false
-      # end
-      # @token
    end
 
    def skip_tokens(*tokens : Symbol)
@@ -553,6 +545,10 @@ class OnyxParser < OnyxLexer
       dbgtail "/parse_expressions".yellow
    end
 
+   def last_was_newline_or_dedent
+      (prev_token_type == :NEWLINE || prev_token_type == :DEDENT || prev_token_type == :ACTUAL_BOF)
+   end
+
    def parse_expression
       dbg "parse_expression ->"
       dbginc
@@ -563,7 +559,7 @@ class OnyxParser < OnyxLexer
 
       # when explicit keyword fun - then it's better to parse via the usual
       # expression route
-      possible_def_context = @last_was_newline_or_dedent
+      possible_def_context = last_was_newline_or_dedent
       can_be_arrow_func_def = possible_def_context && (
          # kwd?(:def, :fn, :fu, :mf, :fun, :own, :me, :func, :meth, :pure, :proc) ||
          (
@@ -616,17 +612,9 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_expression_suffix(atomic, location)
-
-
-
-
       # *TODO* this is called after all kinds of things
       # after def -> end for instance - where of course ENSURE and RESCUE are ok,
-      # but no others. But that is handled IN "parse_def_helper"
-
       # Look over the entire concept!
-
-
 
       dbg "parse_expression_suffix ->"
       # dbginc
@@ -640,19 +628,21 @@ class OnyxParser < OnyxLexer
             case @token.value
             when :if
                atomic = parse_expression_suffix(location) { |exp| If.new(exp, atomic) }
+
             when :unless
                atomic = parse_expression_suffix(location) { |exp| Unless.new(exp, atomic) }
+
             when :for
                dbgtail_off!
                raise "suffix `for` is not supported - discuss on IRC or in issues if you disagree", @token
+
             when :while
                dbgtail_off!
                raise "suffix `while` is not supported", @token
+
             when :until
                dbgtail_off!
                raise "suffix `until` is not supported", @token
-
-
 
             when :rescue
                next_token_skip_space
@@ -663,6 +653,7 @@ class OnyxParser < OnyxLexer
                else
                   atomic = ExceptionHandler.new(atomic, rescues).at(location)
                end
+
             when :ensure
                next_token_skip_space
                ensure_body = parse_expression
@@ -680,18 +671,12 @@ class OnyxParser < OnyxLexer
 
             else
                break
-
             end
 
          # *TODO* :"}}" is no longer produced in lexing
-         when :")", :",", :";", MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER, :"}}", :NEWLINE, :EOF, :DEDENT
+         when :")", :",", :":", :";", MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER, :"}}", :NEWLINE, :EOF, :DEDENT  # :":" is solely for "ternary-if"
             # *TODO* skip explicit end token
             break
-
-
-         # when :PRAGMA   # *TODO* look over when this is revised as mentioned at top
-         #    raise "Didn't expect a pragma here! /ozra"
-         #    break
 
          else
             # _just_ Pragmas (being the atomic part)
@@ -1550,20 +1535,6 @@ class OnyxParser < OnyxLexer
 
       # when :"->"
       #   parse_fun_literal
-
-
-      # when :"@["
-      #    parse_attribute
-
-
-      # when :PRAGMA
-      #    #*TODO* GHOST IMPLEMENTATION ATM
-      #    pragmas = parse_pragma_cluster
-      #    dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
-
-      #    # *TODO* parse_expression very likely should NOT BE DONE HERE (see
-      #    # - GHOST IMPLEMENTATION -
-      #    parse_expression
 
       when :NUMBER
          dbg "when :NUMBER"
@@ -5515,12 +5486,13 @@ class OnyxParser < OnyxLexer
          dbg "parse_if_after_condition: after skip_statement_end"
       end
 
+      dbg "TIME FOR ELSE".white
+
       a_else = nil
-      if @token.type == :IDFR
+      if tok?(:IDFR) || (nest_kind == :TERNARY && tok?(:":"))
          dbg "parse_if_after_condition: idfr - is it else or elsif?"
 
-         case @token.value
-         when :else
+         if kwd?(:else) || tok?(:":")
             dbg "parse_if_after_condition: was else"
             # next_token_skip_statement_end
             else_indent = @indent
@@ -5535,7 +5507,8 @@ class OnyxParser < OnyxLexer
             else
                a_else = parse_expressions
             end
-         when :elsif, :elif
+
+         elsif kwd? :elsif, :elif
             dbg "parse_if_after_condition: was elsif"
             a_else = parse_if check_end: false
          end
@@ -7574,6 +7547,7 @@ class OnyxParser < OnyxLexer
       when kind == :if && tok?(:"?")
          dbg "parse_nest_start - :? -> TERNARY"
          next_token_skip_statement_end
+
          {:TERNARY, dedent_level}
 
       when tok? :INDENT
@@ -7670,7 +7644,10 @@ class OnyxParser < OnyxLexer
 
    def handle_transition_tokens
       dbg "handle_transition_tokens - one_line_nest = #{@one_line_nest}"
-      if kwd? :else, :elsif, :elif, :ensure, :fulfil, :rescue # *TODO* add more reasonable ones here - possibly strengthen up with "expectation (context)
+      # *TODO* add more reasonable ones here - possibly strengthen up with 
+      # "expectation" (based on nesting context)
+      if tok?(:":") || kwd?(:else, :elsif, :elif, :ensure, :fulfil, :rescue)
+      # if kwd?(:else, :elsif, :elif, :ensure, :fulfil, :rescue)
          dbg "- handle_transition_tokens - DE-NESTS".red
          # @was_just_nest_end = true
          de_nest @indent, :"", ""
@@ -8063,7 +8040,7 @@ class OnyxParser < OnyxLexer
          @def_nest,
          @certain_def_count,
          @one_line_nest,
-         @last_was_newline_or_dedent,
+         @prev_token_type,
          @was_just_nest_end,
          @significant_newline,
          @next_token_continuation_state
@@ -8074,7 +8051,7 @@ class OnyxParser < OnyxLexer
       self.current_pos, @line_number, @column_number, @indent,
          token, nest_count, scope_count, def_parsing, def_nest,
          certain_def_count,
-         @one_line_nest, @last_was_newline_or_dedent, @was_just_nest_end,
+         @one_line_nest, @prev_token_type, @was_just_nest_end,
          @significant_newline, @next_token_continuation_state =
             backup
 
