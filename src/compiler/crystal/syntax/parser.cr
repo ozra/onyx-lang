@@ -4169,14 +4169,15 @@ module Crystal
       push_def if require_body
 
       next_token_skip_space_or_newline
-      name = check_ident
+      check_ident
+      name = @token.raw
       next_token_skip_space_or_newline
 
       if @token.type == :"="
         next_token_skip_space_or_newline
         case @token.type
         when :IDENT, :CONST
-          real_name = @token.value.to_s
+          real_name = @token.raw.to_s # ONYX–INOP
           next_token_skip_space_or_newline
         when :DELIMITER_START
           real_name = parse_string_without_interpolation { "interpolation not allowed in fun name" }

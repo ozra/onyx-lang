@@ -273,6 +273,7 @@ module Crystal
       # Check if we have an untyped expression in this call, or an expression
       # whose type was never allocated. Replace it with raise.
       if (obj && !obj_type)
+        # raise "YO >>>>>> `#{obj}` has no type"
         return untyped_expression(node, "`#{obj}` has no type")
       end
 
@@ -282,6 +283,7 @@ module Crystal
 
       node.args.each do |arg|
         unless arg.type?
+          # raise "YO >>>>>> `#{arg}` has no type"
           return untyped_expression(node, "`#{arg}` has no type")
         end
 

@@ -219,6 +219,23 @@ class Crystal::Call
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
     matches ||= lookup_matches_checking_expansion(owner, signature, search_in_parents)
 
+
+    # - - - - - - - - - - - - - - - - - - - -
+    # *TODO* *TEMP* - the ugly hack
+    if matches.empty?
+      dbgx "Matches are empty - is it init?"
+      if def_name == "init"
+        dbgx "yes  init!"
+
+        def_name = "initialize"
+        signature = CallSignature.new(def_name, arg_types, block, named_args)
+        matches = check_tuple_indexer(owner, def_name, args, arg_types)
+        matches ||= lookup_matches_checking_expansion(owner, signature, search_in_parents)
+      end
+    end
+    # - - - - - - - - - - - - - - - - - - - -
+
+
     if matches.empty?
       if def_name == "new" && owner.metaclass? && (owner.instance_type.class? || owner.instance_type.virtual?) && !owner.instance_type.pointer?
         new_matches = define_new owner, arg_types
