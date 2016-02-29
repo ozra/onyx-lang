@@ -306,9 +306,11 @@ module Crystal
     #       p val, ", ", ix
     #     end
     def transform(node : For) : ASTNode
-      unless node.onyx_node
-        raise "There shouldn't be any For-nodes from Crystal sources!"
-      end
+
+      # *TODO* - after macros is fixed
+      # unless node.onyx_node
+      #   raise "There shouldn't be any For-nodes from Crystal sources!"
+      # end
 
       # method_name uninitialized String
       # if !(node.stepping && node.stepping != 1)
@@ -406,7 +408,9 @@ module Crystal
 
     # Remove pragmas used at parsing stage
     def transform(node : Attribute) : ASTNode
-      return node unless node.onyx_node
+
+      # *TODO* when macros are fixed
+      # return node unless node.onyx_node
 
       if ["int_literal", "real_literal"].includes? node.name
         Nop.new

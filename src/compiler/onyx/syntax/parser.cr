@@ -4,32 +4,22 @@ require "../../crystal/syntax/parser"
 require "../../debug_utils/global_pollution"
 require "../../debug_utils/ast_dump"
 
-# Not needed any more
-# def tag_onyx(node : Crystal::ASTNode)
-#    node.onyx_node = true
-#    node
-# end
-
-# *TODO* report below error:
-# def tag_onyx(node : Crystal::ASTNode+)
-#    node.onyx_node = true
-# end
-
-# def tag_onyx(node : T) T
-#    node.onyx_node = true
-#    node
-# end
-
 module Crystal
 
 abstract class ASTNode
-   macro def tag_onyx(val = true) : Nil
+   macro def tag_onyx(val = true, visited = [] of ASTNode) : Nil
       @onyx_node = val
-
       {% for ivar, i in @type.instance_vars %}
-         {% if ivar.is_a? ASTNode %}
-            @{{ivar}}.tag_onyx val
-         {% end %}
+         _{{ivar}} = @{{ivar}}
+         if _{{ivar}}.is_a?(ASTNode)
+            if !visited.includes? _{{ivar}}
+               visited << _{{ivar}}
+               _{{ivar}}.tag_onyx val, visited
+               visited.pop
+            end
+         elsif _{{ivar}}.is_a?(Array(ASTNode))
+            _{{ivar}}.each &.tag_onyx(val, visited)
+         end
       {% end %}
       nil
    end
@@ -450,7 +440,9 @@ class OnyxParser < OnyxLexer
          expressions = parse_expressions # .tap { check :EOF }
       end
 
-      expressions.tag_onyx
+      # expressions.tag_onyx true  *TODO* after macros is fixed!
+      expressions.onyx_node = true
+
 
       dbg "/parse - after program body parse_expressions"
 
@@ -460,7 +452,7 @@ class OnyxParser < OnyxLexer
       end
 
       # ifdef !release
-      #    # *TODO* - debugga hela programstrukturen
+      #    # *TODO* - debugga hela programstrukturen - gör med parse --ast nu
       #    STDERR.puts "\n\n\nAST:\n\n\n"
       #    expressions.dump_std
       #    STDERR.puts "\n\n\n"
@@ -1837,7 +1829,7 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_constish_or_type_tied_literal
-      constish = parse_constish
+      constish = parse_constish allow_call_parsing: true
 
       dbg "parse_constish_or_type_tied_literal ->"
 
@@ -1859,13 +1851,13 @@ class OnyxParser < OnyxLexer
          # set_visibility parse_var_or_call global: true
          parse_var_or_call global: true
       when :CONST
-         parse_constish_after_colons(location, true, true)
+         parse_constish_after_colons(location, true, true, true)
       else
          unexpected_token "while parsing identifer or global call"
       end
    end
 
-   def parse_constish(allow_type_vars = true)
+   def parse_constish(allow_type_vars = true, allow_call_parsing = false)
       location = @token.location
 
       dbg "parse_constish"
@@ -1892,11 +1884,11 @@ class OnyxParser < OnyxLexer
       end
 
       check :CONST
-      parse_constish_after_colons(location, global, allow_type_vars)
+      parse_constish_after_colons(location, global, allow_type_vars, allow_call_parsing)
 
    end
 
-   def parse_constish_after_colons(location, global, allow_type_vars)
+   def parse_constish_after_colons(location, global, allow_type_vars, allow_call_parsing)
       dbg "parse_constish_after_colons ->"
 
       start_line = location.line_number
@@ -1962,17 +1954,19 @@ class OnyxParser < OnyxLexer
 
       dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
 
-      case
-      when tok? :"("
-         return parse_constish_type_new_call_sugar const
-
-      when tok? :SPACE
-         # *TODO* we should probably pre–parse and just make sure it's not a
-         # binary operator or assign
-         # *TODO* - RE–USE CODE FROM PARSE_PAREN_CALL_ARGS!!!
-         case current_char #   peek_next_char
-         when .alpha?, '_', '"', '%',.ord_gt?(0x9F), .digit?, '(', '[', '{', '!', '|', '$'
+      if allow_call_parsing
+         case
+         when tok? :"("
             return parse_constish_type_new_call_sugar const
+
+         when tok? :SPACE
+            # *TODO* we should probably pre–parse and just make sure it's not a
+            # binary operator or assign
+            # *TODO* - RE–USE CODE FROM PARSE_PAREN_CALL_ARGS!!!
+            case current_char #   peek_next_char
+            when .alpha?, '_', '"', '%',.ord_gt?(0x9F), .digit?, '(', '[', '{', '!', '$'
+               return parse_constish_type_new_call_sugar const
+            end
          end
       end
 
@@ -7717,7 +7711,7 @@ class OnyxParser < OnyxLexer
       # is there a name–matching?
       if tok? :"="
          next_token
-         match_name = parse_constish.to_s
+         match_name = parse_constish.to_s # *TODO* WRONG!
          dbg "parse_explicit_end_statement - got match name '" + match_name + "'"
          next_token_skip_space
 

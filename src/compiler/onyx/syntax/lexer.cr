@@ -410,37 +410,6 @@ module Crystal
           case nextch
           when '='
             toktype_then_nextch :"<<="
-          when '-'
-            here = MemoryIO.new(20)
-
-            while true
-              case char = nextch
-              when '\n'
-                @line_number += 1
-                @column_number = 0
-                break
-              when '\\'
-                if peek_nextch == 'n'
-                  nextch
-                  raise "invalid heredoc identifier"
-                end
-              when ' '
-                case peek_nextch
-                when ' '
-                  nextch
-                when '\n'
-                  nextch
-                  break
-                else
-                  raise "invalid heredoc identifier"
-                end
-              else
-                here << char
-              end
-            end
-
-            here = here.to_s
-            delimited_pair :heredoc, here, here, start
           else
             @token.type = :"<<"
           end
@@ -552,6 +521,11 @@ module Crystal
         when '(', '[', '{', '<'
           delimited_pair :string, curch, closing_char, start
 
+        when ':'
+          here = scan_heredoc_delimiter
+          dbg_lex "heredoc idfr found: '#{here}'"
+          delimited_pair :heredoc, here, here, start
+
         when '"'
           line = @line_number
           column = @column_number
@@ -611,6 +585,10 @@ module Crystal
           case nextch
           when '(', '[', '{', '<'
             delimited_pair :straight_string, curch, closing_char, start
+          when ':'
+            here = scan_heredoc_delimiter
+          dbg_lex "heredoc idfr found for straigt: '#{here}'"
+            delimited_pair :straight_heredoc, here, here, start
           else
             raise "unknown %s char"
           end
@@ -1701,6 +1679,42 @@ module Crystal
       @slash_is_regex = false
     end
 
+    def scan_heredoc_delimiter
+      here = MemoryIO.new(20)
+
+      while peek_next_char == ' '
+        nextch
+      end
+
+      while true
+        case char = nextch
+        when '\n'
+          @line_number += 1
+          @column_number = 0
+          break
+        when '\\'
+          if peek_nextch == 'n'
+            nextch
+            raise "invalid delimiter identifier"
+          end
+        when ' '
+          case peek_nextch
+          when ' '
+            nextch
+          when '\n'
+            nextch
+            break
+          else
+            raise "invalid delimiter identifier"
+          end
+        else
+          here << char
+        end
+      end
+
+      here.to_s
+    end
+
     def handle_comment
       # Comments to skip or consume?
       dbg_lex "Is it '-'?"
@@ -2498,7 +2512,7 @@ module Crystal
         end
 
       when '{'
-        if delimiter_state.kind != :straight_string
+        if delimiter_state.kind != :straight_string && delimiter_state.kind != :straight_heredoc
           nextch
           @token.type = :INTERPOLATION_START
         else
@@ -2513,7 +2527,7 @@ module Crystal
         @column_number = 1
         @line_number += 1
 
-        if delimiter_state.kind == :heredoc
+        if delimiter_state.kind == :heredoc || delimiter_state.kind == :straight_heredoc
           string_end = string_end.to_s
           old_pos = cur_pos
           old_column = @column_number
