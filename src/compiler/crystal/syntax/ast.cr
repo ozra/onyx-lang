@@ -887,8 +887,7 @@ module Crystal
     property :splat_index
     property :doc
 
-    def initialize(name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil)
-      @name = name
+    def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil)
       @body = Expressions.from body
       @calls_super = false
       @calls_initialize = false

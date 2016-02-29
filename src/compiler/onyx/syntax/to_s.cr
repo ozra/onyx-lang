@@ -259,15 +259,15 @@ class ToOnyxSVisitor < Visitor
          @str << ">"
       end
 
-      if (superclass = node.superclass) || node.struct || node.abstract
+      if (superclass = node.superclass) || node.struct? || node.abstract?
          @str << " <"
 
-         if node.abstract
+         if node.abstract?
             @str << " "
             @str << keyword("abstract")
          end
 
-         if node.struct
+         if node.struct?
             @str << " "
             @str << keyword("value")
          end
@@ -822,7 +822,7 @@ class ToOnyxSVisitor < Visitor
       # *TODO* `!` etc. modifiers
       @str << " ->"
 
-      if node.abstract
+      if node.abstract?
          @str << " abstract"
 
       else
