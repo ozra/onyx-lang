@@ -20,6 +20,10 @@ all: onyx
 bootstrap:
 	./bootstrap.sh
 
+ifeq (${LLVM_CONFIG},)
+$(error Could not locate llvm-config, make sure it is installed and in your PATH)
+endif
+
 spec: all_spec
 	$(O)/all_spec
 doc:

@@ -2253,22 +2253,39 @@ module Crystal
     def parse_macro
       doc = @token.doc
 
-      next_token_skip_space_or_newline
+      next_token
 
-      if @token.keyword?(:def)
-        a_def = parse_def_helper is_macro_def: true
-        a_def.doc = doc
-        return a_def
+      case current_char
+      when '%'
+        next_char
+        @token.type = :"%"
+        @token.column_number += 1
+      when '/'
+        next_char
+        @token.type = :"/"
+        @token.column_number += 1
+      else
+        skip_space_or_newline
+
+        if @token.keyword?(:def)
+          a_def = parse_def_helper is_macro_def: true
+          a_def.doc = doc
+          return a_def
+        end
+
+        check DefOrMacroCheck1
       end
 
       push_def
 
-      check DefOrMacroCheck1
-
       name_line_number = @token.line_number
       name_column_number = @token.column_number
 
-      name = check_ident
+      if @token.type == :IDENT
+        name = @token.value.to_s
+      else
+        name = @token.type.to_s
+      end
       next_token_skip_space
 
       args = [] of Arg
@@ -2840,6 +2857,24 @@ module Crystal
         skip_space
       end
 
+      if @token.type == :SYMBOL
+        raise "space required after colon in type restriction", @token
+      end
+
+      found_colon = false
+
+      if allow_restrictions && @token.type == :":"
+        if !default_value && !found_space
+          raise "space required before colon in type restriction", @token
+        end
+
+        next_token_skip_space_or_newline
+
+        location = @token.location
+        restriction = parse_single_type
+        found_colon = true
+      end
+
       unless splat
         if @token.type == :"="
           if found_splat || splat
@@ -2866,19 +2901,21 @@ module Crystal
         end
       end
 
-      if @token.type == :SYMBOL
-        raise "space required after colon in type restriction", @token
-      end
-
-      if allow_restrictions && @token.type == :":"
-        if !default_value && !found_space
-          raise "space required before colon in type restriction", @token
+      unless found_colon
+        if @token.type == :SYMBOL
+          raise "space required after colon in type restriction", @token
         end
 
-        next_token_skip_space_or_newline
+        if allow_restrictions && @token.type == :":"
+          if !default_value && !found_space
+            raise "space required before colon in type restriction", @token
+          end
 
-        location = @token.location
-        restriction = parse_single_type
+          next_token_skip_space_or_newline
+
+          location = @token.location
+          restriction = parse_single_type
+        end
       end
 
       raise "Bug: arg_name is nil" unless arg_name

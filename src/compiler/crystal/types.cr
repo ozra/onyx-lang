@@ -4,39 +4,28 @@ require "./syntax/ast"
 module Crystal
   # Abstract base class of all types
   abstract class Type
-    include Enumerable(self)
-
     property doc
     getter locations
-    getter attributes
-
-    def add_attributes(attributes)
-      return unless attributes
-      return if attributes.empty?
-
-      my_attributes = @attributes ||= [] of Attribute
-      my_attributes.concat(attributes)
-    end
+    setter metaclass
 
     def has_attribute?(name)
-      attributes = @attributes
-      attributes.try &.any? &.name.==(name)
+      false
     end
 
     def locations
       @locations ||= [] of Location
     end
 
-    def each
-      yield self
-    end
-
     def metaclass
-      @metaclass ||= MetaclassType.new(program, self)
+      @metaclass ||= begin
+        metaclass = MetaclassType.new(program, self)
+        initialize_metaclass(metaclass)
+        metaclass
+      end
     end
 
-    def force_metaclass(metaclass)
-      @metaclass = metaclass
+    def initialize_metaclass(metaclass)
+      # Nothing
     end
 
     # An opaque id of every type. 0 for Nil, non zero for others, so we can
@@ -54,11 +43,7 @@ module Crystal
       false
     end
 
-    def rank
-      raise "Bug: #{self} doesn't implement rank"
-    end
-
-    def abstract
+    def abstract?
       false
     end
 
@@ -83,15 +68,11 @@ module Crystal
     end
 
     def integer?
-      false
+      self.is_a?(IntegerType)
     end
 
     def float?
-      false
-    end
-
-    def number?
-      integer? || float?
+      self.is_a?(FloatType)
     end
 
     def class?
@@ -111,7 +92,7 @@ module Crystal
     end
 
     def pointer?
-      false
+      self.is_a?(PointerInstanceType)
     end
 
     def primitive_like?
@@ -119,31 +100,31 @@ module Crystal
     end
 
     def nil_type?
-      false
+      self.is_a?(NilType)
     end
 
     def bool_type?
-      false
+      self.is_a?(BoolType)
     end
 
     def no_return?
-      false
+      self.is_a?(NoReturnType)
     end
 
     def virtual?
-      false
+      self.is_a?(VirtualType)
     end
 
     def virtual_metaclass?
-      false
+      self.is_a?(VirtualMetaclassType)
     end
 
     def fun?
-      false
+      self.is_a?(FunInstanceType)
     end
 
     def void?
-      false
+      self.is_a?(VoidType)
     end
 
     def reference_like?
@@ -183,21 +164,22 @@ module Crystal
     end
 
     def is_implicitly_converted_in_c_to?(expected_type)
-      if self.nil_type? && (expected_type.pointer? || expected_type.fun?)
-        # OK: nil will be sent as pointer
-        true
-      elsif expected_type.is_a?(FunInstanceType) && self.is_a?(FunInstanceType) && expected_type.return_type == program.void && expected_type.arg_types == self.arg_types
-        # OK: fun will be cast to return void
-        true
-      elsif self.is_a?(NilablePointerType) && self.pointer_type == expected_type
-        # OK: nilable pointer is just a pointer
-        true
+      case self
+      when NilType
+        # nil will be sent as pointer
+        expected_type.pointer? || expected_type.fun?
+      when FunInstanceType
+        # fun will be cast to return void
+        expected_type.is_a?(FunInstanceType) && expected_type.return_type == program.void && expected_type.arg_types == self.arg_types
+      when NilablePointerType
+        # nilable pointer is just a pointer
+        self.pointer_type == expected_type
       else
         false
       end
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -206,7 +188,7 @@ module Crystal
     end
 
     def devirtualize
-      self
+      self.is_a?(VirtualTypeLookup) ? self.base_type : self
     end
 
     def implements?(other_type : Type)
@@ -245,14 +227,6 @@ module Crystal
 
     def filter_by_responds_to(name)
       nil
-    end
-
-    def cover
-      self
-    end
-
-    def cover_size
-      1
     end
 
     def lookup_def_instance(key)
@@ -834,14 +808,6 @@ module Crystal
       @including_types
     end
 
-    def cover
-      including_types.try(&.cover) || self
-    end
-
-    def cover_size
-      including_types.try(&.cover_size) || 1
-    end
-
     def filter_by_responds_to(name)
       including_types.try &.filter_by_responds_to(name)
     end
@@ -905,13 +871,15 @@ module Crystal
 
     getter :superclass
     getter :subclasses
-    getter :depth
-    property :abstract
-    property :struct
+    getter depth : Int32
+    property? :abstract
+    @abstract : Bool
+    property? :struct
+    @struct : Bool
     getter :owned_instance_vars
     property :instance_vars_in_initialize
-    getter :allocated
-    property? :allowed_in_generics
+    getter? allocated : Bool
+    property? allowed_in_generics : Bool
 
     def initialize(program, container, name, @superclass, add_subclass = true)
       super(program, container, name)
@@ -1146,16 +1114,12 @@ module Crystal
     include ClassVarContainer
     include DefInstanceContainer
 
-    def metaclass
-      @metaclass ||= begin
-        metaclass = MetaclassType.new(program, self)
-        metaclass.add_def Def.new("allocate", body: Primitive.new(:allocate))
-        metaclass
-      end
+    def initialize_metaclass(metaclass)
+      metaclass.add_def Def.new("allocate", body: Primitive.new(:allocate))
     end
 
     def virtual_type
-      if leaf? && !self.abstract
+      if leaf? && !self.abstract?
         self
       elsif struct?
         self
@@ -1212,11 +1176,11 @@ module Crystal
       false
     end
 
-    def allocated
+    def allocated?
       true
     end
 
-    def abstract
+    def abstract?
       false
     end
 
@@ -1226,9 +1190,6 @@ module Crystal
   end
 
   class BoolType < PrimitiveType
-    def bool_type?
-      true
-    end
   end
 
   class CharType < PrimitiveType
@@ -1240,10 +1201,6 @@ module Crystal
 
     def initialize(program, container, name, superclass, bytes, @rank, @kind)
       super(program, container, name, superclass, bytes)
-    end
-
-    def integer?
-      true
     end
 
     def signed?
@@ -1270,10 +1227,6 @@ module Crystal
       super(program, container, name, superclass, bytes)
     end
 
-    def float?
-      true
-    end
-
     def kind
       @bytes == 4 ? :f32 : :f64
     end
@@ -1283,10 +1236,6 @@ module Crystal
   end
 
   class NilType < PrimitiveType
-    def nil_type?
-      true
-    end
-
     def reference_like?
       true
     end
@@ -1310,20 +1259,16 @@ module Crystal
       nil
     end
 
-    def allocated
+    def allocated?
       true
     end
 
-    def abstract
+    def abstract?
       false
     end
   end
 
   class NoReturnType < EmptyType
-    def no_return?
-      true
-    end
-
     def primitive_like?
       true
     end
@@ -1334,10 +1279,6 @@ module Crystal
   end
 
   class VoidType < EmptyType
-    def void?
-      true
-    end
-
     def primitive_like?
       true
     end
@@ -1551,12 +1492,8 @@ module Crystal
       end
     end
 
-    def metaclass
-      @metaclass ||= begin
-        metaclass = MetaclassType.new(program, self)
-        metaclass.add_def Def.new("allocate", body: Primitive.new(:allocate))
-        metaclass
-      end
+    def initialize_metaclass(metaclass)
+      metaclass.add_def Def.new("allocate", body: Primitive.new(:allocate))
     end
 
     def has_instance_var_in_initialize?(name)
@@ -1574,7 +1511,7 @@ module Crystal
       subclasses.each do |subclass|
         if subclass.is_a?(GenericClassType)
           subtypes = subclass.including_types
-          instances.concat subtypes if subtypes
+          instances << subtypes if subtypes
         else
           instances << subclass
         end
@@ -1607,7 +1544,7 @@ module Crystal
     getter generic_class
     getter type_vars
     getter subclasses
-    property allocated
+    property? allocated : Bool
     getter generic_nest
 
     def initialize(@program, generic_class, @type_vars, generic_nest = nil)
@@ -1645,7 +1582,7 @@ module Crystal
     delegate owned_instance_vars, @generic_class
     delegate instance_vars_in_initialize, @generic_class
     delegate macros, @generic_class
-    delegate :abstract, @generic_class
+    delegate :abstract?, @generic_class
     delegate struct?, @generic_class
     delegate passed_by_value?, @generic_class
     delegate type_desc, @generic_class
@@ -1717,10 +1654,6 @@ module Crystal
   end
 
   class PointerType < GenericClassType
-    def pointer?
-      true
-    end
-
     def new_generic_instance(program, generic_type, type_vars)
       PointerInstanceType.new program, generic_type, type_vars
     end
@@ -1739,15 +1672,11 @@ module Crystal
       var.type
     end
 
-    def pointer?
-      true
-    end
-
     def reference_like?
       false
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -1793,7 +1722,7 @@ module Crystal
       var.type
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -1885,7 +1814,7 @@ module Crystal
       true
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -2302,12 +2231,13 @@ module Crystal
       add_def Def.new(var.name, body: Primitive.new(:struct_get))
     end
 
-    def metaclass
-      @metaclass ||= begin
-        metaclass = MetaclassType.new(program, self)
-        metaclass.add_def Def.new("new", body: Primitive.new(:struct_new))
-        metaclass
-      end
+    def initialize_metaclass(metaclass)
+      metaclass.add_def Def.new("new", body: Primitive.new(:struct_new))
+    end
+
+    def has_attribute?(name)
+      return true if packed && name == "Packed"
+      false
     end
 
     def type_desc
@@ -2322,12 +2252,8 @@ module Crystal
       add_def Def.new(var.name, body: Primitive.new(:union_get))
     end
 
-    def metaclass
-      @metaclass ||= begin
-        metaclass = MetaclassType.new(program, self)
-        metaclass.add_def Def.new("new", body: Primitive.new(:union_new))
-        metaclass
-      end
+    def initialize_metaclass(metaclass)
+      metaclass.add_def Def.new("new", body: Primitive.new(:union_new))
     end
 
     def type_desc
@@ -2356,6 +2282,11 @@ module Crystal
 
     def add_constant(constant)
       types[constant.name] = Const.new(program, self, constant.name, constant.default_value.not_nil!)
+    end
+
+    def has_attribute?(name)
+      return true if flags? && name == "Flags"
+      false
     end
 
     def primitive_like?
@@ -2395,7 +2326,7 @@ module Crystal
       super(@program, @program, name, super_class)
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -2403,7 +2334,7 @@ module Crystal
       @program.class_type
     end
 
-    delegate :abstract, instance_type
+    delegate :abstract?, instance_type
     delegate :generic_nest, instance_type
 
     def class_var_owner
@@ -2455,7 +2386,7 @@ module Crystal
     delegate defs, instance_type.generic_class.metaclass
     delegate macros, instance_type.generic_class.metaclass
     delegate type_vars, instance_type
-    delegate :abstract, instance_type
+    delegate :abstract?, instance_type
     delegate generic_nest, instance_type
 
     def metaclass?
@@ -2490,12 +2421,6 @@ module Crystal
     def initialize(@program, @union_types)
     end
 
-    def each
-      @union_types.each do |union_type|
-        yield union_type
-      end
-    end
-
     def parents
       nil
     end
@@ -2510,25 +2435,6 @@ module Crystal
 
     def covariant?(other_type)
       union_types.all? &.covariant? other_type
-    end
-
-    def cover
-      cover = [] of Type
-      union_types.each do |union_type|
-        union_type_cover = union_type.cover
-        if union_type_cover.is_a?(Array)
-          union_type_cover.each do |cover_type|
-            cover << cover_type
-          end
-        else
-          cover << union_type_cover
-        end
-      end
-      cover
-    end
-
-    def cover_size
-      union_types.sum &.cover_size
     end
 
     def filter_by_responds_to(name)
@@ -2738,10 +2644,6 @@ module Crystal
         collect_filtered_by_responds_to(name, subclass, result)
       end
     end
-
-    def devirtualize
-      base_type
-    end
   end
 
   class VirtualType < Type
@@ -2769,15 +2671,16 @@ module Crystal
     delegate has_instance_var_in_initialize?, base_type
     delegate all_instance_vars, base_type
     delegate owned_instance_vars, base_type
-    delegate :abstract, base_type
-    delegate allocated, base_type
+    delegate :abstract?, base_type
+    delegate allocated?, base_type
+    delegate :"allocated=", base_type
     delegate is_subclass_of?, base_type
     delegate implements?, base_type
     delegate covariant?, base_type
     delegate ancestors, base_type
 
     def has_instance_var_in_initialize?(name)
-      if base_type.abstract
+      if base_type.abstract?
         each_concrete_type do |subtype|
           unless subtype.has_instance_var_in_initialize?(name)
             return false
@@ -2789,58 +2692,17 @@ module Crystal
       end
     end
 
-    def allocated=(allocated)
-      base_type.allocated = allocated
-    end
-
     def metaclass
       @metaclass ||= VirtualMetaclassType.new(program, self)
-    end
-
-    def virtual?
-      true
     end
 
     def reference_like?
       true
     end
 
-    def cover
-      if base_type.abstract
-        cover = [] of Type
-        base_type.subclasses.each do |s|
-          s_cover = s.virtual_type.cover
-          if s_cover.is_a?(Array)
-            cover.concat s_cover
-          else
-            cover.push s_cover
-          end
-        end
-        cover
-      else
-        base_type
-      end
-    end
-
-    def cover_size
-      if base_type.abstract
-        base_type.subclasses.sum &.virtual_type.cover_size
-      else
-        1
-      end
-    end
-
-    def each
-      subtypes.each do |subtype|
-        yield subtype
-      end
-    end
-
     def each_concrete_type
       subtypes.each do |subtype|
-        unless subtype.abstract
-          yield subtype
-        end
+        yield subtype unless subtype.abstract?
       end
     end
 
@@ -2904,10 +2766,6 @@ module Crystal
       type.metaclass
     end
 
-    def virtual_metaclass?
-      true
-    end
-
     def lookup_macro(name, args_size, named_args)
       nil
     end
@@ -2921,7 +2779,7 @@ module Crystal
     end
 
     def each_concrete_type
-      instance_type.each_concrete_type do |type|
+      instance_type.subtypes.each do |type|
         yield type.metaclass
       end
     end
@@ -2991,7 +2849,7 @@ module Crystal
       true
     end
 
-    def allocated
+    def allocated?
       true
     end
 
@@ -3013,10 +2871,6 @@ module Crystal
 
     def passed_by_value?
       false
-    end
-
-    def fun?
-      true
     end
 
     def to_s_with_options(io : IO, skip_union_parens = false : Bool, generic_args = true : Bool)

@@ -196,7 +196,7 @@ class Crystal::Call
     matches = check_tuple_indexer(owner, name, args, arg_types)
     matches ||= lookup_matches_checking_expansion(owner, signature)
 
-    if matches.empty? && owner.class? && owner.abstract
+    if matches.empty? && owner.class? && owner.abstract?
       matches = owner.virtual_type.lookup_matches(signature)
     end
 
@@ -245,7 +245,7 @@ class Crystal::Call
       end
     end
 
-    if matches.empty? && owner.class? && owner.abstract && name != "super"
+    if matches.empty? && owner.class? && owner.abstract? && name != "super"
       matches = owner.virtual_type.lookup_matches(signature)
     end
 
@@ -264,7 +264,7 @@ class Crystal::Call
         # don't give error. This is to allow small code comments without giving
         # compile errors, which will anyway appear once you add concrete
         # subclasses and instances.
-        unless owner.abstract && (owner.leaf? || owner.is_a?(GenericClassInstanceType))
+        unless owner.abstract? && (owner.leaf? || owner.is_a?(GenericClassInstanceType))
           raise_matches_not_found(matches.owner || owner, def_name, matches)
         end
       end
@@ -342,7 +342,7 @@ class Crystal::Call
 
     matches.each do |match|
       # Discard abstract defs for abstract classes
-      next if match.def.abstract && match.context.owner.abstract
+      next if match.def.abstract? && match.context.owner.abstract?
 
       check_visibility match
 
@@ -703,7 +703,7 @@ class Crystal::Call
         else
           # Otherwise, we create a FunLiteral and type it
           if block.args.size > fun_args.size
-            raise "wrong number of block arguments (#{block.args.size} for #{fun_args.size})"
+            wrong_number_of "block arguments", block.args.size, fun_args.size
           end
 
           a_def = Def.new("->", fun_args, block.body)
@@ -808,7 +808,7 @@ class Crystal::Call
     call_block_arg_types = (call_block_arg.type as FunInstanceType).arg_types
     if yield_vars
       if yield_vars.size != call_block_arg_types.size
-        raise "wrong number of block argument's arguments (#{call_block_arg_types.size} for #{yield_vars.size})"
+        wrong_number_of "block argument's arguments", call_block_arg_types.size, yield_vars.size
       end
 
       i = 1
@@ -819,7 +819,7 @@ class Crystal::Call
         i += 1
       end
     elsif call_block_arg_types.size != 0
-      raise "wrong number of block argument's arguments (#{call_block_arg_types.size} for 0)"
+      wrong_number_of "block argument's arguments", call_block_arg_types.size, 0
     end
   end
 

@@ -286,6 +286,7 @@ describe "Parser" do
   it_parses "def foo(var : Char[N]); end", Def.new("foo", [Arg.new("var", restriction: "Char".static_array_of("N".path))])
   it_parses "def foo(var : Foo+); end", Def.new("foo", [Arg.new("var", restriction: Virtual.new("Foo".path))])
   it_parses "def foo(var = 1 : Int32); end", Def.new("foo", [Arg.new("var", 1.int32, "Int32".path)])
+  it_parses "def foo(var : Int32 = 1); end", Def.new("foo", [Arg.new("var", 1.int32, "Int32".path)])
   it_parses "def foo; yield; end", Def.new("foo", body: Yield.new, yields: 0)
   it_parses "def foo; yield 1; end", Def.new("foo", body: Yield.new([1.int32] of ASTNode), yields: 1)
   it_parses "def foo; yield 1; yield; end", Def.new("foo", body: [Yield.new([1.int32] of ASTNode), Yield.new] of ASTNode, yields: 1)
@@ -715,6 +716,9 @@ describe "Parser" do
   it_parses "$foo", Global.new("$foo")
 
   it_parses "macro foo;end", Macro.new("foo", [] of Arg, Expressions.new)
+  it_parses "macro [];end", Macro.new("[]", [] of Arg, Expressions.new)
+  it_parses "macro %();end", Macro.new("%", [] of Arg, Expressions.new)
+  it_parses "macro /();end", Macro.new("/", [] of Arg, Expressions.new)
   it_parses %(macro foo; 1 + 2; end), Macro.new("foo", [] of Arg, Expressions.from([" 1 + 2; ".macro_literal] of ASTNode))
   it_parses %(macro foo(x); 1 + 2; end), Macro.new("foo", ([Arg.new("x")]), Expressions.from([" 1 + 2; ".macro_literal] of ASTNode))
   it_parses %(macro foo(x)\n 1 + 2; end), Macro.new("foo", ([Arg.new("x")]), Expressions.from([" 1 + 2; ".macro_literal] of ASTNode))
