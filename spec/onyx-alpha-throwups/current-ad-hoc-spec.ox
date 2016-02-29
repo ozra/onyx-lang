@@ -5,14 +5,56 @@ say "\n\nBefore requires!\n\n"
 require "./crystal-scopes"
 require "wild_colors"
 
-say "\nLet's ROCK\n".red
-
-say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
+'!literal-int = I64
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
 _debug_compiler_start_ = true
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+say "\nLet's ROCK\n".red
+
+say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
+
+foos = %:MY_STR
+1. lots asf self_def fds
+ f  fsd fsdf asdf
+  fasef _debug_compiler_start_ = {_debug_compiler_start_} here
+fasd
+MY_STR
+
+say foos
+
+foos = %s:MY_STR
+2. lots asf self_def fds
+ f  fsd fsdf asdf
+  fasef _debug_compiler_start_ == {_debug_compiler_start_} here
+fasd
+MY_STR
+
+say foos
+
+foos = %:  MY_STR
+3. lots asf self_def fds
+ f  fsd fsdf asdf
+  fasef _debug_compiler_start_ = {_debug_compiler_start_} here
+fasd
+MY_STR
+
+say foos
+
+foos = %s: MY_STR
+4. lots asf self_def fds
+ f  fsd fsdf asdf
+  fasef _debug_compiler_start_ == {_debug_compiler_start_} here
+fasd
+MY_STR
+
+say foos
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 pp 1..2
 pp 1 .. 2
@@ -140,10 +182,6 @@ facts .|.= SomeFacts.PearLover
 say "facts: {facts}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
--- *TODO*
--- change soft lambda syntax?
--- /\|([\w, ]+?)\|/   =>   "($1) ~>"
 
 MY_CONST = do
    x = 0
@@ -691,6 +729,8 @@ def zoo*(a; b; ...c 'Ints) Str ->  'pure
    qwo = "{(a + b)} {c.to–s}"
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
+
+'literal-int=Ints
 
 p zoo 1, 2, 47, 42
 
