@@ -23,7 +23,7 @@ foos = %:MY_STR
  f  fsd fsdf asdf
   fasef _debug_compiler_start_ = {_debug_compiler_start_} here
 fasd
-MY_STR
+MY_STR.upcase.reverse
 
 say foos
 

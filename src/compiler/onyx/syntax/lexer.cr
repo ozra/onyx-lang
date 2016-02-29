@@ -2549,7 +2549,7 @@ module Crystal
             end
 
             if reached_end &&
-               (curch == '\n' || curch == '\0')
+               (curch == '\n' || curch == '\0' || curch == '.')
               @token.type = :DELIMITER_END
             else
               @reader.pos = old_pos
