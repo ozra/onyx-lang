@@ -35,6 +35,7 @@ class ToOnyxSVisitor < Visitor
    def initialize(@str = MemoryIO.new)
       @indent = 0
       @inside_macro = 0
+      @inside_typedef = 0
       @inside_lib = false
    end
 
@@ -75,7 +76,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : StringLiteral)
-      # *TODO* - will       
+      # *TODO* - will
       # node.value.inspect(@str)
       # suffice yet again - since we're not doing stylizing here? or is this non-DRY needed for string-literal-variations?
       @str << "\""
@@ -238,34 +239,52 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : ClassDef)
-      if node.abstract
-         @str << keyword("abstract")
-         @str << " "
-      end
-      if node.struct
-         @str << keyword("struct")
-      else
-         @str << keyword("type")
-      end
+
+      # # *TODO* what to do??
+      # if node.doc
+      #    @str << node.doc
+      # end
+
+
+      @str << keyword("type")
       @str << " "
       node.name.accept self
+
       if type_vars = node.type_vars
-         @str << "["
+         @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
             @str << type_var.to_s
          end
-         @str << "]"
+         @str << ">"
       end
-      if superclass = node.superclass
-         @str << " < "
-         superclass.accept self
+
+      if (superclass = node.superclass) || node.struct || node.abstract
+         @str << " <"
+
+         if node.abstract
+            @str << " "
+            @str << keyword("abstract")
+         end
+
+         if node.struct
+            @str << " "
+            @str << keyword("value")
+         end
+
+         if superclass
+            @str << " "
+            superclass.accept self
+         end
       end
+
       newline
       accept_with_indent(node.body)
 
       append_indent
       @str << keyword("end")
+      newline
+
       false
    end
 
@@ -274,12 +293,12 @@ class ToOnyxSVisitor < Visitor
       @str << " "
       node.name.accept self
       if type_vars = node.type_vars
-         @str << "["
+         @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
             @str << type_var
          end
-         @str << "]"
+         @str << ">"
       end
       newline
       accept_with_indent(node.body)
@@ -294,15 +313,18 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit_call(node, ignore_obj = false)
-      # *TODO* if receiver is Type and method name is "new"
-      #    org|"(pars)"|".new(pars)"|" pars"|".new pars"
-
       if node.name == "`"
          visit_backtick(node.args[0])
          return false
       end
 
       node_obj = ignore_obj ? nil : node.obj
+
+      if node.name == "new"
+         is_new = node_obj.is_a?(Generic) || (node_obj.is_a?(Path) && ('A' <= node_obj.names.last.to_s[0] <= 'Z'))
+      else
+         is_new = false
+      end
 
       need_parens =
          case node_obj
@@ -328,6 +350,31 @@ class ToOnyxSVisitor < Visitor
       @str << "$." if node.global
 
       case # *TODO* org|"."{0}|"["{0}"]" etc.
+      when is_new
+         node_obj = node_obj.not_nil!
+         in_parenthesis(need_parens, node_obj)
+         call_args_need_parens = node.args.empty?
+         @str << (call_args_need_parens ? "(" : " ")
+         printed_arg = false
+         node.args.each_with_index do |arg, i|
+            @str << ", " if printed_arg
+            arg_needs_parens = arg.is_a?(Cast)
+            in_parenthesis(arg_needs_parens) { arg.accept self }
+            printed_arg = true
+         end
+         if named_args = node.named_args
+            named_args.each do |named_arg|
+               @str << ", " if printed_arg
+               named_arg.accept self
+               printed_arg = true
+            end
+         end
+         if block_arg = node.block_arg
+            @str << ", " if printed_arg
+            @str << "&"
+            block_arg.accept self
+         end
+
       when node_obj && (node.name == "[]" || node.name == "[]?")
          in_parenthesis(need_parens, node_obj)
 
@@ -420,7 +467,7 @@ class ToOnyxSVisitor < Visitor
                   else
                      @str << ", "
                   end
-                  @str << "&."
+                  @str << "~."
                   visit_call block_body, ignore_obj: true
                   @str << ")"
                   return false
@@ -493,15 +540,41 @@ class ToOnyxSVisitor < Visitor
       # *TODO* since we don't stylize here, we can hardcode to one style
 
       case literal_style
-      when :dash
-         # *TODO* initial and trailing underscore should reasonably be left be
-         str.gsub(/_/, '-')
+      when :dash, :endash
+         encountered_alpha = false
+         delimiter_count = 0
+         String.build str.size, do |ret|
+            str.each_char_with_index do |chr, i|
+               is_last_char = (i + 1 == str.size)
 
-      when :endash
-         # *TODO* initial and trailing underscore should reasonably be left be
-         str.gsub(/_/, '–')
+               if chr == '_'
+                  delimiter_count += 1
+               end
+
+               if chr != '_' || is_last_char
+                  if delimiter_count > 0
+                     if encountered_alpha
+                        if literal_style == :dash
+                           ret << "-"
+                        else
+                           ret << "–"
+                        end
+                     else
+                        ret << "_" unless is_last_char # done below
+                     end
+                     delimiter_count = 0
+                  end
+
+                  ret << chr
+                  encountered_alpha = true
+               end
+            end
+         end
 
       when :camel
+
+         # *TODO* trailing uscores + doubled uscores etc.
+
          encountered_alpha = false
          was_delimit = false
          String.build str.size, do |ret|
@@ -703,7 +776,7 @@ class ToOnyxSVisitor < Visitor
       # @str << " "
 
       if node_receiver = node.receiver
-         puts ">>>receiver = '#{node_receiver.to_s}  DBG"
+         # puts ">>>receiver = '#{node_receiver.to_s}  DBG"
 
          if node_receiver.to_s == "self"
             @str << "Type"
@@ -715,8 +788,16 @@ class ToOnyxSVisitor < Visitor
 
       if node.name == "initialize"
          @str << def_name("init", :snake)
+
       else
          @str << def_name(node.name, :dash) # node.literal_style)
+
+         @str << case node.visibility
+         when Visibility::Public then ""
+         when Visibility::Private then "*"
+         when Visibility::Protected then "**"
+         else raise "I'm not aware of the visibility mode '#{node.visibility}'"
+         end
       end
 
       @str << "("
@@ -915,7 +996,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : Self)
-      @str << keyword("self")
+      @str << keyword("Self")
    end
 
    def visit(node : Path)
@@ -936,21 +1017,21 @@ class ToOnyxSVisitor < Visitor
          when "StaticArray"
             if node.type_vars.size == 2
                node.type_vars[0].accept self
-               @str << "["
+               @str << "<"
                node.type_vars[1].accept self
-               @str << "]"
+               @str << ">"
                return false
             end
          end
       end
 
       node.name.accept self
-      @str << "["
+      @str << "<"
       node.type_vars.each_with_index do |var, i|
          @str << ", " if i > 0
          var.accept self
       end
-      @str << "]"
+      @str << ">"
       false
    end
 
@@ -1084,7 +1165,7 @@ class ToOnyxSVisitor < Visitor
    def to_s_mutability(flag : Symbol)
       @str << case flag
       when :auto
-         "'"
+         ""       # *TODO* "'" when needed
       when :mut
          "~"
       when :let
@@ -1099,12 +1180,12 @@ class ToOnyxSVisitor < Visitor
       if node.args.empty?
          @str << "~>"
       else
-         @str << "|"
+         @str << "("
          node.args.each_with_index do |arg, i|
             @str << ", " if i > 0
             arg.accept self
          end
-         @str << "|"
+         @str << ") ~>"
       end
 
       newline
@@ -1148,9 +1229,14 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : VisibilityModifier)
-      @str << node.modifier
-      @str << ' '
       node.exp.accept self
+
+      # @str << case node.modifier
+      # when Visibility::Public then ""
+      # when Visibility::Private then "*"
+      # when Visibility::Protected then "**"
+      # else raise "I'm not aware of the visibility mode '#{node.modifier}'"
+      # end
       false
    end
 
@@ -1177,7 +1263,10 @@ class ToOnyxSVisitor < Visitor
       @str << op
       @str << " "
 
-      right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions)
+      # puts "XXX #{node.right.class} XXX"
+
+      right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions) ||
+                           node.right.is_a?(Call) && (node.right as Call).name == "[]="
       in_parenthesis(right_needs_parens, node.right)
       false
    end
@@ -1275,14 +1364,19 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : EnumDef)
-      @str << keyword("enum")
+      @str << keyword("type")
       @str << " "
       @str << node.name.to_s
+      @str << " < "
+      @str << keyword("enum")
+
       if base_type = node.base_type
          @str << " "
          base_type.accept self
       end
+
       newline
+
       with_indent do
          node.members.each do |member|
             append_indent
@@ -1576,7 +1670,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def indent_string
-      "    "
+      "   "
    end
 
    def append_indent

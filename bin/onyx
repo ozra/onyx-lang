@@ -120,7 +120,7 @@ export CRYSTAL_PATH=$CRYSTAL_ROOT/src:libs
 
 if [ -x "$CRYSTAL_DIR/onyx" ]
 then
-  echo -e "\x1B[33mUsing compiled compiler at .build/onyx\x1B[0m"
+  # echo -e "\x1B[33mUsing compiled compiler at .build/onyx\x1B[0m"
   exec "$CRYSTAL_DIR/onyx" "$@"
 elif ! command -v onyx > /dev/null
 then

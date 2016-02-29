@@ -569,7 +569,9 @@ module Crystal
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
-            @token.value = string_range(start)
+            tmp = string_range(start)
+            @token.value = canonicalize_identifier tmp
+            @token.raw = tmp
           else
             unknown_token
           end
@@ -603,7 +605,9 @@ module Crystal
               # Nothing to do
             end
             @token.type = :GLOBAL
-            @token.value = string_range(start)
+            tmp = string_range(start)
+            @token.value = canonicalize_identifier tmp
+            @token.raw = tmp
           else
             unknown_token
           end
@@ -975,7 +979,9 @@ module Crystal
             # Nothing to do
           end
           @token.type = :CONST
-          @token.value = string_range(start)
+          tmp = string_range(start)
+          @token.value = tmp
+          @token.raw = tmp
         elsif ('a' <= current_char <= 'z') || current_char == '_' || current_char.ord > 0x9F
           next_char
           scan_ident(start)
@@ -2338,6 +2344,7 @@ module Crystal
     end
 
     def reset_token
+      @token.raw = ""
       @token.value = nil
       @token.line_number = @line_number
       @token.column_number = @column_number
