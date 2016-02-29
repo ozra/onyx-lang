@@ -18,6 +18,13 @@ pp 1..2
 pp 1 .. 2
 
 
+a(x) -> say "a says: '{x}' and '{x[String]}'"
+a {String => String}
+say ({String => String}).class
+say typeof({String => String})
+
+b(x) -> say "b says: '{x}' and '{x.first}'"
+b [String]
 
 -- a-function(messages List<Str>, pairs {String => String}) ->
 
@@ -982,6 +989,10 @@ type Fn = Proc
 -- syntax and lambda-style type syntax respectively
 def booze1(f1 Fn[I32,List<*>,List<List[Ptr<Int32>]>], f2 Fn[Str, Nil, List<Bool>]) ->
 def booze2(f1 (List<*>, List<List[Ptr<Int32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
+
+-- New list type literal suggestion: cause problems in expressions!
+-- booze3(f1 ([*], [[Ptr<Int32>]]) -> I32, f2 (Nil, [Bool]) -> Str) ->
+-- say "[[Ptr[Int32]]] => " + '[[Ptr[Int32]]].to–s
 
 say "List[List<Ptr[Int32]>] => " + List[List<Ptr[Int32]>].to–s
 

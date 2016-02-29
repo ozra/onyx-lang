@@ -4,7 +4,7 @@ require "json"
 # *TODO* make sure correct cornerstone path can be handled
 def dbg(*objs)
   ifdef !release
-    puts objs
+    STDERR.puts objs
   end
 end
 
@@ -72,6 +72,9 @@ USAGE
       # when "init-cr".starts_with?(command)
       #   options.shift
       #   init(:crystal)
+      when "parse".starts_with?(command)
+        options.shift
+        parse_command
       when "build".starts_with?(command)
         error "Use either 'release' or 'devel' specifically"
       when "release".starts_with?(command)
@@ -167,7 +170,7 @@ USAGE
   end
 
   private def build(mode = :devel)
-    config = create_compiler "build"
+    config = setup_compiler "build"
     if mode == :release
       config.compiler.release = true
     else
@@ -245,7 +248,7 @@ USAGE
   end
 
   private def run_command
-    config = create_compiler "run", run: true
+    config = setup_compiler "run", run: true
     if config.specified_output
       config.compile
       return
@@ -331,6 +334,29 @@ USAGE
     Crystal.print_types result.original_node
   end
 
+
+  private def parse_command
+    config = setup_compiler "parse", no_codegen: true
+
+    if config.output_format != "ast"
+      STDERR.puts "Sorry, parse and dump ast is all I know how to do! ('onyx parse --ast ...')"
+      exit 1
+    end
+
+    config.sources.each do |source|
+      # code = File.read source.filename
+      if source.filename.ends_with?(".cr")
+        parser = Parser.new source.code
+      else
+        parser = OnyxParser.new source.code
+      end
+      parser.filename = source.filename
+      parser.wants_doc = true
+      node = parser.parse
+      node.dump_std
+    end
+  end
+
   private def stylize(how = :standard_style)
     if how == :upgrade
       STDERR.puts "wants to do code upgrade"
@@ -341,9 +367,26 @@ USAGE
   end
 
   private def onyxify
-    # config, result = compile_no_codegen "tool types"
-    # Crystal.print_types result.original_node
-    STDERR.puts "IMPLEMENT ME!"
+    config = setup_compiler "onyxify", no_codegen: true
+
+    config.sources.each do |source|
+      # code = File.read source.filename
+      if source.filename.ends_with?(".cr")
+        parser = Parser.new source.code
+      else
+        parser = OnyxParser.new source.code
+      end
+      parser.filename = source.filename
+      parser.wants_doc = true
+      node = parser.parse
+      node.to_s STDOUT, :onyx
+    end
+
+    # compiler = config.compiler
+    # compiler.wants_doc = true
+    # ret = config.compile
+    # ret.original_node.to_s STDOUT, :onyx
+
   end
 
   private def crystallize
@@ -353,7 +396,7 @@ USAGE
   end
 
   private def compile_no_codegen(command, wants_doc = false, hierarchy = false, cursor_command = false)
-    config = create_compiler command, no_codegen: true, hierarchy: hierarchy, cursor_command: cursor_command
+    config = setup_compiler command, no_codegen: true, hierarchy: hierarchy, cursor_command: cursor_command
     config.compiler.no_codegen = true
     config.compiler.wants_doc = wants_doc
     {config, config.compile}
@@ -393,7 +436,7 @@ USAGE
     end
   end
 
-  private def create_compiler(command, no_codegen = false, run = false, hierarchy = false, cursor_command = false)
+  private def setup_compiler(command, no_codegen = false, run = false, hierarchy = false, cursor_command = false)
     compiler = Compiler.new
     link_flags = [] of String
     opt_filenames = nil
@@ -406,6 +449,11 @@ USAGE
 
     option_parser = OptionParser.parse(options) do |opts|
       opts.banner = "Usage: crystal #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
+
+      opts.on("--ast", "Dump AST to .onyx-cache directory") do
+        no_codegen = true
+        output_format = "ast"
+      end
 
       unless no_codegen
         unless run
@@ -450,7 +498,7 @@ USAGE
       end
 
       unless no_codegen
-        opts.on("--ll", "Dump ll to .crystal directory") do
+        opts.on("--ll", "Dump ll to .onyx-cache directory") do
           compiler.dump_ll = true
         end
         opts.on("--link-flags FLAGS", "Additional flags to pass to the linker") do |some_link_flags|
@@ -546,6 +594,7 @@ USAGE
     end
 
     @config = CompilerConfig.new compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format
+
   rescue ex : OptionParser::Exception
     error ex.message
   end

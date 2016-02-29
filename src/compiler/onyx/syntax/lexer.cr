@@ -20,6 +20,49 @@ ContinuationTokens = [
 ]
 
 module Crystal
+
+  class Lexer
+    def scan_ident(start)
+      while ident_part?(current_char)
+        next_char
+      end
+      case current_char
+      when '!', '?'
+        next_char
+      end
+      @token.type = :IDENT
+
+      str = string_range(start)
+      @token.value = canonicalize_identifier str
+      @token.raw = str
+
+      @token
+    end
+
+    def canonicalize_identifier(idfr_str)
+      do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
+
+      ret = String.build idfr_str.size * 3, do |str|
+        idfr_str.each_char_with_index do |chr, i|
+          if chr == '-'
+            str << '_'
+
+          elsif chr == '–'
+            str << '_'
+
+          elsif do_hump_magic && ('A' <= chr <= 'Z')
+            str << '_'
+            str << chr.downcase
+
+          else
+            str << chr
+          end
+        end
+      end
+      ret
+    end
+  end
+
   class OnyxLexer
     property? doc_enabled
     property? comments_enabled
@@ -47,6 +90,10 @@ module Crystal
       @slash_is_regex = true
       @wants_raw = false
 
+      @dbg–switch = false
+      @dbg–tail–switch = false
+      @dbgindent__ = 0
+
 
       @indent = 0
 
@@ -58,15 +105,81 @@ module Crystal
 
     end
 
+    # DEBUG UTILS #
+    def dbginc
+      @dbgindent__ += 1
+    end
+
+    def dbgdec
+      @dbgindent__ -= 1
+    end
+
+    def dbg_on
+      ifdef !release
+        return if @dbg–switch
+        @dbg–switch = true
+        @dbg–tail–switch = true
+        dbg "TURNS DEBUG LOGGING ON".red
+      end
+    end
+
+    def dbg_off
+      ifdef !release
+        return if !@dbg–switch
+        dbg "TURNS DEBUG LOGGING OFF".red
+        @dbg–switch = false
+        @dbg–tail–switch = false
+      end
+    end
+
+    def dbgtail_off!
+      ifdef !release
+        @dbg–tail–switch = false
+      end
+    end
+
+    def dbgtail(str : String)
+      ifdef !release
+      # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
+        return if @dbg–tail–switch == false
+        STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": /" + str +
+              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "])"
+      end
+    end
+
+    def dbg(str : String)
+      ifdef !release
+      # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
+        return if @dbg–switch == false
+        STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
+              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "])"
+      end
+    end
+
+    def dbgXXX(str : String)
+        STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
+              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "])" + " XXX".red
+
+        # STDOUT.flush
+    end
+
     def dbg_lex(s)
       ifdef !release
-        puts "## #{s} @#{@line_number}:#{@column_number - 1}"
+        return if @dbg–switch == false
+        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}"
       end
     end
 
     def dbg_ind(s)
       ifdef !release
-        puts "## #{s} @#{@line_number}:#{@column_number - 1}"
+        return if @dbg–switch == false
+        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}"
       end
     end
 
@@ -88,6 +201,19 @@ module Crystal
 
     def next_token
       dbg_lex "next_token() - curch ='#{curch.ord}'"
+
+      # *TODO* DEBUG HELPER
+      # *TODO* skip generating token, and eath below followed by newline and continue!
+      ifdef !release
+        if (v = @token.value).is_a?(String)
+           case v
+           when "_debug_compiler_start_"
+              dbg_on
+           when "_debug_compiler_stop_"
+              dbg_off
+           end
+        end
+      end
 
       prev_token_type = @token.type
 
