@@ -55,13 +55,19 @@ module Levenshtein
   # ```
   class Finder
     # :nodoc:
-    record Entry, value, distance
+    record Entry,
+      value : String,
+      distance : Int32
 
-    def initialize(@target : String, tolerance = nil : Int?)
+    @target : String
+    @tolerance : Int32
+    @best_entry : Entry?
+
+    def initialize(@target : String, tolerance : Int? = nil)
       @tolerance = tolerance || (target.size / 5.0).ceil.to_i
     end
 
-    def test(name : String, value = name : String)
+    def test(name : String, value : String = name)
       distance = Levenshtein.distance(@target, name)
       if distance <= @tolerance
         if best_entry = @best_entry

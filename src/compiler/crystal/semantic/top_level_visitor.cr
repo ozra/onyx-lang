@@ -38,6 +38,9 @@ module Crystal
   # subclasses or not and we can tag it as "virtual" (having subclasses), but that concept
   # might disappear in the future and we'll make consider everything as "maybe virtual".
   class TopLevelVisitor < BaseTypeVisitor
+    @process_types : Int32
+    @inside_block : Int32
+
     def initialize(mod)
       super(mod)
 
@@ -197,6 +200,7 @@ module Crystal
 
         if superclass.is_a?(InheritedGenericClass)
           superclass.extending_class = type
+          (superclass.extended_class as GenericClassType).add_inherited(type)
         end
 
         scope.types[name] = type
@@ -525,7 +529,8 @@ module Crystal
           end
         end
 
-        node.enum_type = scope.types[name] = enum_type
+        scope.types[name] = enum_type
+        node.created_new_type = true
       end
 
       node.type = mod.nil
@@ -586,9 +591,15 @@ module Crystal
 
     def visit(node : FunDef)
       return false if @lib_def_pass == 1
-      return false if node.body
 
+      # Only declare the function, but do not type it
+      # (we do that later in MainVisitor)
+      body = node.body
+      node.body = nil
       visit_fun_def(node)
+      node.body = body
+
+      false
     end
 
     def visit(node : Cast)
@@ -803,6 +814,8 @@ module Crystal
 
         mapping = Hash.zip(type.type_vars, node_name.type_vars)
         module_to_include = IncludedGenericModule.new(@mod, type, current_type, mapping)
+
+        type.add_inherited(current_type)
       else
         if type.is_a?(GenericModuleType)
           node_name.raise "#{type} is a generic module"
@@ -843,6 +856,9 @@ module Crystal
     end
 
     class StructOrUnionVisitor < Visitor
+      @type_inference : TopLevelVisitor
+      @struct_or_union : CStructOrUnionType
+
       def initialize(@type_inference, @struct_or_union)
       end
 

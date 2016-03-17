@@ -9,6 +9,8 @@ struct BigInt < Int
   include Comparable(BigInt)
   include Comparable(Float)
 
+  @mpz : LibGMP::MPZ
+
   # Creates a BigInt with the value zero.
   #
   # ```
@@ -54,6 +56,12 @@ struct BigInt < Int
   # ditto
   def initialize(num : Float)
     LibGMP.init_set_d(out @mpz, num)
+  end
+
+  # Returns `num`. Useful for generic code that does `T.new(...)` with `T`
+  # being a `Number`.
+  def self.new(num : BigInt)
+    num
   end
 
   # :nodoc:
@@ -252,19 +260,19 @@ struct BigInt < Int
   end
 
   def to_u8
-    to_i64.to_u8
+    to_u64.to_u8
   end
 
   def to_u16
-    to_i64.to_u16
+    to_u64.to_u16
   end
 
   def to_u32
-    to_i64.to_u32
+    to_u64.to_u32
   end
 
   def to_u64
-    to_i64.to_u64
+    LibGMP.get_ui(self)
   end
 
   def to_f

@@ -4,7 +4,7 @@
 # (in which `_` is the downcase version of `-`).
 struct HTTP::Headers
   # :nodoc:
-  record Key, name do
+  record Key, name : String do
     forward_missing_to @name
 
     def hash
@@ -38,13 +38,15 @@ struct HTTP::Headers
     private def normalize_byte(byte)
       char = byte.chr
 
-      return byte if 'a' <= char <= 'z' || char == '-' # Optimize the common case
-      return byte + 32 if 'A' <= char <= 'Z'
+      return byte if char.lowercase? || char == '-' # Optimize the common case
+      return byte + 32 if char.uppercase?
       return '-'.ord if char == '_'
 
       byte
     end
   end
+
+  @hash : Hash(Key, Array(String))
 
   def initialize
     @hash = Hash(Key, Array(String)).new
@@ -55,6 +57,8 @@ struct HTTP::Headers
   end
 
   def []=(key, value : Array(String))
+    value.each { |val| check_invalid_header_content val }
+
     @hash[wrap(key)] = value
   end
 
@@ -68,6 +72,8 @@ struct HTTP::Headers
   end
 
   def add(key, value : String)
+    check_invalid_header_content value
+
     key = wrap(key)
     existing = @hash[key]?
     if existing
@@ -79,6 +85,8 @@ struct HTTP::Headers
   end
 
   def add(key, value : Array(String))
+    value.each { |val| check_invalid_header_content val }
+
     key = wrap(key)
     existing = @hash[key]?
     if existing
@@ -220,6 +228,19 @@ struct HTTP::Headers
       values.first
     else
       values.join ","
+    end
+  end
+
+  private def check_invalid_header_content(value)
+    # According to RFC 7230, characters accepted as HTTP header
+    # are '\t', ' ', all US-ASCII printable characters and
+    # range from '\x80' to '\xff' (but the last is obsoleted.)
+    value.each_byte do |byte|
+      char = byte.chr
+      next if char == '\t'
+      if char < ' ' || char > '\u{ff}' || char == '\u{7e}'
+        raise ArgumentError.new("header content contains invalid character #{char.inspect}")
+      end
     end
   end
 end

@@ -45,6 +45,13 @@ module Crystal
   # idea on how to generate code for unreachable branches, because they have no type,
   # and for now the codegen only deals with typed nodes.
   class CleanupTransformer < Transformer
+    @program : Program
+    @transformed : Set(UInt64)
+    @def_nest_count : Int32
+    @last_is_truthy : Bool
+    @last_is_falsey : Bool
+    @const_being_initialized : Path?
+
     def initialize(@program)
       @transformed = Set(typeof(object_id)).new
       @def_nest_count = 0
@@ -225,8 +232,10 @@ module Crystal
     def transform(node : EnumDef)
       super
 
-      node.enum_type.try &.types.each_value do |const|
-        (const as Const).initialized = true
+      if node.created_new_type
+        node.resolved_type.types.each_value do |const|
+          (const as Const).initialized = true
+        end
       end
 
       node
@@ -294,7 +303,7 @@ module Crystal
 
       # Check if the block has its type freezed and it doesn't match the current type
       if block && (freeze_type = block.freeze_type) && (block_type = block.type?)
-        unless freeze_type.is_restriction_of_all?(block_type)
+        unless block_type.implements?(freeze_type)
           freeze_type = freeze_type.base_type if freeze_type.is_a?(VirtualType)
           node.raise "expected block to return #{freeze_type}, not #{block_type}"
         end
@@ -401,7 +410,8 @@ module Crystal
     end
 
     class ClosuredVarsCollector < Visitor
-      getter vars
+      getter vars : Array(ASTNode)
+      @a_def : Def
 
       def self.collect(a_def)
         visitor = new a_def
@@ -537,6 +547,18 @@ module Crystal
     #     end
     #   end
     # end
+
+    def transform(node : While)
+      super
+
+      # If the condition is a NoReturn, just replace the whole
+      # while with it, since the body will never be executed
+      if node.cond.no_returns?
+        return node.cond
+      end
+
+      node
+    end
 
     def transform(node : If)
       node.cond = node.cond.transform(self)
@@ -800,6 +822,8 @@ module Crystal
       end
     end
 
+    @false_literal : BoolLiteral?
+
     def false_literal
       @false_literal ||= begin
         false_literal = BoolLiteral.new(false)
@@ -807,6 +831,8 @@ module Crystal
         false_literal
       end
     end
+
+    @true_literal : BoolLiteral?
 
     def true_literal
       @true_literal ||= begin

@@ -913,4 +913,41 @@ describe "Type inference: class" do
       ),
       "instance variable '@x' of Foo must be Int32"
   end
+
+  it "errors if assigning superclass to declared instance var" do
+    assert_error %(
+      class Foo
+      end
+
+      class Bar < Foo
+      end
+
+      class Main
+        @bar : Bar
+
+        def initialize
+          @bar = Foo.new
+        end
+      end
+
+      Main.new
+      ),
+      "instance variable '@bar' of Main must be Bar"
+  end
+
+  it "hoists instance variable initializer" do
+    assert_type(%(
+      a = Foo.new.bar + 1
+
+      class Foo
+        @bar = 1
+
+        def bar
+          @bar
+        end
+      end
+
+      a
+      )) { int32 }
+  end
 end
