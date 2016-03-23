@@ -7,11 +7,11 @@ struct XML::Node
     initialize(node as LibXML::Node*)
   end
 
-  def initialize(node : LibXML::DocPtr)
+  def initialize(node : LibXML::Doc*)
     initialize(node as LibXML::Node*)
   end
 
-  def initialize(node : LibXML::DocPtr)
+  def initialize(node : LibXML::Doc*)
     initialize(node as LibXML::Node*)
   end
 
@@ -81,6 +81,26 @@ struct XML::Node
 
   def document?
     type == XML::Type::DOCUMENT_NODE
+  end
+
+  # Returns the encoding of this node's document
+  def encoding
+    if document?
+      encoding = (@node as LibXML::Doc*).value.encoding
+      encoding ? String.new(encoding) : nil
+    else
+      document.encoding
+    end
+  end
+
+  # Returns the version of this node's document
+  def version
+    if document?
+      version = (@node as LibXML::Doc*).value.version
+      version ? String.new(version) : nil
+    else
+      document.version
+    end
   end
 
   def element?
@@ -311,7 +331,7 @@ struct XML::Node
   end
 
   # :nodoc:
-  SAVE_MUTEX = Mutex.new
+  SAVE_MUTEX = Thread::Mutex.new
 
   def to_xml(io : IO, indent = 2, indent_text = " ", options : SaveOptions = SaveOptions.xml_default)
     # We need to use a mutex because we modify global libxml variables
@@ -332,7 +352,7 @@ struct XML::Node
           0
         },
         Box(IO).box(io),
-        nil,
+        @node.value.doc.value.encoding,
         options)
       LibXML.xmlSaveTree(save_ctx, self)
       LibXML.xmlSaveClose(save_ctx)

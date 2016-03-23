@@ -417,6 +417,10 @@ module Crystal
 
       self.type = self.def.type.program.fun_of(types)
     end
+
+    def return_type
+      (@type as FunInstanceType).return_type
+    end
   end
 
   class Generic
@@ -560,9 +564,18 @@ module Crystal
 
   class ClassVar
     property! owner : Type
-    property! var : Var
+    property! var : ClassVar
     property class_scope : Bool
     @class_scope = false
+    property? thread_local : Bool
+    @thread_local = false
+  end
+
+  class Global
+    property! owner : Type
+    property! var : Global
+    property? thread_local : Bool
+    @thread_local = false
   end
 
   class Path

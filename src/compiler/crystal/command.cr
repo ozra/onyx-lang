@@ -16,7 +16,9 @@ class Crystal::Command
         build                    compile program
         deps                     install project dependencies
         docs                     generate documentation
+        env                      print Crystal environment information
         eval                     eval code from args or standard input
+        play                     starts crystal playground server
         run (default)            compile and run program
         spec                     compile and run specs (in spec directory)
         tool                     run a tool
@@ -63,13 +65,19 @@ class Crystal::Command
       when "build".starts_with?(command)
         options.shift
         build
+      when "play".starts_with?(command)
+        options.shift
+        playground
       when "deps".starts_with?(command)
         options.shift
         deps
       when "docs".starts_with?(command)
         options.shift
         docs
-      when "eval".starts_with?(command)
+      when command == "env"
+        options.shift
+        env
+      when command == "eval"
         options.shift
         eval
       when "run".starts_with?(command)
@@ -106,6 +114,8 @@ class Crystal::Command
       puts ex
     end
     exit 1
+  rescue ex : OptionParser::Exception
+    error ex.message
   rescue ex
     puts ex
     ex.backtrace.each do |frame|
@@ -153,6 +163,37 @@ class Crystal::Command
   private def build
     config = create_compiler "build"
     config.compile
+  end
+
+  private def env
+    if ARGV.size == 1 && {"--help", "-h"}.includes?(ARGV[0])
+      puts <<-USAGE
+      Usage: crystal env [var ...]
+
+      Prints Crystal environment information.
+
+      By default it prints information as a shell script.
+      If one or more variable names is given as arguments,
+      it prints the value of each named variable on its own line.
+      USAGE
+
+      exit
+    end
+
+    vars = {
+      "CRYSTAL_PATH":    CrystalPath::DEFAULT_PATH,
+      "CRYSTAL_VERSION": Config::VERSION || "",
+    }
+
+    if ARGV.empty?
+      vars.each do |key, value|
+        puts "#{key}=#{value.inspect}"
+      end
+    else
+      ARGV.each do |key|
+        puts vars[key]?
+      end
+    end
   end
 
   private def eval
@@ -441,6 +482,39 @@ class Crystal::Command
     Crystal.print_types result.original_node
   end
 
+  private def playground
+    server = Playground::Server.new
+
+    OptionParser.parse(options) do |opts|
+      opts.banner = "Usage: crystal play [options] [file]\n\nOptions:"
+
+      opts.on("-p PORT", "--port PORT", "Runs the playground on the specified port") do |port|
+        server.port = port.to_i
+      end
+
+      opts.on("-b HOST", "--binding HOST", "Binds the playground to the specified IP") do |host|
+        server.host = host
+      end
+
+      opts.on("-v", "--verbose", "Display detailed information of executed code") do
+        server.logger.level = Logger::Severity::DEBUG
+      end
+
+      opts.on("-h", "--help", "Show this message") do
+        puts opts
+        exit 1
+      end
+
+      opts.unknown_args do |before, after|
+        if before.size > 0
+          server.source = gather_sources([before.first]).first
+        end
+      end
+    end
+
+    server.start
+  end
+
   private def compile_no_codegen(command, wants_doc = false, hierarchy = false, cursor_command = false)
     config = create_compiler command, no_codegen: true, hierarchy: hierarchy, cursor_command: cursor_command
     config.compiler.no_codegen = true
@@ -642,8 +716,6 @@ class Crystal::Command
     end
 
     @config = CompilerConfig.new compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format
-  rescue ex : OptionParser::Exception
-    error ex.message
   end
 
   private def gather_sources(filenames)

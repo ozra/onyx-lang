@@ -8,13 +8,13 @@ else
 end
 
 class HTTP::WebSocketHandler < HTTP::Handler
-  @proc : WebSocket ->
+  @proc : WebSocket, Server::Context ->
 
-  def initialize(&@proc : WebSocket ->)
+  def initialize(&@proc : WebSocket, Server::Context ->)
   end
 
   def call(context)
-    if context.request.headers["Upgrade"]? == "websocket" && context.request.headers["Connection"]? == "Upgrade"
+    if context.request.headers["Upgrade"]? == "websocket" && context.request.headers.includes_word?("Connection", "Upgrade")
       key = context.request.headers["Sec-Websocket-Key"]
 
       ifdef without_openssl
@@ -30,7 +30,7 @@ class HTTP::WebSocketHandler < HTTP::Handler
       response.headers["Sec-Websocket-Accept"] = accept_code
       response.upgrade do |io|
         ws_session = WebSocket.new(io)
-        @proc.call(ws_session)
+        @proc.call(ws_session, context)
         ws_session.run
         io.close
       end

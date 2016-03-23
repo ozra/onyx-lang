@@ -384,9 +384,9 @@ module Crystal
               when InstanceVar
                 instance_var_ptr (context.type.remove_typedef as InstanceVarContainer), node_exp.name, llvm_self_ptr
               when ClassVar
-                get_global node_exp, class_var_global_name(node_exp), node_exp.type
+                get_global node_exp, class_var_global_name(node_exp), node_exp.type, node_exp.var
               when Global
-                get_global node_exp, node_exp.name, node_exp.type
+                get_global node_exp, node_exp.name, node_exp.type, node_exp.var
               when Path
                 accept(node_exp)
                 global_name = node_exp.target_const.not_nil!.llvm_name
@@ -409,6 +409,10 @@ module Crystal
       # of bindings and type propagation.
       if node.force_void
         node.def.set_type @mod.void
+      else
+        # Use fun literal's type, which might have a broader type then the body
+        # (for example, return type: Int32 | String, body: String)
+        node.def.set_type node.return_type
       end
 
       the_fun = codegen_fun fun_literal_name, node.def, context.type, fun_module: @main_mod, is_fun_literal: true, is_closure: is_closure
@@ -809,9 +813,9 @@ module Crystal
             when InstanceVar
               instance_var_ptr (context.type as InstanceVarContainer), target.name, llvm_self_ptr
             when Global
-              get_global target, target.name, target_type
+              get_global target, target.name, target_type, target.var
             when ClassVar
-              get_global target, class_var_global_name(target), target_type
+              get_global target, class_var_global_name(target), target_type, target.var
             when Var
               # Can't assign void
               return if target.type.void?
@@ -831,7 +835,17 @@ module Crystal
               node.raise "Unknown assign target in codegen: #{target}"
             end
 
-      store_instruction = assign ptr, target_type, value.type, @last
+      if target.is_a?(Var) && target.special_var? && !target_type.reference_like?
+        # For special vars that are not reference-like, the function argument will
+        # be a pointer to the struct value. So, we need to first cast the value to
+        # that type (without the pointer), load it, and store it in the argument.
+        # If it's a reference-like then it's just a pointer and we can reuse the
+        # logic in the other branch.
+        upcasted_value = upcast @last, target_type, value.type
+        store load(upcasted_value), ptr
+      else
+        assign ptr, target_type, value.type, @last
+      end
 
       false
     end
@@ -843,13 +857,20 @@ module Crystal
       end
     end
 
-    def get_global(node, name, type)
+    def get_global(node, name, type, real_var)
+      if real_var.thread_local?
+        get_thread_local(name, type, real_var)
+      else
+        get_global_var(name, type, real_var)
+      end
+    end
+
+    def get_global_var(name, type, real_var)
       ptr = @llvm_mod.globals[name]?
       unless ptr
         llvm_type = llvm_type(type)
 
-        global_var = @mod.global_vars[name]?
-        thread_local = global_var.try(&.has_attribute?("ThreadLocal")) || node.has_attribute?("ThreadLocal")
+        thread_local = real_var.thread_local?
 
         # Declare global in this module as external
         ptr = @llvm_mod.globals.add(llvm_type, name)
@@ -870,6 +891,10 @@ module Crystal
         end
       end
 
+      ptr
+    end
+
+    def get_thread_local(name, type, real_var)
       # If it's thread local, we use a NoInline function to access it
       # because of http://lists.llvm.org/pipermail/llvm-dev/2016-February/094736.html
       #
@@ -884,25 +909,19 @@ module Crystal
       # which is the same as the global, but through a non-inlined function.
       #
       # Making a function that just returns the pointer doesn't work: LLVM inlines it.
-      if ptr.thread_local?
-        fun_name = "*#{name}"
-        thread_local_fun = @main_mod.functions[fun_name]?
-        unless thread_local_fun
-          thread_local_fun = @main_mod.functions.add(fun_name, ([llvm_type(type).pointer.pointer]), LLVM::Void) do |func|
-            func.basic_blocks.append do |builder|
-              builder.store ptr, func.params[0]
-              builder.ret
-            end
-          end
-          thread_local_fun.add_attribute LLVM::Attribute::NoInline
+      fun_name = "*#{name}"
+      thread_local_fun = @main_mod.functions[fun_name]?
+      unless thread_local_fun
+        thread_local_fun = define_main_function(fun_name, [llvm_type(type).pointer.pointer], LLVM::Void) do |func|
+          builder.store get_global_var(name, type, real_var), func.params[0]
+          builder.ret
         end
-        thread_local_fun = check_main_fun(fun_name, thread_local_fun)
-        indirection_ptr = alloca llvm_type(type).pointer
-        call thread_local_fun, indirection_ptr
-        ptr = load indirection_ptr
+        thread_local_fun.add_attribute LLVM::Attribute::NoInline
       end
-
-      ptr
+      thread_local_fun = check_main_fun(fun_name, thread_local_fun)
+      indirection_ptr = alloca llvm_type(type).pointer
+      call thread_local_fun, indirection_ptr
+      ptr = load indirection_ptr
     end
 
     def class_var_global_name(node)
@@ -949,15 +968,15 @@ module Crystal
     end
 
     def visit(node : Global)
-      read_global node, node.name.to_s, node.type
+      read_global node, node.name.to_s, node.type, node.var
     end
 
     def visit(node : ClassVar)
-      read_global node, class_var_global_name(node), node.type
+      read_global node, class_var_global_name(node), node.type, node.var
     end
 
-    def read_global(node, name, type)
-      @last = get_global node, name, type
+    def read_global(node, name, type, real_var)
+      @last = get_global node, name, type, real_var
       @last = to_lhs @last, type
     end
 

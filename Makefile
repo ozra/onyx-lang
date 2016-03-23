@@ -44,7 +44,7 @@ $(O)/all_spec: deps $(SOURCES) $(SPEC_SOURCES)
 
 $(O)/onyx: deps $(SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) $(EXPORTS) ./bin/cr-ox build $(FLAGS) -o $@ src/compiler/onyx.cr
+	$(BUILD_PATH) $(EXPORTS) ./bin/cr-ox build $(FLAGS) -o $@ src/compiler/onyx.cr -D without_openssl -D without_zlib
 
 $(LLVM_EXT_OBJ): $(LLVM_EXT_DIR)/llvm_ext.cc
 	$(CXX) -c -o $@ $< `$(LLVM_CONFIG) --cxxflags`
