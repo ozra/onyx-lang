@@ -969,9 +969,9 @@ class OnyxParser < OnyxLexer
                   "^"
                when ".~."
                   "~"
-               # when "not"
-               #    dbg "\n\n\ndoes this happen? (not in parse_operator)\n\n\n".red
-               #    "!"
+
+               when "~~"
+                  "==="
 
                else
                   method
@@ -999,7 +999,7 @@ class OnyxParser < OnyxLexer
    parse_operator :or, :and, "Or.new left, right", ":\"||\", :or"
    parse_operator :and, :equality, "And.new left, right", ":\"&&\", :and"
    parse_operator :equality, :cmp, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<\", :\"<=\", :\">\", :\">=\", :\"<=>\""
-   parse_operator :cmp, :logical_or, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :is, :\"!=\", :isnt, :\"=~\", :\".~.=\", :\"===\""
+   parse_operator :cmp, :logical_or, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :is, :\"!=\", :isnt, :\"=~\", :\".~.=\", :\"~~\", :\"!~~\""
    parse_operator :logical_or, :logical_and, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".|.\", :\".^.\""
    parse_operator :logical_and, :shift, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".&.\""
    parse_operator :shift, :add_or_sub, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<<\", :\">>\""
@@ -1055,7 +1055,7 @@ class OnyxParser < OnyxLexer
 
    parse_operator :pow, :atomic_with_method, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"**\""
 
-   AtomicWithMethodCheck = [:NUMBER, :IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"===", :"[]", :"[]=", :"[]?", :"!", :"not"]
+   AtomicWithMethodCheck = [:NUMBER, :IDFR, :"+", :"-", :"*", :"/", :"%", :"|", :"&", :"^", :"**", :"<<", :"<", :"<=", :"==", :"is", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"<=>", :"||", :"or", :"&&", :"and", :"~~", :"!~~", :"[]", :"[]=", :"[]?", :"!", :"not"]
 
    def parse_atomic_with_method
       dbg "parse_atomic_with_method"
@@ -1964,8 +1964,12 @@ class OnyxParser < OnyxLexer
             # binary operator or assign
             # *TODO* - RE–USE CODE FROM PARSE_PAREN_CALL_ARGS!!!
             case current_char #   peek_next_char
-            when .alpha?, '_', '"', '%',.ord_gt?(0x9F), .digit?, '(', '[', '{', '!', '$'
+            when .alpha?, '_', '"', '%',.ord_gt?(0x9F), .digit?, '(', '[', '{', '$'
                return parse_constish_type_new_call_sugar const
+            when '!'
+               if (p = peek_next_char) != '=' && p != '~'
+                  return parse_constish_type_new_call_sugar const
+               end
             end
          end
       end
@@ -2941,7 +2945,7 @@ class OnyxParser < OnyxLexer
    end
 
 
-   def parse_type_def_body(def_kind) : Expressions
+   def parse_type_def_body(def_kind) : ASTNode # Expressions
       dbg "parse_type_def_body ->"
 
       members = [] of ASTNode
@@ -4891,8 +4895,8 @@ class OnyxParser < OnyxLexer
       exp
    end
 
-   DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
-   DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"is", :"===", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :".^.", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
+   DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"is", :"!~~", :"~~", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
+   DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"is", :"!~~", :"~~", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :".^.", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
 
    # *TODO* remove is_abstract - prefix version _when_ it seems like it's fine
    # using only the "abstract-body–notation"
@@ -4954,21 +4958,30 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
       end
 
+      #
+      # DEFFED FUNCTION NAME PRE–MANGLING!
       # *TODO* error message column is fucked up! Points to first param!!!
       case name
       when "init" # Onyx uses "init", but promotes it to "initialize" for Crystal compatibility
          name = "initialize"
+
+      when "~~"
+         name = "==="
+
       when "initialize"
          dbgtail_off!
          raise "initialize is a reserved internal method name. Use 'init' for constructor code.", name_line_number, name_column_number
       end
 
+      #
+      #
+
       marked_visibility =  if tok? :"*"
                               next_token
-                              Visibility::Private
+                              Visibility::Protected
                            elsif tok? :"**"
                               next_token
-                              Visibility::Protected
+                              Visibility::Private
                            else
                               Visibility::Public
                            end
@@ -5328,7 +5341,7 @@ class OnyxParser < OnyxLexer
          # next_token_skip_space_or_newline
          location = @token.location
          mutability, storage, type = parse_qualifer_and_type()
-         pp mutability.to_s + ", " + storage.to_s + ", " + type.to_s
+         pp "type parts: #{mutability}, #{storage}, #{type}"
 
          restriction = type
       else
@@ -7374,13 +7387,12 @@ class OnyxParser < OnyxLexer
 
       dbg "we got the mandatory '->'"
 
-      next_token_skip_space
+      next_token
 
       dbg "check for callable variations"
 
       # *TODO* these variations look like shit - ditch. replace with pragmas and
       # grouping pragmas
-
       case
       when tok? :"@"
          callable_type = :strict_method
@@ -7396,6 +7408,8 @@ class OnyxParser < OnyxLexer
          callable_type = :standard_callable
       end
 
+
+
       if tok? :"!"
          dbg "got returns-nothing modifier!"
 
@@ -7406,6 +7420,8 @@ class OnyxParser < OnyxLexer
          dbg "expl or auto return type"
          returns_nothing = false
       end
+
+      skip_space
 
       dbg "check for def suffix-pragmas"
       if pragmas? # tok? :PRAGMA
@@ -7533,7 +7549,7 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   def handle_nest_end(known_nil_nest = false : Bool) : Bool
+   def handle_nest_end(known_nil_nest : Bool = false) : Bool
       dbg "handle_nest".yellow + "_end".red
       if tok? :";"
          next_token_skip_space

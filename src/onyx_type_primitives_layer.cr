@@ -53,5 +53,3 @@ end
 # alias Index       = StdInt
 alias FastInt      = StdInt
 alias CompactInt   = I32
-
-

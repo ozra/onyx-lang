@@ -16,6 +16,41 @@ _debug_compiler_start_ = true
 
 say "\nLet's ROCK\n".red
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+
+
+a1 = String
+b1 = "fdsaf"
+
+say "a ~~ b == {a1 ~~ b1}"
+say "Int !~~ b == {Int !~~ b1}"
+say "a !~~ b == {a1 !~~ b1}"
+
+x = /x/
+
+say "x ~~ \"zxy\" == {x ~~ "zxy"}"
+say "\"zxy\" ~~ x == {"zxy" ~~ x}"
+say "x !~~ \"zxy\" == {x !~~ "zxy"}"
+say "\"zxy\" !~~ x == {"zxy" !~~ x}"
+
+say "x =~ \"zxy\" == {x =~ "zxy"}"
+say "\"zxy\" =~ x == {"zxy" =~ x}"
+
+-- say "x !~ \"xy\" == {x !~ "xy"}"
+-- say "\"xy\" !~ x == {"xy" !~ x}"
+
+branch x
+   "nilx"
+      say "~~ was rex"
+   0.0
+      say "~~ was 0.0"
+   *
+      say "was not eq"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+
 say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
 
 foos = %:MY_STR

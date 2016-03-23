@@ -394,6 +394,13 @@ module Crystal
         case nextch
         when '='
           toktype_then_nextch :"!="
+        when '~'
+          if peek_nextch == '~'
+            nextch
+            toktype_then_nextch :"!~~"
+          else
+            @token.type = :"!~"
+          end
         else
           @token.type = :"!"
         end
@@ -420,7 +427,9 @@ module Crystal
         case nextch
         when '='
           toktype_then_nextch :">="
-          # when '>'  # needs to be tracked in parser now - generics or operator
+          # when '>'  # needs to be tracked in parser now - can be generic
+          # parametrization or operator!
+
           #   case nextch
           #   when '='
           #     toktype_then_nextch :">>="
@@ -665,8 +674,8 @@ module Crystal
           toktype_then_nextch :"~."
         when '>'
           toktype_then_nextch :"~>"
-        when '='
-          toktype_then_nextch :"~="
+        when '~'
+          toktype_then_nextch :"~~"
         else
           @token.type = :"~"
         end

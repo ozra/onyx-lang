@@ -23,19 +23,23 @@ echo "Let's sudo you first, so that's done:"
 sudo mkdir -p /opt
 
 
-echo "Gets Crystal 0.14.2"
 
-# curl can't handle the redirect to data-store!
-wget 'https://github.com/manastech/crystal/releases/download/0.14.2/crystal-0.14.2-1-linux-x86_64.tar.gz' -O - | tar zx
-echo "Installs Crystal 0.14.2 at /opt/cr-ox/"
+# echo "Gets Crystal 0.14.2"
 
-sudo mkdir -p /opt
-sudo rm -rf /opt/cr-ox
-sudo cp -a crystal-0.14.2-1/ /opt/cr-ox
-sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox
-sudo ln -fs /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox
+# # curl can't handle the redirect to data-store!
+# wget 'https://github.com/manastech/crystal/releases/download/0.14.2/crystal-0.14.2-1-linux-x86_64.tar.gz' -O - | tar zx
+# echo "Installs Crystal 0.14.2 at /opt/cr-ox/"
 
-rm -rf crystal-0.14.2-1
+# sudo mkdir -p /opt
+# sudo rm -rf /opt/cr-ox
+# sudo cp -a crystal-0.14.2-1/ /opt/cr-ox
+# sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox
+# sudo ln -fs /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox
+
+# rm -rf crystal-0.14.2-1
+
+
+
 # echo "Get Onyx latest"
 
 # git clone --depth 1 --branch master https://github.com/ozra/onyx-lang
