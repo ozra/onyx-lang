@@ -170,6 +170,7 @@ class Nesting
       case when
       while until for each loop
       try rescue catch ensure
+      indent_call
    )
 
    def self.nesting_keywords
@@ -264,7 +265,7 @@ class NestingStack
          end
          (@stack.size - 1..0).each do |i|
             ifdef !release
-               STDERR.puts @stack[i].indent
+               STDERR.puts "ind: #{@stack[i].indent}"
             end
             # *TODO*
             # check so that the indent–level EXISTS further up (we don't allow dedent
@@ -354,6 +355,8 @@ class OnyxParser < OnyxLexer
       @def_nest = 0
       @certain_def_count = 0
       @def_parsing = 0
+
+      @control_construct_parsing = 0 # *TODO* this could probably be just a flag, huh!
 
       @type_nest = 0
 
@@ -997,7 +1000,55 @@ class OnyxParser < OnyxLexer
 
 
    parse_operator :or, :and, "Or.new left, right", ":\"||\", :or"
-   parse_operator :and, :equality, "And.new left, right", ":\"&&\", :and"
+   parse_operator :and, :possible_tuple, "And.new left, right", ":\"&&\", :and"
+
+
+   def parse_possible_tuple
+      parse_equality
+
+      # *TODO* *9* continue the tuple code
+
+      # if ! tok? :"<"
+      #    return parse_equality
+
+      # begin
+      #    tup = parse_tuple
+
+      # rescue WrongParsePathException
+
+   end
+
+   def parse_tuple
+      location = @token.location
+      next_token_skip_space
+
+      exps = [] of ASTNode
+      end_location = nil
+
+      open("tuple literal", location) do
+         exps << first_exp
+         while @token.type != :"}"
+            exps << parse_expression
+            # skip_statement_end
+
+            # if @token.type == :","
+            #    next_token_skip_space_or_newline
+            # end
+
+            if tok? :",", :NEWLINE, :INDENT, :DEDENT
+               parse_item_separator
+            end
+         end
+         end_location = token_end_location
+         next_token_skip_space
+      end
+
+      tupish_pre_set = TupleLiteral.new(exps).at_end(end_location)
+      # tupish_pre_set.name = "_Settish_"
+      tupish_pre_set
+   end
+
+
    parse_operator :equality, :cmp, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<\", :\"<=\", :\">\", :\">=\", :\"<=>\""
    parse_operator :cmp, :logical_or, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :is, :\"!=\", :isnt, :\"=~\", :\".~.=\", :\"~~\", :\"!~~\""
    parse_operator :logical_or, :logical_and, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".|.\", :\".^.\""
@@ -1489,7 +1540,8 @@ class OnyxParser < OnyxLexer
          parse_array_literal_or_multi_assign
 
       when :"{"
-         parse_hash_or_tuple_literal
+         # parse_hash_or_set_literal
+         parse_hash_or_set_literal
 
       when MACRO_VAR_EXPRS_START_DELIMITER # *TODO* ONLY IN MACRO CONTEXT!
          macro_exp = parse_tplmacro_expression
@@ -1981,7 +2033,7 @@ class OnyxParser < OnyxLexer
 
    def parse_constish_tied_listish_literal(idfr)
       # usertype literal
-      tuple_or_hash = parse_hash_or_tuple_literal allow_of: false
+      tuple_or_hash = parse_hash_or_set_literal allow_of: false
 
       skip_space
 
@@ -2456,6 +2508,8 @@ class OnyxParser < OnyxLexer
       # for v in 0 til 10
       # for v in 1 to 10
 
+      @control_construct_parsing += 1  # for "indent is call" syntax excemption
+
       # we should push a new scope huh?
       slash_is_regex!
       for_indent = @indent
@@ -2561,6 +2615,8 @@ class OnyxParser < OnyxLexer
 
       dbg "check block start"
 
+      @control_construct_parsing -= 1  # for "indent is call" syntax excemption
+
       nest_kind, dedent_level = parse_nest_start(:generic, for_indent)
       add_nest :for, dedent_level, "", (nest_kind == :LINE_NEST), false
 
@@ -2587,11 +2643,14 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_while_or_until(klass)
+      @control_construct_parsing += 1  # for "indent is call" syntax excemption
       while_indent = @indent
       slash_is_regex!
       next_token_skip_space_or_newline
 
       cond = parse_op_assign_no_control allow_suffix: false
+
+      @control_construct_parsing -= 1  # for "indent is call" syntax excemption
 
       slash_is_regex!
       # skip_statement_end
@@ -2657,7 +2716,7 @@ class OnyxParser < OnyxLexer
       skip_space
 
 
-      unless tok? :"=", :"<", :"<<"
+      unless tok? :"=", :"<", :"<<" # *TODO* remove << support
          base_type = nil #Path-or-something "Reference" # class
          builder = :object
 
@@ -4039,8 +4098,8 @@ class OnyxParser < OnyxLexer
       ArrayLiteral.new(exps, of).at(location).at_end(end_location)
    end
 
-   def parse_hash_or_tuple_literal(allow_of = true)
-      dbg "parse_hash_or_tuple_literal"
+   def parse_hash_or_set_literal(allow_of = true)
+      dbg "parse_hash_or_set_literal"
 
       location = @token.location
       line = @line_number
@@ -4074,10 +4133,10 @@ class OnyxParser < OnyxLexer
                parse_item_separator
                slash_is_regex!
                # next_token_skip_space_or_newline
-               return parse_tuple first_key, location
+               return parse_set first_key, location
 
             when :"}"
-               return parse_tuple first_key, location
+               return parse_set first_key, location
             else
                raise "expected to parse hash or tuple literal - but now I'm lost"
                # check :":"
@@ -4142,7 +4201,7 @@ class OnyxParser < OnyxLexer
    #    (@token.type == :IDFR || @token.type == :CONST) && current_char == '#'
    # end
 
-   def parse_tuple(first_exp, location)
+   def parse_set(first_exp, location)
       exps = [] of ASTNode
       end_location = nil
 
@@ -4164,7 +4223,9 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
       end
 
-      TupleLiteral.new(exps).at_end(end_location)
+      tupish_pre_set = TupleLiteral.new(exps).at_end(end_location)
+      # ary = ArrayLiteral.new(exps, name: Path.global("_Settish_")).at(tupish_pre_set.location)
+      # ary
    end
 
    def new_hash_literal(entries, line, column, end_location, allow_of = true)
@@ -4220,6 +4281,8 @@ class OnyxParser < OnyxLexer
    def parse_case
       dbg "parse_case"
 
+      @control_construct_parsing += 1  # for "indent is call" syntax excemption
+
       # *TODO* depending on (match|branch|case) - the end–token should match
       case_indent_level = @indent
 
@@ -4231,6 +4294,8 @@ class OnyxParser < OnyxLexer
          cond = parse_op_assign_no_control
          skip_statement_end
       end
+
+      @control_construct_parsing -= 1  # for "indent is call" syntax excemption
 
       dbg "parse_case - check block start"
       nest_kind, dedent_level = parse_nest_start(:case, case_indent_level)
@@ -5466,7 +5531,9 @@ class OnyxParser < OnyxLexer
       end
 
       dbg "parse_if condition"
+      @control_construct_parsing += 1  # for "indent is call" syntax excemption
       cond = parse_op_assign_no_control allow_suffix: false
+      @control_construct_parsing -= 1
       dbg "parse_if code block"
       parse_if_after_condition If, if_indent, cond #, check_end
    ensure
@@ -5679,6 +5746,7 @@ class OnyxParser < OnyxLexer
       location = @token.location
       end_location = token_end_location
       doc = @token.doc
+      curr_indent = @indent
 
       case @token.value
       when "is_a?", "of?" # :is_a?
@@ -5750,8 +5818,9 @@ class OnyxParser < OnyxLexer
       # else
       #    parse args and that
 
+      @temp_temp__curr_namish = name # *TODO* remove after test!
 
-      has_parens, call_args = parse_call_args()
+      has_parens, call_args = parse_call_args curr_indent: curr_indent
 
       instance = nil
 
@@ -5822,7 +5891,7 @@ class OnyxParser < OnyxLexer
 
    record CallArgs, args, block, explicit_block_param, named_args, stopped_on_do_after_space, end_location
 
-   def parse_call_args(allow_curly = true)
+   def parse_call_args(allow_curly = true, curr_indent = -47)
       dbg "parse_call_args ->"
 
       case @token.type
@@ -5842,6 +5911,14 @@ class OnyxParser < OnyxLexer
          end_location = token_end_location
          next_token
          {true, parse_call_args_spaced check_plus_and_minus: true, allow_curly: allow_curly}
+
+      when :INDENT
+         return {false, nil} if @control_construct_parsing != 0
+
+         dbg "- parse_call_args -> INDENT"
+         end_location = token_end_location
+         next_token
+         {true, parse_call_args_indented curr_indent, check_plus_and_minus: true, allow_curly: allow_curly}
 
       else
          {false, nil}
@@ -5935,7 +6012,7 @@ class OnyxParser < OnyxLexer
 
             if arg.is_a? Block
                block = arg
-               dbg "parse_call_args_parenthesized after block arg - check for ')'"
+               dbg "parse_call_args_spaced after block arg - check for ')'"
 
             elsif named_args
                dbg "named_args: #{named_args}, arg: #{arg}, #{arg.class}, args: #{args}"
@@ -5957,12 +6034,12 @@ class OnyxParser < OnyxLexer
             next_token_skip_space_or_newline
 
          else
-            dbg "- parse_call_args_parenthesized - found non ',' in loop - check for ')'"
+            dbg "- parse_call_args_spaced - found non ',' in loop - check for ')'"
             break
          end
       end
 
-      dbg "- parse_call_args_parenthesized - after 'while' - do next_token_skip_space"
+      dbg "- parse_call_args_spaced - after 'while' - do next_token_skip_space"
 
       CallArgs.new args, block, nil, named_args, false, end_location
 
@@ -6029,6 +6106,82 @@ class OnyxParser < OnyxLexer
 
       false
    end
+
+   def parse_call_args_indented(indent_level, block = nil, check_plus_and_minus = true, allow_curly = false)
+      dbg "parse_call_args_indented ->"
+      return nil if parse_call_args_spaced_any_non_call_hints?(check_plus_and_minus, allow_curly)
+
+      call_indent_level = indent_level # @indent
+      da_name_muddafuckas = @temp_temp__curr_namish.to_s
+
+      dbg_prev_nest_is = @nesting_stack.last
+
+      add_nest :indent_call, call_indent_level, da_name_muddafuckas, false, false
+
+      args = [] of ASTNode
+      end_location = nil
+
+      dbg "- parse_call_args_indented - starts while loop"
+
+      while true # until (got_dedent = handle_nest_end) # tok?(:DEDENT, :";", :EOF, :")") || is_end_token
+         dbg "- parse_call_args_indented - TOP of WHILE"
+
+         if @token.type == :SYMBOL && parser_peek_non_ws_char == '='
+            named_args = parse_named_args(allow_newline: true)
+         end
+
+         dbg "- parse_call_args_indented - AFTER parse_named_args: #{named_args}"
+
+         if !tok?(:DEDENT) # , :";", :EOF, :")") || is_end_token
+            arg = parse_call_arg
+
+            if arg.is_a? Block
+               block = arg
+               dbg "parse_call_args_indented after block arg - check for ')'"
+
+            elsif named_args
+               dbg "named_args: #{named_args}, arg: #{arg}, #{arg.class}, args: #{args}"
+               dbgtail_off!
+               raise "sorry, regular arguments after named arguments doesn't work out"
+
+            else
+               args << arg
+            end
+         end
+
+         end_location = token_end_location
+         skip_space
+
+         if handle_nest_end
+            dbg "- parse_call_args_indented - handled active dedent for '#{da_name_muddafuckas}'!!!".red
+            break
+
+         elsif tok?(:",", :NEWLINE) || tok?(:DEDENT) || @indent > call_indent_level
+            dbg "- parse_call_args_indented - got ','|'\\n'|DEDENT - go for next arg".red
+
+            # scan_next_as_continuation
+            slash_is_regex!
+
+            skip_tokens :SPACE, :NEWLINE, :DEDENT, :","
+
+         else
+            dbg "- parse_call_args_indented - seems we're done collecting args for '#{da_name_muddafuckas}'!".red
+            break
+         end
+      end
+
+      dbg "- parse_call_args_indented - after 'while' - do next_token_skip_space".red
+
+      if dbg_prev_nest_is != @nesting_stack.last
+         raise "dbg_prev_nest_is != @nesting_stack.last doesn't match - de-nest missed for #{da_name_muddafuckas}!"
+      end
+
+      CallArgs.new args, block, nil, named_args, false, end_location
+
+   ensure
+      dbgtail "/parse_call_args_indented"
+   end
+
 
    def parse_named_args(allow_newline = false)
       named_args = [] of NamedArgument
