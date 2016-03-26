@@ -22,18 +22,6 @@ say "\nLet's ROCK\n".red
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-indent-call(x, y, ...z) -> "{x}, {y}, {z}"
-
-say indent-call
-   "a", "b"
-   47, 23, 11
-   12
-   indent-call "masta", indent-call
-      "blasta"
-      "blaaasta"
-
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
 -- TUPPELA
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -757,7 +745,7 @@ def zoo*(a; b; ...c 'Ints) Str ->  'pure
             if 47 => say "NO"
          else
             say "11"
-            for val[ix] in {"c", "b", "a"} by 2
+            for val[ix] in <"c", "b", "a"> by 2
                p "{val}, {ix}"
 
          if true
@@ -820,19 +808,18 @@ say "n = " + n.to–s + " from " + 4747.to–s
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
+say "tag–hash: {tag–hash}"
+
 json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
 say "json–correct–hash: {json–hash}"
 
-
-tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
-say "tag–hash: {tag–hash}"
+js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
+say "perhaps to be js–hash: {js–hash}"
 
 apa = #apa
 katt = "katt"
 panter = 947735
-
-js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
-say "perhaps to be js–hash: {js–hash}"
 
 arrow–hash = {apa => "Apa", katt => "Katt", panter => "Panter"}
 say "arrow–hash: {arrow–hash}"
@@ -845,12 +832,12 @@ tag–hash–2 = {
       "Kappo",
       "Nugetto"
    ]
-   #tuple: { "47",
+   #tuple: < "47",
       13,
       3.1415
       "yep"
       #Boo
-   }
+   >
    #bastard: "Bastard"
 }
 say "tag–hash–2 type is {typeof(tag–hash–2)}"
@@ -858,6 +845,13 @@ say "tag–hash–2 value is {tag–hash–2}"
 
 
 say "ACCESS TERSECUTS!".yellow
+
+tuple1 = <13, 32, 47, 2>
+tuple2 = <"foo", 1, {1, 2, 3}>
+
+set1 = {1, 2, 3, 5}
+set2 = {"foo", 47, "mine", 13}
+
 
 list = [47, 13, 42, 11]
 say list.1, list.2?, list.4?
