@@ -1,6 +1,7 @@
 ## 0.103.0 - (2016-03-26) ##
 
-* **(breaking change)** New syntax for Tuple literals: `<my, tup>`.
+* **(breaking change)** New trial syntax A for Tuple literals: `<my, tup>`.
+* **(breaking change)** New trial syntax B for Tuple literals: `(my, tup)`.
 * New call syntax alternative: indented args. Use for DSL-like code (Temel for instance).
 
 
