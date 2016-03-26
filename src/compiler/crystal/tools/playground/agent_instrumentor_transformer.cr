@@ -18,11 +18,23 @@ module Crystal
       end
     end
 
+    class TypeBodyTransformer < Transformer
+      def initialize(@instrumentor)
+      end
+
+      def transform(node : Def)
+        @instrumentor.transform(node)
+      end
+    end
+
     property ignore_line
+    @nested_block_visitor : FirstBlockVisitor?
+    @type_body_transformer : TypeBodyTransformer?
 
     def initialize
       @ignore_line = nil
       @nested_block_visitor = FirstBlockVisitor.new(self)
+      @type_body_transformer = TypeBodyTransformer.new(self)
     end
 
     private def instrument(node)
@@ -39,7 +51,10 @@ module Crystal
     end
 
     def transform(node : Assign)
-      node.value = instrument(node.value)
+      # constants are Path, avoid instrumenting those assignments
+      unless node.target.is_a?(Path)
+        node.value = instrument(node.value)
+      end
       node
     end
 
@@ -70,6 +85,8 @@ module Crystal
         instrument_arg node
       when {nil, "print", _}
         instrument_args_and_splat node
+      when {nil, "record", _}
+        node
       else
         instrument(node)
       end
@@ -128,7 +145,7 @@ module Crystal
     end
 
     def transform(node : ClassDef | ModuleDef)
-      node.body = node.body.transform(self)
+      node.body = @type_body_transformer.not_nil!.transform(node.body)
       node
     end
 

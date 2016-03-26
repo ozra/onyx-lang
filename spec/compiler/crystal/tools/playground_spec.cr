@@ -88,6 +88,10 @@ describe Playground::AgentInstrumentorTransformer do
     assert_agent %(a = 4), %(a = $p.i(4, 1))
   end
 
+  it "do not instrument constants assignments" do
+    assert_agent %(A = 4), %(A = 4)
+  end
+
   it "instrument multi assignments in the rhs" do
     assert_agent %(a, b = t), %(a, b = $p.i(t, 1))
     assert_agent %(a, b = d, f), %(a, b = $p.i({d, f}, 1, ["d", "f"]))
@@ -179,11 +183,12 @@ describe Playground::AgentInstrumentorTransformer do
     CR
   end
 
-  it "instrument instance variable and class variables reads" do
+  it "instrument instance variable and class variables reads and writes" do
     assert_agent %(
     class Foo
       def initialize
         @x = 3
+        @@x = 4
       end
       def bar
         @x
@@ -195,12 +200,13 @@ describe Playground::AgentInstrumentorTransformer do
     class Foo
       def initialize
         @x = $p.i(3, 4)
+        @@x = $p.i(4, 5)
       end
       def bar
-        $p.i(@x, 7)
+        $p.i(@x, 8)
       end
       def self.bar
-        $p.i(@@x, 10)
+        $p.i(@@x, 11)
       end
     end
     CR
@@ -221,6 +227,65 @@ describe Playground::AgentInstrumentorTransformer do
         @z = $p.i(@x + @y, 4)
       end
     end
+    CR
+  end
+
+  it "allow visibility modifiers" do
+    assert_agent %(
+    class Foo
+      private def bar
+        1
+      end
+      protected def self.bar
+        2
+      end
+    end), <<-CR
+    class Foo
+      private def bar
+        $p.i(1, 4)
+      end
+      protected def self.bar
+        $p.i(2, 7)
+      end
+    end
+    CR
+  end
+
+  it "do not instrument macro calls in class" do
+    assert_agent %(
+    class Foo
+      property foo
+    end), <<-CR
+    class Foo
+      property(foo)
+    end
+    CR
+  end
+
+  it "instrument nested class defs" do
+    assert_agent %(
+    class Bar
+      class Foo
+        def initialize
+          @x = 3
+        end
+      end
+    end), <<-CR
+    class Bar
+      class Foo
+        def initialize
+          @x = $p.i(3, 5)
+        end
+      end
+    end
+    CR
+  end
+
+  it "do not records class" do
+    assert_agent %(
+    record Foo, x, y
+    ), <<-CR
+    record(Foo, x, y)
     CR
   end
 
