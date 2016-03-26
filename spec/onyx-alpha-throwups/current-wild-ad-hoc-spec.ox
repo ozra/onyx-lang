@@ -22,7 +22,119 @@ say "\nLet's ROCK\n".red
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- TUPPELA
+indent-call(x, y, ...z) -> "{x}, {y}, {z}"
+
+say indent-call
+   "a", "b"
+   47, 23, 11
+   12
+   indent-call "masta", indent-call
+      "blasta"
+      "blaaasta"
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- TUPLES
+
+vx = 2; vy = 3
+a = 1
+b = 3
+c = 2
+that = "That"
+
+
+good-ole-set = {47, "Hey", 3}
+
+say typeof(good-ole-set)
+say good-ole-set.class
+
+
+pp 1 < 2 < 4
+
+do-tup(x Tup) -> x
+
+-- ANGULAR TUPLE SYNTAX
+
+tup1 = <47, 13, "yo">
+tup2 = <#exacto, that>
+tup3 = <that>
+tup4 = <>
+
+tup5 = <
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+>
+
+tup6 = do-tup <
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+>
+
+tup7 = <a < b, b > c>
+tup8 = <true, a < b > c, false>
+
+
+do-tup <1, 2>
+do-tup(<1, 2>)
+
+if do-tup <1> => say "tup tup yeay"
+
+bzz = do-tup <that> if true
+fdf = 5 < 7 < 23 && vx > + vy
+
+x = a < b > c
+
+say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
+
+-- PAREN TUPLE SYNTAX
+
+tup1 = ( 47, 13, "yo" )
+tup2 = (#exacto, that)
+tup3 = (that,)
+tup4 = (,)
+
+tup5 = (
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+)
+
+tup6 = do-tup (
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+)
+
+tup7 = (a < b, b > c)
+tup8 = (true, a < b > c, false)
+
+
+do-tup (1, 2)
+do-tup((1, 2))
+
+if do-tup (1,) => say "tup tup yeay"
+
+bzz = do-tup (that,) if true
+fdf = 5 < 7 < 23 && vx > + vy
+
+x = a < b > c
+
+say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -101,13 +213,13 @@ pp 1..2
 pp 1 .. 2
 
 
-a(x) -> say "a says: '{x}' and '{x[String]}'"
-a {String => String}
+fun-a(x) -> say "fun-a says: '{x}' and '{x[String]}'"
+fun-a {String => String}
 say ({String => String}).class
 say typeof({String => String})
 
-b(x) -> say "b says: '{x}' and '{x.first}'"
-b [String]
+fun-b(x) -> say "fun-b says: '{x}' and '{x.first}'"
+fun-b [String]
 
 -- a-function(messages List<Str>, pairs {String => String}) ->
 
@@ -600,7 +712,7 @@ do-something(x) -> say "do-something {x}"
 match n
    1
       do-something 1
-   n == 5
+   .== 5
       do-something 2
    .< 10
       do-something 3
@@ -723,9 +835,9 @@ def zoo*(a; b; ...c 'Ints) Str ->  'pure
       i = 1
 
       if (a == 1 &&
-         a >
+         a >=
           0 &&
-         a <
+         a <=
           9999 &&
          a != 2
       ) =>
@@ -801,8 +913,13 @@ qwo2 1, 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+foo-list = List<List<List<String>>> 1
+
 n = 4747 >> 3
 n >>= 1
+m = 4747 << 3
+m <<= 1
+
 say "n = " + n.to–s + " from " + 4747.to–s
 -- say "n = " + $n + " from " + $4747
 
@@ -832,7 +949,14 @@ tag–hash–2 = {
       "Kappo",
       "Nugetto"
    ]
-   #tuple: < "47",
+   #tuple: <"47",
+      13,
+      3.1415
+      "yep"
+      #Boo
+   >
+   #tuple2: <
+      "47",
       13,
       3.1415
       "yep"
@@ -1307,10 +1431,6 @@ type Foo[S1] < Bar
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
-   -- *TODO* pragma "blocks"!
-   -- \ pure
-   --    fn–1aa(x) -> nil \public   -- should this be legal? - looks very confusing!
-   --    fn–1ab(x) Nil -> nil  \ pure public   -- should this be legal? - looks very confusing!
    'pure
    fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
    'pure
@@ -1346,17 +1466,6 @@ type Foo[S1] < Bar
    def fn–b(a S1, b Ints) -> -- fdsa
       "b: {a}, {b}"
 
-   -- # private
-   --    fn–c(a, b S1) S1 -> # redef inline
-   --       "c: {a}, {b}"
-
-   --    end–def
-
-   --    -- fn–c(a, b I32) redef private ->
-   --    fn–c(a, b Ints) -> # redef
-   --       "c: {a}, {b}"
-
-   -- # private
    fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
 
@@ -1378,9 +1487,9 @@ type Foo[S1] < Bar
       @foo–b = b
       fn–e
 
-   -- fn–d3(a S1, b <IntT>) ->
+   -- fn–d3(a S1, b T) ->
    --    @foo–a = a
-   --    c IntT
+   --    c 'T
    --    c = b
    --    @foo–b = c
    --    fn–e
@@ -1439,17 +1548,6 @@ type FooStyle2<S1> < Bar
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
-
-   -- |pure
-   --    fn fn–1aa(x) ->  |public;  nil   -- should this be legal? - looks very confusing!
-   --    fn fn–1ab(x) Nil -> |public;  nil   -- should this be legal? - looks very confusing!
-
-   -- (private ) ~>inline:
-   --    fn fn–1ba(x)! -> nil
-   --    fn fn–1ca(x)! ->
-   --    fn fn–1da(x) -> nil | pure
-   --    fn fn–1ea(x)! -> nil | pure
-
    --| Do some 1aa action!
    'pure
    fn fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
@@ -1461,15 +1559,6 @@ type FooStyle2<S1> < Bar
    fn fn–1ca(x) ->!
    fn fn–1da(x) -> nil 'pure
    fn fn–1ea(x) ->! nil 'pure
-
-   -- fn fn–1fa(x)!
-
-   -- fn fn–1ga(x)!
-   --    ifdef x86_64
-   --       say "Hey"
-   --    else
-   --       say "you!"
-   -- ;
 
    fn fn–1fa(x) ->!
 
@@ -1498,21 +1587,10 @@ type FooStyle2<S1> < Bar
    fn fn–b(a S1, b Ints) -> -- fdsa
       "b: {a}, {b}"
 
-   -- | private
-   --    fn fn–c(a, b S1) S1 | redef inline
-   --       "c: {a}, {b}"
-   --    end–fn
-
-   --    -- fn–c(a, b I32) redef private ->
-   --    fn fn–c(a, b Ints) |redef
-   --       "c: {a}, {b}"
-
-   -- | private
    fn fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
    end–fn
 
-   -- fn–c(a, b I32) redef private ->
    fn fn–c**(a, b Ints) -> 'redef
       "c: {a}, {b}"
 
@@ -1528,13 +1606,6 @@ type FooStyle2<S1> < Bar
       @foo–a = a
       @foo–b = b
       fn–e
-
-   -- fn–d3(a S1, b <IntT>) ->
-   --    @foo–a = a
-   --    c IntT
-   --    c = b
-   --    @foo–b = c
-   --    fn–e
 
    fn fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 

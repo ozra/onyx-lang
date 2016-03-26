@@ -169,6 +169,9 @@ module Crystal
       mod.symbols.each_with_index do |sym, index|
         @symbols[sym] = index
         @symbol_table_values << build_string_constant(sym, sym)
+
+        STDERR.puts "SYMBOL: #{sym} => #{index}"
+
       end
 
       unless mod.symbols.empty?
