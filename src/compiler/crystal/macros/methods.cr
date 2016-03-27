@@ -354,7 +354,7 @@ module Crystal
           arg = args.first
           raise "argument to StringLiteral#to_i must be a number, not #{arg.class_desc}" unless arg.is_a?(NumberLiteral)
 
-          value = @value.to_i64?(arg.to_number)
+          value = @value.to_i64?(arg.to_number.to_i)
         else
           wrong_number_of_arguments "StringLiteral#to_i", args.size, "0..1"
         end
@@ -815,6 +815,8 @@ module Crystal
             raise "undefined method 'size' for TypeNode of type #{type} (must be a tuple type)"
           end
         end
+      when "class"
+        interpret_argless_method(method, args) { TypeNode.new(type.metaclass) }
       else
         super
       end
@@ -1026,6 +1028,17 @@ module Crystal
         interpret_argless_method(method, args) { obj }
       when "to"
         interpret_argless_method(method, args) { to }
+      else
+        super
+      end
+    end
+  end
+
+  class Splat
+    def interpret(method, args, block, interpreter)
+      case method
+      when "exp"
+        interpret_argless_method(method, args) { exp }
       else
         super
       end

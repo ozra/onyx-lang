@@ -1,3 +1,66 @@
+## 0.14.2 (2016-03-22)
+
+* Fixed regression with formatter (#2348)
+* Fixed regression with block return types (#2347)
+* Fixed regression with openssl (https://github.com/crystal-lang/crystal/commit/78c12caf2366b01f949046e78ad4dab65d0d80d4)
+
+## 0.14.1 (2016-03-21)
+
+* Fixed some regressions in the formatter
+
+## 0.14.0 (2016-03-21)
+
+* **(breaking change)** The syntax of a method argument with a default value and a type restriction is now `def foo(arg : Type = default_value)`. The old `def foo(arg = default_value : Type)` was removed.
+* **(breaking change)** `Enumerable#take(n)` and `Iterator#take(n)` were renamed to `first(n)`
+* **(breaking change)** `Socket#addr` and `Socket#peeraddr` were renamed to `local_address` and `remote_address` respectively
+* **(breaking change)** Removed `Comparable#between?(a, z)`. Use `a <= x <= z` instead
+* **(breaking change)** `HTTP::WebSocketHandler` callbacks can now access the `HTTP::Context`. If you had a forwarding method to it you'll need to update it. See #2313.
+* New command `crystal play` that opens a playground for you to play in the browser :-) (thanks @bcardiff)
+* New command `crystal env` that prints environment information
+* `Spec`: you can now run multiple files with specified line numbers, as in `crystal spec file1.cr:10 file2.cr:20 ...`
+* Initial support for musl-libc (thanks @ysbaddaden)
+* Added `FileUtils.cp` (thanks @Dreauw)
+* Added `Array#first(n)` and `Array#last(n)` (thanks @greyblake)
+* Added `WebSocket#close` and properly handle disconnections
+* Added `UDPSocket#send` and `UDPSocket#receive` (thanks @tatey)
+* Added `Char#uppercase?` and `Char#lowercase?` (thanks @MaloJaffre`)
+* Added `sync_close` property to `OpenSSL::SSL::Socket`, `Zlib::Inflate` and `Zlib::Deflate`
+* Added `XML::Node#encoding` and `XML::Node#version`
+* Added `HTTP::Client::Response#success?` (thanks @marceloboeira)
+* Added `StaticArray#shuffle!(random)` (thanks @Nesqwik)
+* Added `Splat#exp` method in macros
+* Added fiber-safe `Mutex`
+* All `Int` types (except `BigInt`) can now be used in `JSON` and `YAML` mappings (thanks @marceloboeira)
+* Instance variable declarations/initializations now correctly work in generic classes and modules
+* Lots of bug fixes
+
+## 0.13.0 (2016-03-07)
+
+* **(breaking change)** `Matrix` was moved to a separate shard: [https://github.com/Exilor/matrix](https://github.com/Exilor/Matrix)
+* The syntax of a method argument with a default value and a type restriction is now `def foo(arg : Type = default_value)`. Run `crystal tool format` to automatically upgrade exsiting code to this new syntax. The old `def foo(arg = default_value : Type)` syntax will be removed in a next release.
+* Special handling of `case` with a tuple literal. See [#2258](https://github.com/crystal-lang/crystal/pull/2258).
+* Keywords can now be used for variable declaration, so `property end : Time` works as expected.
+* Comparison of signed vs. unsigned integers now always give a correct result
+* Allow declaring instance variables in non-generic module types (`module Moo; @x : Int32; end`)
+* Allow initializing instance variables in non-generic module types (`module Moo; @x = 1; end`)
+* `Spec`: allow setting multiple output formatters (thanks @marceloboeira)
+* `StringScanner`: improved performance
+* Added `foo.[0] = 1` and `foo.[0]` as valid syntax, similar to the one in `&.` blocks (thanks @MakeNowJust)
+* `CSV`: allow separate and quote characters different than comma and doble quote (thanks @jreinert)
+* `YAML`: support merge operator (`<<`) (thanks @jreinert)
+* Allow redefining primitive methods like `Int32#+(other : Int32)`
+* Allow defining macros with operator names like `[]`
+* `Levenshtein`: improved performance (thanks @tcrouch)
+* `HTTP::Client`: fixed incorrect parsing of chunked body
+* `HTTP::Client`: added a constructor with an `URI` argument (thanks @plukevdh)
+* `String`: `sub` and `gsub` now understand backreferences (thanks @bjmllr)
+* `Random`: added `Random#rand(Float64)` and `Random#rand(Range(Float, Float))` (thanks @AlexWayfer)
+* `HTML`: `HTLM.escape` includes more characters (thanks @Ryuuzakis)
+* Added `TypeNode.class` method in macros (thanks @waterlink)
+* `run` inside macros now also work with absolute paths (useful when used with `__DIR__`)
+* Added docs for `Math` and `StaticArray` (thanks @Zavydiel, @HeleneMyr)
+* Many bug fixes and some micro-optimizations
+
 ## 0.12.0 (2016-02-16)
 
 * **(breaking change)** When used with a type declaration, the macros `property`, `getter`, `setter`, etc., declare instance variables with those types.

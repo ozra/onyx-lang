@@ -33,7 +33,7 @@ If you open a question, try to remember to close the issue once you are satisfie
 
 ## RFC "template" example ##
 
-```
+```text
 I propose this and that. Bla blabla.
 
 \`\`\`onyx

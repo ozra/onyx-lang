@@ -30,8 +30,10 @@
 #   log.fatal(err)
 # end
 # ```
-class Logger(T)
-  property :level, :progname, :formatter
+class Logger
+  property level : Severity
+  property progname : String
+  property formatter
 
   # A logger severity level
   enum Severity
@@ -62,24 +64,33 @@ class Logger(T)
   end
 
   # :nodoc:
-  record Message, severity, datetime, progname, message
+  record Message,
+    severity : Severity,
+    datetime : Time,
+    progname : String,
+    message : String
 
-  def initialize(@io : T)
+  @io : IO
+  @closed : Bool
+  @mutex : Mutex
+  @level : Severity
+  @progname : String
+
+  def initialize(@io : IO)
     @level = Severity::INFO
     @formatter = DEFAULT_FORMATTER
     @progname = ""
-    @channel = Channel(Message).new(100)
-    @close_channel = Channel(Nil).new
     @closed = false
-    @shutdown = false
-    spawn write_messages
-    at_exit { shutdown }
+    @mutex = Mutex.new
   end
 
   def close
     return if @closed
     @closed = true
-    shutdown
+
+    @mutex.synchronize do
+      @io.close
+    end
   end
 
   {% for name in Severity.constants %}
@@ -100,45 +111,22 @@ class Logger(T)
 
   def log(severity, message, progname = nil)
     return if severity < level
-    enqueue(severity, Time.now, progname || @progname, message)
+    write(severity, Time.now, progname || @progname, message)
   end
 
   def log(severity, progname = nil)
     return if severity < level
-    enqueue(severity, Time.now, progname || @progname, yield)
+    write(severity, Time.now, progname || @progname, yield)
   end
 
-  private def enqueue(severity, datetime, progname, message)
-    @channel.send Message.new(severity, datetime, progname, message)
-  end
-
-  private def write_messages
-    loop do
-      msg = Channel.receive_first(@channel, @close_channel)
-      if msg.is_a?(Message)
-        label = msg.severity == Severity::UNKNOWN ? "ANY" : msg.severity.to_s
-
-        # We write to an intermediate String because the IO might be sync'ed so
-        # we avoid some system calls. In the future we might want to add an IO#sync?
-        # method to every IO so we can do this conditionally.
-        @io << String.build do |str|
-          formatter.call(label, msg.datetime, msg.progname.to_s, msg.message.to_s, str)
-          str.puts
-        end
-
-        @io.flush
-      else
-        @io.close if @closed
-        @close_channel.send(nil)
-        break
-      end
+  private def write(severity, datetime, progname, message)
+    label = severity == Severity::UNKNOWN ? "ANY" : severity.to_s
+    progname_to_s = progname.to_s
+    message_to_s = message.to_s
+    @mutex.synchronize do
+      formatter.call(label, datetime, progname_to_s, message_to_s, @io)
+      @io.puts
+      @io.flush
     end
-  end
-
-  private def shutdown
-    return if @shutdown
-    @shutdown = true
-    @close_channel.send(nil)
-    @close_channel.receive
   end
 end

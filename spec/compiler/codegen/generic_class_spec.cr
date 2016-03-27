@@ -110,4 +110,70 @@ describe "Code gen: generic class type" do
       x.size
       )).to_i.should eq(3)
   end
+
+  it "inherited instance var initialize from generic to concrete (#2128)" do
+    run(%(
+      class Foo(T)
+        @x = 42
+
+        def x
+          @x
+        end
+      end
+
+      class Bar < Foo(Int32)
+      end
+
+      Bar.new.x
+      )).to_i.should eq(42)
+  end
+
+  it "inherited instance var initialize from generic to generic to concrete (#2128)" do
+    run(%(
+      class Foo(T)
+        @x = 10
+
+        def x
+          @x
+        end
+      end
+
+      class Bar(T) < Foo(T)
+        @y = 32
+
+        def y
+          @y
+        end
+      end
+
+      class Baz < Bar(Int32)
+      end
+
+      baz = Baz.new
+      baz.x + baz.y
+      )).to_i.should eq(42)
+  end
+
+  it "invokes super in generic class (#2354)" do
+    run(%(
+      $x = 1
+
+      class Foo
+        def foo
+          $x = 2
+        end
+      end
+
+      class Bar(T) < Foo
+        def foo
+          super
+        end
+      end
+
+      b = Bar(Int32).new
+      b.foo
+
+      $x
+      )).to_i.should eq(2)
+  end
 end

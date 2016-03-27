@@ -11,22 +11,65 @@ module Crystal
       formatter.finish
     end
 
-    record AlignInfo, id, line, start_column, middle_column, end_column, number do
+    record AlignInfo,
+      id : UInt64,
+      line : Int32,
+      start_column : Int32,
+      middle_column : Int32,
+      end_column : Int32,
+      number : Bool do
       def size
         end_column - start_column
       end
     end
 
     class CommentInfo
-      property start_line
-      property end_line
-      property needs_newline
+      property start_line : Int32
+      property end_line : Int32
+      property needs_newline : Bool
+      @kind : Symbol
 
       def initialize(@start_line, @kind)
         @end_line = @start_line
         @needs_newline = true
       end
     end
+
+    record HeredocFix,
+      start_line : Int32,
+      end_line : Int32,
+      difference : Int32
+
+    @lexer : Lexer
+    @comment_columns : Array(Int32?)
+    @indent : Int32
+    @line : Int32
+    @column : Int32
+    @token : Token
+    @output : MemoryIO
+    @line_output : MemoryIO
+    @wrote_newline : Bool
+    @wrote_comment : Bool
+    @macro_state : Token::MacroState
+    @inside_macro : Int32
+    @inside_cond : Int32
+    @inside_lib : Int32
+    @inside_struct_or_union : Int32
+    @dot_column : Int32?
+    @def_indent : Int32
+    @last_write : String
+    @exp_needs_indent : Bool
+    @inside_def : Int32
+    @when_infos : Array(AlignInfo)
+    @hash_infos : Array(AlignInfo)
+    @assign_infos : Array(AlignInfo)
+    @doc_comments : Array(CommentInfo)
+    @current_doc_comment : CommentInfo?
+    @hash_in_same_line : Set(UInt64)
+    @shebang : Bool
+    @heredoc_fixes : Array(HeredocFix)
+    @assign_length : Int32?
+    @current_hash : HashLiteral?
 
     def initialize(source)
       @lexer = Lexer.new(source)
@@ -42,7 +85,6 @@ module Crystal
 
       @output = MemoryIO.new(source.bytesize)
       @line_output = MemoryIO.new
-      @next_exp_column = nil
       @wrote_newline = false
       @wrote_comment = false
       @macro_state = Token::MacroState.default
@@ -56,6 +98,13 @@ module Crystal
       @exp_needs_indent = true
       @inside_def = 0
 
+      # When we parse a type, parentheses information is not stored in ASTs, unlike
+      # for an Expressions node. So when we are printing a type (Path, Fun, Union, etc.)
+      # we increment this when we find a '(', and decrement it when we find ')', but
+      # only if `paren_count > 0`: it might be the case of `def foo(x : A)`, but we don't
+      # want to print that last ')' when printing the type A.
+      @paren_count = 0
+
       # This stores the column number (if any) of each comment in every line
       @when_infos = [] of AlignInfo
       @hash_infos = [] of AlignInfo
@@ -64,6 +113,7 @@ module Crystal
       @current_doc_comment = nil
       @hash_in_same_line = Set(typeof(object_id)).new
       @shebang = @token.type == :COMMENT && @token.value.to_s.starts_with?("#!")
+      @heredoc_fixes = [] of HeredocFix
     end
 
     def visit(node : FileNode)
@@ -327,6 +377,10 @@ module Crystal
 
       check :DELIMITER_START
       is_regex = @token.delimiter_state.kind == :regex
+      is_heredoc = @token.delimiter_state.kind == :heredoc
+
+      indent_difference = @token.column_number - (@column + 1)
+      heredoc_line = @line
 
       write @token.raw
       next_string_token
@@ -353,6 +407,10 @@ module Crystal
       write @token.raw
       format_regex_modifiers if is_regex
 
+      if is_heredoc && indent_difference != 0
+        @heredoc_fixes << HeredocFix.new(heredoc_line, @line, indent_difference)
+      end
+
       if space_slash_newline?
         write " \\"
         write_line
@@ -373,9 +431,17 @@ module Crystal
       next_string_token
 
       delimiter_state = @token.delimiter_state
+      is_heredoc = @token.delimiter_state.kind == :heredoc
+
+      indent_difference = @token.column_number - (@column + 1)
+      heredoc_line = @line
 
       node.expressions.each do |exp|
         if @token.type == :DELIMITER_END
+          # If the delimiter ends with "\n" it's something like "\n  HEREDOC",
+          # so we are done
+          break if @token.raw.starts_with?("\n")
+
           # This is for " ... " \
           #     " ... "
           write @token.raw
@@ -421,6 +487,11 @@ module Crystal
 
       check :DELIMITER_END
       write @token.raw
+
+      if is_heredoc && indent_difference != 0
+        @heredoc_fixes << HeredocFix.new(heredoc_line, @line, indent_difference)
+      end
+
       format_regex_modifiers if is_regex
       next_token
 
@@ -737,14 +808,23 @@ module Crystal
       false
     end
 
-    def visit(node : Path)
-      has_parentheses = false
-
+    def check_open_paren
       if @token.type == :"("
         write "("
         next_token_skip_space
-        has_parentheses = true
+        @paren_count += 1
       end
+    end
+
+    def check_close_paren
+      if @token.type == :")" && @paren_count > 0
+        @paren_count -= 1
+        write_token :")"
+      end
+    end
+
+    def visit(node : Path)
+      check_open_paren
 
       # Sometimes the :: is not present because the parser generates ::Nil, for example
       if node.global && @token.type == :"::"
@@ -764,10 +844,7 @@ module Crystal
         end
       end
 
-      if has_parentheses
-        skip_space_or_newline
-        write_token :")"
-      end
+      check_close_paren
 
       false
     end
@@ -828,30 +905,40 @@ module Crystal
       accept name
       skip_space_or_newline
 
-      write_token :"("
+      check_open_paren
       skip_space_or_newline
+
+      paren_count = @paren_count
 
       node.type_vars.each_with_index do |type_var, i|
         accept type_var
-        skip_space_or_newline
-        if @token.type == :","
-          write ", " unless last?(i, node.type_vars)
-          next_token_skip_space_or_newline
+        if @paren_count == paren_count
+          skip_space_or_newline
+          if @token.type == :","
+            write ", " unless last?(i, node.type_vars)
+            next_token_skip_space_or_newline
+          end
         end
       end
 
-      write_token :")"
+      skip_space_or_newline if @paren_count == paren_count
+      check_close_paren
 
       false
     end
 
     def visit(node : Union)
-      has_parentheses = false
-      if @token.type == :"("
-        write "("
-        next_token_skip_space_or_newline
-        has_parentheses = true
+      if @token.type == :IDENT && @token.value == "self?" && node.types.size == 2 &&
+         node.types.any?(&.is_a?(Self)) &&
+         node.types.any? { |t| t.to_s == "::Nil" }
+        write "self?"
+        next_token
+        return false
       end
+
+      check_open_paren
+
+      paren_count = @paren_count
 
       node.types.each_with_index do |type, i|
         accept type
@@ -859,33 +946,35 @@ module Crystal
         last = last?(i, node.types)
         skip_space_or_newline unless last
 
-        # This can happen if it's a nilable type written like T?
-        case @token.type
-        when :"?"
-          write " " if type.is_a?(Self)
-          write "?"
-          next_token
-          break
-        when :"|"
-          write " | " unless last
-          next_token
-          skip_space_or_newline unless last
-        when :")"
-          # This can happen in a case like (A)?
-          break
+        must_break = false
+        while true
+          case @token.type
+          when :"?"
+            # This can happen if it's a nilable type written like T?
+            write "?"
+            next_token
+            must_break = true
+            break
+          when :"|"
+            write " | "
+            next_token
+            skip_space_or_newline
+          when :")"
+            if @paren_count > 0
+              @paren_count -= 1
+              write ")"
+              next_token_skip_space
+            else
+              break
+            end
+          else
+            break
+          end
         end
+        break if must_break
       end
 
-      if has_parentheses
-        write_token :")"
-        skip_space
-      end
-
-      # This can happen in a case like (A)?
-      if @token.type == :"?"
-        write "?"
-        next_token
-      end
+      check_close_paren
 
       false
     end
@@ -1582,26 +1671,8 @@ module Crystal
       write @token.value
       next_token
 
-      old_syntax = false
-      before_equals_pos = 0
-      after_equals_pos = 0
-      before_colon_pos = 0
-      after_colon_pos = 0
-
       if restriction
         skip_space_or_newline
-
-        if default_value && @token.type == :"="
-          old_syntax = true
-          # This is the case of `x = 1 : Int32`, which we'll rewrite as
-          # `x : Int32 = 1`
-          before_equals_pos = @output.pos
-          write_token " ", :"=", " "
-          skip_space_or_newline
-          accept default_value
-          after_equals_pos = @output.pos
-          skip_space_or_newline
-        end
 
         # This is for a case like `x, y : Int32`
         if @inside_struct_or_union && @token.type == :","
@@ -1611,14 +1682,12 @@ module Crystal
           return false
         end
 
-        before_colon_pos = @output.pos
         write_token " ", :":", " "
         skip_space_or_newline
         accept restriction
-        after_colon_pos = @output.pos
       end
 
-      if default_value && !old_syntax
+      if default_value
         skip_space_or_newline
 
         check_align = check_assign_length node
@@ -1629,21 +1698,8 @@ module Crystal
         check_assign_align before_column, default_value if check_align
       end
 
-      # Update old syntax to new syntax
-      if old_syntax
-        string = @output.to_s
-        before = string.byte_slice(0, before_equals_pos)
-        equals = string.byte_slice(before_equals_pos, after_equals_pos - before_equals_pos)
-        middle = string.byte_slice(after_equals_pos, before_colon_pos - after_equals_pos)
-        colon = string.byte_slice(before_colon_pos, after_colon_pos - before_colon_pos)
-        ending = string.byte_slice(after_colon_pos)
-        string = "#{before}#{colon}#{middle}#{equals}#{ending}"
-        @output = MemoryIO.new
-        @output << string
-      end
-
       # This is the case of an enum member
-      if 'A' <= node.name[0] <= 'Z' && @token.type == :","
+      if node.name[0].uppercase? && @token.type == :","
         write ", "
         next_token_skip_space
         @exp_needs_indent = @token.type == :NEWLINE
@@ -1661,29 +1717,26 @@ module Crystal
     end
 
     def visit(node : Fun)
-      has_parentheses = false
-      if @token.type == :"("
-        write "("
-        next_token_skip_space_or_newline
-        has_parentheses = true
-      end
+      check_open_paren
+
+      paren_count = @paren_count
 
       if inputs = node.inputs
         inputs.each_with_index do |input, i|
           accept input
-          skip_space_or_newline
-          if @token.type == :","
-            write ", " unless last?(i, inputs)
-            next_token_skip_space_or_newline
+          if @paren_count == paren_count
+            skip_space_or_newline
+            if @token.type == :","
+              write ", " unless last?(i, inputs)
+              next_token_skip_space_or_newline
+            end
           end
         end
       end
 
-      if @token.type == :")"
-        next_token_skip_space
-        write ")"
-        has_parentheses = false
-      end
+      skip_space_or_newline if paren_count == @paren_count
+      check_close_paren
+      skip_space
 
       write " " if inputs
       write_token :"->"
@@ -1694,9 +1747,7 @@ module Crystal
         accept output
       end
 
-      if has_parentheses
-        write_token :")"
-      end
+      check_close_paren
 
       false
     end
@@ -2277,14 +2328,44 @@ module Crystal
             indent(@indent, call)
           end
         when IsA
-          call = Call.new(nil, "is_a?", args: [body.const] of ASTNode)
-          accept call
+          if body.obj.is_a?(Var)
+            call = Call.new(nil, "is_a?", args: [body.const] of ASTNode)
+            accept call
+          else
+            clear_object(body)
+            accept body
+          end
         when RespondsTo
-          call = Call.new(nil, "responds_to?", args: [SymbolLiteral.new(body.name.to_s)] of ASTNode)
-          accept call
+          if body.obj.is_a?(Var)
+            call = Call.new(nil, "responds_to?", args: [SymbolLiteral.new(body.name.to_s)] of ASTNode)
+            accept call
+          else
+            clear_object(body)
+            accept body
+          end
+        when Cast
+          clear_object(body)
+          accept body
         else
-          raise "Bug: expected Call, IsA or RespondsTo as &. argument, at #{node.location}"
+          raise "Bug: expected Call, IsA or RespondsTo as &. argument, at #{node.location}, not #{body.class}"
         end
+      end
+    end
+
+    def clear_object(node)
+      case node
+      when Call
+        if node.obj.is_a?(Var)
+          node.obj = nil
+        else
+          clear_object(node.obj)
+        end
+      when IsA
+        clear_object(node.obj)
+      when RespondsTo
+        clear_object(node.obj)
+      when Cast
+        clear_object(node.obj)
       end
     end
 
@@ -2456,7 +2537,7 @@ module Crystal
 
     def check_assign_align(before_column, exp)
       if exp.is_a?(NumberLiteral)
-        @assign_infos << AlignInfo.new(0, @line, before_column, @column, @column, true)
+        @assign_infos << AlignInfo.new(0_u64, @line, before_column, @column, @column, true)
       end
     end
 
@@ -3652,6 +3733,7 @@ module Crystal
       skip_space_or_newline last: true
       result = to_s.strip
       lines = result.split("\n")
+      fix_heredocs(lines, @heredoc_fixes)
       align_infos(lines, @when_infos)
       align_infos(lines, @hash_infos)
       align_infos(lines, @assign_infos)
@@ -3664,6 +3746,17 @@ module Crystal
         result = result[0] + result[2..-1]
       end
       result
+    end
+
+    def fix_heredocs(lines, @heredoc_fixes)
+      @heredoc_fixes.each do |fix|
+        fix.start_line.upto(fix.end_line) do |line_number|
+          line = lines[line_number]
+          if (0...fix.difference).all? { |index| line[index]?.try &.whitespace? }
+            lines[line_number] = line[fix.difference..-1]
+          end
+        end
+      end
     end
 
     # Align series of successive inline when/else (in a case),

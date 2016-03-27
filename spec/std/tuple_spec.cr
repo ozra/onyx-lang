@@ -1,7 +1,7 @@
 require "spec"
 
 class TupleSpecObj
-  getter x
+  getter x : Int32
 
   def initialize(@x)
   end
@@ -218,5 +218,37 @@ describe "Tuple" do
     tuple.last?.should eq("a")
 
     Tuple.new.last?.should be_nil
+  end
+
+  it "does comparison" do
+    tuple1 = {"a", "a", "c"}
+    tuple2 = {"a", "b", "c"}
+    (tuple1 <=> tuple2).should eq(-1)
+    (tuple2 <=> tuple1).should eq(1)
+  end
+
+  it "does <=> for equality" do
+    tuple1 = {0, 1}
+    tuple2 = {0.0, 1}
+    (tuple1 <=> tuple2).should eq(0)
+  end
+
+  it "does <=> with the same begining and different size" do
+    tuple1 = {1, 2, 3}
+    tuple2 = {1, 2}
+    (tuple1 <=> tuple2).should eq(1)
+  end
+
+  it "does types" do
+    tuple = {1, 'a', "hello"}
+    tuple.types.to_s.should eq("{Int32, Char, String}")
+  end
+
+  it "does ===" do
+    ({1, 2} === {1, 2}).should be_true
+    ({1, 2} === {1, 3}).should be_false
+    ({1, 2, 3} === {1, 2}).should be_false
+    ({/o+/, "bar"} === {"fox", "bar"}).should be_true
+    ({1, 2} === nil).should be_false
   end
 end

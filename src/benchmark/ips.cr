@@ -17,6 +17,10 @@ module Benchmark
       # After #execute, these are populated with the resulting statistics.
       property items : Array(Entry)
 
+      @interactive : Bool
+      @warmup_time : Time::Span
+      @calculation_time : Time::Span
+
       def initialize(calculation = 5, warmup = 2, @interactive = STDOUT.tty?)
         @warmup_time = warmup.seconds
         @calculation_time = calculation.seconds
@@ -141,6 +145,7 @@ module Benchmark
       # Multiple slower than the fastest entry
       property! slower : Float64
 
+      @ran : Bool
       @ran = false
 
       def initialize(@label, @action : ->)

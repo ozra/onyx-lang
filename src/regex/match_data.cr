@@ -28,7 +28,7 @@ class Regex
     # ```
     # "Crystal".match(/[p-s]/) { |md| md.regex } # => /[p-s]/
     # ```
-    getter regex
+    getter regex : Regex
 
     # Returns the number of capture groups, including named capture groups.
     #
@@ -37,14 +37,18 @@ class Regex
     # "Crystal".match(/r(ys)/) { |md| md.size }          # => 1
     # "Crystal".match(/r(ys)(?<ok>ta)/) { |md| md.size } # => 2
     # ```
-    getter size
+    getter size : Int32
 
     # Returns the original string.
     #
     # ```
     # "Crystal".match(/[p-s]/) { |md| md.string } # => "Crystal"
     # ```
-    getter string
+    getter string : String
+
+    @code : LibPCRE::Pcre
+    @pos : Int32
+    @ovector : Int32*
 
     # :nodoc:
     def initialize(@regex, @code, @string, @pos, @ovector, @size)
@@ -131,8 +135,8 @@ class Regex
     # if there is no `n`th capture group.
     #
     # ```
-    # "Crystal".match(/r(ys)/) { |md| md[1]? } # => "ys"
-    # "Crystal".match(/r(ys)/) { |md| md[2]? } # => raises IndexError
+    # "Crystal".match(/r(ys)/) { |md| md[1] } # => "ys"
+    # "Crystal".match(/r(ys)/) { |md| md[2] } # => raises IndexError
     # ```
     def [](n)
       check_index_out_of_bounds n

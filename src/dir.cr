@@ -45,7 +45,10 @@ class Dir
   include Enumerable(String)
   include Iterable
 
-  getter path
+  getter path : String
+
+  @dir : LibC::Dir*
+  @closed : Bool
 
   # Returns a new directory object for the named directory.
   def initialize(@path)
@@ -240,6 +243,8 @@ class Dir
   # :nodoc:
   struct EntryIterator
     include Iterator(String)
+
+    @dir : Dir
 
     def initialize(@dir)
     end

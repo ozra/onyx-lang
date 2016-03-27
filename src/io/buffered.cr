@@ -9,16 +9,19 @@ module IO::Buffered
 
   BUFFER_SIZE = 8192
 
-  # Due to https://github.com/crystal-lang/crystal/issues/456 this
-  # initialization logic must be copied in the included type's
-  # initialize method:
-  #
-  # def initialize
-  #   @in_buffer_rem = Slice.new(Pointer(UInt8).null, 0)
-  #   @out_count = 0
-  #   @sync = false
-  #   @flush_on_newline = false
-  # end
+  @in_buffer : Pointer(UInt8)?
+  @in_buffer_rem : Slice(UInt8)
+  @in_buffer_rem = Slice.new(Pointer(UInt8).null, 0)
+
+  @out_buffer : Pointer(UInt8)?
+  @out_count : Int32
+  @out_count = 0
+
+  @sync : Bool
+  @sync = false
+
+  @flush_on_newline : Bool
+  @flush_on_newline = false
 
   # Reads at most *slice.size* bytes from the wrapped IO into *slice*. Returns the number of bytes read.
   abstract def unbuffered_read(slice : Slice(UInt8))
@@ -37,6 +40,8 @@ module IO::Buffered
 
   # :nodoc:
   def gets(delimiter : Char, limit : Int)
+    check_open
+
     if delimiter.ord >= 128 || @encoding
       return super
     end
@@ -110,6 +115,8 @@ module IO::Buffered
 
   # :nodoc:
   def read_byte : UInt8?
+    check_open
+
     fill_buffer if @in_buffer_rem.empty?
     if @in_buffer_rem.empty?
       nil
@@ -152,6 +159,8 @@ module IO::Buffered
 
   # Buffered implementation of `IO#read(slice)`.
   def read(slice : Slice(UInt8))
+    check_open
+
     count = slice.size
     return 0 if count == 0
 
@@ -174,6 +183,8 @@ module IO::Buffered
 
   # Buffered implementation of `IO#write(slice)`.
   def write(slice : Slice(UInt8))
+    check_open
+
     count = slice.size
 
     if sync?
@@ -207,6 +218,8 @@ module IO::Buffered
 
   # :nodoc:
   def write_byte(byte : UInt8)
+    check_open
+
     if sync?
       return super
     end

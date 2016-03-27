@@ -16,7 +16,9 @@ class Crystal::Command
         build                    compile program
         deps                     install project dependencies
         docs                     generate documentation
+        env                      print Crystal environment information
         eval                     eval code from args or standard input
+        play                     starts crystal playground server
         run (default)            compile and run program
         spec                     compile and run specs (in spec directory)
         tool                     run a tool
@@ -42,11 +44,15 @@ class Crystal::Command
     new(options).run
   end
 
+  private getter options : Array(String)
+
+  @color : Bool
+  @config : CompilerConfig?
+  @format : String?
+
   def initialize(@options)
     @color = true
   end
-
-  private getter options
 
   def run
     command = options.first?
@@ -59,13 +65,19 @@ class Crystal::Command
       when "build".starts_with?(command)
         options.shift
         build
+      when "play".starts_with?(command)
+        options.shift
+        playground
       when "deps".starts_with?(command)
         options.shift
         deps
       when "docs".starts_with?(command)
         options.shift
         docs
-      when "eval".starts_with?(command)
+      when command == "env"
+        options.shift
+        env
+      when command == "eval"
         options.shift
         eval
       when "run".starts_with?(command)
@@ -102,6 +114,8 @@ class Crystal::Command
       puts ex
     end
     exit 1
+  rescue ex : OptionParser::Exception
+    error ex.message
   rescue ex
     puts ex
     ex.backtrace.each do |frame|
@@ -149,6 +163,37 @@ class Crystal::Command
   private def build
     config = create_compiler "build"
     config.compile
+  end
+
+  private def env
+    if ARGV.size == 1 && {"--help", "-h"}.includes?(ARGV[0])
+      puts <<-USAGE
+      Usage: crystal env [var ...]
+
+      Prints Crystal environment information.
+
+      By default it prints information as a shell script.
+      If one or more variable names is given as arguments,
+      it prints the value of each named variable on its own line.
+      USAGE
+
+      exit
+    end
+
+    vars = {
+      "CRYSTAL_PATH":    CrystalPath::DEFAULT_PATH,
+      "CRYSTAL_VERSION": Config::VERSION || "",
+    }
+
+    if ARGV.empty?
+      vars.each do |key, value|
+        puts "#{key}=#{value.inspect}"
+      end
+    else
+      ARGV.each do |key|
+        puts vars[key]?
+      end
+    end
   end
 
   private def eval
@@ -299,13 +344,13 @@ class Crystal::Command
   end
 
   private def implementations
-    cursor_command("implementations") do |location, config, result|
+    cursor_command("tool implementations") do |location, config, result|
       result = ImplementationsVisitor.new(location).process(result)
     end
   end
 
   private def context
-    cursor_command("context") do |location, config, result|
+    cursor_command("tool context") do |location, config, result|
       result = ContextVisitor.new(location).process(result)
     end
   end
@@ -350,30 +395,46 @@ class Crystal::Command
   end
 
   private def run_specs
-    target_index = options.index { |o| !o.starts_with? '-' }
-    if target_index
-      target_filename_and_line_number = options[target_index]
-      splitted = target_filename_and_line_number.split ':', 2
-      target_filename = splitted[0]
-      if File.file?(target_filename)
-        options.delete_at target_index
-        cwd = Dir.current
-        if target_filename.starts_with?(cwd)
-          target_filenames = [target_filename[cwd.size..-1]]
+    # Assume spec files end with ".cr" and optionally with a colon and a number
+    # (for the target line number). Everything else is an option we forward.
+    filenames = options.select { |option| option =~ /\.cr(\:\d+)?\Z/ }
+    options.reject! { |option| filenames.includes?(option) }
+
+    locations = [] of {String, String}
+
+    if filenames.empty?
+      target_filenames = Dir["spec/**/*_spec.cr"]
+    else
+      target_filenames = [] of String
+      filenames.each do |filename|
+        if filename =~ /\A(.+?)\:(\d+)\Z/
+          file, line = $1, $2
+          unless File.file?(file)
+            error "'#{file}' is not a file"
+          end
+          target_filenames << file
+          locations << {file, line}
         else
-          target_filenames = [target_filename]
+          if Dir.exists?(filename)
+            target_filenames.concat Dir["#{filename}/**/*_spec.cr"]
+          elsif File.file?(filename)
+            target_filenames << filename
+          else
+            error "'#{filename}' is not a file"
+          end
         end
-        if splitted.size == 2
-          target_line = splitted[1]
-          options << "-l" << target_line
-        end
-      elsif File.directory?(target_filename)
-        target_filenames = Dir["#{target_filename}/**/*_spec.cr"]
-      else
-        error "'#{target_filename}' is not a file"
+      end
+    end
+
+    if target_filenames.size == 1
+      if locations.size == 1
+        # This is in case other spec runners use `-l`, we keep compatibility
+        options << "-l" << locations.first[1]
       end
     else
-      target_filenames = Dir["spec/**/*_spec.cr"]
+      locations.each do |loc|
+        options << "--location" << "#{loc[0]}:#{loc[1]}"
+      end
     end
 
     source = target_filenames.map { |filename| %(require "./#{filename}") }.join("\n")
@@ -421,6 +482,39 @@ class Crystal::Command
     Crystal.print_types result.original_node
   end
 
+  private def playground
+    server = Playground::Server.new
+
+    OptionParser.parse(options) do |opts|
+      opts.banner = "Usage: crystal play [options] [file]\n\nOptions:"
+
+      opts.on("-p PORT", "--port PORT", "Runs the playground on the specified port") do |port|
+        server.port = port.to_i
+      end
+
+      opts.on("-b HOST", "--binding HOST", "Binds the playground to the specified IP") do |host|
+        server.host = host
+      end
+
+      opts.on("-v", "--verbose", "Display detailed information of executed code") do
+        server.logger.level = Logger::Severity::DEBUG
+      end
+
+      opts.on("-h", "--help", "Show this message") do
+        puts opts
+        exit 1
+      end
+
+      opts.unknown_args do |before, after|
+        if before.size > 0
+          server.source = gather_sources([before.first]).first
+        end
+      end
+    end
+
+    server.start
+  end
+
   private def compile_no_codegen(command, wants_doc = false, hierarchy = false, cursor_command = false)
     config = create_compiler command, no_codegen: true, hierarchy: hierarchy, cursor_command: cursor_command
     config.compiler.no_codegen = true
@@ -461,7 +555,16 @@ class Crystal::Command
     Crystal.tempfile(basename)
   end
 
-  record CompilerConfig, compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format do
+  record(CompilerConfig,
+    compiler : Compiler,
+    sources : Array(Compiler::Source),
+    output_filename : String,
+    original_output_filename : String,
+    arguments : Array(String),
+    specified_output : Bool,
+    hierarchy_exp : String?,
+    cursor_location : String?,
+    output_format : String?) do
     def compile(output_filename = self.output_filename)
       compiler.original_output_filename = original_output_filename
       compiler.compile sources, output_filename
@@ -613,8 +716,6 @@ class Crystal::Command
     end
 
     @config = CompilerConfig.new compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format
-  rescue ex : OptionParser::Exception
-    error ex.message
   end
 
   private def gather_sources(filenames)

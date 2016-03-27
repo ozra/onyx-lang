@@ -23,3 +23,5 @@ alias Tag = Symbol
 
 alias Str = String
 
+
+alias Real = Float64

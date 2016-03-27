@@ -368,7 +368,7 @@ describe "File" do
 
     it "expands paths of symlinks" do
       symlink_path = "/tmp/test_file_symlink.txt"
-      file_path = "#{ __DIR__ }/data/test_file.txt"
+      file_path = "#{__DIR__}/data/test_file.txt"
       begin
         File.symlink(file_path, symlink_path)
         real_symlink_path = File.real_path(symlink_path)
@@ -716,6 +716,21 @@ describe "File" do
       File.write(filename, "hello", encoding: "UCS-2LE")
       File.read_lines(filename, encoding: "UCS-2LE").should eq(["hello"])
       File.delete filename
+    end
+  end
+
+  describe "closed stream" do
+    it "raises if writing on a closed stream" do
+      io = File.open(__FILE__, "r")
+      io.close
+
+      expect_raises(IO::Error, "closed stream") { io.gets_to_end }
+      expect_raises(IO::Error, "closed stream") { io.print "hi" }
+      expect_raises(IO::Error, "closed stream") { io.puts "hi" }
+      expect_raises(IO::Error, "closed stream") { io.seek(1) }
+      expect_raises(IO::Error, "closed stream") { io.gets }
+      expect_raises(IO::Error, "closed stream") { io.read_byte }
+      expect_raises(IO::Error, "closed stream") { io.write_byte('a'.ord.to_u8) }
     end
   end
 end

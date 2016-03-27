@@ -5,6 +5,8 @@ module Crystal
     # CACHE_DIR = ENV["CRYSTAL_CACHE_DIR"]? || ".crystal"
     CACHE_DIR = ENV["CRYSTAL_CACHE_DIR"]? || ".onyx-cache"
 
+    @@cache_dir : String?
+
     def self.cache_dir
       @@cache_dir ||= File.expand_path(CACHE_DIR)
     end

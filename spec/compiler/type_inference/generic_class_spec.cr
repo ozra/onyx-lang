@@ -507,6 +507,26 @@ describe "Type inference: generic class" do
       "generic type too nested"
   end
 
+  it "errors on generic type too nested (#2257)" do
+    assert_error %(
+      class Foo(T)
+      end
+
+      class Bar
+        def initialize(@value)
+        end
+
+        def value
+          @value
+        end
+      end
+
+      foo = Foo(typeof(Bar.new(nil).value))
+      Bar.new(foo)
+      ),
+      "generic type too nested"
+  end
+
   it "errors on too nested tuple instance" do
     assert_error %(
       def foo
@@ -589,5 +609,59 @@ describe "Type inference: generic class" do
 
       Foo.new(Bar(Int32).new).x
       )) { int32 }
+  end
+
+  it "inherits instance var type annotation from generic to concrete" do
+    assert_type(%(
+      class Foo(T)
+        @x : Int32?
+
+        def x
+          @x
+        end
+      end
+
+      class Bar < Foo(Int32)
+      end
+
+      Bar.new.x
+      )) { nilable int32 }
+  end
+
+  it "inherits instance var type annotation from generic to concrete with T" do
+    assert_type(%(
+      class Foo(T)
+        @x : T?
+
+        def x
+          @x
+        end
+      end
+
+      class Bar < Foo(Int32)
+      end
+
+      Bar.new.x
+      )) { nilable int32 }
+  end
+
+  it "inherits instance var type annotation from generic to generic to concrete" do
+    assert_type(%(
+      class Foo(T)
+        @x : Int32?
+
+        def x
+          @x
+        end
+      end
+
+      class Bar(T) < Foo(T)
+      end
+
+      class Baz < Bar(Int32)
+      end
+
+      Baz.new.x
+      )) { nilable int32 }
   end
 end

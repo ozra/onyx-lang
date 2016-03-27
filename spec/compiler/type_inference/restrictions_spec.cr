@@ -103,7 +103,7 @@ describe "Restrictions" do
 
   it "passes #278" do
     assert_error %(
-      def bar(x : String, y = nil : String)
+      def bar(x : String, y : String = nil)
       end
 
       bar(1 || "")
@@ -326,5 +326,51 @@ describe "Restrictions" do
 
       foo
       )) { types["B"].metaclass }
+  end
+
+  it "matches virtual type against alias" do
+    assert_type(%(
+      module Moo
+      end
+
+      class Foo
+        include Moo
+      end
+
+      class Bar < Foo
+      end
+
+      class Baz < Bar
+      end
+
+      alias Alias = Moo
+
+      def foo(x : Alias)
+        1
+      end
+
+      foo(Baz.new as Bar)
+      )) { int32 }
+  end
+
+  it "matches alias against alias in block type" do
+    assert_type(%(
+      class Foo(T)
+        def self.new(&block : -> T)
+          Foo(T).new
+        end
+
+        def initialize
+        end
+
+        def t
+          T
+        end
+      end
+
+      alias Rec = Nil | Array(Rec)
+
+      Foo.new { nil as Rec }.t
+      )) { types["Rec"].metaclass }
   end
 end

@@ -2,14 +2,16 @@ require "./client"
 require "../common"
 
 class HTTP::Client::Response
-  getter version
-  getter status_code
-  getter status_message
-  getter headers
+  getter version : String
+  getter status_code : Int32
+  getter status_message : String
+  getter headers : Headers
   getter! body_io
   property upgrade_handler
+  @body : String?
+  @cookies : Cookies?
 
-  def initialize(@status_code, @body = nil, @headers = Headers.new : Headers, status_message = nil, @version = "HTTP/1.1", @body_io = nil)
+  def initialize(@status_code, @body = nil, @headers : Headers = Headers.new, status_message = nil, @version = "HTTP/1.1", @body_io = nil)
     @status_message = status_message || HTTP.default_status_message_for(@status_code)
 
     if Response.mandatory_body?(@status_code)
@@ -29,6 +31,10 @@ class HTTP::Client::Response
     @body
   end
 
+  def success?
+    (200..299).includes?(status_code)
+  end
+
   # Returns a convenience wrapper around querying and setting cookie related
   # headers, see `HTTP::Cookies`.
   def cookies
@@ -46,6 +52,8 @@ class HTTP::Client::Response
   def charset
     process_content_type_header.charset
   end
+
+  @computed_content_type_header : ComputedContentTypeHeader?
 
   private def process_content_type_header
     @computed_content_type_header ||= begin

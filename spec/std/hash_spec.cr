@@ -3,7 +3,7 @@ require "spec"
 alias RecursiveHash = Hash(RecursiveHash, RecursiveHash)
 
 class HashBreaker
-  getter x
+  getter x : Int32
 
   def initialize(@x)
   end
@@ -732,6 +732,11 @@ describe "Hash" do
       h.select!(:b, :c)
       h.should eq({b: 6, c: 9})
     end
+  end
+
+  it "doesn't generate a negative index for the bucket index (#2321)" do
+    items = (0..100000).map { rand(100000).to_i16 }
+    items.uniq.size
   end
 
   # Check that Hash can be created with an initial capacity

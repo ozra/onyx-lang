@@ -502,13 +502,12 @@ describe "Code gen: block" do
   end
 
   it "can break without value from yielder that returns nilable (1)" do
-    run("
-      require \"nil\"
-      require \"reference\"
+    run(%(
+      require "prelude"
 
       def foo
         yield
-        \"\"
+        ""
       end
 
       a = foo do
@@ -516,17 +515,16 @@ describe "Code gen: block" do
       end
 
       a.nil?
-    ").to_b.should be_true
+    )).to_b.should be_true
   end
 
   it "can break without value from yielder that returns nilable (2)" do
-    run("
-      require \"nil\"
-      require \"reference\"
+    run(%(
+      require "prelude"
 
       def foo
         yield
-        \"\"
+        ""
       end
 
       a = foo do
@@ -534,26 +532,25 @@ describe "Code gen: block" do
       end
 
       a.nil?
-    ").to_b.should be_true
+    )).to_b.should be_true
   end
 
   it "break with value from yielder that returns a nilable" do
-    run("
-      require \"nil\"
-      require \"reference\"
+    run(%(
+      require "prelude"
 
       def foo
         yield
-        \"\"
+        ""
       end
 
       a = foo do
         break if false
-        break \"\"
+        break ""
       end
 
       a.nil?
-    ").to_b.should be_false
+    )).to_b.should be_false
   end
 
   it "can use self inside a block called from dispatch" do
@@ -1330,5 +1327,20 @@ describe "Code gen: block" do
         block.call
       end
       )).to_i.should eq(123)
+  end
+
+  it "codegens captured block that returns union, but proc only returns a single type" do
+    run(%(
+      def run_callbacks(&block : -> Int32 | String)
+        block.call
+      end
+
+      f = run_callbacks { "foo" }
+      if f.is_a?(String)
+        f
+      else
+        "oops"
+      end
+      )).to_string.should eq("foo")
   end
 end

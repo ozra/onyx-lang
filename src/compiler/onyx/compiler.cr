@@ -10,7 +10,7 @@ module Crystal
       @dump_ll = false
       @color = true
       @no_codegen = false
-      @n_threads = 8.to_i32
+      @n_threads = 4.to_i32 # saner default!
       @prelude = "onyx_prelude"
       @release = false
       @single_module = false
