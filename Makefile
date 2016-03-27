@@ -5,7 +5,7 @@
 O := .build
 SOURCES := $(shell find src -name '*.cr')
 SPEC_SOURCES := $(shell find spec -name '*.cr') $(shell find spec -name '*.ox')
-FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads) )
+FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads),--threads 3)
 EXPORTS := $(if $(release),,CRYSTAL_CONFIG_PATH=`pwd`/src)
 SHELL = /bin/bash
 LLVM_CONFIG := $(shell command -v llvm-config-3.6 llvm-config-3.5 llvm-config | head -n 1)

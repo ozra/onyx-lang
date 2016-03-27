@@ -147,9 +147,13 @@ class StylizeOnyxVisitor < Visitor
 
    def visit(node : ArrayLiteral)
       name = node.name
-      if name
+      if name == "Set"
+         @str << " {"
+
+      elsif name
          name.accept self
          @str << " {"
+
       else
          @str << "["
       end
@@ -831,8 +835,13 @@ class StylizeOnyxVisitor < Visitor
          @str << "."
       end
 
-      if node.name == "initialize"
+      case node.name
+      when "initialize"
          @str << def_name("init", :snake)
+
+      when "===" # *TODO*
+         @str << def_name("~~", :snake)
+
       else
          @str << def_name(node.name, @main_literal_style)
          @str << case node.visibility
@@ -1188,12 +1197,13 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : TupleLiteral)
-      @str << "{"
+      @str << "("
       node.elements.each_with_index do |exp, i|
          @str << ", " if i > 0
          exp.accept self
       end
-      @str << "}"
+      @str << "," if node.elements.size < 2
+      @str << ")"
       false
    end
 

@@ -22,6 +22,29 @@ say "\nLet's ROCK\n".red
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- suffix (int)      = Ints _
+-- suffix (real)     = Real _
+-- suffix (number)r  = Real _
+
+-- module GeometricSuffixes[B = 1.0]
+--    BaseUnitFromMeter = B
+
+--    suffix (number)mm    = _r * (1000r * BaseUnitFromMeter)
+--    suffix (number)cm    = _r * (100r * BaseUnitFromMeter)
+--    suffix (number)dm    = _r * (10r * BaseUnitFromMeter)
+--    suffix (number)m     = _r
+--    suffix (number)km    = _r * (0.001r * BaseUnitFromMeter)
+--    suffix (number)svmil = _r * (0.0001r * BaseUnitFromMeter)
+
+-- module GeometryUtils
+--    mixin GeometricSuffixes
+--    mixin GeometricCalcs
+
+-- using GeometryUtils
+--    dist = 47km + 300m
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 indent-call(x, y, ...z) -> "{x}, {y}, {z}"
 
 say indent-call
@@ -237,12 +260,14 @@ FDSA
 >.downcase
 
 
-the-function(a Int64? = nil, b Int64? = nil) ->
+the-function(a Int64? = nil, b Int64? = nil) -> true
 the-function         -- a is nil, #b is nil
 the-function 1       -- a is 1, #b is nil
-the-function #b = 2  -- a is nil, #b is 2
+the-function b: 2  -- a is nil, #b is 2
 the-function 1, 2    -- error, #b must be assigned by name
 
+if the-function a: 1, b: 2: say "the-function says yes!"
+if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
 my-foo(x, y, opts Hash<Str, Str|I64|Nil>) ->
@@ -594,11 +619,11 @@ say ""
 '!literal-int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
-   say "{awol}, {foo}, {bar}"
+   say "foo-named: (awol): {awol}, foo: {foo}, bar: {bar}"
 
 foo-named 1, "blarg", "qwö qwö"
-foo-named 2, 42, #bar = "yo"
-foo-named 3, #foo = 11, #bar = "yo"
+foo-named 2, 42, bar: "yo"
+foo-named 3, foo: 11, bar: "yo"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -968,7 +993,6 @@ say "tag–hash–2 type is {typeof(tag–hash–2)}"
 say "tag–hash–2 value is {tag–hash–2}"
 
 
-say "ACCESS TERSECUTS!".yellow
 
 tuple1 = <13, 32, 47, 2>
 tuple2 = <"foo", 1, {1, 2, 3}>
@@ -976,8 +1000,10 @@ tuple2 = <"foo", 1, {1, 2, 3}>
 set1 = {1, 2, 3, 5}
 set2 = {"foo", 47, "mine", 13}
 
-
 list = [47, 13, 42, 11]
+
+say "- - ACCESS TERSECUTS! - -".yellow
+
 say list.1, list.2?, list.4?
 
 say tag-hash-2#katt
@@ -1757,6 +1783,12 @@ MyLibGmp.set-memory-functions(
    ((ptr, size) -> GC.free(ptr) )
 )
 
+MyLibGmp.set-memory-functions
+   (size) -> GC.malloc(size)
+   (ptr, old_size, new_size) -> GC.realloc(ptr, new_size)
+   (ptr, size) -> GC.free(ptr)
+
+x = 7
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- add-as-big-ints(a T, b T) ->

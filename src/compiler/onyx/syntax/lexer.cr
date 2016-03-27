@@ -593,7 +593,7 @@ module Crystal
           case peek_nextch
           when '(', '{', '[', '<'
             start_char = nextch
-            toktype_then_nextch :SYMBOL_ARRAY_START
+            toktype_then_nextch :TAG_ARRAY_START
             @token.delimiter_state = Token::DelimiterState.new(:symbol_array, start_char, closing_char(start_char), 0)
           else
             @token.type = :"%"
@@ -924,7 +924,7 @@ module Crystal
             end
           end
 
-          @token.type = :SYMBOL
+          @token.type = :TAG
           @token.value = string_range(start)
           nextch
           set_token_raw_from_start(start - 2)
@@ -937,7 +937,7 @@ module Crystal
             if curch == '!' || curch == '?'
               nextch
             end
-            @token.type = :SYMBOL
+            @token.type = :TAG
             @token.value = string_range(start)
             set_token_raw_from_start(start - 1)
           else
@@ -1971,7 +1971,7 @@ module Crystal
     end
 
     def symbol(value)
-      @token.type = :SYMBOL
+      @token.type = :TAG
       @token.value = value
       @token.raw = ":#{value}" if @wants_raw
     end

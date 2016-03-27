@@ -91,9 +91,13 @@ class ToOnyxSVisitor < Visitor
 
    def visit(node : ArrayLiteral)
       name = node.name
-      if name
+      if name == "Set"
+         @str << " {"
+
+      elsif name
          name.accept self
          @str << " {"
+
       else
          @str << "["
       end
@@ -690,15 +694,19 @@ class ToOnyxSVisitor < Visitor
          @str << "."
       end
 
-      if node.name == "initialize"
+      case node.name
+      when "initialize"
          @str << def_name("init", :snake)
+
+      when "===" # *TODO*
+         @str << def_name("~~", :snake)
 
       else
          @str << def_name(node.name, :dash)
          @str << case node.visibility
          when Visibility::Public then ""
-         when Visibility::Private then "*"
-         when Visibility::Protected then "**"
+         when Visibility::Protected then "*"
+         when Visibility::Private then "**"
          else raise "I'm not aware of the visibility mode '#{node.visibility}'"
          end
       end
@@ -1044,12 +1052,13 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : TupleLiteral)
-      @str << "{"
+      @str << "("
       node.elements.each_with_index do |exp, i|
          @str << ", " if i > 0
          exp.accept self
       end
-      @str << "}"
+      @str << "," if node.elements.size < 2
+      @str << ")"
       false
    end
 
@@ -1081,8 +1090,6 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : Block)
-      # @str << keyword("do")
-
       if node.args.empty?
          @str << "~>"
       else
@@ -1098,7 +1105,7 @@ class ToOnyxSVisitor < Visitor
       accept_with_indent(node.body)
 
       append_indent
-      # @str << keyword("end")
+      @str << keyword("end")
 
       false
    end
@@ -1612,7 +1619,7 @@ class ToOnyxSVisitor < Visitor
             node.expressions.first.accept self
             @str << ")"
          else
-            @str << keyword("do")
+            @str << keyword("do") # *TODO* this doubling of function of "do" as "=>" AND "do–block", hmmmm
             newline
             accept_with_indent(node)
             append_indent
