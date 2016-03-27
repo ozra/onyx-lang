@@ -1,6 +1,7 @@
 require "object"
 
 type Object: !~~(other) -> !(self ~~ other)
+type Object: !~(other) -> !(self ~~ other)
 
 
 -- Bool comparison additions
