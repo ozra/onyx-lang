@@ -8,13 +8,23 @@ require "wild_colors"
 '!literal-int = I64
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
-
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+say "\nLet's ROCK\n".red
 _debug_compiler_start_ = true
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-say "\nLet's ROCK\n".red
+iff(x, a, b) -> if x ? a : b
+
+say zz = if 0 == 1 ? "Weird" : "Unweird"
+say (if 0 == 1 ? "Weird" : "Unweird")
+-- say if 0 == 1 ? "Weird" : "Unweird"  -- errors because it's parsed as suffix-if (that doesn't allow `else`)
+say iff 0 == 1, "Weird", "Unweird"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 say %s(\nfunction(foo) { SomeJsCode(foo("bar}")); }\n)
 
@@ -767,6 +777,32 @@ say "n = " + n.to–s + " from " + 4747.to–s
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+
+
+-- TUPLE AND SET SYNTAX VARIATIONS:
+
+tuple1 = {"monkey", "wrench", "and", "shit"}
+tuple2 = {#abra, #cadabra, "Foo", 47}
+set1 = Set{"monkey", "wrench", "and", "shit"}
+set2 = Set{#abra, #cadabra, "Foo", 47}
+
+-- paren tuple ws angular tuple
+-- x = Foo<Tup> ("monkey", #brains, 47)
+-- x = Foo[Tup] ("monkey", #brains, 47)
+-- y = foo ("monkey", #brains, 47)
+--
+-- x = Foo<Tup> <"monkey", #brains, 47>
+-- x = Foo[Tup] <"monkey", #brains, 47>
+-- y = foo <"monkey", #brains, 47>
+--
+
+-- xtuple1 = <"monkey", "wrench", "and", "shit">
+-- xtuple2 = <#abra, #cadabra, "Foo", 47>
+-- xset1 = {"monkey", "wrench", "and", "shit"}
+-- xset2 = {#abra, #cadabra, "Foo", 47}
+
+-- -- --
+
 json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
 say "json–correct–hash: {json–hash}"
 
@@ -1058,6 +1094,8 @@ end
 -- for: while–loops for the 'stepping' case must be generated
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+
 
 list = [#abra, #baba, #cadabra]
 

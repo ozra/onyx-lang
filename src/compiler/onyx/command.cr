@@ -46,7 +46,6 @@ Commands:
     --version, -v            show version
 
 USAGE
-#    crystallize              convert onyx sources to crystal
 
 
   VALID_EMIT_VALUES = %w(asm llvm-bc llvm-ir obj)
@@ -112,18 +111,15 @@ USAGE
         options.shift
         types
 
-      when "upgrade".starts_with?(command) # a convenience util for upgrading code to refactor depreceated constructs
-        options.shift
-        stylize :upgrade
       when "stylize".starts_with?(command)
         options.shift
         stylize
       when "onyxify".starts_with?(command)
         options.shift
         onyxify
-      when "crystallize".starts_with?(command)
+      when "_to_s_".starts_with?(command)
         options.shift
-        crystallize
+        to_s_debug
 
       when "--help" == command, "-h" == command
         puts USAGE
@@ -357,17 +353,29 @@ USAGE
     end
   end
 
-  private def stylize(how = :standard_style)
-    if how == :upgrade
-      STDERR.puts "wants to do code upgrade"
+  private def stylize()
+    config = setup_compiler "onyxify", no_codegen: true
+
+    config.sources.each do |source|
+      # code = File.read source.filename
+      if source.filename.ends_with?(".cr")
+        parser = Parser.new source.code
+      else
+        parser = OnyxParser.new source.code
+      end
+      parser.filename = source.filename
+      parser.wants_doc = true
+      node = parser.parse
+      node.stylize STDOUT, {nop: true}, source.code
     end
-    # config, result = compile_no_codegen "tool types"
-    # Crystal.print_types result.original_node
-    STDERR.puts "IMPLEMENT ME!"
   end
 
   private def onyxify
-    config = setup_compiler "onyxify", no_codegen: true
+    stylize()
+  end
+
+  private def to_s_debug
+    config = setup_compiler "just_to_s", no_codegen: true
 
     config.sources.each do |source|
       # code = File.read source.filename
@@ -381,18 +389,6 @@ USAGE
       node = parser.parse
       node.to_s STDOUT, :onyx
     end
-
-    # compiler = config.compiler
-    # compiler.wants_doc = true
-    # ret = config.compile
-    # ret.original_node.to_s STDOUT, :onyx
-
-  end
-
-  private def crystallize
-    # config, result = compile_no_codegen "tool types"
-    # Crystal.print_types result.original_node
-    STDERR.puts "IMPLEMENT ME!"
   end
 
   private def compile_no_codegen(command, wants_doc = false, hierarchy = false, cursor_command = false)

@@ -134,8 +134,8 @@ class Nesting
    property require_end_token
    @auto_parametrization = false
    #property auto_parametrization
-   @block_params : Array(Var)?
-   property block_params
+   @block_auto_params : Array(Var)?
+   property block_auto_params
    property location
    property single_line
 
@@ -235,7 +235,7 @@ class NestingStack
    def in_auto_paramed?
       @stack.reverse.each do |v|
          if v.nest_kind == :block
-            return v.block_params != nil
+            return v.block_auto_params != nil
          end
          false
       end
@@ -357,6 +357,8 @@ class OnyxParser < OnyxLexer
 
       @type_nest = 0
 
+      @anon_param_counter = 1
+
       @explicit_block_param_count = 0
       @in_macro_expression = false
       @stop_on_yield = 0
@@ -460,6 +462,8 @@ class OnyxParser < OnyxLexer
       #    STDERR.puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
 
       # end
+
+      STDERR.flush
 
       expressions
    end
@@ -1365,10 +1369,14 @@ class OnyxParser < OnyxLexer
                (args || [] of ASTNode),
                block,
                explicit_block_param, named_args,
-               name_column_number: name_column_number
+               name_column_number: name_column_number,
+               has_parenthesis: has_parens
             )
          else
-            atomic = args ? (Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number) : (Call.new atomic, name, name_column_number: name_column_number)
+            atomic = args ?
+               (Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number, has_parenthesis: has_parens)
+            :
+               (Call.new atomic, name, name_column_number: name_column_number, has_parenthesis: has_parens)
          end
          atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
          atomic.at(location)
@@ -3422,7 +3430,9 @@ class OnyxParser < OnyxLexer
 
       # *TODO* should probably support `(\n      )` etc. constructs (for commented out stuff)
       if @token.type == :")"
-         return node_and_next_token NilLiteral.new
+         ret = NilLiteral.new
+         ret.parenthesized = true
+         return node_and_next_token ret
       end
 
       exps = [] of ASTNode
@@ -3459,6 +3469,7 @@ class OnyxParser < OnyxLexer
       end
 
       ret = Expressions.new exps
+      ret.parenthesized = true
 
       # Check if a call is being made directly upon the grouped expression
       if tok? :"("
@@ -3470,7 +3481,7 @@ class OnyxParser < OnyxLexer
          explicit_block_param = call_args.explicit_block_param
          named_args = call_args.named_args
 
-         Call.new(ret, "call", args, block, explicit_block_param, named_args, false, name_column_number, has_parens)
+         Call.new(ret, "call", args, block, explicit_block_param, named_args, false, name_column_number, has_parenthesis: has_parens)
       else
          ret
       end
@@ -3572,7 +3583,7 @@ class OnyxParser < OnyxLexer
    def parse_softlambda : Block
       dbg "parse_softlambda ->"
 
-      block_params = [] of Var
+      block_auto_params = [] of Var
       block_body = nil
       auto_parametrization = false
 
@@ -3603,7 +3614,7 @@ class OnyxParser < OnyxLexer
                end
 
                var = Var.new(arg_name).at(@token.location)
-               block_params << var
+               block_auto_params << var
 
                next_token_skip_space_or_newline
                if tok? :",", :";" # these are PARAMS so semis allowed.
@@ -3636,10 +3647,10 @@ class OnyxParser < OnyxLexer
       add_nest :block, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if auto_parametrization
-         dbg "auto_parametrization - so we add to nesting_stack. block_params == nil? : #{block_params == nil}".red
-         @nesting_stack.last.block_params = block_params
+         dbg "auto_parametrization - so we add to nesting_stack. block_auto_params == nil? : #{block_auto_params == nil}".red
+         @nesting_stack.last.block_auto_params = block_auto_params
       else
-         add_vars block_params
+         add_vars block_auto_params
       end
 
       if nest_kind == :NIL_NEST
@@ -3650,7 +3661,7 @@ class OnyxParser < OnyxLexer
       dbg "parse_softlambda - before parse_expressions"
 
       # auto–params are extracted in var_or_call parsing when above nest_stack
-      # has block_params and name ~= /_\d/
+      # has block_auto_params and name ~= /_\d/
       block_body = parse_expressions
 
       dbg "parse_softlambda - AFTER parse_expressions"
@@ -3659,7 +3670,7 @@ class OnyxParser < OnyxLexer
 
       end_location = token_end_location
 
-      Block.new(block_params, block_body).at_end(end_location)
+      Block.new(block_auto_params, block_body).at_end(end_location)
    end
 
 
@@ -5328,7 +5339,7 @@ class OnyxParser < OnyxLexer
          # next_token_skip_space_or_newline
          location = @token.location
          mutability, storage, type = parse_qualifer_and_type()
-         pp mutability.to_s + ", " + storage.to_s + ", " + type.to_s
+         dbg "#{mutability}, #{storage}, #{type}"
 
          restriction = type
       else
@@ -5404,6 +5415,11 @@ class OnyxParser < OnyxLexer
       # named fields here in def too
 
       case @token.type
+      when :UNDERSCORE
+         arg_name = "_tmp_par_#{@anon_param_counter}"
+         @anon_param_counter += 1
+         uses_arg = false
+
       when :IDFR
          arg_name = @token.value.to_s
          uses_arg = false
@@ -5758,16 +5774,16 @@ class OnyxParser < OnyxLexer
       node =
          if block || explicit_block_param || global
             dbg "parse_var_or_call - got some kinda block"
-            Call.new instance, name, (args || [] of ASTNode), block, explicit_block_param, named_args, global, name_column_number, has_parens
+            Call.new instance, name, (args || [] of ASTNode), block, explicit_block_param, named_args, global, name_column_number, has_parenthesis: has_parens
          else
             if args
                dbg "parse_var_or_call - got some kinda args"
                if (!force_call && is_var) && args.size == 1 && (num = args[0]) && (num.is_a?(NumberLiteral) && num.has_sign?)
                   sign = num.value[0].to_s
                   num.value = num.value.byte_slice(1)
-                  Call.new(Var.new(name), sign, args)
+                  Call.new(Var.new(name), sign, args, has_parenthesis: has_parens)
                else
-                  Call.new(instance, name, args, nil, explicit_block_param, named_args, global, name_column_number, has_parens)
+                  Call.new(instance, name, args, nil, explicit_block_param, named_args, global, name_column_number, has_parenthesis: has_parens)
                end
             else
                dbg "check for type annotation prefixes"
@@ -5787,7 +5803,7 @@ class OnyxParser < OnyxLexer
                   Var.new name
                else
                   dbg "parse_var_or_call - got call as default else case"
-                  Call.new instance, name, [] of ASTNode, nil, explicit_block_param, named_args, global, name_column_number, has_parens
+                  Call.new instance, name, [] of ASTNode, nil, explicit_block_param, named_args, global, name_column_number, has_parenthesis: has_parens
                end
             end
          end
@@ -5820,7 +5836,7 @@ class OnyxParser < OnyxLexer
 
       when :"("
          dbg "- parse_call_args -> '('"
-         {false, parse_call_args_parenthesized}
+         {true, parse_call_args_parenthesized}
 
       # *TODO* PERHAPS indent should also be allowed!? Looks quite confusing though...
       when :SPACE
@@ -5828,7 +5844,7 @@ class OnyxParser < OnyxLexer
          slash_is_not_regex!
          end_location = token_end_location
          next_token
-         {true, parse_call_args_spaced check_plus_and_minus: true, allow_curly: allow_curly}
+         {false, parse_call_args_spaced check_plus_and_minus: true, allow_curly: allow_curly}
 
       else
          {false, nil}
@@ -6225,7 +6241,7 @@ class OnyxParser < OnyxLexer
       dbg "add_magic_param #{name}"
       add_var name
       var = Var.new(name).at(@token.location)
-      if bp = @nesting_stack.last.block_params
+      if bp = @nesting_stack.last.block_auto_params
          bp << var
       else
          raise "Internal error: tried to add_magic_param() when par-stack == nil [4953]"
@@ -6233,7 +6249,7 @@ class OnyxParser < OnyxLexer
    end
 
    def in_auto_paramed?
-      #ret = @nesting_stack.last.block_params != nil
+      #ret = @nesting_stack.last.block_auto_params != nil
       ret = @nesting_stack.in_auto_paramed?
       dbg "in_auto_paramed? = #{ret}"
       ret
@@ -7539,22 +7555,9 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
       end
 
-
-
-      # if tok?(:",")
-      #    return true
-      # end
-
-
-
-
       # *TODO*
       if tok?(:EOF)
          return true
-
-
-      # elsif tok?(:")") # *TODO* *TEST*
-      #    return true
 
       elsif @one_line_nest == 0 # *TODO* this is semi–defunct!!
 
@@ -7563,6 +7566,16 @@ class OnyxParser < OnyxLexer
             handle_definite_nest_end_
             @was_just_nest_end = true
             return true
+
+         # *TODO* *9* single–line function–def was flagged as multiline, and didn't
+         # close when "ternary"-if was only body. This is a temporary quick–fix!
+         # Fix proper when refactoring indent/dedent–handling!
+         elsif tok?(:NEWLINE) && @indent == @nesting_stack.last.indent
+            dbg "handle_nest_end - dirty quick fix - newline+same-indent explicit check"
+            handle_definite_nest_end_
+            @was_just_nest_end = true
+            return true
+
          elsif handle_transition_tokens
             return true
          end
@@ -7604,7 +7617,7 @@ class OnyxParser < OnyxLexer
 
    def handle_one_line_nest_end : Bool
       case
-      # *TODO* clean up belows after indent–parsing has solidified
+      # *TODO* clean up belows when refactoring indent–parsing
 
       # `,` was added so `foo( ()->1, ()->2; 3, ()->4) - ie lambdas as args can be used smoothly
       when tok? :","

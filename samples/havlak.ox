@@ -1,3 +1,5 @@
+_debug_parser_start_=1
+
 type BasicBlock
    @in-edges   = [] of BasicBlock 'get 'set
    @out-edges  = [] of BasicBlock 'get 'set
@@ -95,9 +97,9 @@ type LSG
 
    calculate-nesting-level-rec(l, depth) ->
       l.depth-level = depth
-      l.children.each (liter) ~>
-         calculate-nesting-level-rec(liter, depth + 1)
-         l.set-nesting-level(Math.max(l.nesting-level, 1 + liter.nesting-level))
+      l.children.each (l-iter) ~>
+         calculate-nesting-level-rec(l-iter, depth + 1)
+         l.set-nesting-level(Math.max(l.nesting-level, 1 + l-iter.nesting-level))
 
    get-num-loops() ->
       @loops.size
@@ -180,15 +182,15 @@ type HavlakLoopFinder
       size.times (w) ~>
          header[w] = 0
          types[w] = BB_NONHEADER
-         node-w = (nodes[w]).bb
+         node-w = nodes[w].bb
          if node-w
             node-w.in-edges.each (node-v) ~>
                v = number[node-v]
                unless v is UNVISITED
                   if is-ancestor(w, v, last)
-                     (back-preds[w]) << v
+                     back-preds[w] << v
                   else
-                     (non-back-preds[w]).add(v)
+                     non-back-preds[w].add(v)
                   end
                end
 
@@ -201,9 +203,9 @@ type HavlakLoopFinder
          node-pool = [] of UnionFindNode
          node-w = (nodes[w]).bb
          if node-w
-            (back-preds[w]).each (v) ~>
+            back-preds[w].each (v) ~>
                if v != w
-                  node-pool << (nodes[v]).find-set
+                  node-pool << nodes[v].find-set
                else
                   types[w] = BB_SELF
                end
@@ -214,29 +216,27 @@ type HavlakLoopFinder
             end
             while !work-list.empty?
                x = work-list.shift
-               non-back-size = (non-back-preds[x.dfs-number]).size
-               if non-back-size > MAXNONBACKPREDS
-                  return 0
-               end
-               (non-back-preds[x.dfs-number]).each (iter) ~>
+               non-back-size = non-back-preds[x.dfs-number].size
+               return 0 if non-back-size > MAXNONBACKPREDS
+               non-back-preds[x.dfs-number].each (iter) ~>
                   y = nodes[iter]
                   ydash = y.find-set
-                  if !(is-ancestor(w, ydash.dfs-number, last))
+                  if !is-ancestor(w, ydash.dfs-number, last)
                      types[w] = BB_IRREDUCIBLE
-                     (non-back-preds[w]).add(ydash.dfs-number)
+                     non-back-preds[w].add(ydash.dfs-number)
                   else
-                     if ydash.dfs-number != w and !(node-pool.includes?(ydash))
+                     if ydash.dfs-number != w and !node-pool.includes?(ydash)
                         work-list << ydash
                         node-pool << ydash
                      end
                   end
 
             end
-            if node-pool.size > 0 || (types[w]) == BB_SELF
+            if node-pool.size > 0 || types[w] == BB_SELF
                l = @lsg.create-new-loop
                l.set-header(node-w)
-               l.is-reducible = (types[w]) != BB_IRREDUCIBLE
-               (nodes[w]).l = l
+               l.is-reducible = types[w] != BB_IRREDUCIBLE
+               nodes[w].l = l
                node-pool.each (node) ~>
                   header[node.dfs-number] = w
                   node.union(nodes[w])
@@ -257,16 +257,16 @@ build-diamond(start) ->
    bb0 = start
    BasicBlockEdge.add($cfg, bb0, bb0 + 1)
    BasicBlockEdge.add($cfg, bb0, bb0 + 2)
-   BasicBlockEdge.add($cfg, bb0 + 1, bb0 + 3)
+   BasicBlockEdge.add $cfg, bb0 + 1, bb0 + 3
    BasicBlockEdge.add($cfg, bb0 + 2, bb0 + 3)
    bb0 + 3
 
-build-connect(_start, _end) ->
-   BasicBlockEdge.add($cfg, _start, _end)
+build-connect(start, _end) ->
+   BasicBlockEdge.add($cfg, start, _end)
 
 build-straight(start, n) ->
    n.times (i) ~>
-      build-connect(start + i, (start + i) + 1)
+      build-connect(start + i, start + i + 1)
    start + n
 
 build-base-loop(from) ->
@@ -276,9 +276,9 @@ build-base-loop(from) ->
    diamond2 = build-diamond(d11)
    footer = build-straight(diamond2, 1)
    build-connect(diamond2, d11)
-   build-connect(diamond1, header)
+   build-connect diamond1, header
    build-connect(footer, from)
-   build-straight(footer, 1)
+   build-straight footer, 1
 
 
 say "Welcome to LoopTesterApp, Onyx Edition"
@@ -291,14 +291,14 @@ $cfg.create-node(1)
 build-connect(0, 2)
 say "15000 dummy loops"
 15000.times ~>
-   (HavlakLoopFinder $cfg, LSG()).find-loops
+   HavlakLoopFinder($cfg, LSG()).find-loops
 
 say "Constructing CFG..."
 n = 2
 10.times ~>
    $cfg.create-node(n + 1)
    build-connect(2, n + 1)
-   n = n + 1
+   n += 1
    100.times ~>
       top = n
       n = build-straight(n, 1)
@@ -316,7 +316,10 @@ loops = (HavlakLoopFinder $cfg, LSG()).find-loops
 say "Another 50 iterations..."
 sum = 0
 50.times ~>
-   print(".")
-   sum = sum + (HavlakLoopFinder $cfg, LSG()).find-loops
+   print "."
+   sum += (HavlakLoopFinder $cfg, LSG()).find-loops
+
+47.times ~.to-s
+42.times(~.to-s)
 
 say "\nFound {loops} loops (including artificial root node) ({sum})\n"

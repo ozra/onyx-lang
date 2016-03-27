@@ -1499,6 +1499,7 @@ module Crystal
 
       node = Expressions.new exps
       node.keyword = :"("
+      node.parenthesized = true # *TODO* might as well look at keyword instead though (make helper function)
       node
     end
 

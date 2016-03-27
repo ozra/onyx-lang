@@ -4,6 +4,11 @@ module Crystal
     property location
     property end_location
 
+    property onyx_node
+    property? parenthesized
+    @onyx_node = false
+    @parenthesized = false
+
     def at(@location : Location?)
       self
     end
@@ -437,6 +442,7 @@ module Crystal
   class Call < ASTNode
     @global = false
     @has_parenthesis = false
+    @implicit_construction = false
 
     property :obj
     property :name
@@ -450,7 +456,9 @@ module Crystal
     property :name_size
     property :doc
 
-    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, @global = false, @name_column_number = 0, @has_parenthesis = false)
+    property? :implicit_construction
+
+    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, @global = false, @name_column_number = 0, @has_parenthesis = false, @implicit_construction = false)
       @name_size = -1
       if block = @block
         block.call = self
@@ -489,7 +497,7 @@ module Crystal
     end
 
     def clone_without_location
-      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis)
+      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction)
       clone.name_size = name_size
       clone.is_expansion = is_expansion?
       clone
@@ -807,7 +815,11 @@ module Crystal
     property :restriction
     property :doc
 
-    def initialize(@name, @default_value = nil, @restriction = nil, @type = nil)
+    property :mutability
+    @mutability : Symbol
+    @mutability = :auto
+
+    def initialize(@name, @default_value = nil, @restriction = nil, @type = nil, @mutability = :auto)
     end
 
     def accept_children(visitor)
@@ -820,7 +832,7 @@ module Crystal
     end
 
     def clone_without_location
-      arg = Arg.new @name, @default_value.clone, @restriction.clone
+      arg = Arg.new @name, @default_value.clone, @restriction.clone, nil, @mutability.clone
 
       # An arg's type can sometimes be used as a restriction,
       # and must be preserved when cloned
@@ -829,7 +841,7 @@ module Crystal
       arg
     end
 
-    def_equals_and_hash name, default_value, restriction
+    def_equals_and_hash name, default_value, restriction, mutability
   end
 
   class Fun < ASTNode
@@ -1316,6 +1328,38 @@ module Crystal
     def_equals_and_hash @cond, @body
   end
 
+  # For expression.
+  #
+  #     'for' ( id | id[id] | [id] | id:id | id: | id, id | id, ) ('in'|'from') (expr | (expr 'to' expr) | (expr 'til' expr)) (('step'|'by') expr)?
+  #       body
+  #     ('end')?
+  #
+  class For < ASTNode
+    property value_id
+    property index_id
+    property iterable
+    property stepping
+    property body
+
+    def initialize(@value_id, @index_id, @iterable, @stepping, body = nil)
+      @body = Expressions.from body
+    end
+
+    def accept_children(visitor)
+      @value_id.try &.accept visitor
+      @index_id.try &.accept visitor
+      @iterable.accept visitor
+      @stepping.try &.accept visitor
+      @body.accept visitor
+    end
+
+    def clone_without_location
+      For.new(@value_id, @index_id, @iterable.clone, @stepping.clone, @body.clone)
+    end
+
+    def_equals_and_hash @value_id, @index_id, @iterable, @stepping, @body
+  end
+
   class Generic < ASTNode
     property :name
     property :type_vars
@@ -1342,8 +1386,12 @@ module Crystal
   class TypeDeclaration < ASTNode
     property :var
     property :declared_type
+    property :is_assign_composite
+    property :mutability
+    @mutability : Symbol
+    @mutability = :auto
 
-    def initialize(@var, @declared_type)
+    def initialize(@var, @declared_type, @is_assign_composite = false, @mutability = :auto)
     end
 
     def accept_children(visitor)
@@ -1368,10 +1416,10 @@ module Crystal
     end
 
     def clone_without_location
-      TypeDeclaration.new(@var.clone, @declared_type.clone)
+      TypeDeclaration.new(@var.clone, @declared_type.clone, @is_assign_composite.clone, @mutability.clone)
     end
 
-    def_equals_and_hash @var, @declared_type
+    def_equals_and_hash @var, @declared_type, @is_assign_composite, @mutability
   end
 
   class UninitializedVar < ASTNode

@@ -41,7 +41,6 @@ module Crystal
         {% unless {
             "call": true, # for recursion in Block..
             "is_expansion": true,
-            "has_parenthesis": true,
             "location": true,
             "type": true,
             "dirty": true,

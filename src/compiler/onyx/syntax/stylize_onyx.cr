@@ -1,10 +1,45 @@
 module Crystal
 
+class ASTNode
+   def stylize(io, conf, source)
+      visitor = StylizeOnyxVisitor.new(io, conf, source)
+      self.accept visitor
+   end
+end
+
 class StylizeOnyxVisitor < Visitor
-   def initialize(@str = MemoryIO.new, conf = Tuple.new)
+   def initialize(@str = MemoryIO.new, conf = Tuple.new, source = "")
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
+      @inside_func = 0
+      @inside_typedef = 0
+      @style_parser = StyleParseVisitor.new conf, source
+
+      # Conf
+      @indent_string = "   "
+      # @indent_string = "«««" # debug
+      @fake_fluid_tabs = true
+
+      @main_literal_style = :dash
+
+      @hard_width = 80
+
+      @preserve_one_line_expressions = true
+
+      @preserve_single_empty = false
+      @line_before = Set{:if, :else, :while, :for, :switches}
+      @line_after = Set{:func, :macro, :typedef}
+
+      @justified_instvars = true
+      @justified_switches = true
+
+      @boolean_op_style = :as_source
+
+      @func_style = :arrow
+      @func_parens = :as_source
+      @func_favour_oneliners = true
+
    end
 
    def visit(node : Primitive)
@@ -28,6 +63,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : CharLiteral)
+      # *TODO* encode escaped chars etc!
       @str << "%\"#{node.value}\""
    end
 
@@ -43,7 +79,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : StringLiteral)
-      @str << case node.string_literal_style
+      @str << case @main_literal_style
       when :straight_quoted then    "%s\""
       when :straight_paren then     "%s("
       when :straight_brace then     "%s{"
@@ -168,16 +204,27 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Expressions)
+      just_grouping = node.parenthesized? && node.expressions.try &.size == 1
+      if node.parenthesized?
+         append_indent unless just_grouping
+         @str << "("
+         newline unless just_grouping
+      end
       if @inside_macro > 0
          node.expressions.each &.accept self
       else
          node.expressions.each do |exp|
             unless exp.nop?
-               append_indent
+               append_indent unless just_grouping
                exp.accept self
-               newline
+               newline unless just_grouping
             end
          end
+      end
+
+      if node.parenthesized?
+         append_indent unless just_grouping
+         @str << ")"
       end
       false
    end
@@ -212,35 +259,52 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : ClassDef)
-      if node.abstract
-         @str << keyword("abstract")
-         @str << " "
-      end
-      if node.struct
-         @str << keyword("struct")
-      else
-         @str << keyword("type")
-      end
+      @inside_typedef += 1
+      # # *TODO* what to do??
+      # if node.doc
+      #    @str << node.doc
+      # end
+      @str << keyword("type")
       @str << " "
       node.name.accept self
       if type_vars = node.type_vars
-         @str << "["
+         @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
             @str << type_var.to_s
          end
-         @str << "]"
+         @str << ">"
       end
-      if superclass = node.superclass
-         @str << " < "
+      if (superclass = node.superclass) || node.struct? || node.abstract?
+         @str << " <"
+
+         if node.abstract?
+            @str << " "
+            @str << keyword("abstract")
+         end
+
+         if node.struct?
+            @str << " "
+            @str << keyword("value")
+         end
+
+         if superclass
+            @str << " "
          superclass.accept self
+         end
       end
+
       newline
       accept_with_indent(node.body)
 
       append_indent
       @str << keyword("end")
+      newline
+
       false
+
+   ensure
+      @inside_typedef -= 1
    end
 
    def visit(node : ModuleDef)
@@ -248,12 +312,12 @@ class StylizeOnyxVisitor < Visitor
       @str << " "
       node.name.accept self
       if type_vars = node.type_vars
-         @str << "["
+         @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
             @str << type_var
          end
-         @str << "]"
+         @str << ">"
       end
       newline
       accept_with_indent(node.body)
@@ -268,40 +332,80 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit_call(node, ignore_obj = false)
-      # *TODO* if receiver is Type and method name is "new"
-      #    org|"(pars)"|".new(pars)"|" pars"|".new pars"
-
       if node.name == "`"
          visit_backtick(node.args[0])
          return false
       end
 
+      @str << "(" if node.parenthesized?
+
+
       node_obj = ignore_obj ? nil : node.obj
 
-      need_parens =
-         case node_obj
-         when Call
-            case node_obj.args.size
-            when 0
-               !is_alpha(node_obj.name)
-            else
-               true
+      if node.name == "new"
+         is_new = node_obj.is_a?(Generic) || (node_obj.is_a?(Path) && ('A' <= node_obj.names.last.to_s[0] <= 'Z'))
+      else
+         is_new = false
+      end
+
+      if @inside_typedef && @inside_func == 0
+         if {"property", "property?", "property!", "getter", "getter?", "setter"}.includes? node.name
+
+            @str << "SCRAMBLE "
+
+            node.args.each_with_index do |arg, i|
+               @str << ", " if i > 0
+
+# *TODO* break with a line 
+# several can be defined on one row 
+# create each own row for then
+# possible are :name, "name", name, TypeDeclaration
+
+# prop -> 'get 'set
+# prop? -> 'get? 'set
+# prop! -> 'get! 'set
+
+
+               arg_needs_parens = arg.is_a?(Cast)
+               in_parenthesis(arg_needs_parens) { arg.accept self }
             end
-         when Var, NilLiteral, BoolLiteral, CharLiteral, NumberLiteral, StringLiteral,
-                StringInterpolation, Path, Generic, InstanceVar, Global
-            false
-         when ArrayLiteral
-            !!node_obj.of
-         when HashLiteral
-            !!node_obj.of
-         else
-            true
+
+            return false
          end
+      end
+
+      need_parens = !node_obj || (node_obj && node_obj.parenthesized?)
       call_args_need_parens = false
 
       @str << "$." if node.global
 
-      case # *TODO* org|"."{0}|"["{0}"]" etc.
+      call_args_need_parens = node.has_parenthesis
+
+      case
+      when is_new
+         node_obj = node_obj.not_nil!
+         in_parenthesis(need_parens, node_obj)
+         @str << (call_args_need_parens ? "(" : (node.block || node.args) ? " " : "")
+         printed_arg = false
+         node.args.each_with_index do |arg, i|
+            @str << ", " if printed_arg
+            arg_needs_parens = arg.is_a?(Cast)
+            in_parenthesis(arg_needs_parens) { arg.accept self }
+            printed_arg = true
+         end
+         if named_args = node.named_args
+            named_args.each do |named_arg|
+               @str << ", " if printed_arg
+               named_arg.accept self
+               printed_arg = true
+            end
+         end
+         if block_arg = node.block_arg
+            @str << ", " if printed_arg
+            @str << "&"
+            block_arg.accept self
+         end
+
       when node_obj && (node.name == "[]" || node.name == "[]?")
          in_parenthesis(need_parens, node_obj)
 
@@ -317,6 +421,7 @@ class StylizeOnyxVisitor < Visitor
          else
             @str << decorate_call(node, "]?")
          end
+
       when node_obj && node.name == "[]="
          in_parenthesis(need_parens, node_obj)
 
@@ -328,16 +433,21 @@ class StylizeOnyxVisitor < Visitor
          @str << decorate_call(node, "=")
          @str << " "
          node.args[1].accept self
-      when node_obj && !is_alpha(node.name) && node.args.size == 0
+
+      when node_obj && is_operatorish(node.name) && node.args.size == 0
+         @str << (call_args_need_parens ? "(" : node.block ? " " : "")
          @str << decorate_call(node, node.name)
          in_parenthesis(need_parens, node_obj)
-      when node_obj && !is_alpha(node.name) && node.args.size == 1
+
+      when node_obj && is_operatorish(node.name) && node.args.size == 1
          in_parenthesis(need_parens, node_obj)
 
          @str << " "
+
          @str << decorate_call(node, node.name)
          @str << " "
          node.args[0].accept self
+
       else
          if node_obj
             in_parenthesis(need_parens, node_obj)
@@ -353,9 +463,14 @@ class StylizeOnyxVisitor < Visitor
          else
             @str << decorate_call(node, node.name)
 
-            call_args_need_parens = !node.args.empty? || node.block_arg || node.named_args
-
-            @str << "(" if call_args_need_parens
+            @str << (call_args_need_parens ?
+               "("
+            :
+               (node.block || (node.args && node.args.size > 0)) ?
+                  " "
+               :
+                  ""
+            )
 
             printed_arg = false
             node.args.each_with_index do |arg, i|
@@ -384,31 +499,30 @@ class StylizeOnyxVisitor < Visitor
       if block
          # Check if this is foo &.bar
          first_block_arg = block.args.first?
+
          if first_block_arg && block.args.size == 1
             block_body = block.body
             if block_body.is_a?(Call)
                block_obj = block_body.obj
                if block_obj.is_a?(Var) && block_obj.name == first_block_arg.name
-                  if node.args.empty?
-                     @str << "("
-                  else
+                  unless node.args.empty?
                      @str << ", "
                   end
-                  @str << "&."
+                  @str << "~."
                   visit_call block_body, ignore_obj: true
-                  @str << ")"
+                  @str << ")" if call_args_need_parens
+                  @str << ")" if node.parenthesized?
                   return false
                end
             end
          end
-      end
 
-      if block
          @str << ", " if node.args.size > 0
          block.accept self
       end
 
       @str << ")" if call_args_need_parens
+      @str << ")" if node.parenthesized?
 
       false
    end
@@ -464,13 +578,36 @@ class StylizeOnyxVisitor < Visitor
 
    def stylize_idfr(str, literal_style : Symbol)
       case literal_style
-      when :dash
-         # *TODO* initial and trailing underscore should reasonably be left be
-         str.gsub(/_/, '-')
+      when :dash, :endash
+         encountered_alpha = false
+         delimiter_count = 0
+         String.build str.size, do |ret|
+            str.each_char_with_index do |chr, i|
+               is_last_char = (i + 1 == str.size)
 
-      when :endash
-         # *TODO* initial and trailing underscore should reasonably be left be
-         str.gsub(/_/, '–')
+               if chr == '_'
+                  delimiter_count += 1
+               end
+
+               if chr != '_' || is_last_char
+                  if delimiter_count > 0
+                     if encountered_alpha
+                        if literal_style == :dash
+                           ret << "-"
+                        else
+                           ret << "–"
+                        end
+                     else
+                        ret << "_" unless is_last_char # done below
+                     end
+                     delimiter_count = 0
+                  end
+
+                  ret << chr
+                  encountered_alpha = true
+               end
+            end
+         end
 
       when :camel
          encountered_alpha = false
@@ -508,31 +645,40 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def decorate_singleton(node, str)
-      stylize_idfr str, node.literal_style
+      # *TODO* make switch right here, no?
+      stylize_idfr str, @main_literal_style
    end
 
    def decorate_call(node, str)
-      stylize_idfr str, node.literal_style
+      stylize_idfr str, @main_literal_style
    end
 
    def decorate_var(node, str)
-      stylize_idfr str, node.literal_style
+      stylize_idfr str, @main_literal_style
    end
 
    def decorate_arg(node, str)
-      stylize_idfr str, node.literal_style
+      if str =~ /^_tmp_par_\d+/
+         "_"
+      else
+         stylize_idfr str, @main_literal_style
+      end
    end
 
    def decorate_instance_var(node, str)
-      stylize_idfr str, node.literal_style
+      stylize_idfr str, @main_literal_style
    end
 
    def decorate_class_var(node, str)
-      stylize_idfr str, node.literal_style
+      stylize_idfr str, @main_literal_style
    end
 
-   def is_alpha(string)
+   def is_alpha_initial(string)
       'a' <= string[0].downcase <= 'z'
+   end
+
+   def is_operatorish(string)
+      !is_alpha_initial string
    end
 
    def visit(node : Assign)
@@ -652,7 +798,7 @@ class StylizeOnyxVisitor < Visitor
          obj.accept self
          @str << "."
       end
-      @str << def_name(node.name, node.literal_style)
+      @str << def_name(node.name, @main_literal_style)
 
       if node.args.size > 0
          @str << "("
@@ -666,16 +812,17 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Def)
+      @inside_func += 1
       @str << "macro " if node.macro_def?
 
-      # if context needs it - output ORIGINAL, or specific CHOICE OF "\", "λ", "def " (stylize mode)
+      # if context needs it - output ORIGINAL, or specific CHOICE OF "fn", "fun", "def" (stylize mode)
       # kwd_choice = "\\"
-      # @str << keyword(kwd_choice)
-      # @str << " "
+      # if func_style != :arrow
+      #  @str << keyword(kwd_choice)
+      #  @str << " "
+      # end
 
       if node_receiver = node.receiver
-         puts ":::receiver = '#{node_receiver.to_s}"
-
          if node_receiver.to_s == "self"
             @str << "Type"
          else
@@ -687,7 +834,14 @@ class StylizeOnyxVisitor < Visitor
       if node.name == "initialize"
          @str << def_name("init", :snake)
       else
-         @str << def_name(node.name, node.literal_style)
+         @str << def_name(node.name, @main_literal_style)
+         @str << case node.visibility
+         when Visibility::Public then ""
+         when Visibility::Private then "*"
+         when Visibility::Protected then "**"
+         else raise "I'm not aware of the visibility mode '#{node.visibility}'"
+         end
+
       end
 
       @str << "("
@@ -712,7 +866,7 @@ class StylizeOnyxVisitor < Visitor
       # *TODO* `!` etc. modifiers
       @str << " ->"
 
-      if node.abstract
+      if node.abstract?
          @str << " abstract"
 
       else
@@ -725,6 +879,9 @@ class StylizeOnyxVisitor < Visitor
          # @str << keyword("end")
       end
       false
+
+   ensure
+      @inside_func -= 1
    end
 
    def visit(node : Macro)
@@ -854,7 +1011,11 @@ class StylizeOnyxVisitor < Visitor
       elsif restriction = node.restriction
          @str << " " # *TODO*: unless mut and mut_word == "~"
          to_s_mutability node.mutability
-         restriction.accept self
+         if restriction.is_a? Underscore
+            @str << "*"
+         else
+            restriction.accept self
+         end
       end
       false
    end
@@ -886,7 +1047,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Self)
-      @str << keyword("self")
+      @str << keyword("Self")
    end
 
    def visit(node : Path)
@@ -907,21 +1068,21 @@ class StylizeOnyxVisitor < Visitor
          when "StaticArray"
             if node.type_vars.size == 2
                node.type_vars[0].accept self
-               @str << "["
+               @str << "<"
                node.type_vars[1].accept self
-               @str << "]"
+               @str << ">"
                return false
             end
          end
       end
 
       node.name.accept self
-      @str << "["
+      @str << "<"
       node.type_vars.each_with_index do |var, i|
          @str << ", " if i > 0
          var.accept self
       end
-      @str << "]"
+      @str << ">"
       false
    end
 
@@ -1044,10 +1205,17 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   def visit(node : UninitializedVar)
+      node.var.accept self
+      @str << " = raw "
+      node.declared_type.accept self
+      false
+   end
+
    def to_s_mutability(flag : Symbol)
       @str << case flag
       when :auto
-         "'"
+         ""       # *TODO* "'" when needed
       when :mut
          "~"
       when :let
@@ -1062,12 +1230,12 @@ class StylizeOnyxVisitor < Visitor
       if node.args.empty?
          @str << "~>"
       else
-         @str << "|"
+         @str << "("
          node.args.each_with_index do |arg, i|
             @str << ", " if i > 0
             arg.accept self
          end
-         @str << "|"
+         @str << ")~>"
       end
 
       newline
@@ -1111,9 +1279,13 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : VisibilityModifier)
-      @str << node.modifier
-      @str << ' '
       node.exp.accept self
+      # @str << case node.modifier
+      # when Visibility::Public then ""
+      # when Visibility::Private then "*"
+      # when Visibility::Protected then "**"
+      # else raise "I'm not aware of the visibility mode '#{node.modifier}'"
+      # end
       false
    end
 
@@ -1122,6 +1294,8 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def to_s_binary(node, op)
+      @str << "(" if node.parenthesized?
+
       left_needs_parens = node.left.is_a?(Assign) || node.left.is_a?(Expressions)
       in_parenthesis(left_needs_parens, node.left)
 
@@ -1140,8 +1314,12 @@ class StylizeOnyxVisitor < Visitor
       @str << op
       @str << " "
 
-      right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions)
+      right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions) ||
+                           node.right.is_a?(Call) && (node.right as Call).name == "[]="
       in_parenthesis(right_needs_parens, node.right)
+
+      @str << ")" if node.parenthesized?
+
       false
    end
 
@@ -1238,9 +1416,11 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : EnumDef)
-      @str << keyword("enum")
+      @str << keyword("type")
       @str << " "
       @str << node.name.to_s
+      @str << " < "
+      @str << keyword("enum")
       if base_type = node.base_type
          @str << " "
          base_type.accept self
@@ -1259,6 +1439,8 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : RangeLiteral)
+      @str << "(" if node.parenthesized?
+
       node.from.accept self
 
       # *TODO* org|"..."|"til"
@@ -1270,6 +1452,9 @@ class StylizeOnyxVisitor < Visitor
          @str << ".."
       end
       node.to.accept self
+
+      @str << ")" if node.parenthesized?
+
       false
    end
 
@@ -1444,7 +1629,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Attribute)
-      @str << "\\"
+      @str << "'"
       #@str << "@["
       @str << node.name
       if !node.args.empty? || node.named_args
@@ -1526,17 +1711,21 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   def visit(node : FileNode)
+      @str.puts
+      @str << "-- " << node.filename
+      @str.puts
+      node.node.accept self
+      false
+   end
+
    def newline
       @str << "\n"
    end
 
-   def indent_string
-      "    "
-   end
-
    def append_indent
       @indent.times do
-         @str << indent_string
+         @str << @indent_string
       end
    end
 

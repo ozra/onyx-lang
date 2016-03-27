@@ -4,7 +4,7 @@
 
 O := .build
 SOURCES := $(shell find src -name '*.cr')
-SPEC_SOURCES := $(shell find spec -name '*.cr')
+SPEC_SOURCES := $(shell find spec -name '*.cr') $(shell find spec -name '*.ox')
 FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads) )
 EXPORTS := $(if $(release),,CRYSTAL_CONFIG_PATH=`pwd`/src)
 SHELL = /bin/bash

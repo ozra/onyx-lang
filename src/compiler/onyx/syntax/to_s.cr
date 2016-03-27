@@ -3,18 +3,10 @@ require "../../crystal/syntax/to_s"
 module Crystal
 
 class ASTNode
-   # def inspect(io)
-   #    to_s(io)
-   # end
-
    def to_s(io, as_kind = :auto)
-      # *TODO* depends of _if_ in crystal and macro
-      # 1. Macro / Template situation - render same as source
-
       if (as_kind == :auto && @onyx_node) || as_kind == :onyx
          visitor = ToOnyxSVisitor.new(io)
          self.accept visitor
-
       else
          visitor = ToSVisitor.new(io)
          self.accept visitor
@@ -23,11 +15,8 @@ class ASTNode
 end
 
 class ToSVisitor < Visitor
-
-   # *TODO* this node is just needed for type fullness - it will never happen
-   # in crystal code, and thus this can be empty!
    def visit(node : For)
-      raise "Shouldn't possibly happen!"
+      raise "Shouldn't possibly happen from Crystal code!"
    end
 end
 
@@ -35,7 +24,6 @@ class ToOnyxSVisitor < Visitor
    def initialize(@str = MemoryIO.new)
       @indent = 0
       @inside_macro = 0
-      @inside_typedef = 0
       @inside_lib = false
    end
 
@@ -76,42 +64,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : StringLiteral)
-      # *TODO* - will
-      # node.value.inspect(@str)
-      # suffice yet again - since we're not doing stylizing here? or is this non-DRY needed for string-literal-variations?
-      @str << "\""
-
-      reader = Char::Reader.new(node.value as String)
-      while reader.has_next?
-         current_char = reader.current_char
-         case current_char
-         when '"' then   @str << "\\\""
-         when '\\' then @str << "\\\\"
-         when '\b' then @str << "\\b"
-         when '\e' then @str << "\\e"
-         when '\f' then @str << "\\f"
-         when '\n' then @str << "\\n"
-         when '\r' then @str << "\\r"
-         when '\t' then @str << "\\t"
-         when '\v' then @str << "\\v"
-         when '{'
-            @str << "\\{"
-            reader.next_char
-            next
-         else
-            if current_char.control?
-               @str << "\\u{"
-               current_char.ord.to_s(16, @str)
-               @str << "}"
-            else
-               @str << current_char
-            end
-         end
-         reader.next_char
-      end
-
-      @str << "\""
-
+      node.value.inspect(@str)
    end
 
    def visit(node : StringInterpolation)
@@ -239,13 +192,6 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : ClassDef)
-
-      # # *TODO* what to do??
-      # if node.doc
-      #    @str << node.doc
-      # end
-
-
       @str << keyword("type")
       @str << " "
       node.name.accept self
@@ -349,7 +295,7 @@ class ToOnyxSVisitor < Visitor
 
       @str << "$." if node.global
 
-      case # *TODO* org|"."{0}|"["{0}"]" etc.
+      case
       when is_new
          node_obj = node_obj.not_nil!
          in_parenthesis(need_parens, node_obj)
@@ -427,7 +373,6 @@ class ToOnyxSVisitor < Visitor
             @str << decorate_call(node, node.name)
 
             call_args_need_parens = !node.args.empty? || node.block_arg || node.named_args
-
             @str << "(" if call_args_need_parens
 
             printed_arg = false
@@ -537,67 +482,28 @@ class ToOnyxSVisitor < Visitor
    end
 
    def stylize_idfr(str, literal_style : Symbol)
-      # *TODO* since we don't stylize here, we can hardcode to one style
-
-      case literal_style
-      when :dash, :endash
-         encountered_alpha = false
-         delimiter_count = 0
-         String.build str.size, do |ret|
-            str.each_char_with_index do |chr, i|
-               is_last_char = (i + 1 == str.size)
-
-               if chr == '_'
-                  delimiter_count += 1
-               end
-
-               if chr != '_' || is_last_char
-                  if delimiter_count > 0
-                     if encountered_alpha
-                        if literal_style == :dash
-                           ret << "-"
-                        else
-                           ret << "–"
-                        end
-                     else
-                        ret << "_" unless is_last_char # done below
-                     end
-                     delimiter_count = 0
-                  end
-
-                  ret << chr
-                  encountered_alpha = true
-               end
+      encountered_alpha = false
+      delimiter_count = 0
+      String.build str.size, do |ret|
+         str.each_char_with_index do |chr, i|
+            is_last_char = (i + 1 == str.size)
+            if chr == '_'
+               delimiter_count += 1
             end
-         end
-
-      when :camel
-
-         # *TODO* trailing uscores + doubled uscores etc.
-
-         encountered_alpha = false
-         was_delimit = false
-         String.build str.size, do |ret|
-            str.each_char_with_index do |chr, i|
-               if chr == '_'
+            if chr != '_' || is_last_char
+               if delimiter_count > 0
                   if encountered_alpha
-                     was_delimit = true
+                     ret << "-"
                   else
-                     ret << chr
+                     ret << "_" unless is_last_char # done below
                   end
-               elsif was_delimit
-                  ret << chr.upcase
-                  was_delimit = false
-
-               else
-                  ret << chr
-                  encountered_alpha = true
+                  delimiter_count = 0
                end
+
+               ret << chr
+               encountered_alpha = true
             end
          end
-
-      else
-         str
       end
    end
 
@@ -610,27 +516,27 @@ class ToOnyxSVisitor < Visitor
    end
 
    def decorate_singleton(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def decorate_call(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def decorate_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def decorate_arg(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def decorate_instance_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def decorate_class_var(node, str)
-      stylize_idfr str, :dash # node.literal_style
+      stylize_idfr str, :dash
    end
 
    def is_alpha(string)
@@ -754,7 +660,7 @@ class ToOnyxSVisitor < Visitor
          obj.accept self
          @str << "."
       end
-      @str << def_name(node.name, :dash) # node.literal_style)
+      @str << def_name(node.name, :dash)
 
       if node.args.size > 0
          @str << "("
@@ -776,8 +682,6 @@ class ToOnyxSVisitor < Visitor
       # @str << " "
 
       if node_receiver = node.receiver
-         # puts ">>>receiver = '#{node_receiver.to_s}  DBG"
-
          if node_receiver.to_s == "self"
             @str << "Type"
          else
@@ -790,8 +694,7 @@ class ToOnyxSVisitor < Visitor
          @str << def_name("init", :snake)
 
       else
-         @str << def_name(node.name, :dash) # node.literal_style)
-
+         @str << def_name(node.name, :dash)
          @str << case node.visibility
          when Visibility::Public then ""
          when Visibility::Private then "*"
@@ -964,7 +867,11 @@ class ToOnyxSVisitor < Visitor
       elsif restriction = node.restriction
          @str << " " # *TODO*: unless mut and mut_word == "~"
          to_s_mutability node.mutability
-         restriction.accept self
+         if restriction.is_a? Underscore
+            @str << "*"
+         else
+            restriction.accept self
+         end
       end
       false
    end
@@ -1158,14 +1065,13 @@ class ToOnyxSVisitor < Visitor
       node.var.accept self
       @str << " = raw "
       node.declared_type.accept self
-      # @str << ".alloca"
       false
    end
 
    def to_s_mutability(flag : Symbol)
       @str << case flag
       when :auto
-         ""       # *TODO* "'" when needed
+         "'"
       when :mut
          "~"
       when :let
@@ -1185,7 +1091,7 @@ class ToOnyxSVisitor < Visitor
             @str << ", " if i > 0
             arg.accept self
          end
-         @str << ") ~>"
+         @str << ")~>"
       end
 
       newline
@@ -1230,7 +1136,6 @@ class ToOnyxSVisitor < Visitor
 
    def visit(node : VisibilityModifier)
       node.exp.accept self
-
       # @str << case node.modifier
       # when Visibility::Public then ""
       # when Visibility::Private then "*"
@@ -1262,8 +1167,6 @@ class ToOnyxSVisitor < Visitor
       @str << " "
       @str << op
       @str << " "
-
-      # puts "XXX #{node.right.class} XXX"
 
       right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions) ||
                            node.right.is_a?(Call) && (node.right as Call).name == "[]="
@@ -1575,7 +1478,7 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : Attribute)
-      @str << "\\"
+      @str << "'"
       #@str << "@["
       @str << node.name
       if !node.args.empty? || node.named_args
