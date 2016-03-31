@@ -1036,6 +1036,15 @@ module Crystal
       false
     end
 
+    # def visit(node : BabelDef)
+    #   @str << keyword("babel")
+    #   @str << " "
+    #   @str << node.given_name.to_s
+    #   @str << " <== "
+    #   @str << node.foreign_name.to_s
+    #   false
+    # end
+
     def visit(node : TypeDef)
       @str << keyword("type")
       @str << " "

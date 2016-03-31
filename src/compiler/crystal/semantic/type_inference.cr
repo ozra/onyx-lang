@@ -22,7 +22,10 @@ module Crystal
     # - main: process "main" code, calls and method bodies (the whole program).
     # - check recursive structs (RecursiveStructChecker): check that structs are not recursive (impossible to codegen)
     def infer_type(node, stats = false)
-      result = Crystal.timing("Semantic (top level)", stats) do
+      # result = Crystal.timing("Semantic (first top level - program-wide affecting pragmas)", stats) do
+      #   visit_top_level_pragmas(node)
+      # end
+      result = Crystal.timing("Semantic (second top level)", stats) do
         visit_top_level(node)
       end
       Crystal.timing("Semantic (abstract def check)", stats) do

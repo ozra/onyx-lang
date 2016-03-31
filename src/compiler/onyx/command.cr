@@ -1,13 +1,5 @@
 require "json"
 
-
-# *TODO* make sure correct cornerstone path can be handled
-def dbg(*objs)
-  ifdef !release
-    STDERR.puts objs
-  end
-end
-
 module Crystal
   def self.tempfile(basename)
     Dir.mkdir_p Config.cache_dir
@@ -301,7 +293,7 @@ USAGE
 
   private def docs
     # *TODO* debug
-    dbg "generate docs"
+    _dbg "generate docs"
 
     if options.empty?
       sources = [Compiler::Source.new("require", %(require "./src/**"))]
@@ -620,7 +612,7 @@ USAGE
   end
 
   private def do_link_flags_rationalism!(compiler) : Nil
-    dbg "compiler.link_flags = #{compiler.link_flags}"
+    _dbg "compiler.link_flags = #{compiler.link_flags}"
 
     lflags = compiler.link_flags || ""
 
@@ -648,7 +640,7 @@ USAGE
           # We don't know how to try to help - let's hope the system is actually setup right ;-)
         end
 
-      dbg "compiler.link_flags massaged to: #{out_flags}"
+      _dbg "compiler.link_flags massaged to: #{out_flags}"
       compiler.link_flags = out_flags
       return
 

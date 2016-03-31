@@ -158,12 +158,12 @@ module Crystal
 
   class Type
     def lookup_type(node : Path, lookup_in_container = true)
-      (node.global ? program : self).lookup_type(node.names, lookup_in_container: lookup_in_container)
+      (node.global ? program : self).lookup_type(node.names, lookup_in_container: lookup_in_container, is_onyx: node.onyx_node)
     rescue ex
       node.raise ex.message
     end
 
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       raise "Bug: #{self} doesn't implement lookup_type"
     end
 
@@ -173,10 +173,12 @@ module Crystal
   end
 
   class NamedType
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      return nil if already_looked_up.includes?(object_id)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false, recursive_try = false)
+      _dbg "NamedType.lookup_type(#{names}) - #{object_id}"
 
-      if lookup_in_container
+      return nil if already_looked_up.includes?(object_id) && recursive_try == false
+
+      if lookup_in_container && recursive_try == false
         already_looked_up.add(object_id)
       end
 
@@ -194,16 +196,53 @@ module Crystal
         break unless type
       end
 
+      _dbg "NamedType.lookup_type(#{names}) - #{object_id} return if a type: #{type}"
       return type if type
 
       parent_match = lookup_type_in_parents(names, already_looked_up)
+      _dbg "NamedType.lookup_type(#{names}) - #{object_id} return if a parent_match: #{parent_match}"
       return parent_match if parent_match
 
-      lookup_in_container && container ? container.lookup_type(names, already_looked_up) : nil
+      if ret = lookup_in_container && container ? container.lookup_type(names, already_looked_up) : nil
+        _dbg "NamedType.lookup_type(#{names}) - #{object_id} returns lookup in container #{ret}"
+        return ret
+      end
+
+      if is_onyx && !recursive_try
+        _dbg "NamedType.lookup_type(#{names}) - #{object_id} is_onyx, not recursive_try"
+
+        if names.first.ends_with? "__X_"
+          _dbg "NamedType.lookup_type(#{names}) - #{object_id} - not babel-mangled yet!"
+
+          names = names.map &.[0..-5]
+
+          if names.size == 1
+            if foreign = $babelfish_type_dict[names.first]?
+              _dbg "NamedType.lookup_type - babelfish_to_foreign got a translation: #{foreign}"
+              names[0] = foreign
+            end
+          end
+
+          # recurse
+          _dbg "NamedType.lookup_type(#{names}) - #{object_id} - recurses"
+          return lookup_type names, ObjectIdSet.new, lookup_in_container, is_onyx, true
+
+        else
+          _dbg "NamedType.lookup_type(#{names}) - #{object_id} - ALREADY babel-mangled!"
+        end
+      end
+
+      nil
+
+    ensure
+      _dbg "/ NamedType.lookup_type(#{names}) - #{object_id}"
     end
 
     def lookup_type_in_parents(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = false)
       parents.try &.each do |parent|
+
+# xxx is_onyx passed on?
+
         match = parent.lookup_type(names, already_looked_up, lookup_in_container)
         if match.is_a?(Type)
           return match
@@ -214,7 +253,7 @@ module Crystal
   end
 
   module GenericType
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       # If we are Foo(T) and somebody looks up the type T, we return `nil` because we don't
       # know what type T is, and we don't want to continue search in the container
       if !names.empty? && type_vars.includes?(names[0])
@@ -225,7 +264,7 @@ module Crystal
   end
 
   class GenericClassInstanceType
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       if !names.empty? && (type_var = type_vars[names[0]]?)
         case type_var
         when Var
@@ -250,7 +289,7 @@ module Crystal
   end
 
   class IncludedGenericModule
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       if (names.size == 1) && (m = @mapping[names[0]]?)
         case @including_class
         when GenericClassType, GenericModuleType
@@ -265,7 +304,7 @@ module Crystal
   end
 
   class InheritedGenericClass
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       if (names.size == 1) && (m = @mapping[names[0]]?)
         case extending_class
         when GenericClassType
@@ -280,7 +319,7 @@ module Crystal
   end
 
   class UnionType
-    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       raise "can't lookup type in union #{self}"
     end
   end
@@ -290,7 +329,7 @@ module Crystal
       typedef.lookup_type(node, lookup_in_container: lookup_in_container)
     end
 
-    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       typedef.lookup_type(node, already_looked_up: already_looked_up, lookup_in_container: lookup_in_container)
     end
   end
@@ -300,7 +339,7 @@ module Crystal
       instance_type.lookup_type(node, lookup_in_container: lookup_in_container)
     end
 
-    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       instance_type.lookup_type(node, already_looked_up: already_looked_up, lookup_in_container: lookup_in_container)
     end
   end
@@ -310,7 +349,7 @@ module Crystal
       instance_type.lookup_type(node, lookup_in_container: lookup_in_container)
     end
 
-    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       instance_type.lookup_type(node, already_looked_up: already_looked_up, lookup_in_container: lookup_in_container)
     end
   end
@@ -320,7 +359,7 @@ module Crystal
       base_type.lookup_type(node, lookup_in_container: lookup_in_container)
     end
 
-    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       base_type.lookup_type(node, already_looked_up: already_looked_up, lookup_in_container: lookup_in_container)
     end
   end
@@ -330,7 +369,7 @@ module Crystal
       instance_type.lookup_type(node, lookup_in_container: lookup_in_container)
     end
 
-    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
+    def lookup_type(node : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true, is_onyx = false)
       instance_type.lookup_type(node, already_looked_up: already_looked_up, lookup_in_container: lookup_in_container)
     end
   end

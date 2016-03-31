@@ -73,16 +73,22 @@ module Crystal
       generated_source = expanded_macro.source
       begin
         parser = Parser.new(generated_source, [vars.dup])
+        # parser = OnyxParser.new(generated_source, [vars.dup])
         parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
+
         parser.visibility = node.visibility
         parser.def_nest = 1 if inside_def
         parser.type_nest = 1 if inside_type
         parser.wants_doc = @program.wants_doc?
+
         generated_node = yield parser
+
         if yields = expanded_macro.yields
           generated_node = generated_node.transform(YieldsTransformer.new(yields))
         end
+
         normalize(generated_node, inside_exp: inside_exp)
+
       rescue ex : Crystal::SyntaxException
         node.raise "macro didn't expand to a valid program, it expanded to:\n\n#{"=" * 80}\n#{"-" * 80}\n#{generated_source.lines.to_s_with_line_numbers}\n#{"-" * 80}\n#{ex.to_s_with_source(generated_source)}\n#{"=" * 80}"
       end
@@ -253,7 +259,7 @@ module Crystal
             yields[var_name] = @last
             @last = Var.new(var_name)
           end
-          @last.to_s(@str)
+          @last.to_s(@str, as_kind: :crystal)
         end
 
         false
@@ -279,7 +285,7 @@ module Crystal
               str << exp.value
             else
               exp.accept self
-              @last.to_s(str)
+              @last.to_s(str, as_kind: :crystal)
             end
           end
         end)
@@ -752,7 +758,7 @@ module Crystal
       end
 
       def to_s(io)
-        @str.to_s(io)
+        @str.to_s(io, as_kind: :crystal)
       end
     end
   end

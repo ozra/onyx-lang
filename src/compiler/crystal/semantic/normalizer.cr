@@ -415,7 +415,7 @@ module Crystal
       # *TODO* when macros are fixed
       # return node unless node.onyx_node
 
-      if ["int_literal", "real_literal"].includes? node.name
+      if ["!int_literal", "!real_literal"].includes? node.name
         Nop.new
       else
         node.name =

@@ -5,6 +5,18 @@ class Crystal::Call
     old_target_defs = @target_defs
 
     external = obj_type.lookup_first_def(name, false) as External?
+
+    # # # # # # # # # # #
+    # Onyx Babelfishing
+    if ! external
+      if name == "initialize"
+        name = "init"
+        external = obj_type.lookup_first_def(name, false) as External?
+      end
+    end
+    # # # # # # # # # # #
+
+
     raise "undefined fun '#{name}' for #{obj_type}" unless external
 
     check_fun_args_size_match obj_type, external

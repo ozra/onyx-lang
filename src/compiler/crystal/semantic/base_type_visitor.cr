@@ -332,6 +332,8 @@ module Crystal
     end
 
     def resolve_ident(node : Path, create_modules_if_missing = false)
+      _dbg "resolve_ident Path: #{node}" # , auto-mod: #{create_modules_if_missing}"
+
       target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
 
       unless target_type
@@ -343,6 +345,8 @@ module Crystal
         end
         node.raise error_msg
       end
+
+      _dbg "resolve_ident Path got target_type: #{target_type}, #{target_type.class}"
 
       target_type
     end
@@ -356,6 +360,14 @@ module Crystal
         end
       else
         base_lookup = node.global ? mod : (@type_lookup || @scope || @types.last)
+
+
+        # _dbg "node.onyx_node: #{node.onyx_node}, base_lookup == mod: #{base_lookup == mod}, node.names.size: #{node.names.size}"
+        # if node.onyx_node && base_lookup == mod && node.names.size == 1
+        #   foo, node.names[0] = babelfish_to_foreign mod, node.names.first
+        # end
+
+
         target_type = lookup_type base_lookup, node, node
 
         unless target_type
@@ -394,7 +406,21 @@ module Crystal
       node.raise ex.message
     end
 
+    def babelfish_to_foreign(scope, name)
+      _dbg "babelfish_to_foreign - #{scope}, #{scope.class}, #{name}, #{name.class}"
+      return {scope, name} if !scope.is_a? Program
+
+      if foreign = $babelfish_type_dict[name]?
+        _dbg "babelfish_to_foreign got a translation: #{foreign}"
+        name = foreign
+      end
+
+      {scope, name}
+    end
+
     def process_type_name(node_name)
+      _dbg "process_type_name #{node_name}"
+
       if node_name.names.size == 1 && !node_name.global
         scope = current_type
         name = node_name.names.first
@@ -402,6 +428,34 @@ module Crystal
         name = node_name.names.pop
         scope = lookup_path_type node_name, create_modules_if_missing: true
       end
+
+
+      _dbg "- process_type_name - node_name.onyx_node: #{node_name.onyx_node}"
+      if node_name.onyx_node
+        _dbg "- process_type_name - #{scope} -> #{name}"
+
+        if name.ends_with? "__X_"
+          _dbg "- process_type_name - #{scope} -> #{name} - not babel-mangled yet!"
+
+          name = name[0..-5]
+
+          if scope.is_a? Program
+            if foreign = $babelfish_type_dict[name]?
+              _dbg "- process_type_name - #{scope} -> #{name} - babelfish_to_foreign got a translation: #{foreign}"
+              name = foreign
+            end
+          end
+
+        else
+          _dbg "- process_type_name - #{scope} -> #{name} - ALREADY babel-mangled!"
+        end
+
+      #   if foreign = $babelfish_type_dict[name]?
+      #     _dbg "babelfish_to_foreign got a translation: #{foreign}"
+      #     name = foreign
+      #   end
+      end
+
       {scope, name}
     end
 

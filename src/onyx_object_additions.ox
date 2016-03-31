@@ -1,12 +1,12 @@
 require "object"
 
-type Object: !~~(other) -> !(self ~~ other)
-type Object: !~(other) -> !(self ~~ other)
+type Any: !~~(other) -> !(self ~~ other)
+type Any: !~(other) -> !(self ~~ other)
 
 
 -- Bool comparison additions
 
-type Object: ~~(other Bool) -> other is true
+type Any: ~~(other Bool) -> other is true
 
 -- to Nil - move
 type Nil < value: ~~(other Bool) -> other is false

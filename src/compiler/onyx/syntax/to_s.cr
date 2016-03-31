@@ -4,6 +4,7 @@ module Crystal
 
 class ASTNode
    def to_s(io, as_kind = :auto)
+      # if as_kind != :crystal # (as_kind == :auto && @onyx_node) || as_kind == :onyx
       if (as_kind == :auto && @onyx_node) || as_kind == :onyx
          visitor = ToOnyxSVisitor.new(io)
          self.accept visitor
@@ -1242,6 +1243,15 @@ class ToOnyxSVisitor < Visitor
       end
       false
    end
+
+   # def visit(node : BabelDef)
+   #    @str << keyword("babel")
+   #    @str << " "
+   #    @str << node.given_name.to_s
+   #    @str << " <== "
+   #    @str << node.foreign_name.to_s
+   #    false
+   # end
 
    def visit(node : TypeDef)
       @str << keyword("ctype")

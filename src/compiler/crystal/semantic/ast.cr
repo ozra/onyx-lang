@@ -539,7 +539,7 @@ module Crystal
       name == other.name
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       self
     end
 

@@ -5,6 +5,16 @@ require "../primitives"
 require "./type_lookup"
 
 class Crystal::Call
+  def dbgx(str : String)
+    ifdef !release
+      if @onyx_node
+        STDERR.puts str + " " + @name
+      end
+    end
+  end
+end
+
+class Crystal::Call
   property! scope : Type
   property with_scope : Type?
   property! parent_visitor : MainVisitor?
@@ -216,6 +226,8 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
+    _dbg "lookup_matches_in_type #{def_name}"
+
     signature = CallSignature.new(def_name, arg_types, block, named_args)
 
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
@@ -223,13 +235,21 @@ class Crystal::Call
 
 
     # - - - - - - - - - - - - - - - - - - - -
-    # *TODO* *TEMP* - the ugly hack
+    # Onyx Babelfishing
     if matches.empty?
-      dbgx "Matches are empty - is it init?"
-      if def_name == "init"
-        dbgx "yes  init!"
 
-        def_name = "initialize"
+      # _dbg "Matches are empty - is it xyz-special? #{def_name}"
+
+      retry_def_name = case def_name
+      # when "init"         then  "initialize"
+      when "initialize"   then  "init"
+      else                      def_name
+      end
+
+      # _dbg "Matches are empty - is it xyz-special? #{retry_def_name}"
+
+      if retry_def_name != def_name
+        def_name = retry_def_name
         signature = CallSignature.new(def_name, arg_types, block, named_args)
         matches = check_tuple_indexer(owner, def_name, args, arg_types)
         matches ||= lookup_matches_checking_expansion(owner, signature, search_in_parents)
@@ -310,7 +330,10 @@ class Crystal::Call
     # If this call is an expansion (because of default or named args) we must
     # resolve the call in the type that defined the original method, without
     # triggering a virtual lookup. But the context of lookup must be preseved.
+    _dbg "lookup_matches_checking_expansion"
+
     if is_expansion?
+      _dbg "lookup_matches_checking_expansion - if is_expansion?"
       matches = bubbling_exception do
         target = parent_visitor.typed_def.original_owner
         if search_in_parents
@@ -325,21 +348,27 @@ class Crystal::Call
       end
       matches
     else
+      _dbg "lookup_matches_checking_expansion - else"
       bubbling_exception { lookup_matches_with_signature(owner, signature, search_in_parents) }
     end
   end
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
+    _dbg "lookup_matches_with_signature Program"
+
     location = self.location
     if location && (filename = location.original_filename)
+      _dbg "- lookup_matches_with_signature Program - 1"
       matches = owner.lookup_private_matches filename, signature
     end
 
     if matches
       if matches.empty?
+      _dbg "- lookup_matches_with_signature Program - 2"
         matches = owner.lookup_matches signature
       end
     else
+      _dbg "- lookup_matches_with_signature Program - 3"
       matches = owner.lookup_matches signature
     end
 
@@ -347,6 +376,8 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner, signature, search_in_parents)
+    _dbg "lookup_matches_with_signature General"
+
     if search_in_parents
       owner.lookup_matches signature
     else
@@ -355,6 +386,12 @@ class Crystal::Call
   end
 
   def instantiate(matches, owner, self_type = nil)
+    if matches.first?.try &.def.onyx_node
+      _dbg "instantiate".yellow + " #{matches}"
+      _dbg ""
+      _dbg "instantiate matches.matches.try &.[0].def.onyx_node = #{matches.matches.try &.[0].def.onyx_node}"
+    end
+
     block = @block
 
     typed_defs = Array(Def).new(matches.size)
@@ -362,6 +399,19 @@ class Crystal::Call
     matches.each do |match|
       # Discard abstract defs for abstract classes
       next if match.def.abstract? && match.context.owner.abstract?
+
+
+      if match.def.onyx_node
+        _dbg "match is an onyx_node #{match.def}"
+        _dbg "owner is #{owner}"
+
+        if owner == mod
+          match.arg_types.each do |arg_type|
+            _dbg "arg_type: #{arg_type}"
+          end
+        end
+
+      end
 
       check_visibility match
 
@@ -394,7 +444,12 @@ class Crystal::Call
 
       def_instance_key = DefInstanceKey.new(match.def.object_id, lookup_arg_types, block_type, named_args_key)
       typed_def = def_instance_owner.lookup_def_instance def_instance_key if use_cache
+
       unless typed_def
+        if match.def.onyx_node
+          _dbg "calls prepare_typed_def_with_args for #{match.def}"
+        end
+
         typed_def, typed_def_args = prepare_typed_def_with_args(match.def, match_owner, lookup_self_type, match.arg_types, block_arg_type)
         def_instance_owner.add_def_instance(def_instance_key, typed_def) if use_cache
 
@@ -408,6 +463,7 @@ class Crystal::Call
           end
 
           check_recursive_splat_call match.def, typed_def_args do
+            _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
             bubbling_exception do
               visitor = MainVisitor.new(mod, typed_def_args, typed_def)
               visitor.yield_vars = yield_vars
@@ -436,8 +492,14 @@ class Crystal::Call
             end
           end
         end
+      else
+        if match.def.onyx_node
+          _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
+        end
       end
+
       typed_defs << typed_def
+
     end
 
     typed_defs
@@ -896,6 +958,9 @@ class Crystal::Call
 
     def lookup_node_type(node)
       @type = nil
+
+      _dbg "lookup_node_type - before bubbling_exception accept"
+
       @call.bubbling_exception do
         node.accept self
       end
@@ -949,6 +1014,8 @@ class Crystal::Call
 
   def prepare_typed_def_with_args(untyped_def, owner, self_type, arg_types, block_arg_type)
     named_args = @named_args
+
+    node_language = untyped_def.onyx_node
 
     # If there's an argument count mismatch, or we have a splat, or there are
     # named arguments, we create another def that sets ups everything for the real call.
@@ -1026,6 +1093,11 @@ class Crystal::Call
       args[block_arg.name] = var
 
       typed_def.block_arg.not_nil!.type = block_arg_type
+    end
+
+    typed_def.tag_onyx node_language
+    args.each do |k, arg|
+      arg.tag_onyx node_language
     end
 
     {typed_def, args}

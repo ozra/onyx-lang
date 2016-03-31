@@ -160,7 +160,11 @@ type SomeFacts < enum U8
 end
 facts = SomeFacts.flags AppleLover, CoolDude
 say "facts: {facts}"
-say typeof(facts)
+say typedecl(facts)
+say typedecl facts
+say typeof(facts, "blargh", 1_i64)
+say (typedecl facts, "blargh", 1_i64)
+say typedecl(facts, "blargh", 1_i64)
 facts = facts | SomeFacts.PearLover
 say "facts: {facts}"
 MY_CONST = do

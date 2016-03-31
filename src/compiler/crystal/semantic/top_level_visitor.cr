@@ -135,6 +135,16 @@ module Crystal
 
       scope, name = process_type_name(node.name)
 
+      _dbg_on # if node.name == "Gimp"
+      _dbg "TopLevelVisitor : visit ClassDef #{node.name}, #{node.onyx_node ? "ONYX" : "CRYSTAL"}"
+      _dbg_off if node.name == "BoogleGoo"
+
+      # if node.onyx_node
+      #   scope, name = babelfish_to_foreign scope, name
+      # end
+
+      _dbg "TopLevelVisitor : visit ClassDef #{scope}, #{name} - after process_type_name"
+
       type = scope.types[name]?
 
       if !type && superclass
@@ -263,9 +273,36 @@ module Crystal
     end
 
     def visit(node : Alias)
+      _dbg "TopLevelVisitor.visit(Alias) : #{node} (name = #{node.name}, value = #{node.value}) - @lib_def_pass = #{@lib_def_pass}"
       return false if @lib_def_pass == 2
 
+
+      _dbg "- TopLevelVisitor.visit(Alias) onyx_node: #{node.onyx_node}"
+      if node.onyx_node
+
+        if node.name.ends_with? "__X_"
+          _dbg "- TopLevelVisitor.visit(Alias) - not babel-mangled yet!"
+
+          node.name = node.name[0..-5]
+
+          if current_type.is_a? Program
+            if foreign = $babelfish_type_dict[node.name]?
+              _dbg "- TopLevelVisitor.visit(Alias) - babelfish_to_foreign got a translation: #{foreign}"
+              node.name = foreign
+            end
+          end
+
+        else
+          _dbg "- TopLevelVisitor.visit(Alias) - ALREADY babel-mangled!"
+        end
+
+      end
+
+
+
       check_outside_block_or_exp node, "declare alias"
+
+      _dbg "- TopLevelVisitor.visit(Alias) - All current types: #{current_type.types}"
 
       existing_type = current_type.types[node.name]?
       if existing_type
@@ -299,6 +336,8 @@ module Crystal
     end
 
     def visit(node : Def)
+      _dbg "TopLevelVisitor.visit Def #{node.name}"
+
       check_outside_block_or_exp node, "declare def"
 
       check_valid_attributes node, ValidDefAttributes, "def"
@@ -330,6 +369,29 @@ module Crystal
         end
         if target_type.metaclass?
           node.raise "can't define abstract def on metaclass"
+        end
+      end
+
+      # Onyx babeling
+      node.args.each do |arg|
+        _dbg "- TopLevelVisitor.visit(Def) - arg: #{arg.name}, #{arg.restriction}, #{arg.restriction.class}"
+
+        if (restriction = arg.restriction).is_a? Path
+          _dbg "- TopLevelVisitor.visit(Def) - is_a? Path == true"
+
+          if node.onyx_node
+            _dbg "- TopLevelVisitor.visit(Def) - node.onyx_node == true"
+            restriction.tag_onyx node.onyx_node
+
+            scope, type_name = process_type_name(restriction)
+            _dbg "- TopLevelVisitor.visit(Def) - process_type_name gave #{scope}, #{type_name}"
+            # foo = Path.new (scope << type_name; scope.global = true; scope)
+            # if foreign = babelfish_to_foreign scope, type_name
+            #   _dbg "uses translation arg: #{arg.name}, #{restriction}, #{foreign}"
+            #   restriction.names[-1] = foreign.last
+            #   _dbg "after translation arg: #{arg}"
+            # end
+          end
         end
       end
 
@@ -868,6 +930,21 @@ module Crystal
         end
 
         restriction = field.restriction.not_nil!
+
+        # # Onyx babeling
+        # if field.onyx_node && restriction.is_a? Path
+        #     scope, type_name = @type_inference.process_type_name(restriction)
+        #     _dbg "process_type_name gives #{scope}, #{type_name}"
+        #     # # foo = Path.new (scope << type_name; scope.global = true; scope)
+        #     # if foreign = babelfish_to_foreign scope, type_name
+        #     #   _dbg "uses translation arg: #{arg.name}, #{restriction}, #{foreign}"
+        #     #   restriction.names[-1] = foreign.last
+        #     #   _dbg "after translation arg: #{arg}"
+        #     # end
+        #     restriction.names[-1] = type_name
+
+        # end
+
         field_type = @type_inference.check_primitive_like restriction
         if field_type.remove_typedef.void?
           if @struct_or_union.is_a?(CStructType)

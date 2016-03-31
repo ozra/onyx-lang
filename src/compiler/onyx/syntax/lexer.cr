@@ -206,7 +206,7 @@ module Crystal
       dbg_lex "next_token() - curch ='#{curch.ord}'"
 
       # *TODO* DEBUG HELPER
-      # *TODO* skip generating token, and eath below followed by newline and continue!
+      # *TODO* skip generating token, and eat below followed by newline and continue!
       ifdef !release
         if (v = @token.value).is_a?(String)
            case v
@@ -412,6 +412,8 @@ module Crystal
         case nextch
         when '='
           case nextch
+          # when '='
+          #   toktype_then_nextch :"<=="
           when '>'
             toktype_then_nextch :"<=>"
           else
@@ -949,8 +951,7 @@ module Crystal
         nextch
         case curch
         when '.'
-          nextch
-          @token.type = :"$." # "global" prefix, instead of `::`
+          @token.type = :"$"
         when '~'
           nextch
           @token.type = :"$~"
@@ -1082,10 +1083,10 @@ module Crystal
         scan_idfr(start)
       when 'e'
         case nextch
-        when 'a'
-          if mc?('c','h')
-            return check_idfr_or_keyword(:each, start)
-          end
+        # when 'a'
+        #   if mc?('c','h')
+        #     return check_idfr_or_keyword(:each, start)
+        #   end
         when 'l'
           case nextch
           when 'i'
@@ -1514,11 +1515,24 @@ module Crystal
           end
         when 'y'
           if mc?('p','e')
-            if peek_nextch == 'o'
+            case peek_nextch
+            when 'o'
               nextch
               if mc?('f')
                 return check_idfr_or_keyword(:typeof, start)
               end
+            when '-', '_', '–'
+              nextch
+              if mc?('d','e','c','l')
+                return check_idfr_or_keyword(:typedecl, start)
+              end
+
+            when 'd'
+              nextch
+              if mc?('e','c','l')
+                return check_idfr_or_keyword(:typedecl, start)
+              end
+
             else
               return check_idfr_or_keyword(:type, start)
             end
@@ -1548,6 +1562,8 @@ module Crystal
               return check_idfr_or_keyword(:until, start)
             end
           end
+        elsif mc?('s','i','n','g')
+          return check_idfr_or_keyword(:using, start)  # not implemented in parser yet - *TODO*
         end
         scan_idfr(start)
       when 'v'
