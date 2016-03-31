@@ -431,6 +431,12 @@ module Crystal
         false
       end
 
+      def visit(node : Not)
+        node.exp.accept self
+        @last = BoolLiteral.new(!@last.truthy?)
+        false
+      end
+
       def visit(node : If)
         node.cond.accept self
         (@last.truthy? ? node.then : node.else).accept self
@@ -490,6 +496,11 @@ module Crystal
       end
 
       def visit(node : Path)
+        @last = resolve(node)
+        false
+      end
+
+      def resolve(node : Path)
         if node.names.size == 1 && (match = @free_vars.try &.[node.names.first])
           matched_type = match
         else
@@ -502,16 +513,14 @@ module Crystal
 
         case matched_type
         when Const
-          @last = matched_type.value
+          matched_type.value
         when Type
-          @last = TypeNode.new(matched_type)
+          TypeNode.new(matched_type)
         when ASTNode
-          @last = matched_type
+          matched_type
         else
           node.raise "can't interpret #{node}"
         end
-
-        false
       end
 
       def visit(node : Splat)

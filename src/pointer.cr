@@ -57,18 +57,18 @@ struct Pointer(T)
   #
   # ```crystal
   # a = 1
-  # pointerof(a).nil? # => false
+  # pointerof(a).null? # => false
   #
   # b = Pointer(Int32).new(0)
-  # b.nil? # => true
+  # b.null? # => true
   # ```
-  def nil?
+  def null?
     address == 0
   end
 
-  # Alias of `#nil?`
-  def null?
-    nil?
+  # Returns true if this is a null pointer, false otherwise.
+  def !
+    null?
   end
 
   # Returns a new pointer whose address is this pointer's address incremented by `other * sizeof(T)`.

@@ -218,7 +218,7 @@ describe "Parser" do
   it_parses "$foo/2", Call.new(Global.new("$foo"), "/", 2.int32)
   it_parses "1+2*3", Call.new(1.int32, "+", Call.new(2.int32, "*", 3.int32))
 
-  it_parses "!1", Call.new(1.int32, "!")
+  it_parses "!1", Not.new(1.int32)
   it_parses "- 1", Call.new(1.int32, "-")
   it_parses "+ 1", Call.new(1.int32, "+")
   it_parses "~ 1", Call.new(1.int32, "~")
@@ -395,8 +395,8 @@ describe "Parser" do
   it_parses "1.x; foo do\nend", [Call.new(1.int32, "x"), Call.new(nil, "foo", block: Block.new)] of ASTNode
   it_parses "x = 1; foo.bar x do\nend", [Assign.new("x".var, 1.int32), Call.new("foo".call, "bar", ["x".var] of ASTNode, Block.new)]
 
-  it_parses "foo !false", Call.new(nil, "foo", [Call.new(false.bool, "!")] of ASTNode)
-  it_parses "!a && b", And.new(Call.new("a".call, "!"), "b".call)
+  it_parses "foo !false", Call.new(nil, "foo", [Not.new(false.bool)] of ASTNode)
+  it_parses "!a && b", And.new(Not.new("a".call), "b".call)
 
   it_parses "foo.bar.baz", Call.new(Call.new("foo".call, "bar"), "baz")
   it_parses "f.x Foo.new", Call.new("f".call, "x", [Call.new("Foo".path, "new")] of ASTNode)
@@ -772,6 +772,13 @@ describe "Parser" do
 
   it_parses "is_a?(Const)", IsA.new("self".var, "Const".path)
   it_parses "responds_to?(:foo)", RespondsTo.new("self".var, "foo")
+  it_parses "nil?", IsA.new("self".var, Path.global("Nil"), nil_check: true)
+  it_parses "nil?(  )", IsA.new("self".var, Path.global("Nil"), nil_check: true)
+
+  it_parses "foo.nil?", IsA.new("foo".call, Path.global("Nil"), nil_check: true)
+  it_parses "foo.nil?(  )", IsA.new("foo".call, Path.global("Nil"), nil_check: true)
+
+  it_parses "foo &.nil?", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], IsA.new(Var.new("__arg0"), Path.global("Nil"), nil_check: true)))
 
   it_parses "/foo/", regex("foo")
   it_parses "/foo/i", regex("foo", Regex::Options::IGNORE_CASE)
@@ -1430,6 +1437,14 @@ describe "Parser" do
       loc = node.location.not_nil!
       loc.line_number.should eq(1)
       loc.column_number.should eq(14)
+    end
+
+    it "gets correct location after macro with yield" do
+      parser = Parser.new(%(\n  1 ? 2 : 3))
+      node = parser.parse
+      loc = node.location.not_nil!
+      loc.line_number.should eq(2)
+      loc.column_number.should eq(3)
     end
   end
 end

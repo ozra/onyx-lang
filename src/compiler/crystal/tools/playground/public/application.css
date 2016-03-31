@@ -21,8 +21,24 @@ html {
   font-weight: 200;
 }
 
-h4 {
+h1 {
   margin-top: 3.14rem;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: 2.0rem;
+}
+
+h3 {
+  font-size: 1.8rem;
+}
+
+h4 {
+  font-size: 1.5rem;
 }
 
 .brand-logo img {
@@ -92,6 +108,10 @@ h4 {
   bottom: 0;
   left: 0;
   width: 29px;
+}
+
+.CodeMirror .inspector-hover {
+  background-color: #eee;
 }
 
 .card-plain {
@@ -171,4 +191,20 @@ h4 {
 
 .f-16 {
   width: 16px; /* avoid horizontal flicking in the toolbar */
+}
+
+main ul {
+  padding: 0 2rem;
+}
+
+main ul li {
+  list-style-type: disc;
+}
+
+ul.unstyled {
+  padding: 0;
+}
+
+ul.unstyled li {
+  list-style-type: none;
 }

@@ -358,7 +358,7 @@ describe "Code gen: virtual type" do
     ").to_i.should eq(1)
   end
 
-  pending "calls class method 1" do
+  it "calls class method 1" do
     run("
       class Foo
         def self.foo
@@ -376,7 +376,7 @@ describe "Code gen: virtual type" do
       ").to_i.should eq(1)
   end
 
-  pending "calls class method 2" do
+  it "calls class method 2" do
     run("
       class Foo
         def self.foo
@@ -394,7 +394,7 @@ describe "Code gen: virtual type" do
       ").to_i.should eq(2)
   end
 
-  pending "calls class method 3" do
+  it "calls class method 3" do
     run("
       class Base
         def self.foo
@@ -644,5 +644,46 @@ describe "Code gen: virtual type" do
 
       (Bar || Foo || Baz).foo
       )).to_i.should eq(2)
+  end
+
+  it "codegens new for virtual class with one type" do
+    run(%(
+      abstract class Foo
+      end
+
+      class Bar < Foo
+        def foo
+          123
+        end
+      end
+
+      p = Pointer(Foo.class).malloc(1_u64)
+      p.value = Bar
+      p.value.new.foo
+      )).to_i.should eq(123)
+  end
+
+  it "codegens new for virtual class with two types" do
+    run(%(
+      abstract class Foo
+      end
+
+      class Bar < Foo
+        def foo
+          123
+        end
+      end
+
+      class Baz < Foo
+        def foo
+          456
+        end
+      end
+
+      p = Pointer(Foo.class).malloc(1_u64)
+      p.value = Bar
+      p.value = Baz
+      p.value.new.foo
+      )).to_i.should eq(456)
   end
 end

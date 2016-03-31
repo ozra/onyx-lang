@@ -495,6 +495,7 @@ module Crystal
     end
 
     def transform(node : Not)
+      node.exp = node.exp.transform(self)
       node
     end
 
