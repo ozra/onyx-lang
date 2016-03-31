@@ -82,6 +82,8 @@ module Crystal
 
     def type_assign(target : Var, value, node)
       @vars[target.name] = MetaVar.new(target.name)
+      value.accept self
+      false
     end
 
     def type_assign(target : Path, value, node)
@@ -109,7 +111,8 @@ module Crystal
     end
 
     def type_assign(target, value, node)
-      # Nothing
+      value.accept self
+      false
     end
 
     def visit(node : ClassDef)
@@ -267,6 +270,8 @@ module Crystal
 
       check_outside_block_or_exp node, "declare alias"
 
+      check_no_typeof node.value
+
       existing_type = current_type.types[node.name]?
       if existing_type
         if existing_type.is_a?(AliasType)
@@ -283,6 +288,31 @@ module Crystal
       node.type = @mod.nil
 
       false
+    end
+
+    private def check_no_typeof(node)
+      visitor = HasTypeofVisitor.new
+      node.accept visitor
+      if t = visitor.typeof
+        t.raise "can't use typeof inside alias declaration"
+      end
+    end
+
+    class HasTypeofVisitor < Visitor
+      getter typeof : TypeOf?
+
+      def initialize
+        @typeof = nil
+      end
+
+      def visit(node : TypeOf)
+        @typeof ||= node
+        false
+      end
+
+      def visit(node : ASTNode)
+        true
+      end
     end
 
     def visit(node : Macro)
@@ -649,7 +679,7 @@ module Crystal
         node.scope = current_type.metaclass
       end
 
-      if expand_macro(node, raise_on_missing_const: false)
+      if expand_macro(node, raise_on_missing_const: false, first_pass: true)
         false
       else
         true

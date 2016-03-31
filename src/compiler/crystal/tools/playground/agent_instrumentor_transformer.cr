@@ -1,5 +1,22 @@
 module Crystal
   class Playground::AgentInstrumentorTransformer < Transformer
+    class MacroDefNameCollector < Visitor
+      getter names
+
+      def initialize
+        @names = Set(String).new
+      end
+
+      def visit(node : Macro)
+        @names << node.name
+        false
+      end
+
+      def visit(node)
+        true
+      end
+    end
+
     class FirstBlockVisitor < Visitor
       def initialize(@instrumentor)
       end
@@ -31,20 +48,36 @@ module Crystal
     @nested_block_visitor : FirstBlockVisitor?
     @type_body_transformer : TypeBodyTransformer?
 
-    def initialize
+    def initialize(@macro_names : Set(String))
+      @macro_names << "record"
+
       @ignore_line = nil
       @nested_block_visitor = FirstBlockVisitor.new(self)
       @type_body_transformer = TypeBodyTransformer.new(self)
     end
 
+    def self.transform(ast)
+      # collect names of declared macros in ast
+      # so the instrumentor can ignore call's of methods with this name
+      # this will avoid instrumenting calls to methods with the same name than
+      # declared macros in the playground source. For a more accurate solution
+      # a compilation should be done to distigush whether each call refers to a macro or
+      # a method. Between the macro names collection and only instrumenting def's inside
+      # modules/classes the generated instrumentation is pretty good enough. See #2355
+      collector = MacroDefNameCollector.new
+      ast.accept collector
+
+      ast.transform self.new(collector.names)
+    end
+
     private def instrument(node)
       if (location = node.location) && location.line_number != ignore_line
         @nested_block_visitor.not_nil!.accept(node)
-        args = [node as ASTNode, NumberLiteral.new(location.line_number)] of ASTNode
+        args = [NumberLiteral.new(location.line_number)] of ASTNode
         if node.is_a?(TupleLiteral)
           args << ArrayLiteral.new(node.elements.map { |e| StringLiteral.new(e.to_s) as ASTNode })
         end
-        Call.new(Global.new("$p"), "i", args)
+        Call.new(Global.new("$p"), "i", args, Block.new([] of Var, node as ASTNode))
       else
         node
       end
@@ -69,7 +102,7 @@ module Crystal
       node
     end
 
-    def transform(node : NilLiteral | NumberLiteral | StringLiteral | BoolLiteral | CharLiteral | SymbolLiteral | TupleLiteral | ArrayLiteral | StringInterpolation | RegexLiteral | Var | InstanceVar | ClassVar | Global | TypeOf)
+    def transform(node : NilLiteral | NumberLiteral | StringLiteral | BoolLiteral | CharLiteral | SymbolLiteral | TupleLiteral | ArrayLiteral | StringInterpolation | RegexLiteral | Var | InstanceVar | ClassVar | Global | TypeOf | UnaryExpression | BinaryOp | IsA | ReadInstanceVar)
       instrument(node)
     end
 
@@ -77,18 +110,29 @@ module Crystal
       case {node.obj, node.name, node.args.size}
       when {nil, "raise", 1}
         instrument_arg node
-      when {nil, "puts", 1}
-        instrument_arg node
       when {nil, "puts", _}
-        instrument_args_and_splat node
-      when {nil, "print", 1}
-        instrument_arg node
+        instrument_if_args node
       when {nil, "print", _}
-        instrument_args_and_splat node
-      when {nil, "record", _}
-        node
+        instrument_if_args node
+      when {nil, _, _}
+        if @macro_names.includes?(node.name)
+          node
+        else
+          instrument(node)
+        end
       else
         instrument(node)
+      end
+    end
+
+    private def instrument_if_args(node : Call)
+      case node.args.size
+      when 0
+        node
+      when 1
+        instrument_arg node
+      else
+        instrument_args_and_splat node
       end
     end
 

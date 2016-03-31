@@ -450,7 +450,7 @@ module Crystal
         false_val = parse_question_colon
         @no_type_declaration -= 1
 
-        cond = If.new(cond, true_val, false_val)
+        cond = If.new(cond, true_val, false_val).at(cond).at_end(false_val)
       end
 
       cond
@@ -560,7 +560,11 @@ module Crystal
         next_token_skip_space_or_newline
         check_void_expression_keyword
         arg = parse_prefix
-        Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
+        if token_type == :"!"
+          Not.new(arg).at(location).at_end(arg)
+        else
+          Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
+        end
       else
         parse_pow
       end
@@ -638,6 +642,8 @@ module Crystal
             atomic = parse_is_a(atomic).at(location)
           elsif @token.value == :responds_to?
             atomic = parse_responds_to(atomic).at(location)
+          elsif @token.value == :nil?
+            atomic = parse_nil?(atomic).at(location)
           elsif @token.type == :"["
             return parse_atomic_method_suffix(atomic, location)
           else
@@ -821,6 +827,18 @@ module Crystal
       end
 
       @token.value.to_s
+    end
+
+    def parse_nil?(atomic)
+      next_token
+
+      if @token.type == :"("
+        next_token_skip_space_or_newline
+        check :")"
+        next_token_skip_space
+      end
+
+      IsA.new(atomic, Path.global("Nil"), nil_check: true)
     end
 
     def parse_atomic
@@ -1371,6 +1389,8 @@ module Crystal
           call = parse_is_a(obj).at(location)
         elsif @token.value == :responds_to?
           call = parse_responds_to(obj).at(location)
+        elsif @token.value == :nil?
+          call = parse_nil?(obj).at(location)
         elsif @token.type == :"["
           call = parse_atomic_method_suffix obj, location
 
@@ -3259,6 +3279,9 @@ module Crystal
       when :responds_to?
         obj = Var.new("self").at(location)
         return parse_responds_to(obj)
+      when :nil?
+        obj = Var.new("self").at(location)
+        return parse_nil?(obj)
       end
 
       name = @token.value.to_s
@@ -3916,6 +3939,8 @@ module Crystal
     end
 
     def parse_typeof
+      location = @token.location
+
       next_token_skip_space
       check :"("
       next_token_skip_space_or_newline
@@ -3934,7 +3959,7 @@ module Crystal
       end_location = token_end_location
       next_token_skip_space
 
-      TypeOf.new(exps).at_end(end_location)
+      TypeOf.new(exps).at(location).at_end(end_location)
     end
 
     def next_comes_type

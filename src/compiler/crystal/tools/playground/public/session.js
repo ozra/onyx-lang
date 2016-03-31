@@ -168,6 +168,13 @@ Playground.Inspector = function(session, line) {
       .css("cursor", "pointer");
   session.sidebarDom.append(this.lineDom);
 
+  var INSPECTOR_HOVER_CLASS = "inspector-hover";
+  this.lineDom.hover(function(){
+    session.editor.addLineClass(line-1, "wrap", INSPECTOR_HOVER_CLASS);
+  }.bind(this), function(){
+    session.editor.removeLineClass(line-1, "wrap", INSPECTOR_HOVER_CLASS);
+  }.bind(this));
+
   this.messages = [];
   this.value_type = null; // null if mismatch. keep value if always the same.
 
@@ -317,6 +324,11 @@ Playground.Session = function(options) {
         case "value":
           this._getInspector(message.line).addMessage(message);
           break;
+        case "runtime-exception":
+          this._fullError = message.exception;
+          var column =  this.editor.getLine(message.line-1).match(/\s*\S/)[0].length;
+          this._showEditorError(message.line, column, message.exception, 0);
+          break;
         case "exit":
           this._triggerFinish();
 
@@ -329,18 +341,22 @@ Playground.Session = function(options) {
           this._triggerFinish();
 
           this._fullError = message.exception.message;
-          for (var i = 0; i < message.exception.payload.length; i++) {
-            var ex = message.exception.payload[i];
-            if (ex.file == "play" || ex.file == "") {
-              this._showEditorError(ex.line, ex.column, ex.message, i);
+          if (message.exception.payload) {
+            for (var i = 0; i < message.exception.payload.length; i++) {
+              var ex = message.exception.payload[i];
+              if (ex.file == "play" || ex.file == "") {
+                this._showEditorError(ex.line, ex.column, ex.message, i);
+              }
             }
+          } else {
+            this._showEditorError(this.editor.lastLine(), 1, "Compiler error", 0);
           }
           break;
         case "bug":
           this._triggerFinish();
 
           new ModalDialog().append(
-            $("<h4>").append("Bug"),
+            $("<h1>").append("Bug"),
             $("<p>")
               .append("You've reached a bug in the playground. Please ")
               .append($("<a>")
@@ -348,9 +364,9 @@ Playground.Session = function(options) {
                 .attr("href", "https://github.com/crystal-lang/crystal/issues/new")
                 .attr("target", "_blank"))
               .append(" about it."),
-            $("<h5>").append("Code"),
+            $("<h2>").append("Code"),
             $("<pre>").append(this.editor.getValue()),
-            $("<h5>").append("Exception"),
+            $("<h2>").append("Exception"),
             $("<pre>").append(message.exception.message)).openModal();
 
           break;
@@ -508,7 +524,7 @@ Playground.Session = function(options) {
 
   this._showFullError = function() {
     new ModalDialog().append(
-      $("<h4>").append("Error"),
+      $("<h1>").append("Error"),
       $("<pre>").css("min-height", "70%").text(this._fullError))
       .openModal();
   }.bind(this);

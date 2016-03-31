@@ -2,6 +2,7 @@ require "http/server"
 require "tempfile"
 require "logger"
 require "ecr/macros"
+require "markdown"
 
 module Crystal::Playground
   class Session
@@ -27,7 +28,7 @@ module Crystal::Playground
         return
       end
 
-      instrumented = ast.transform(Playground::AgentInstrumentorTransformer.new).to_s
+      instrumented = Playground::AgentInstrumentorTransformer.transform(ast).to_s
       @logger.info "Code instrumentation (session=#{@session_key}, tag=#{tag}).\n#{instrumented}"
 
       prelude = %(
@@ -45,14 +46,14 @@ module Crystal::Playground
       begin
         @logger.info "Instrumented code compilation started (session=#{@session_key}, tag=#{tag})."
         result = compiler.compile sources, output_filename
-      rescue ex : Crystal::Exception
+      rescue ex
         @logger.info "Instrumented code compilation failed (session=#{@session_key}, tag=#{tag})."
 
         # due to instrumentation, we compile the original program
         begin
           @logger.info "Original code compilation started (session=#{@session_key}, tag=#{tag})."
           compiler.compile Compiler::Source.new("play", source), output_filename
-        rescue ex : Crystal::Exception
+        rescue ex
           @logger.info "Original code compilation failed (session=#{@session_key}, tag=#{tag})."
           send_exception ex, tag
           return # if we don't exit here we've found a bug
@@ -112,7 +113,9 @@ module Crystal::Playground
     def append_exception(io, ex)
       io.json_object do |json|
         json.field "message", ex.to_s
-        json.field "payload", ex
+        if ex.is_a?(Crystal::Exception)
+          json.field "payload", ex
+        end
       end
     end
 
@@ -177,20 +180,98 @@ module Crystal::Playground
     end
   end
 
-  class PageHandler < HTTP::Handler
-    class Page
-      def initialize(@filename)
-      end
+  abstract class PlaygroundPage
+    def render_with_layout(io, &block)
+      ECR.embed "#{__DIR__}/views/layout.html.ecr", io
+    end
+  end
 
-      def content
-        File.read(@filename)
-      end
-
-      ECR.def_to_s "#{__DIR__}/views/layout.html.ecr"
+  class FileContentPage < PlaygroundPage
+    def initialize(@filename)
     end
 
-    def initialize(@path, filename)
-      @page = Page.new(filename)
+    def content
+      begin
+        extname = File.extname(@filename)
+        content = if extname == ".cr"
+                    crystal_source_to_markdown(@filename)
+                  else
+                    File.read(@filename)
+                  end
+
+        if extname == ".md" || extname == ".cr"
+          content = Markdown.to_html(content)
+        end
+        content
+      rescue e
+        e.message
+      end
+    end
+
+    def to_s(io)
+      render_with_layout(io) do
+        content
+      end
+    end
+
+    private def crystal_source_to_markdown(filename)
+      String.build do |io|
+        header = true
+        File.each_line(filename) do |line|
+          if header && line[0] != '\n' && line[0] != '#'
+            header = false
+            io << "```playground\n"
+          end
+
+          if header
+            io << line.sub(/^\#\ /, "")
+          else
+            io << line
+          end
+        end
+
+        unless header
+          io << "```"
+        end
+      end
+    end
+  end
+
+  class WorkbookIndexPage < PlaygroundPage
+    record Item, title, path
+
+    def items
+      files.map do |f|
+        ext = File.extname(f)
+        title = File.basename(f)[0..-ext.size - 1].gsub(/[_-]/, " ").camelcase
+        Item.new(title, "/workbook/#{f[0..-ext.size - 1]}")
+      end
+    end
+
+    def has_items
+      !files.empty?
+    end
+
+    private def files
+      Dir["playground/*.{md,html,cr}"]
+    end
+
+    def to_s(io)
+      render_with_layout(io) do
+        ECR.embed "#{__DIR__}/views/_workbook.html.ecr", io
+        nil
+      end
+    end
+  end
+
+  class PageHandler < HTTP::Handler
+    @page : PlaygroundPage
+
+    def initialize(@path, filename : String)
+      @page = FileContentPage.new(filename)
+    end
+
+    def initialize(@path, @page : PlaygroundPage)
     end
 
     def call(context)
@@ -201,6 +282,22 @@ module Crystal::Playground
       else
         call_next(context)
       end
+    end
+  end
+
+  class WorkbookHandler < HTTP::Handler
+    def call(context)
+      case {context.request.method, context.request.resource}
+      when {"GET", /\/workbook\/playground\/(.*)/}
+        files = Dir["playground/#{$1}.{md,html,cr}"]
+        if files.size > 0
+          context.response.headers["Content-Type"] = "text/html"
+          context.response << FileContentPage.new(files[0])
+          return
+        end
+      end
+
+      call_next(context)
     end
   end
 
@@ -324,6 +421,8 @@ module Crystal::Playground
         PageHandler.new("/", File.join(views_dir, "_index.html")),
         PageHandler.new("/about", File.join(views_dir, "_about.html")),
         PageHandler.new("/settings", File.join(views_dir, "_settings.html")),
+        PageHandler.new("/workbook", WorkbookIndexPage.new),
+        WorkbookHandler.new,
         EnvironmentHandler.new(self),
         HTTP::StaticFileHandler.new(public_dir),
       ]

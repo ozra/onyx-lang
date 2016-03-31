@@ -457,7 +457,7 @@ module Crystal
       end
     end
 
-    def expand_macro(node, raise_on_missing_const = true)
+    def expand_macro(node, raise_on_missing_const = true, first_pass = false)
       if expanded = node.expanded
         @exp_nest -= 1
         begin
@@ -488,6 +488,13 @@ module Crystal
       end
 
       return false unless the_macro
+
+      # If we find a macro outside a def/block and this is not the first pass it means that the
+      # macro was defined before we first found this call, so it's an error
+      # (we must analyze the macro expansion in all passes)
+      if !@typed_def && !@block && !first_pass
+        node.raise "macro '#{node.name}' must be defined before this point but is defined later"
+      end
 
       @exp_nest -= 1
 
@@ -608,10 +615,11 @@ module Crystal
       type
     end
 
-    def interpret_enum_value(node : NumberLiteral, target_type)
+    def interpret_enum_value(node : NumberLiteral, target_type = nil)
       case node.kind
       when :i8, :i16, :i32, :i64, :u8, :u16, :u32, :u64, :i64
-        case target_type.kind
+        target_kind = target_type.try(&.kind) || node.kind
+        case target_kind
         when :i8  then node.value.to_i8? || node.raise "invalid Int8: #{node.value}"
         when :u8  then node.value.to_u8? || node.raise "invalid UInt8: #{node.value}"
         when :i16 then node.value.to_i16? || node.raise "invalid Int16: #{node.value}"
@@ -621,14 +629,14 @@ module Crystal
         when :i64 then node.value.to_i64? || node.raise "invalid Int64: #{node.value}"
         when :u64 then node.value.to_u64? || node.raise "invalid UInt64: #{node.value}"
         else
-          node.raise "enum type must be an integer, not #{target_type.kind}"
+          node.raise "enum type must be an integer, not #{target_kind}"
         end
       else
         node.raise "constant value must be an integer, not #{node.kind}"
       end
     end
 
-    def interpret_enum_value(node : Call, target_type)
+    def interpret_enum_value(node : Call, target_type = nil)
       obj = node.obj
       unless obj
         node.raise "invalid constant value"
@@ -675,7 +683,7 @@ module Crystal
       end
     end
 
-    def interpret_enum_value(node : Path, target_type)
+    def interpret_enum_value(node : Path, target_type = nil)
       type = resolve_ident(node)
       case type
       when Const
@@ -685,7 +693,7 @@ module Crystal
       end
     end
 
-    def interpret_enum_value(node : ASTNode, target_type)
+    def interpret_enum_value(node : ASTNode, target_type = nil)
       node.raise "invalid constant value"
     end
 

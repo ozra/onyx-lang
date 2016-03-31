@@ -334,6 +334,11 @@ module Crystal
         node.raise "#{obj_type} doesn't have an instance var named '#{node.name}'"
       end
 
+      unless obj_type.has_instance_var_in_initialize?(node.name)
+        ivar.nil_reason = NilReason.new(node.name, :not_in_initialize, scope: obj_type)
+        ivar.bind_to mod.nil_var
+      end
+
       node.bind_to ivar
 
       ivar
@@ -697,8 +702,7 @@ module Crystal
       # must be inside the def's metavars.
       meta_vars.each do |name, var|
         if var.special_var?
-          new_var = @meta_vars[name] ||= new_meta_var(name)
-          new_var.bind_to(var)
+          define_special_var(name, var)
         end
       end
 
@@ -1405,10 +1409,10 @@ module Crystal
 
       # The only cases where we can deduce something for the 'else'
       # block is when the condition is a Var (in the else it must be
-      # nil), IsA (in the else it's not that type) or RespondsTo
-      # (in the else it doesn't respond to that message).
+      # nil), IsA (in the else it's not that type), RespondsTo
+      # (in the else it doesn't respond to that message) or Not.
       case node.cond
-      when Var, IsA, RespondsTo
+      when Var, IsA, RespondsTo, Not
         filter_vars cond_type_filters, &.not
       end
 
@@ -2368,6 +2372,20 @@ module Crystal
       expanded.accept self
       node.expanded = expanded
       node.bind_to expanded
+      false
+    end
+
+    def visit(node : Not)
+      node.exp.accept self
+      node.exp.add_observer node
+      node.update
+
+      if needs_type_filters? && (type_filters = @type_filters)
+        @type_filters = type_filters.not
+      else
+        @type_filters = nil
+      end
+
       false
     end
 
