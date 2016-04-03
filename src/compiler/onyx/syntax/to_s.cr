@@ -4,8 +4,8 @@ module Crystal
 
 class ASTNode
    def to_s(io, as_kind = :auto)
-      # if as_kind != :crystal # (as_kind == :auto && @onyx_node) || as_kind == :onyx
-      if (as_kind == :auto && @onyx_node) || as_kind == :onyx
+      # if as_kind != :crystal # (as_kind == :auto && @is_onyx) || as_kind == :onyx
+      if (as_kind == :auto && @is_onyx) || as_kind == :onyx
          visitor = ToOnyxSVisitor.new(io)
          self.accept visitor
       else

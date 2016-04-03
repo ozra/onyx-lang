@@ -274,7 +274,7 @@ if the-function a: 1, b: 2: say "the-function says yes!"
 if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
-my-foo(x, y, opts Hash<Str, Str|I64|Nil>) ->
+my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
    say "csx { opts["magic_port"]?.class }"
    say "csx { opts["x"]?.class }"
    say "csx { typeof(opts["x"]?) }"
@@ -647,7 +647,6 @@ j = list.map ~> "{_1} 13"
 
 puts "{v}, {w}"
 
-
 list = [47, 13, 42, 11]
 
 list.each (v, i) ~> say "each: v: {v}, i: {i}"
@@ -666,9 +665,12 @@ v = ( ( list.each((v) ~> p v) ).map ~.* 2 )
 say " w:"
 w = ( ( list.each((v) ~> p v) ).map(~.* 2))
 say " pw:"
+
 pw = (list.each ~> p _1).map ~.* 2
 
+
 say "All lists should equal [94, 26, 84, 22]"
+
 say x
 say y
 say z
@@ -677,9 +679,12 @@ say v
 say w
 say pw
 
+
 -- def say(s) -> puts s
 
+
 '!literal-int=I32
+
 
 DEBUG–SEPARATOR = 47
 
@@ -1053,6 +1058,7 @@ type TradeSide < enum I8
    Unknown
    Buy
    Sell
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -1670,7 +1676,6 @@ type FooStyle2<S1> < Bar
    fn [](i) -> @foo–b + i
 
 end–type
-
 -- *TODO* Anonymous types!
 -- anon-typed = new Bar
 --    mixin AnotherTrait<I64>
@@ -1764,9 +1769,6 @@ say ".~. 12 == { .~. 12 }"
 
 'link("gmp")
 
-xa = I32 47
-say xa
-
 api MyLibGmp
    TEST_CONST = 47
 
@@ -1797,8 +1799,8 @@ api MyLibGmp
    alias MpzP = Ptr[Mpz]
 
    fun init = __gmpz_init(x MpzP)
-   fun init_set_si = __gmpz_init_set_si(rop Ptr<Mpz>, op Long)
-   fun init_set_str = __gmpz_init_set_str(rop MpzP, str Ptr[U8], base Int)
+   fun init_set_si = __gmpz_init_set_si(rop MpzP, op Long)
+   fun init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr[U8], base Int)
 
    fun get_si = __gmpz_get_si(op MpzP) Long
    fun get_str = __gmpz_get_str(str Ptr[U8], base Int, op MpzP) Ptr[U8]

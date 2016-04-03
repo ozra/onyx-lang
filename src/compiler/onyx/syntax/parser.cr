@@ -9,7 +9,7 @@ module Crystal
 
 abstract class ASTNode
    macro def tag_onyx(val = true, visited = [] of ASTNode) : Nil
-      @onyx_node = val
+      @is_onyx = val
       {% for ivar, i in @type.instance_vars %}
          _{{ivar}} = @{{ivar}}
          if _{{ivar}}.is_a?(ASTNode)
@@ -455,7 +455,7 @@ class OnyxParser < OnyxLexer
       end
 
       expressions.tag_onyx true  # *TODO* after macros is fixed!
-      #expressions.onyx_node = true
+      #expressions.is_onyx = true
 
 
       dbg "/parse - after program body parse_expressions"
@@ -2053,13 +2053,6 @@ class OnyxParser < OnyxLexer
          const.name_size = token_location.column_number - start_column
       end
 
-      # *DEBUG* TEMP* *TODO*
-      _dbg "\n\n#{const.class}\n\n".red
-      # if const.responds_to? :names # is_a?(Path|Const) #|| ret.is_a?(Const)
-         # *TODO* done in check_const now
-         # const.names = const.names.map {|x| x + "__X_"}
-      # end
-
       if allow_type_vars && tok? :"<", :"["
          generic_end = tok?(:"<") ? :">" : :"]"
          next_token_skip_space
@@ -2069,10 +2062,6 @@ class OnyxParser < OnyxLexer
             dbgtail_off!
             raise "must specify at least one type var"
          end
-
-         # *DEBUG* TEMP* *TODO*
-         _dbg "\n\n#{types.class}: #{types}\n\n".red
-         # types.names = types.names.map {|x| x + "__X_"}
 
          raise "expected `>` or `]` ending type params" if !tok? generic_end
          const = Generic.new(const, types).at(location)
@@ -2288,20 +2277,6 @@ class OnyxParser < OnyxLexer
          pragma.name = "!real_literal"
          dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
          @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
-
-      # when "babelfish"
-
-      #    # *TODO*
-      #    # if !root_level?
-      #    #    raise "babelfish pragmas can only be used in the very root of the program, not even in modules."
-      #    # end
-      #    if args.size != 2
-      #       raise "babelfish pragma requires two arguments: given name and foreign name"
-      #    end
-
-      #    STDERR.puts "Defines babelfishing: #{args[0]} => #{args[1]}".red
-
-      #    @babelfishing[args[0].to_s] = args[1].to_s
 
       end
 
@@ -3406,7 +3381,7 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
 
          # *TODO* change check to `possible_type?` ( paren, const, typeof, auto, '~^ )
-         if !tok?(:NEWLINE, :DEDENT, :";", :"=") && !end_token?
+         if !tok?(:NEWLINE, :DEDENT, :";", :"=", :PRAGMA) && !end_token?
             dbg "found type declaration"
             # *TODO* we must take care of the type qualifiers
             mutability, storage, var_type = parse_qualifer_and_type
@@ -6855,12 +6830,12 @@ class OnyxParser < OnyxLexer
          dbg "was 'Self'"
          type = Self.new
          next_token_skip_space
-      
+
       elsif kwd?(:auto) || tok?(:"*")
          dbg "was 'auto'"
          type = Underscore.new # *TODO* - we want a specific "Auto" node!
          next_token_skip_space
-      
+
       else
          case @token.type
          when :"("
@@ -6932,7 +6907,7 @@ class OnyxParser < OnyxLexer
             next_token_skip_space
          when :"."
             next_token
-            check_idfr :type
+            check_idfr :type  # *TODO* `oftype` | `curtype` | `typenow` (vs `typedecl`/`decltype`) or similar
             type = Metaclass.new(type)
             next_token_skip_space
          else
@@ -8300,9 +8275,9 @@ class OnyxParser < OnyxLexer
 
          case confed_type
 
-         # *TODO*
-         when "StdInt"
-            kind = :i32    # *TODO* *9* CHOSEN architecture int width
+         # # *TODO*
+         # when "StdInt",  "Int"
+         #    kind = :i32    # *TODO* *9* CHOSEN architecture int width
 
 
          when "I32", "Int32"
@@ -8310,6 +8285,8 @@ class OnyxParser < OnyxLexer
          when "I64", "Int64"
             kind = :i64
          else
+            confed_type = "StdInt" if confed_type == "Int"  # *TODO*
+
             return Call.new(
                Path.new([confed_type], true), # .at(location)
                "new",
@@ -8362,7 +8339,7 @@ class OnyxParser < OnyxLexer
 
    def check_const
       check :CONST
-      @token.value.to_s + "__X_" # *TODO* *DEBUG* *TEMP*
+      babelfish_taint @token.value.to_s  # *TODO* *DEBUG* *TEMP*
    end
 
    def unexpected_token(msg, token = @token.to_s)

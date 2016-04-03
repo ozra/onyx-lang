@@ -1411,6 +1411,8 @@ module Crystal
     end
 
     def instantiate(type_vars)
+      _dbg "GenericType.instantiate(#{type_vars})"
+
       if (instance = generic_types[type_vars]?)
         return instance
       end

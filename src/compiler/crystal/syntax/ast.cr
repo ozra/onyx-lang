@@ -4,9 +4,9 @@ module Crystal
     property location : Location?
     property end_location : Location?
 
-    property onyx_node
+    property is_onyx
     property? parenthesized
-    @onyx_node = false
+    @is_onyx = false
     @parenthesized = false
 
     def at(@location : Location?)
@@ -38,7 +38,7 @@ module Crystal
 
     def clone_without_location
       n = clone_without_location_individual
-      n.onyx_node = @onyx_node
+      n.is_onyx = @is_onyx
       n
     end
 
@@ -81,6 +81,12 @@ module Crystal
     macro def class_desc : String
       {{@type.name.split("::").last.id.stringify}}
     end
+  end
+
+  module BabelManagment
+    property tried_as_foreign : Bool
+    @tried_as_foreign = false
+
   end
 
   class Nop < ASTNode
@@ -816,11 +822,6 @@ module Crystal
     def initialize(@name, @default_value = nil, @restriction = nil, @type = nil, @mutability = :auto)
     end
 
-    # def restriction=(restriction)
-    #   restriction.onyx_node = @onyx_node
-    #   @restriction = restriction
-    # end
-
     def accept_children(visitor)
       @default_value.try &.accept visitor
       @restriction.try &.accept visitor
@@ -1184,6 +1185,8 @@ module Crystal
   #     const [ '::' const ]*
   #
   class Path < ASTNode
+    include BabelManagment
+
     property names : Array(String)
     property global : Bool
     property name_size : Int32
@@ -1874,6 +1877,8 @@ module Crystal
   end
 
   class Alias < ASTNode
+    include BabelManagment
+
     property name : String
     property value : ASTNode
     property doc : String?

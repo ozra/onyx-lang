@@ -311,7 +311,7 @@ module Crystal
     def transform(node : For) : ASTNode
 
       # *TODO* - after macros is fixed
-      # unless node.onyx_node
+      # unless node.is_onyx
       #   raise "There shouldn't be any For-nodes from Crystal sources!"
       # end
 
@@ -413,7 +413,7 @@ module Crystal
     def transform(node : Attribute) : ASTNode
 
       # *TODO* when macros are fixed
-      # return node unless node.onyx_node
+      # return node unless node.is_onyx
 
       if ["!int_literal", "!real_literal"].includes? node.name
         Nop.new

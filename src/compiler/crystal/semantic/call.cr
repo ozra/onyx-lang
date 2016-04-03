@@ -7,7 +7,7 @@ require "./type_lookup"
 class Crystal::Call
   def dbgx(str : String)
     ifdef !release
-      if @onyx_node
+      if @is_onyx
         STDERR.puts str + " " + @name
       end
     end
@@ -226,7 +226,7 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
-    _dbg "lookup_matches_in_type #{def_name}"
+    _dbg "lookup_matches_in_type for `#{def_name}`, where arg_types = (#{arg_types})"
 
     signature = CallSignature.new(def_name, arg_types, block, named_args)
 
@@ -238,7 +238,7 @@ class Crystal::Call
     # Onyx Babelfishing
     if matches.empty?
 
-      # _dbg "Matches are empty - is it xyz-special? #{def_name}"
+      _dbg "Matches are empty - is it xyz-special? #{def_name}"
 
       retry_def_name = case def_name
       # when "init"         then  "initialize"
@@ -386,10 +386,10 @@ class Crystal::Call
   end
 
   def instantiate(matches, owner, self_type = nil)
-    if matches.first?.try &.def.onyx_node
+    if matches.first?.try &.def.is_onyx
       _dbg "instantiate".yellow + " #{matches}"
       _dbg ""
-      _dbg "instantiate matches.matches.try &.[0].def.onyx_node = #{matches.matches.try &.[0].def.onyx_node}"
+      _dbg "instantiate matches.matches.try &.[0].def.is_onyx = #{matches.matches.try &.[0].def.is_onyx}"
     end
 
     block = @block
@@ -401,8 +401,8 @@ class Crystal::Call
       next if match.def.abstract? && match.context.owner.abstract?
 
 
-      if match.def.onyx_node
-        _dbg "match is an onyx_node #{match.def}"
+      if match.def.is_onyx
+        _dbg "match is an is_onyx #{match.def}"
         _dbg "owner is #{owner}"
 
         if owner == mod
@@ -446,7 +446,7 @@ class Crystal::Call
       typed_def = def_instance_owner.lookup_def_instance def_instance_key if use_cache
 
       unless typed_def
-        if match.def.onyx_node
+        if match.def.is_onyx
           _dbg "calls prepare_typed_def_with_args for #{match.def}"
         end
 
@@ -493,7 +493,7 @@ class Crystal::Call
           end
         end
       else
-        if match.def.onyx_node
+        if match.def.is_onyx
           _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
         end
       end
@@ -1015,7 +1015,7 @@ class Crystal::Call
   def prepare_typed_def_with_args(untyped_def, owner, self_type, arg_types, block_arg_type)
     named_args = @named_args
 
-    node_language = untyped_def.onyx_node
+    node_language = untyped_def.is_onyx
 
     # If there's an argument count mismatch, or we have a splat, or there are
     # named arguments, we create another def that sets ups everything for the real call.

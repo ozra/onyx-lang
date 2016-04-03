@@ -19,7 +19,7 @@ ContinuationTokens = [
   :"===" # :">", - has to be handles contextually - can be generic delimiter
 ]
 
-macro mc?(*chars)
+macro mnc?(*chars)
   ({% for char, ix in chars %} {% if ix > 0 %} && {% end %} nc?({{char}}) {% end %})
 end
 
@@ -829,7 +829,7 @@ module Crystal
         when '-'
           symbol_then_nextch "-"
         when '*'
-          if mc?('*')
+          if mnc?('*')
             symbol_then_nextch "**"
           else
             symbol "*"
@@ -839,7 +839,7 @@ module Crystal
         when '='
           case nextch
           when '='
-            if mc?('=')
+            if mnc?('=')
               symbol_then_nextch "==="
             else
               symbol "=="
@@ -861,7 +861,7 @@ module Crystal
         when '<'
           case nextch
           when '='
-            if mc?('>')
+            if mnc?('>')
               symbol_then_nextch "<=>"
             else
               symbol "<="
@@ -891,7 +891,7 @@ module Crystal
         when '%'
           symbol_then_nextch "%"
         when '['
-          if mc?(']')
+          if mnc?(']')
             case nextch
             when '='
               symbol_then_nextch "[]="
@@ -985,19 +985,19 @@ module Crystal
       when 'a'
         case nextch
         when 'b'
-          if mc?('s','t','r','a','c','t')
+          if mnc?('s','t','r','a','c','t')
             return check_idfr_or_keyword(:abstract, start)
           end
         when 'l'
-          if mc?('i','a','s')
+          if mnc?('i','a','s')
             return check_idfr_or_keyword(:alias, start)
           end
         when 'n'
-          if mc?('d')
+          if mnc?('d')
             return check_idfr_or_token(:and, "", start)
           end
         when 'p'
-          if mc?('i')
+          if mnc?('i')
             return check_idfr_or_keyword(:api, start)
           end
         when 's'
@@ -1008,7 +1008,7 @@ module Crystal
             return check_idfr_or_keyword(:as, start)
           end
         when 'u'
-          if mc?('t','o')
+          if mnc?('t','o')
             return check_idfr_or_keyword(:auto, start)
           end
         end
@@ -1018,7 +1018,7 @@ module Crystal
         when 'y'
           return check_idfr_or_keyword(:by, start)
         when 'e'
-          if mc?('g','i','n')
+          if mnc?('g','i','n')
             if peek_nextch == 's'
               next_char
               return check_idfr_or_keyword(:begins, start)
@@ -1029,11 +1029,11 @@ module Crystal
         when 'r'
           case nextch
           when 'e'
-            if mc?('a','k')
+            if mnc?('a','k')
               return check_idfr_or_keyword(:break, start)
             end
           when 'a'
-            if mc?('n','c','h')
+            if mnc?('n','c','h')
               return check_idfr_or_keyword(:branch, start)
             end
           end
@@ -1042,25 +1042,25 @@ module Crystal
       when 'c'
         case nextch
         when 'a'
-          if mc?('s','e')
+          if mnc?('s','e')
             return check_idfr_or_keyword(:case, start)
           end
           scan_idfr(start)
         when 'f'
-          if mc?('u','n')
+          if mnc?('u','n')
             return check_idfr_or_keyword(:cfun, start)
           end
           scan_idfr(start)
         when 'l'
-          if mc?('a','s','s')
+          if mnc?('a','s','s')
             return check_idfr_or_keyword(:class, start)
           end
           scan_idfr(start)
         when 'o'
-          if mc?('n')
+          if mnc?('n')
             case nextch
             when 's'
-              if mc?('t')
+              if mnc?('t')
                 return check_idfr_or_keyword(:const, start)
               end
             when 'd'
@@ -1074,7 +1074,7 @@ module Crystal
       when 'd'
         case nextch
         when 'e'
-          if mc?('f')
+          if mnc?('f')
             # p "Got 'def', check if not ident"
             return check_idfr_or_keyword(:def, start)
           end
@@ -1084,20 +1084,20 @@ module Crystal
       when 'e'
         case nextch
         # when 'a'
-        #   if mc?('c','h')
+        #   if mnc?('c','h')
         #     return check_idfr_or_keyword(:each, start)
         #   end
         when 'l'
           case nextch
           when 'i'
-            if mc?('f')
+            if mnc?('f')
               return check_idfr_or_keyword(:elif, start)
             end
           when 's'
             case nextch
             when 'e' then return check_idfr_or_keyword(:else, start)
             when 'i'
-              if mc?('f')
+              if mnc?('f')
                 return check_idfr_or_keyword(:elsif, start)
               end
             end
@@ -1124,11 +1124,11 @@ module Crystal
 
               case nextch
               when 'a'
-                if mc?('p','i')
+                if mnc?('p','i')
                   :end_api
                 end
               when 'b'
-                if mc?('l','o','c','k')
+                if mnc?('l','o','c','k')
                   :end_block
                 end
               when 'c'
@@ -1136,49 +1136,49 @@ module Crystal
                 when 'a'
                   case nextch
                   when 't'
-                    if mc?('c','h')
+                    if mnc?('c','h')
                       :end_catch
                     end
                   when 's'
-                    if mc?('e')
+                    if mnc?('e')
                       :end_case
                     end
                   end
                 when 'l'
-                  if mc?('a','s','s')
+                  if mnc?('a','s','s')
                     :end_class
                   end
                 end
               when 'd'
-                if mc?('e','f')
+                if mnc?('e','f')
                   :end_def
                 end
               when 'e'
                 case nextch
                 when 'a'
-                  if mc?('c','h')
+                  if mnc?('c','h')
                     :end_each
                   end
                 when 'n'
-                  if mc?('u','m')
+                  if mnc?('u','m')
                     :end_enum
                   end
                 end
               when 'f'
                 case nextch
                 when 'o'
-                  if mc?('r')
+                  if mnc?('r')
                     :end_for
                   end
                 when 'u'
-                  if mc?('n')
+                  if mnc?('n')
                     :end_fun
                   end
                 end
               when 'i'
-                if mc?('f')
+                if mnc?('f')
                   back_end_pos = cur_pos
-                  if mc?('d','e','f')
+                  if mnc?('d','e','f')
                     :end_ifdef
                   else
                     set_pos back_end_pos
@@ -1186,7 +1186,7 @@ module Crystal
                   end
                 end
               when 'm'
-                if mc?('o','d','u','l','e')
+                if mnc?('o','d','u','l','e')
                   :end_module
                 end
               when 't'
@@ -1194,23 +1194,23 @@ module Crystal
                 when 'r'
                   case nextch
                   when 'a'
-                    if mc?('i','t')
+                    if mnc?('i','t')
                       :end_trait
                     end
                   when 'y'
                     :end_try
                   end
                 when 'e'
-                  if mc?('m','p','l','a','t','e')
+                  if mnc?('m','p','l','a','t','e')
                     :end_template
                   end
                 when 'y'
-                  if mc?('p','e')
+                  if mnc?('p','e')
                     :end_type
                   end
                 end
               when 'w'
-                if mc?('h','i','l','e')
+                if mnc?('h','i','l','e')
                   :end_while
                 end
               end
@@ -1224,22 +1224,22 @@ module Crystal
               return check_idfr_or_token(:END, end_token, start)
             end
           when 's'
-            if mc?('u','r','e')
+            if mnc?('u','r','e')
               return check_idfr_or_keyword(:ensure, start)
             end
           when 'u'
-            if mc?('m')
+            if mnc?('m')
               return check_idfr_or_keyword(:enum, start)
             end
           end
         when 'x'
           case nextch
           when 't'
-            if mc?('e','n','d')
+            if mnc?('e','n','d')
               return check_idfr_or_keyword(:extend, start)
             end
           when 'p'
-            if mc?('o','r','t')
+            if mnc?('o','r','t')
               return check_idfr_or_keyword(:export, start)
             end
           end
@@ -1248,21 +1248,21 @@ module Crystal
       when 'f'
         case nextch
         when 'a'
-          if mc?('l','s','e')
+          if mnc?('l','s','e')
             return check_idfr_or_keyword(:false, start)
           end
         when 'l'
-          if mc?('a','g','s')
+          if mnc?('a','g','s')
             return check_idfr_or_keyword(:flags, start)
           end
         when 'n'
           return check_idfr_or_keyword(:fn, start)
         when 'o'
-          if mc?('r')
+          if mnc?('r')
             return check_idfr_or_keyword(:for, start)
           end
         when 'r'
-          if mc?('o','m')
+          if mnc?('o','m')
             return check_idfr_or_keyword(:from, start)
           end
         when 'u'
@@ -1270,7 +1270,7 @@ module Crystal
           when 'n'
             return check_idfr_or_keyword(:fun, start)
           when 'l'
-            if mc?('f','i','l')
+            if mnc?('f','i','l')
               return check_idfr_or_keyword(:fulfil, start)
             end
           # else
@@ -1283,7 +1283,7 @@ module Crystal
         when 'f'
           if peek_nextch == 'd'
             nextch
-            if mc?('e','f')
+            if mnc?('e','f')
               return check_idfr_or_keyword(:ifdef, start)
             end
           else
@@ -1293,11 +1293,11 @@ module Crystal
           if idfr_part_or_end?(peek_nextch)
             case nextch
             when 'c'
-              if mc?('l','u','d','e')
+              if mnc?('l','u','d','e')
                 return check_idfr_or_keyword(:include, start)
               end
             when 's'
-              if mc?('t','a','n','c','e','_','s','i','z','e','o','f')
+              if mnc?('t','a','n','c','e','_','s','i','z','e','o','f')
                 return check_idfr_or_keyword(:instance_sizeof, start)
               end
             end
@@ -1310,11 +1310,11 @@ module Crystal
         when 's'
           case nextch
           when '_'
-            if mc?('a','?')
+            if mnc?('a','?')
               return check_idfr_or_keyword(:is_a?, start)
             end
           when 'n'
-            if mc?('t')
+            if mnc?('t')
               return check_idfr_or_token(:isnt, "", start)
             end
           else
@@ -1326,7 +1326,7 @@ module Crystal
       when 'l'
         case nextch
         when 'e'
-          if mc?('t')
+          if mnc?('t')
             return check_idfr_or_keyword(:let, start)
           end
         when 'i'
@@ -1334,7 +1334,7 @@ module Crystal
           when 'b'
             return check_idfr_or_keyword(:lib, start)
           when 'k'
-            if mc?('e','l','y')
+            if mnc?('e','l','y')
               return check_idfr_or_keyword(:likely, start)
             end
           end
@@ -1345,22 +1345,22 @@ module Crystal
         when 'a'
           case nextch
           when 'c'
-            if mc?('r','o')
+            if mnc?('r','o')
               return check_idfr_or_keyword(:macro, start)
             end
           when 't'
-            if mc?('c','h')
+            if mnc?('c','h')
               return check_idfr_or_keyword(:match, start)
             end
           end
         when 'i'
-          if mc?('x','i','n')
+          if mnc?('x','i','n')
             return check_idfr_or_keyword(:mixin, start)
           end
         when 'o'
           case nextch
           when 'd'
-            if mc?('u','l','e')
+            if mnc?('u','l','e')
               return check_idfr_or_keyword(:module, start)
             end
           end
@@ -1369,7 +1369,7 @@ module Crystal
       when 'n'
         case nextch
         when 'e'
-          if mc?('x','t')
+          if mnc?('x','t')
             return check_idfr_or_keyword(:next, start)
           end
         when 'i'
@@ -1377,7 +1377,7 @@ module Crystal
           when 'l' then return check_idfr_or_keyword(:nil, start)
           end
         when 'o'
-          if mc?('t')
+          if mnc?('t')
             return check_idfr_or_token(:not, "", start)
           end
         end
@@ -1385,7 +1385,7 @@ module Crystal
       when 'o'
         case nextch
         when 'b'
-          if mc?('j','e','c','t')
+          if mnc?('j','e','c','t')
             return check_idfr_or_keyword(:object, start)
           end
         when 'f'
@@ -1393,7 +1393,7 @@ module Crystal
         when 'r'
           return check_idfr_or_token(:or, "", start)
         when 'u'
-          if mc?('t')
+          if mnc?('t')
             return check_idfr_or_keyword(:out, start)
           end
         end
@@ -1401,17 +1401,17 @@ module Crystal
       when 'p'
         case nextch
         when 'o'
-          if mc?('i','n','t','e','r','o','f')
+          if mnc?('i','n','t','e','r','o','f')
             return check_idfr_or_keyword(:pointerof, start)
           end
         when 'r'
           case nextch
           when 'i'
-            if mc?('v','a','t','e')
+            if mnc?('v','a','t','e')
               return check_idfr_or_keyword(:private, start)
             end
           when 'o'
-            if mc?('t','e','c','t','e','d')
+            if mnc?('t','e','c','t','e','d')
               return check_idfr_or_keyword(:protected, start)
             end
           end
@@ -1420,7 +1420,7 @@ module Crystal
       when 'r'
         case nextch
         when 'a'
-          if mc?('w')
+          if mnc?('w')
             return check_idfr_or_keyword(:raw, start)
           end
         when 'e'
@@ -1430,20 +1430,20 @@ module Crystal
           when 's'
             case nextch
             when 'c'
-              if mc?('u','e')
+              if mnc?('u','e')
                 return check_idfr_or_keyword(:rescue, start)
               end
             when 'p'
-              if mc?('o','n','d','s','_','t','o','?')
+              if mnc?('o','n','d','s','_','t','o','?')
                 return check_idfr_or_keyword(:responds_to?, start)
               end
             end
           when 't'
-            if mc?('u','r','n')
+            if mnc?('u','r','n')
               return check_idfr_or_keyword(:return, start)
             end
           when 'q'
-            if mc?('u','i','r','e')
+            if mnc?('u','i','r','e')
               return check_idfr_or_keyword(:require, start)
             end
           end
@@ -1452,28 +1452,28 @@ module Crystal
       when 's'
         case nextch
         when 'e'
-          if mc?('l','f')
+          if mnc?('l','f')
             return check_idfr_or_keyword(:self, start)
           end
         when 'i'
-          if mc?('z','e','o','f')
+          if mnc?('z','e','o','f')
             return check_idfr_or_keyword(:sizeof, start)
           end
         when 't'
           case nextch
           when 'r'
-            if mc?('u','c','t')
+            if mnc?('u','c','t')
               return check_idfr_or_keyword(:struct, start)
             end
           when 'e'
-            if mc?('p')
+            if mnc?('p')
               return check_idfr_or_keyword(:step, start)
             end
           end
         when 'u'
           case nextch
           when 'p'
-            if  mc?('e','r')
+            if  mnc?('e','r')
               return check_idfr_or_keyword(:super, start)
             end
           when 'm'
@@ -1486,16 +1486,16 @@ module Crystal
         when 'h'
           case nextch
           when 'e'
-            if mc?('n')
+            if mnc?('n')
               return check_idfr_or_keyword(:then, start)
             end
           when 'i'
-            if mc?('s')
+            if mnc?('s')
               return check_idfr_or_keyword(:this, start)
             end
           end
         when 'i'
-          if mc?('l')
+          if mnc?('l')
             return check_idfr_or_keyword(:til, start)
           end
         when 'o'
@@ -1503,33 +1503,33 @@ module Crystal
         when 'r'
           case nextch
           when 'a'
-            if mc?('i','t')
+            if mnc?('i','t')
               return check_idfr_or_keyword(:trait, start)
             end
           when 'u'
-            if mc?('e')
+            if mnc?('e')
               return check_idfr_or_keyword(:true, start)
             end
           when 'y'
             return check_idfr_or_keyword(:try, start)
           end
         when 'y'
-          if mc?('p','e')
+          if mnc?('p','e')
             case peek_nextch
             when 'o'
               nextch
-              if mc?('f')
+              if mnc?('f')
                 return check_idfr_or_keyword(:typeof, start)
               end
             when '-', '_', '–'
               nextch
-              if mc?('d','e','c','l')
+              if mnc?('d','e','c','l')
                 return check_idfr_or_keyword(:typedecl, start)
               end
 
             when 'd'
               nextch
-              if mc?('e','c','l')
+              if mnc?('e','c','l')
                 return check_idfr_or_keyword(:typedecl, start)
               end
 
@@ -1540,35 +1540,38 @@ module Crystal
         end
         scan_idfr(start)
       when 'u'
-        if mc?('n')
+        case next_char
+        when 'n'
           case nextch
           when 'i'
-            if mc?('o','n')
+            if mnc?('o','n')
               return check_idfr_or_keyword(:union, start)
             end
           when 'l'
             case nextch
             when 'i'
-              if mc?('k','e','l','y')
+              if mnc?('k','e','l','y')
                 return check_idfr_or_keyword(:unlikely, start)
               end
             when 'e'
-              if mc?('s','s')
+              if mnc?('s','s')
                 return check_idfr_or_keyword(:unless, start)
               end
             end
           when 't'
-            if mc?('i','l')
+            if mnc?('i','l')
               return check_idfr_or_keyword(:until, start)
             end
           end
-        elsif mc?('s','i','n','g')
-          return check_idfr_or_keyword(:using, start)  # not implemented in parser yet - *TODO*
+        when 's'
+          if mnc?('i','n','g')
+            return check_idfr_or_keyword(:using, start)  # not implemented in parser yet - *TODO*
+          end
         end
         scan_idfr(start)
       when 'v'
-        if mc?('a','l')
-          if (peek_next_char == 'u') && mc?('u','e')
+        if mnc?('a','l')
+          if (peek_next_char == 'u') && mnc?('u','e')
             return check_idfr_or_keyword(:value, start)
           else
             return check_idfr_or_keyword(:val, start)
@@ -1580,22 +1583,22 @@ module Crystal
         when 'h'
           case nextch
           when 'e'
-            if mc?('n')
+            if mnc?('n')
               return check_idfr_or_keyword(:when, start)
             end
           when 'i'
-            if mc?('l','e')
+            if mnc?('l','e')
               return check_idfr_or_keyword(:while, start)
             end
           end
         when 'i'
-          if mc?('t','h')
+          if mnc?('t','h')
             return check_idfr_or_keyword(:with, start)
           end
         end
         scan_idfr(start)
       when 'y'
-        if mc?('i','e','l','d')
+        if mnc?('i','e','l','d')
           return check_idfr_or_keyword(:yield, start)
         end
         scan_idfr(start)
@@ -1604,7 +1607,7 @@ module Crystal
         when '_'
           case nextch
           when 'D'
-            if mc?('I','R','_','_')
+            if mnc?('I','R','_','_')
               if idfr_part_or_end?(peek_nextch)
                 scan_idfr(start)
               else
@@ -1614,7 +1617,7 @@ module Crystal
               end
             end
           when 'F'
-            if mc?('I','L','E','_','_')
+            if mnc?('I','L','E','_','_')
               if idfr_part_or_end?(peek_nextch)
                 scan_idfr(start)
               else
@@ -1624,7 +1627,7 @@ module Crystal
               end
             end
           when 'L'
-            if mc?('I','N','E','_','_')
+            if mnc?('I','N','E','_','_')
               if idfr_part_or_end?(peek_nextch)
                 scan_idfr(start)
               else
@@ -1651,23 +1654,23 @@ module Crystal
 
           case curch
           when 'C'
-            if mc?('l','a','s','s')
+            if mnc?('l','a','s','s')
               return check_const_or_token(:Class, start)
             end
           when 'I'
-            if mc?('n','t')
+            if mnc?('n','t')
               return check_const_or_token(:Int, start)
             end
           when 'R'
-            if mc?('e','a','l')
+            if mnc?('e','a','l')
               return check_const_or_token(:Real, start)
             end
           when 'S'
-            if mc?('e','l','f')
+            if mnc?('e','l','f')
               return check_const_or_token(:Self, start)
             end
           when 'T'
-            if mc?('y','p','e')
+            if mnc?('y','p','e')
               return check_const_or_token(:Type, start)
             end
 
@@ -2369,7 +2372,7 @@ module Crystal
         @token.number_kind = :i8
         2
       when '1'
-        if mc?('6')
+        if mnc?('6')
           nextch
           @token.number_kind = :i16
           3
@@ -2377,7 +2380,7 @@ module Crystal
           raise "invalid int suffix"
         end
       when '3'
-        if mc?('2')
+        if mnc?('2')
           nextch
           @token.number_kind = :i32
           3
@@ -2385,7 +2388,7 @@ module Crystal
           raise "invalid int suffix"
         end
       when '6'
-        if mc?('4')
+        if mnc?('4')
           nextch
           @token.number_kind = :i64
           3
@@ -2404,7 +2407,7 @@ module Crystal
         @token.number_kind = :u8
         2
       when '1'
-        if mc?('6')
+        if mnc?('6')
           nextch
           @token.number_kind = :u16
           3
@@ -2412,7 +2415,7 @@ module Crystal
           raise "invalid uint suffix"
         end
       when '3'
-        if mc?('2')
+        if mnc?('2')
           nextch
           @token.number_kind = :u32
           3
@@ -2420,7 +2423,7 @@ module Crystal
           raise "invalid uint suffix"
         end
       when '6'
-        if mc?('4')
+        if mnc?('4')
           nextch
           @token.number_kind = :u64
           3
@@ -2435,7 +2438,7 @@ module Crystal
     def consume_float_suffix
       case nextch
       when '3'
-        if mc?('2')
+        if mnc?('2')
           nextch
           @token.number_kind = :f32
           3
@@ -2443,7 +2446,7 @@ module Crystal
           raise "invalid float suffix"
         end
       when '6'
-        if mc?('4')
+        if mnc?('4')
           nextch
           @token.number_kind = :f64
           3
@@ -2663,23 +2666,23 @@ module Crystal
         beginning_of_line = false
         nextch
         start = cur_pos
-        if mc?('%')
+        if mnc?('%')
           while (char = nextch).whitespace?
           end
 
           case char
           when 'e'
-            if mc?('n','d') && !idfr_part_or_end?(peek_nextch)
+            if mnc?('n','d') && !idfr_part_or_end?(peek_nextch)
               nextch
               nest -= 1
             end
           when 'f'
-            if mc?('o','r') && !idfr_part_or_end?(peek_nextch)
+            if mnc?('o','r') && !idfr_part_or_end?(peek_nextch)
               nextch
               nest += 1
             end
           when 'i'
-            if mc?('f') && !idfr_part_or_end?(peek_nextch)
+            if mnc?('f') && !idfr_part_or_end?(peek_nextch)
               nextch
               nest += 1
             end
@@ -2761,7 +2764,7 @@ module Crystal
         return @token
       end
 
-      if !delimiter_state && curch == 'e' && mc?('n')
+      if !delimiter_state && curch == 'e' && mnc?('n')
         beginning_of_line = false
         case nextch
         when 'd'
@@ -2778,7 +2781,7 @@ module Crystal
             end
           end
         when 'u'
-          if !delimiter_state && whitespace && mc?('m') && !idfr_part_or_end?(nextch)
+          if !delimiter_state && whitespace && mnc?('m') && !idfr_part_or_end?(nextch)
             char = curch
             nest += 1
             whitespace = true
@@ -2834,7 +2837,7 @@ module Crystal
             break
           end
         else
-          if !delimiter_state && whitespace && char == 'y' && mc?('i','e','l','d') && !idfr_part_or_end?(peek_nextch)
+          if !delimiter_state && whitespace && char == 'y' && mnc?('i','e','l','d') && !idfr_part_or_end?(peek_nextch)
             yields = true
             char = curch
             whitespace = true
@@ -2844,7 +2847,7 @@ module Crystal
 
             if keyword == :macro && char.whitespace?
               old_pos = @reader.pos
-              if mc?('d','e','f') && !idfr_part_or_end?(peek_nextch)
+              if mnc?('d','e','f') && !idfr_part_or_end?(peek_nextch)
                 char = nextch
               else
                 @reader.pos = old_pos
@@ -2894,52 +2897,52 @@ module Crystal
     def check_macro_opening_keyword(beginning_of_line)
       case char = curch
       when 'a'
-        if mc?('b','s','t','r','a','c','t') && nextch.whitespace?
+        if mnc?('b','s','t','r','a','c','t') && nextch.whitespace?
           case nextch
           when 'd'
-            mc?('e','f') && peek_not_idfr_part_or_end_nextch && :abstract_def
+            mnc?('e','f') && peek_not_idfr_part_or_end_nextch && :abstract_def
           when 'c'
-            mc?('l','a','s','s') && peek_not_idfr_part_or_end_nextch && :abstract_class
+            mnc?('l','a','s','s') && peek_not_idfr_part_or_end_nextch && :abstract_class
           when 's'
-            mc?('t','r','u','c','t') && peek_not_idfr_part_or_end_nextch && :abstract_struct
+            mnc?('t','r','u','c','t') && peek_not_idfr_part_or_end_nextch && :abstract_struct
           end
         end
       when 'b'
-        mc?('e','g','i','n') && peek_not_idfr_part_or_end_nextch && :begin
+        mnc?('e','g','i','n') && peek_not_idfr_part_or_end_nextch && :begin
       when 'c'
         (char = nextch) && (
-          (char == 'a' && mc?('s','e') && peek_not_idfr_part_or_end_nextch && :case) ||
-            (char == 'l' && mc?('a','s','s') && peek_not_idfr_part_or_end_nextch && :class)
+          (char == 'a' && mnc?('s','e') && peek_not_idfr_part_or_end_nextch && :case) ||
+            (char == 'l' && mnc?('a','s','s') && peek_not_idfr_part_or_end_nextch && :class)
         )
       when 'd'
         (char = nextch) &&
           ((char == 'o' && peek_not_idfr_part_or_end_nextch && :do) ||
-            (char == 'e' && mc?('f') && peek_not_idfr_part_or_end_nextch && :def))
+            (char == 'e' && mnc?('f') && peek_not_idfr_part_or_end_nextch && :def))
       when 'f'
-        mc?('u','n') && peek_not_idfr_part_or_end_nextch && :fun
+        mnc?('u','n') && peek_not_idfr_part_or_end_nextch && :fun
       when 'i'
-        beginning_of_line && mc?('f') &&
+        beginning_of_line && mnc?('f') &&
           (char = nextch) && (
           (!idfr_part_or_end?(char) && :if) ||
-            (char == 'd' && mc?('e','f') && peek_not_idfr_part_or_end_nextch && :ifdef)
+            (char == 'd' && mnc?('e','f') && peek_not_idfr_part_or_end_nextch && :ifdef)
         )
       when 'l'
-        mc?('i','b') && peek_not_idfr_part_or_end_nextch && :lib
+        mnc?('i','b') && peek_not_idfr_part_or_end_nextch && :lib
       when 'm'
         (char = nextch) && (
-          (char == 'a' && mc?('c','r','o') && peek_not_idfr_part_or_end_nextch && :macro) ||
-            (char == 'o' && mc?('d','u','l','e') && peek_not_idfr_part_or_end_nextch && :module)
+          (char == 'a' && mnc?('c','r','o') && peek_not_idfr_part_or_end_nextch && :macro) ||
+            (char == 'o' && mnc?('d','u','l','e') && peek_not_idfr_part_or_end_nextch && :module)
         )
       when 's'
-        mc?('t','r','u','c','t') && !idfr_part_or_end?(peek_nextch) && nextch && :struct
+        mnc?('t','r','u','c','t') && !idfr_part_or_end?(peek_nextch) && nextch && :struct
       when 'u'
-        mc?('n') && (char = nextch) && (
-          (char == 'i' && mc?('o','n') && peek_not_idfr_part_or_end_nextch && :union) ||
-            (beginning_of_line && char == 'l' && mc?('e','s','s') && peek_not_idfr_part_or_end_nextch && :unless) ||
-            (beginning_of_line && char == 't' && mc?('i','l') && peek_not_idfr_part_or_end_nextch && :until)
+        mnc?('n') && (char = nextch) && (
+          (char == 'i' && mnc?('o','n') && peek_not_idfr_part_or_end_nextch && :union) ||
+            (beginning_of_line && char == 'l' && mnc?('e','s','s') && peek_not_idfr_part_or_end_nextch && :unless) ||
+            (beginning_of_line && char == 't' && mnc?('i','l') && peek_not_idfr_part_or_end_nextch && :until)
         )
       when 'w'
-        beginning_of_line && mc?('h','i','l','e') && peek_not_idfr_part_or_end_nextch && :while
+        beginning_of_line && mnc?('h','i','l','e') && peek_not_idfr_part_or_end_nextch && :while
       else
         false
       end
