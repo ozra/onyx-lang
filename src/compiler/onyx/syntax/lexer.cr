@@ -253,19 +253,26 @@ module Crystal
         handle_comment
 
         # p "curch after skip_comment = " + curch
-        if curch == '\n'
-          dbg_lex "in backslash: got newline '#{curch}'"
-          @line_number += 1
-          @column_number = 1
+        
+        # *TODO* disabled during `\` as lambda trial
+        # if curch == '\n'
+        #   dbg_lex "in backslash: got newline '#{curch}'"
+        #   @line_number += 1
+        #   @column_number = 1
 
-          @token.passed_backslash_newline = true
-          consume_whitespace
-          reset_regex_flags = false
-          @token.type = backed_type
+        #   @token.passed_backslash_newline = true
+        #   consume_whitespace
+        #   reset_regex_flags = false
+        #   @token.type = backed_type
+
+        if curch == '.'
+          @token.type = :"\\."
+          next_char
 
         else
-          dbg_lex "must be a solo mystic backslash"
-          @token.type = :BACKSLASH
+          dbg_lex "must be a solo backslash"
+          @token.type = :"\\"
+
         end
 
       when '\n'

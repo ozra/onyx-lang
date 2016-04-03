@@ -369,7 +369,7 @@ say "facts: {facts}"
 
 MY_CONST = do
    x = 0
-   2.upto(4).each (a, i) ~>
+   2.upto(4).each (a, i)\
       x += a
       say "calculating MY_CONST, {a}, {i}"
    x
@@ -474,11 +474,11 @@ type Blk
    ;
 ;
 
-blk = Blk(4, (x) ~>
+blk = Blk(4, (x)\
    say "in blk init block: {x}"
 )
 
-blk2 = Blk 7, (x) ~>
+blk2 = Blk 7, (x)\
    say "in blk2 init block: {x}"
 
 
@@ -643,7 +643,7 @@ w = list.map (x, y) ~> "{x} 47"
 i = list.map (x, y) ~> "{x} 13"
 -- i = list.map (x, y) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
 
-j = list.map ~> "{_1} 13"
+j = list.map \ "{_1} 13"
 
 puts "{v}, {w}"
 
@@ -661,12 +661,12 @@ z = list.each((v) ~> p v).map ~> _1 * 2
 say " u:"
 u = list.each((v) ~> p v).map ~> _1 * 2
 say " v:"
-v = ( ( list.each((v) ~> p v) ).map ~.* 2 )
+v = ( ( list.each((v) ~> p v) ).map \.* 2 )
 say " w:"
 w = ( ( list.each((v) ~> p v) ).map(~.* 2))
 say " pw:"
 
-pw = (list.each ~> p _1).map ~.* 2
+pw = (list.each \p _1).map \.* 2
 
 
 say "All lists should equal [94, 26, 84, 22]"
@@ -1467,7 +1467,10 @@ type Foo[S1] < Bar
    foo–y = 48
    foo–z = "bongo"  'get
    foo–u Int = 47  'get 'set
-   foo–w = 47       'set
+
+   -- *TODO* WTF!
+   foo-w = 474242       'set
+   foo–w = 474747       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
@@ -1491,6 +1494,12 @@ type Foo[S1] < Bar
    init() ->
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
+
+
+
+   -- *TEMP*
+   get-foo-w() -> @foo-w
+
 
    'pure
    fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
@@ -1687,7 +1696,12 @@ say "create a Foo instance"
 foo = Foo[Str]()
 
 pp foo.foo-x
-pp foo.foo-w = 46
+
+-- *TODO* this doesn't work out as it should! foo-w is never set!!!??
+say "foo.foo-w = 463"
+foo.foo-w = 463
+pp foo.foo-w = 461
+say "foo.get-foo-w {foo.get-foo-w}"
 -- pp foo.foo-y -- should fail
 -- pp foo.foo-w -- should fail
 

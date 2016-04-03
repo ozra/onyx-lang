@@ -160,12 +160,12 @@ USAGE
   private def build(mode = :devel)
     config = setup_compiler "build"
     if mode == :release
-      config.compiler.release = true
+      config.try &.compiler.release = true
     else
-      config.compiler.release = false
+      config.try &.compiler.release = false
     end
 
-    config.compile
+    config.try &.compile
   end
 
   private def eval
@@ -212,7 +212,7 @@ USAGE
   private def cursor_command(command)
     config, result = compile_no_codegen command, cursor_command: true
 
-    format = config.output_format
+    format = config.try(&.output_format) || ""
 
     file = ""
     line = ""
@@ -237,8 +237,10 @@ USAGE
 
   private def run_command
     config = setup_compiler "run", run: true
-    if config.specified_output
-      config.compile
+    config = config.not_nil!
+
+    if config.try &.specified_output
+      config.try &.compile
       return
     end
 
@@ -326,12 +328,13 @@ USAGE
   private def parse_command
     config = setup_compiler "parse", no_codegen: true
 
-    if config.output_format != "ast"
+    format = config.try(&.output_format) || ""
+    if format != "ast"
       STDERR.puts "Sorry, parse and dump ast is all I know how to do! ('onyx parse --ast ...')"
       exit 1
     end
 
-    config.sources.each do |source|
+    config.try &.sources.each do |source|
       # code = File.read source.filename
       if source.filename.ends_with?(".cr")
         parser = Parser.new source.code
@@ -348,7 +351,7 @@ USAGE
   private def stylize()
     config = setup_compiler "onyxify", no_codegen: true
 
-    config.sources.each do |source|
+    config.try &.sources.each do |source|
       # code = File.read source.filename
       if source.filename.ends_with?(".cr")
         parser = Parser.new source.code
@@ -369,7 +372,7 @@ USAGE
   private def to_s_debug
     config = setup_compiler "just_to_s", no_codegen: true
 
-    config.sources.each do |source|
+    config.try &.sources.each do |source|
       # code = File.read source.filename
       if source.filename.ends_with?(".cr")
         parser = Parser.new source.code
@@ -385,6 +388,7 @@ USAGE
 
   private def compile_no_codegen(command, wants_doc = false, hierarchy = false, cursor_command = false)
     config = setup_compiler command, no_codegen: true, hierarchy: hierarchy, cursor_command: cursor_command
+    config = config.not_nil!
     config.compiler.no_codegen = true
     config.compiler.wants_doc = wants_doc
     {config, config.compile}
@@ -417,7 +421,22 @@ USAGE
     Crystal.tempfile(basename)
   end
 
-  record CompilerConfig, compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format do
+  # record CompilerConfig, compiler, sources, output_filename, original_output_filename, arguments, specified_output, hierarchy_exp, cursor_location, output_format do
+  #   def compile(output_filename = self.output_filename)
+  #     compiler.original_output_filename = original_output_filename
+  #     compiler.compile sources, output_filename
+  #   end
+  # end
+  record(CompilerConfig,
+    compiler : Compiler,
+    sources : Array(Compiler::Source),
+    output_filename : String,
+    original_output_filename : String,
+    arguments : Array(String),
+    specified_output : Bool,
+    hierarchy_exp : String?,
+    cursor_location : String?,
+    output_format : String?) do
     def compile(output_filename = self.output_filename)
       compiler.original_output_filename = original_output_filename
       compiler.compile sources, output_filename

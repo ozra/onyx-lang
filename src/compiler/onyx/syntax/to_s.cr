@@ -16,6 +16,10 @@ class ASTNode
 end
 
 class ToSVisitor < Visitor
+
+   # If a for–node is passed to a macro expansion, is it normalized first?
+   # Double check. Otherwise it would go straight for crystal generation.
+   # (Crystal macros _must_ have nodes genned as crystal–code!)
    def visit(node : For)
       raise "Shouldn't possibly happen from Crystal code!"
    end

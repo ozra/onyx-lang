@@ -5,6 +5,7 @@ require "pointer"
 
 
 ifdef x86_64
+   type Krax1 = I64
    type StdInt     = I64
    type ArchInt    = I64
 
@@ -13,6 +14,7 @@ ifdef x86_64
 
    type StdReal    = F64
 else
+   type Krax2 = I32
    type StdInt     = I32
    type ArchInt    = I32
 

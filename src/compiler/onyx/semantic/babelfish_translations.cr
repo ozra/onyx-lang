@@ -28,38 +28,37 @@ $babelfish_func_dict = Hash(String, String).new
 $babelfish_reverse_dict = Hash(String, String).new
 
 
-babel_type Any,    Object
+babel_type Any,    Object,      true
 
-babel_type AnyInt, Int,         false
+babel_type AnyInt, CrystalInt,  true
 
 babel_type Int,    StdInt,      false
 babel_type Real,   StdReal,     false
 
-babel_type Tag,    Symbol
+babel_type Tag,    Symbol,      true
 babel_type Ptr,    Pointer,     true
 
 # babel Str,    String, false
-babel_type List,   Array
+babel_type List,   Array,       true
 babel_type Tup,    Tuple,       false
-babel_type Map,    Hash
-babel_type Arr,    StaticArray  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
-babel_type Array,  StaticArray  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
 
-babel_type I8,     Int8
-babel_type I16,    Int16
-babel_type I32,    Int32
-babel_type I64,    Int64
+babel_type Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
 
-babel_type U8,     UInt8
-babel_type U16,    UInt16
-babel_type U32,    UInt32
-babel_type U64,    UInt64
+babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
 
-babel_type F32,    Float32
-babel_type F64,    Float64
+babel_type I8,     Int8,        true
+babel_type I16,    Int16,       true
+babel_type I32,    Int32,       true
+babel_type I64,    Int64,       true
 
-babel_type F32,    Float32
-babel_type F64,    Float64
+babel_type U8,     UInt8,       true
+babel_type U16,    UInt16,      true
+babel_type U32,    UInt32,      true
+babel_type U64,    UInt64,      true
+
+babel_type F32,    Float32,     true
+babel_type F64,    Float64,     true
 
 
 babel_func init,        initialize,         true

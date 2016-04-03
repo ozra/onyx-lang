@@ -1065,7 +1065,7 @@ class OnyxParser < OnyxLexer
       if tok? :"->"
          Crystal.raise_wrong_parse_path "Found parentheses suffix indicating lambda"
       end
-      if tok? :"~>"
+      if tok? :"~>", :"\\"
          Crystal.raise_wrong_parse_path "Found parentheses suffix indicating soft-lambda"
       end
 
@@ -1869,7 +1869,7 @@ class OnyxParser < OnyxLexer
       when :UNDERSCORE
          node_and_next_token Underscore.new
 
-      when :"~.", :"~>"
+      when :"~.", :"~>", :"\\", :"\\."
          parse_softlambda
 
       else
@@ -3829,10 +3829,10 @@ class OnyxParser < OnyxLexer
 
       block_indent = @indent
 
-      if tok? :"~."
+      if tok? :"~.", :"\\."
          return parse_oneletter_softlambda
 
-      elsif tok? :"~>"
+      elsif tok? :"~>", :"\\"
          dbg "parse_softlambda - auto-paramed arrow"
          auto_parametrization = true
 
@@ -3865,7 +3865,7 @@ class OnyxParser < OnyxLexer
             dbg "parse_softlambda - done parsing block parameters"
 
             next_token_skip_space
-            check :"~>"
+            raise "expected `~>` or `\\`" if !tok? :"~>", :"\\"
 
          rescue e
             dbg "parse_softlambda - rescue e: #{e.message}".red
@@ -5983,7 +5983,7 @@ class OnyxParser < OnyxLexer
             add_magic_param name
          else
             dbgtail_off!
-            raise "The identifier \"#{name}\" is reserved for auto-magic parametrization of blocks (used via `~>`)", location
+            raise "The identifier \"#{name}\" is reserved for auto-magic parametrization of blocks (used via `~>`/`\\`)", location
          end
       end
 
@@ -6269,7 +6269,7 @@ class OnyxParser < OnyxLexer
             :TAG_ARRAY_START, :NUMBER, :IDFR, :TAG, :INSTANCE_VAR,
             :CLASS_VAR, :CONST, :GLOBAL, :"$", :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX,
             :REGEX, :"(", :"!", :not, :"[", :"[]", :".~.", :"&", :"->",
-            :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE,   :"~>", :"~."
+            :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE,   :"~>", :"~.", :"\\", :"\\."
             # *TODO* these conflicts with when below (which normally has precedance - both routes can never take:   :"+", :"-",
          dbg "- parse_call_args_spaced_any_non_call_hints? - one of the WANTED token.types "
          # Nothing - because these are the ones we WANT to handle
@@ -6434,7 +6434,7 @@ class OnyxParser < OnyxLexer
             dbg "- parse_named_args - got comma"
 
             next_token_skip_space_or_newline
-            if tok? :")", :"&", :"~>", :"~.", :"("
+            if tok? :")", :"&", :"~>", :"~.", :"\\", :"\\.", :"("
                dbg "- parse_named_args - got ender"
                break
             end
@@ -8268,6 +8268,10 @@ class OnyxParser < OnyxLexer
    def new_num_lit(value, kind = :int)
       dbg "new_num_lit ->"
 
+
+      # *TODO* this should _probably_ be done in a semantic stage
+      # (not absolutely necessarily though)
+
       if kind == :int
          confed_type = @nesting_stack.last.int_type_mapping #.value.to_s
 
@@ -8277,7 +8281,8 @@ class OnyxParser < OnyxLexer
 
          # # *TODO*
          # when "StdInt",  "Int"
-         #    kind = :i32    # *TODO* *9* CHOSEN architecture int width
+         #    look up int–width defined for StdInt
+         #    kind = :i32 | :i64    # *TODO* *9* look up CHOSEN architecture int width
 
 
          when "I32", "Int32"
@@ -8285,19 +8290,19 @@ class OnyxParser < OnyxLexer
          when "I64", "Int64"
             kind = :i64
          else
-            confed_type = "StdInt" if confed_type == "Int"  # *TODO*
+            # confed_type = "StdInt" if confed_type == "Int"  # *TODO*
 
             return Call.new(
                Path.new([confed_type], true), # .at(location)
                "new",
-               # Array(ASTNode+).new(1, NumberLiteral.new(value, :f64)),
-               [NumberLiteral.new(value, :f64)] of ASTNode+,
+               [NumberLiteral.new(value, :i64)] of ASTNode+,
                nil,
                nil,
                nil,
                false,
                0,
-               false
+               true,
+               true
             )
          end
 
@@ -8323,7 +8328,8 @@ class OnyxParser < OnyxLexer
                nil,
                false,
                0,
-               false
+               true,
+               true
             )
          end
 
