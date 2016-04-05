@@ -30,10 +30,12 @@ module Crystal
       while ident_part?(current_char)
         next_char
       end
+
       case current_char
       when '!', '?'
         next_char
       end
+
       @token.type = :IDENT
 
       str = string_range(start)
@@ -1924,12 +1926,18 @@ module Crystal
       while idfr_part?(curch)
         nextch
       end
+
       if special_end_chars
         case curch
         when '!', '?'
-          nextch
+          if (((c = peek_nextch) >= 'a' && c <= 'z') || (c == '_') || (c >= 'A' && c <= 'Z'))
+            # It's nil–sugar
+          else
+            nextch
+          end
         end
       end
+
       @token.type = :IDFR
 
       idfr_str = string_range start
@@ -1953,7 +1961,7 @@ module Crystal
         end
       end
 
-      # p "scanned idfr: '#{@token.value}'"
+      p "scanned idfr: '#{@token.value}', curch = #{curch}"
       nil
     end
 
