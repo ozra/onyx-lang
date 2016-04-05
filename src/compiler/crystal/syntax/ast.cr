@@ -382,7 +382,11 @@ module Crystal
   class Var < ASTNode
     property name : String
 
-    def initialize(@name : String, @type = nil)
+
+    property is_nil_sugared : Bool
+
+
+    def initialize(@name : String, @type = nil, @is_nil_sugared = false)
     end
 
     def name_size
@@ -390,7 +394,7 @@ module Crystal
     end
 
     def clone_without_location
-      Var.new(@name)
+      Var.new(@name,  is_nil_sugared: @is_nil_sugared)
     end
 
     def_equals name, type?
@@ -442,6 +446,8 @@ module Crystal
   class Call < ASTNode
     @implicit_construction = false
 
+    property is_nil_sugared : Bool
+
     property obj : ASTNode?
     property name : String
     property args : Array(ASTNode)
@@ -456,7 +462,7 @@ module Crystal
 
     property? implicit_construction : Bool
 
-    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parenthesis = false, @implicit_construction = false)
+    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parenthesis = false, @implicit_construction = false, @is_nil_sugared = false)
       @name_size = -1
       @global = !!global
       @has_parenthesis = !!has_parenthesis
@@ -497,7 +503,7 @@ module Crystal
     end
 
     def clone_without_location
-      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction)
+      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction , @is_nil_sugared)
       clone.name_size = name_size
       clone.is_expansion = is_expansion?
       clone

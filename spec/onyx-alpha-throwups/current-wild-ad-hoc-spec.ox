@@ -19,12 +19,50 @@ say "\nLet's ROCK\n".red
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+p for y in [1,2,3]: say y
+say for y in [1,2,3]: say y
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- suffix (int)      = Ints _
+say "Nil-sugar"
+
+type Nilish
+   @val = 0
+
+   init(@nil-at = 0) ->
+
+   internal() ->
+      say (foo?bar?qwo || 0) + 200
+
+   foo() ->    @val = 1; if @nil-at >= 1 ? self : nil
+   bar?() ->   @val = 2; if @nil-at >= 2 ? self : nil
+   bar() ->    raise "don't call me!"
+   qwo() ->    @val = 3; if @nil-at >= 3 ? 46 : nil
+
+nfoo = Nilish 1
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
+
+say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
+
+nfoo = Nilish 2
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
+
+nfoo = Nilish 3
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+-- suffix (int)      = Int _
 -- suffix (real)     = Real _
 -- suffix (number)r  = Real _
+-- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
+-- suffix (number)d  = _f64
 
 -- module GeometricSuffixes[B = 1.0]
 --    BaseUnitFromMeter = B
@@ -1005,15 +1043,21 @@ list = [47, 13, 42, 11]
 say "- - ACCESS TERSECUTS! - -".yellow
 
 say list.1, list.2?, list.4?
+say "With to-s: {list.1}, {list.2?to-s.+ "X"}, {list.4?to-s.+ "X"}"
 
 say tag-hash-2#katt
+say "with to_s: '{tag-hash-2#katt?to-s}'"
+
 say json-hash:katt, json-hash:panter
 
 if json-hash:katt: say "Yeeeaaaah"  -- syntactic test for the colon discrepancy
 
 say json-hash:neat-literal?
+say "with to_s: {json-hash:neat-literal?to-s}"
+
 json-hash:neat-literal = "47777777"
 say json-hash:neat-literal
+say "with to_s after: {json-hash:neat-literal?to-s}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

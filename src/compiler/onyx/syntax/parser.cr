@@ -1179,6 +1179,11 @@ class OnyxParser < OnyxLexer
          return parse_atomic_method_suffix_terse_literal_subscript atomic, location
       end
 
+      # Must not be spaced:
+      if tok? :"?"
+         return parse_nil_sugar atomic, location
+      end
+
       while true
          maybe_mutate_gt_op_to_bigger_op
 
@@ -1294,12 +1299,14 @@ class OnyxParser < OnyxLexer
          end
       end
 
+      dbg "parse_atomic_method_suffix_terse_literal_subscript"
+
       # check_void_value atomic, location
       column_number = @token.column_number
       key = @token.value.to_s
 
       if key[-1] == '?'
-         key = key[0..-1]
+         key = key[0..-2]
          is_nilly = true
       else
          is_nilly = false
@@ -1312,22 +1319,41 @@ class OnyxParser < OnyxLexer
       else
          args << StringLiteral.new key
       end
-      next_token
+
+      next_token # unless is_nilly
+
+      # *TODO* handle nil–sugar on top of this sugar
 
       if @token.type == :"?"
+         dbg "parse_atomic_method_suffix_terse_literal_subscript got '?'"
          is_nilly = true
-         next_token_skip_space
-      else
-         skip_space
+         next_token
       end
 
       method_name = is_nilly ? "[]?" : "[]"
 
       atomic = Call.new(atomic, method_name, args,
-                                              name_column_number: column_number
-                                             ).at(location)
+                         name_column_number: column_number
+                        ).at(location)
       atomic.name_size = 0
 
+      if is_nilly && tok? :IDFR
+         return parse_nil_sugar atomic, location, dont_skip_initial_token: true
+      else
+         skip_space
+         return atomic
+      end
+   end
+
+   def parse_nil_sugar(atomic, location, dont_skip_initial_token = false)
+      dbg "parse_nil_sugar ->"
+
+      column_number = @token.column_number
+      try_slant = parse_oneletter_softlambda flag_as_nilish_first: true, dont_skip_initial_token: dont_skip_initial_token
+
+      atomic = Call.new(atomic, "try", [] of ASTNode, try_slant,
+                         name_column_number: column_number
+                        ).at(location)
       return atomic
    end
 
@@ -1369,20 +1395,27 @@ class OnyxParser < OnyxLexer
 
       elsif tok? :NUMBER
          args = [] of ASTNode
-         args << NumberLiteral.new(@token.value.to_s, :i32)
+         args << NumberLiteral.new(@token.value.to_s, :i32) # *TODO* should use current literal–int
          next_token
 
          if @token.type == :"?"
             method_name = "[]?"
-            next_token_skip_space
+            next_token
+            is_nilly = true
          else
             method_name = "[]"
-            skip_space
          end
 
          atomic = Call.new(atomic, method_name, args,
                             name_column_number: name_column_number
                            ).at(location)
+
+         if is_nilly && tok? :IDFR
+            return parse_nil_sugar atomic, location, dont_skip_initial_token: true
+         else
+            skip_space
+            return atomic
+         end
 
       else
          dbg "parse_atomic_method_suffix_dot else"
@@ -5822,7 +5855,7 @@ class OnyxParser < OnyxLexer
    parse_operator :flags_and, :flags_atomic, "And.new left, right", ":\"&&\", :\"and\""
 
    def parse_flags_atomic
-      dbg "parse_flags_atomic", @token.type, @token.value
+      dbg "parse_flags_atomic #{@token.type}, #{@token.value}"
 
       case @token.type
       when :"("
@@ -6463,15 +6496,14 @@ class OnyxParser < OnyxLexer
    #    CallArgs.new args, block, explicit_block_param, named_args, false, end_location
    # end
 
-   def parse_oneletter_softlambda()
-      # next_token_skip_space # the dot is part of the composite token
+   def parse_oneletter_softlambda(flag_as_nilish_first = false, dont_skip_initial_token = false)
+      next_token_skip_space unless dont_skip_initial_token
 
       explicit_block_param_name = "__arg#{@explicit_block_param_count}"
       @explicit_block_param_count += 1
 
       obj = Var.new(explicit_block_param_name)
       @wants_regex = false
-      next_token_skip_space
 
       location = @token.location
 
@@ -6498,6 +6530,14 @@ class OnyxParser < OnyxLexer
          end
 
          call = call as Call
+
+
+         if flag_as_nilish_first
+            call.is_nil_sugared = true
+
+            call.name += '?'
+         end
+
 
          if @token.type == :"="
             next_token_skip_space
