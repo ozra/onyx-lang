@@ -357,37 +357,62 @@ say "- - Templates & Macros - -".yellow
 -- template pow2-round-up(v, r) =
 -- template pow2-round-up(v, r) ->
 
-template pow2-round-up(v, r) =
-   {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
-         r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
-         r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
-   %}
-      raise "pow2-round-up requires a single power-of-two value as rounding ref! Got #{ {{r}} }"
+   -- {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
+   --       r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
+   --       r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
 
-      if 1
-   {% else %}
+module Mac
+   template horribly-formatted-pow2-round-up(v, r) =
+    (
+      {% if r != 64 &&
+            r != 4096 &&
+            r != 65536
+      %}
+         -- raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {{=r=}}"
+         raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {=r=}"
 
-      (
-         -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
-         %ref-v = {{r}} - 1
-         ({{v}} + %ref-v) .&. (.~. %ref-v)
+          %z = nil
+         if 1
 
-         if true
-            say "fooo ya"
+      {% else %}
+         _debug_compiler_start_ = true
+
+         (do
+            -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
+            %ref-v = {=r=} - 1
+            %z = ({=v=} + %ref-v) .&. (.~. %ref-v)
+
+            if true
+            say "fooo ya { %z }"
+            say "qwaaa {{=r=}}"
          else
-            say "booo ya"
+               say "booo ya"
+        end
+   -- comm at 0
          end
-      )
+               )
 
-      if 2
-   {% end %}
-         say "is true"
-      end
-end
+         if 2
 
-pp 4096 == pow2-round-up 3027, 4096
-pp 8192 == pow2-round-up 4097, 4096
--- pp 8192 == pow2-round-up 4097, 4093 -- Should fail!
+      {% end %}
+
+            say "is true"
+            %z
+         end
+          %z
+     )
+
+include Mac
+
+horribly-formatted-pow2-round-up 3027, 4096
+horribly-formatted-pow2-round-up 4097, 4096
+horribly-formatted-pow2-round-up 4097, 65536
+
+pp 4096 == horribly-formatted-pow2-round-up 3027, 4096
+pp 8192 == horribly-formatted-pow2-round-up 4097, 4096
+pp 65536 == horribly-formatted-pow2-round-up 4097, 65536
+
+-- pp 8192 == horribly-formatted-pow2-round-up 4097, 4093  ---> Should fail!
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 

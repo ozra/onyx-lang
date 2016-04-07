@@ -101,6 +101,7 @@ module Crystal
       @dbgindent__ = 0
 
       @indent = 0
+      @macro_base_indent_level = -1
 
       @error_stack = [] of Exception  # *TODO*
 
@@ -177,14 +178,14 @@ module Crystal
     def dbg_lex(s)
       ifdef !release
         return if @dbg–switch == false
-        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}".blue2
+        STDERR.puts "## #{s} ".blue2 + "@#{@line_number}:#{@column_number - 1}".blue2
       end
     end
 
     def dbg_ind(s)
       ifdef !release
         return if @dbg–switch == false
-        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}".blue2
+        STDERR.puts "## #{s}".blue2 + "@#{@line_number}:#{@column_number - 1}".blue2
       end
     end
 
@@ -193,7 +194,7 @@ module Crystal
     end
 
     def skip_shebang
-      return unless curch == '#' && peek_nextch == '!'
+      return unless curch == '#' && peekch == '!'
 
       while nextch != '\0'
         if curch == '\n'
@@ -205,7 +206,7 @@ module Crystal
     end
 
     def next_token
-      dbg_lex "next_token() - curch ='#{curch.ord}'"
+      # dbg_lex "next_token() - curch ='#{curch.ord}'"
 
       # *TODO* DEBUG HELPER
       # *TODO* skip generating token, and eat below followed by newline and continue!
@@ -255,7 +256,7 @@ module Crystal
         handle_comment
 
         # p "curch after skip_comment = " + curch
-        
+
         # *TODO* disabled during `\` as lambda trial
         # if curch == '\n'
         #   dbg_lex "in backslash: got newline '#{curch}'"
@@ -317,7 +318,7 @@ module Crystal
         # #   # return ret
         # #   p "got next newline - now we just handle it like old days"
 
-        if (curch == '-' && peek_nextch == '-') || curch == '—' # a comment
+        if (curch == '-' && peekch == '-') || curch == '—' # a comment
           dbg_lex "Got comment"
 
           # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
@@ -406,7 +407,7 @@ module Crystal
         when '='
           toktype_then_nextch :"!="
         when '~'
-          if peek_nextch == '~'
+          if peekch == '~'
             nextch
             toktype_then_nextch :"!~~"
           else
@@ -446,13 +447,13 @@ module Crystal
         when '>'
           # parametrization, tuple–encloser or operator?!
 
-          if prev_tok?(:SPACE) && peek_nextch == '='
+          if prev_tok?(:SPACE) && peekch == '='
             toktype_then_nextch :">>="
             next_char
             next_char
 
           elsif (
-            (prev_tok?(:SPACE) && (peek_nextch == ' ' || peek_nextch == '\n')) ||
+            (prev_tok?(:SPACE) && (peekch == ' ' || peekch == '\n')) ||
             (prev_tok?(:NEWLINE, :INDENT) && (curch == ' '))
           )
             @token.type = :">>"
@@ -600,7 +601,7 @@ module Crystal
           nextch
 
         when 'i'
-          case peek_nextch
+          case peekch
           when '(', '{', '[', '<'
             start_char = nextch
             toktype_then_nextch :TAG_ARRAY_START
@@ -636,7 +637,7 @@ module Crystal
             raise "unknown %x char"
           end
         when 'w'
-          case peek_nextch
+          case peekch
           when '(', '{', '[', '<'
             start_char = nextch
             toktype_then_nextch :STRING_ARRAY_START
@@ -656,8 +657,8 @@ module Crystal
         case char
         when '%'
           toktype_then_nextch :"{%"
-        when '{'
-          toktype_then_nextch :"{{"
+        # when '{'
+        #   toktype_then_nextch :"{{"
         when '='
           toktype_then_nextch :"{="
         else
@@ -921,7 +922,7 @@ module Crystal
             char = nextch
             case char
             when '\\'
-              if peek_nextch == '"'
+              if peekch == '"'
                 nextch
                 count += 1
               end
@@ -1009,7 +1010,7 @@ module Crystal
             return check_idfr_or_keyword(:api, start)
           end
         when 's'
-          if peek_nextch == 'm'
+          if peekch == 'm'
             nextch
             return check_idfr_or_keyword(:asm, start)
           else
@@ -1027,7 +1028,7 @@ module Crystal
           return check_idfr_or_keyword(:by, start)
         when 'e'
           if mnc?('g','i','n')
-            if peek_nextch == 's'
+            if peekch == 's'
               next_char
               return check_idfr_or_keyword(:begins, start)
             else
@@ -1289,7 +1290,7 @@ module Crystal
       when 'i'
         case nextch
         when 'f'
-          if peek_nextch == 'd'
+          if peekch == 'd'
             nextch
             if mnc?('e','f')
               return check_idfr_or_keyword(:ifdef, start)
@@ -1298,7 +1299,7 @@ module Crystal
             return check_idfr_or_keyword(:if, start)
           end
         when 'n'
-          if idfr_part_or_end?(peek_nextch)
+          if idfr_part_or_end?(peekch)
             case nextch
             when 'c'
               if mnc?('l','u','d','e')
@@ -1531,7 +1532,7 @@ module Crystal
           end
         when 'y'
           if mnc?('p','e')
-            case peek_nextch
+            case peekch
             when 'o'
               nextch
               if mnc?('f')
@@ -1624,7 +1625,7 @@ module Crystal
           case nextch
           when 'D'
             if mnc?('I','R','_','_')
-              if idfr_part_or_end?(peek_nextch)
+              if idfr_part_or_end?(peekch)
                 scan_idfr(start)
               else
                 nextch
@@ -1634,7 +1635,7 @@ module Crystal
             end
           when 'F'
             if mnc?('I','L','E','_','_')
-              if idfr_part_or_end?(peek_nextch)
+              if idfr_part_or_end?(peekch)
                 scan_idfr(start)
               else
                 nextch
@@ -1644,7 +1645,7 @@ module Crystal
             end
           when 'L'
             if mnc?('I','N','E','_','_')
-              if idfr_part_or_end?(peek_nextch)
+              if idfr_part_or_end?(peekch)
                 scan_idfr(start)
               else
                 nextch
@@ -1717,13 +1718,21 @@ module Crystal
       @token
 
     ensure
-      unless @token.type == :SPACE || @token.type == :NEWLINE || @token_type == :INDENT
+      unless tok?(:SPACE, :NEWLINE, :INDENT)
         #p "resets continuation state"
         @next_token_continuation_state = :AUTO
+
       end
-      dbg_lex ("(" + @token.line_number.to_s + ":" + @token.column_number.to_s +
+
+      # macro parsing is indent–ignorant, thus random indents and dedents may
+      # occur legally, thus we need to make them "disappear"
+      if macro_parse_mode? && tok?(:INDENT, :DEDENT)
+        @token.type = :NEWLINE
+      end
+
+      dbg_lex ("" + @token.line_number.to_s + ":" + @token.column_number.to_s +
               "  (#{@line_number}:#{@column_number}): '" + @token.type.to_s +
-              "' : '" + @token.value.to_s + "' )").blue
+              "' : '" + @token.value.to_s + "'").blue
     end
 
 
@@ -1753,12 +1762,12 @@ module Crystal
           @column_number = 0
           break
         when '\\'
-          if peek_nextch == 'n'
+          if peekch == 'n'
             nextch
             raise "invalid delimiter identifier"
           end
         when ' '
-          case peek_nextch
+          case peekch
           when ' '
             nextch
           when '\n'
@@ -1780,7 +1789,7 @@ module Crystal
       dbg_lex "Is it '-'?"
       return false if !(curch == '-' || curch == '—')
       dbg_lex "Is it 2nd '-'?"
-      return false if !(peek_nextch == '-' || curch == '—')
+      return false if !(peekch == '-' || curch == '—')
       dbg_lex "Was prev SPC?"
       prevc = prev_char # if cur_pos > 1
       dbg_lex "Prevc was '" + prevc + "'"
@@ -1868,7 +1877,7 @@ module Crystal
           # *TODO* verify - REALLY?? Leave it to top level parse??
         when '\\'
           dbg_ind  "consume_whitespace: got backslash '\\'"
-          if peek_nextch == '\n'
+          if peekch == '\n'
             dbg_ind "consume_whitespace: got '\\n'"
             nextch
             nextch
@@ -1917,7 +1926,7 @@ module Crystal
     end
 
     def check_const_or_token(symbol, start)
-      if idfr_part_or_end?(peek_nextch)
+      if idfr_part_or_end?(peekch)
         scan_idfr(start, false, false)
         @token.type = :CONST
       else
@@ -1929,7 +1938,7 @@ module Crystal
     end
 
     def check_idfr_or_keyword(symbol, start)
-      if idfr_part_or_end?(peek_nextch)
+      if idfr_part_or_end?(peekch)
         scan_idfr(start)
       else
         nextch
@@ -1940,8 +1949,8 @@ module Crystal
     end
 
     def check_idfr_or_token(type, symbol, start)
-      # p "check_idfr_or_token, peek: '" + peek_nextch + "'"
-      if idfr_part_or_end?(peek_nextch)
+      # p "check_idfr_or_token, peek: '" + peekch + "'"
+      if idfr_part_or_end?(peekch)
         scan_idfr(start, true, false)
       else
         nextch
@@ -1963,7 +1972,7 @@ module Crystal
       if special_end_chars
         case curch
         when '!', '?'
-          if (((c = peek_nextch) >= 'a' && c <= 'z') || (c == '_') || (c >= 'A' && c <= 'Z'))
+          if (((c = peekch) >= 'a' && c <= 'z') || (c == '_') || (c >= 'A' && c <= 'Z'))
             # It's nil–sugar
           else
             nextch
@@ -2038,7 +2047,7 @@ module Crystal
 
       case curch
       when '.'
-        if peek_nextch.digit?
+        if peekch.digit?
           is_integer = false
 
           while true
@@ -2238,7 +2247,7 @@ module Crystal
     end
 
     def scan_zero_number(start, negative = false)
-      case peek_nextch
+      case peekch
       when 'x'
         scan_hex_number(start, negative)
       when 'o'
@@ -2266,7 +2275,7 @@ module Crystal
         consume_uint_suffix
         set_token_raw_from_start(start)
       when '_'
-        case peek_nextch
+        case peekch
         when 'i'
           @token.type = :NUMBER
           @token.value = "0"
@@ -2480,6 +2489,15 @@ module Crystal
       end
     end
 
+
+    #  ######  ######## ########     ########  #######  ##    ##
+    # ##    ##    ##    ##     ##       ##    ##     ## ##   ##
+    # ##          ##    ##     ##       ##    ##     ## ##  ##
+    #  ######     ##    ########        ##    ##     ## #####
+    #       ##    ##    ##   ##         ##    ##     ## ##  ##
+    # ##    ##    ##    ##    ##        ##    ##     ## ##   ##
+    #  ######     ##    ##     ##       ##     #######  ##    ##
+
     def next_string_token(delimiter_state)
       start = current_pos
       string_end = delimiter_state.end
@@ -2653,18 +2671,28 @@ module Crystal
       raise msg, @line_number, @column_number
     end
 
+
+##     ##    ###     ######  ########   #######     ########  #######  ##    ##
+###   ###   ## ##   ##    ## ##     ## ##     ##       ##    ##     ## ##   ##
+#### ####  ##   ##  ##       ##     ## ##     ##       ##    ##     ## ##  ##
+## ### ## ##     ## ##       ########  ##     ##       ##    ##     ## #####
+##     ## ######### ##       ##   ##   ##     ##       ##    ##     ## ##  ##
+##     ## ##     ## ##    ## ##    ##  ##     ##       ##    ##     ## ##   ##
+##     ## ##     ##  ######  ##     ##  #######        ##     #######  ##    ##
+
     def next_macro_token(macro_state, skip_whitespace)
-      nest = macro_state.nest
       whitespace = macro_state.whitespace
       delimiter_state = macro_state.delimiter_state
       beginning_of_line = macro_state.beginning_of_line
       comment = macro_state.comment
       yields = false
 
+      dbg_lex "- next_macro_token - skip_whitespace = #{skip_whitespace}, now: '#{curch.inspect}'"
       if skip_whitespace
         while curch.whitespace?
           whitespace = true
           if curch == '\n'
+            # dbg_lex "got newline in macro scan skip_whitespace"
             @line_number += 1
             @column_number = 0
             beginning_of_line = true
@@ -2684,97 +2712,116 @@ module Crystal
         return @token
       end
 
-      if curch == '\\' && peek_nextch == '{'
-        beginning_of_line = false
-        nextch
-        start = cur_pos
-        if mnc?('%')
-          while (char = nextch).whitespace?
+      if curch == '\\'  # for `boo \{% if true %}` - when would this ever be useful?
+        dbg_lex "- next_macro_token - inside '\\' path. And why?".red
+
+        case peekch
+        when '{'
+          beginning_of_line = false
+          nextch
+          start = cur_pos
+          if mnc?('%')
+            raise "See if this is used in practice!? - EFFICIENT EVIL TRACE!"
+
+            while (char = nextch).whitespace?
+            end
+
+            case char
+            when 'e'
+              if mnc?('n','d') && !idfr_part_or_end?(peekch)
+                nextch
+              end
+            when 'f'
+              if mnc?('o','r') && !idfr_part_or_end?(peekch)
+                nextch
+              end
+            when 'i'
+              if mnc?('f') && !idfr_part_or_end?(peekch)
+                nextch
+              end
+            end
           end
 
-          case char
-          when 'e'
-            if mnc?('n','d') && !idfr_part_or_end?(peek_nextch)
-              nextch
-              nest -= 1
-            end
-          when 'f'
-            if mnc?('o','r') && !idfr_part_or_end?(peek_nextch)
-              nextch
-              nest += 1
-            end
-          when 'i'
-            if mnc?('f') && !idfr_part_or_end?(peek_nextch)
-              nextch
-              nest += 1
-            end
-          end
+          @token.type = :MACRO_LITERAL
+          @token.value = string_range(start)
+          @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
+          return @token
+
+        when '%'
+          beginning_of_line = false
+          nextch
+          nextch
+          @token.type = :MACRO_LITERAL
+          @token.value = "%"
+          @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
+          return @token
         end
-
-        @token.type = :MACRO_LITERAL
-        @token.value = string_range(start)
-        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
-        return @token
-      end
-
-      if curch == '\\' && peek_nextch == '%'
-        beginning_of_line = false
-        nextch
-        nextch
-        @token.type = :MACRO_LITERAL
-        @token.value = "%"
-        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
-        return @token
       end
 
       if curch == '{'
         case nextch
-        when '{'
+        when '='
           beginning_of_line = false
           nextch
           @token.type = :MACRO_EXPRESSION_START
-          @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+          @token.value = :"{="  # for debug output only
+          @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
           return @token
+
         when '%'
           beginning_of_line = false
           nextch
           @token.type = :MACRO_CONTROL_START
-          @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+          @token.value = :"{%"  # for debug output only
+          @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
           return @token
         end
       end
 
-      if comment || (!delimiter_state && curch == '-' && peek_nextch == '-')
+      if comment || (!delimiter_state && curch == '-' && peekch == '-')
+        dbg_lex "Got into comment, curch = '#{curch}'"
+
         comment = true
-        char = curch
-        char = nextch if curch == '-'
-        char = nextch if curch == '-'
+        nextch # skip to second '-'
+        char = nextch
+        # char = nextch if curch == '-'
+
         while true
           case char
           when '\n'
+            # dbg_lex "Done with comment cause newline"
+            @token.line_number = @line_number
+            @token.column_number = @column_number
+
             comment = false
             beginning_of_line = true
             whitespace = true
             nextch
             @line_number += 1
             @column_number = 1
-            @token.line_number = @line_number
-            @token.column_number = @column_number
             break
+
           when '{'
-            break
+            if peekch == '%' || peekch == '='
+              dbg_lex "Done with comment cause '{%'|'{='"
+              break
+            end
+
           when '\0'
+            dbg_lex "Done with comment cause nil-char"
             raise "unterminated macro"
           end
+
           char = nextch
         end
+
         @token.type = :MACRO_LITERAL
         @token.value = string_range(start)
-        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
         return @token
       end
 
-      if curch == '%' && idfr_start?(peek_nextch)
+      if curch == '%' && idfr_start?(peekch)
         char = nextch
         start = cur_pos
         while idfr_part?(char)
@@ -2782,45 +2829,51 @@ module Crystal
         end
         @token.type = :MACRO_VAR
         @token.value = string_range(start)
-        @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+        @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
         return @token
-      end
-
-      if !delimiter_state && curch == 'e' && mnc?('n')
-        beginning_of_line = false
-        case nextch
-        when 'd'
-          if whitespace && !idfr_part_or_end?(peek_nextch)
-            if nest == 0
-              nextch
-              @token.type = :MACRO_END
-              @token.value = "" # *TODO* debug only - so that no newline or crap is left in
-              @token.macro_state = Token::MacroState.default
-              return @token
-            else
-              nest -= 1
-              whitespace = curch.whitespace?
-              nextch
-            end
-          end
-        when 'u'
-          if !delimiter_state && whitespace && mnc?('m') && !idfr_part_or_end?(nextch)
-            char = curch
-            nest += 1
-            whitespace = true
-          end
-        end
       end
 
       char = curch
 
-      until char == '{' || char == '\0' || (char == '\\' && ((peek = peek_nextch) == '{' || peek == '%')) || (whitespace && !delimiter_state && char == 'e')
+      while true
+        if beginning_of_line
+          dbg_lex "- next_macro_token - is beginning_of_line, now: '#{char.inspect}'"
+          current_indent = 0
+
+          while char == ' ' #.whitespace?
+            beginning_of_line = false
+            whitespace = true
+            current_indent += 1
+            char = next_char
+          end
+
+          dbg_lex "- next_macro_token - got indent calced to #{current_indent}"
+
+          # macro closing is now indent–based (while internals are not, of course)
+          if (current_indent <= @macro_base_indent_level &&
+              char != '\n' && !(char == '-' && peekch == '-')
+          )
+            @token.type = :MACRO_END
+            @token.value = "" # *TODO* debug only - so that no newline or crap is left in
+            @token.macro_state = Token::MacroState.default
+            return @token
+          end
+        end
+
+        break if char == '{' || char == '\0'
+        break if char == '\\' && ((peek = peekch) == '=' || peek == '%')
+        # break if whitespace && char == 'e' && !delimiter_state
+
         case char
         when '\n'
+          # dbg_lex "Got newline in macro scanning"
           @line_number += 1
           @column_number = 0
           whitespace = true
           beginning_of_line = true
+          next_char
+          break
+
         when '\\'
           char = nextch
           if delimiter_state
@@ -2832,6 +2885,7 @@ module Crystal
             whitespace = false
           end
           next
+
         when '\'', '"'
           if delimiter_state
             delimiter_state = nil if delimiter_state.end == char
@@ -2839,47 +2893,38 @@ module Crystal
             delimiter_state = Token::DelimiterState.new(:string, char, char, 0)
           end
           whitespace = false
+
         when '%'
           if delimiter_state
             whitespace = false
-            break if idfr_start?(peek_nextch)
+            break if idfr_start?(peekch)
           else
-            case char = peek_nextch
+            case peekch
             when '(', '[', '<', '{'
               nextch
-              delimiter_state = Token::DelimiterState.new(:string, char, closing_char, 1)
+              delimiter_state = Token::DelimiterState.new(:string, curch, closing_char, 1)
             else
               whitespace = false
-              break if idfr_start?(char)
+              break if idfr_start?(peekch)
             end
           end
-        when '#'
+
+        when '-'
           if delimiter_state
             whitespace = false
-          else
+
+          elsif peekch == '-'
+            # dbg_lex "breaks out of common macro scan, because likely comment"
             break
           end
+
         else
-          if !delimiter_state && whitespace && char == 'y' && mnc?('i','e','l','d') && !idfr_part_or_end?(peek_nextch)
+          if !delimiter_state && whitespace && char == 'y' && mnc?('i','e','l','d') && !idfr_part_or_end?(peekch)
             yields = true
             char = curch
             whitespace = true
             beginning_of_line = false
-          elsif !delimiter_state && whitespace && (keyword = check_macro_opening_keyword(beginning_of_line))
-            char = curch
 
-            if keyword == :macro && char.whitespace?
-              old_pos = @reader.pos
-              if mnc?('d','e','f') && !idfr_part_or_end?(peek_nextch)
-                char = nextch
-              else
-                @reader.pos = old_pos
-              end
-            end
-
-            nest += 1 unless keyword == :abstract_def
-            whitespace = true
-            beginning_of_line = false
           else
             char = curch
 
@@ -2895,15 +2940,9 @@ module Crystal
               end
             end
 
-            # If an assignment comes, we accept if/unless/while/until as nesting
-            if char == '=' && peek_nextch.whitespace?
-              whitespace = false
-              beginning_of_line = true
-            else
-              whitespace = char.whitespace? || char == ';' || char == '(' || char == '[' || char == '{'
-              if beginning_of_line && !whitespace
-                beginning_of_line = false
-              end
+            whitespace = char.whitespace? || char == ';' || char == '(' || char == '[' || char == '{'
+            if beginning_of_line && !whitespace
+              beginning_of_line = false
             end
           end
         end
@@ -2912,69 +2951,21 @@ module Crystal
 
       @token.type = :MACRO_LITERAL
       @token.value = string_range(start)
-      @token.macro_state = Token::MacroState.new(whitespace, nest, delimiter_state, beginning_of_line, yields, comment)
+      @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
 
       @token
+
+    ensure
+      dbg_lex ("MACRO_TOK: " + @token.line_number.to_s + ":" + @token.column_number.to_s +
+              "  (#{@line_number}:#{@column_number}): '" + @token.type.to_s +
+              "' : '" + @token.value.to_s.white + "'").blue
     end
 
-    def check_macro_opening_keyword(beginning_of_line)
-      case char = curch
-      when 'a'
-        if mnc?('b','s','t','r','a','c','t') && nextch.whitespace?
-          case nextch
-          when 'd'
-            mnc?('e','f') && peek_not_idfr_part_or_end_nextch && :abstract_def
-          when 'c'
-            mnc?('l','a','s','s') && peek_not_idfr_part_or_end_nextch && :abstract_class
-          when 's'
-            mnc?('t','r','u','c','t') && peek_not_idfr_part_or_end_nextch && :abstract_struct
-          end
-        end
-      when 'b'
-        mnc?('e','g','i','n') && peek_not_idfr_part_or_end_nextch && :begin
-      when 'c'
-        (char = nextch) && (
-          (char == 'a' && mnc?('s','e') && peek_not_idfr_part_or_end_nextch && :case) ||
-            (char == 'l' && mnc?('a','s','s') && peek_not_idfr_part_or_end_nextch && :class)
-        )
-      when 'd'
-        (char = nextch) &&
-          ((char == 'o' && peek_not_idfr_part_or_end_nextch && :do) ||
-            (char == 'e' && mnc?('f') && peek_not_idfr_part_or_end_nextch && :def))
-      when 'f'
-        mnc?('u','n') && peek_not_idfr_part_or_end_nextch && :fun
-      when 'i'
-        beginning_of_line && mnc?('f') &&
-          (char = nextch) && (
-          (!idfr_part_or_end?(char) && :if) ||
-            (char == 'd' && mnc?('e','f') && peek_not_idfr_part_or_end_nextch && :ifdef)
-        )
-      when 'l'
-        mnc?('i','b') && peek_not_idfr_part_or_end_nextch && :lib
-      when 'm'
-        (char = nextch) && (
-          (char == 'a' && mnc?('c','r','o') && peek_not_idfr_part_or_end_nextch && :macro) ||
-            (char == 'o' && mnc?('d','u','l','e') && peek_not_idfr_part_or_end_nextch && :module)
-        )
-      when 's'
-        mnc?('t','r','u','c','t') && !idfr_part_or_end?(peek_nextch) && nextch && :struct
-      when 'u'
-        mnc?('n') && (char = nextch) && (
-          (char == 'i' && mnc?('o','n') && peek_not_idfr_part_or_end_nextch && :union) ||
-            (beginning_of_line && char == 'l' && mnc?('e','s','s') && peek_not_idfr_part_or_end_nextch && :unless) ||
-            (beginning_of_line && char == 't' && mnc?('i','l') && peek_not_idfr_part_or_end_nextch && :until)
-        )
-      when 'w'
-        beginning_of_line && mnc?('h','i','l','e') && peek_not_idfr_part_or_end_nextch && :while
-      else
-        false
-      end
-    end
 
     def consume_octal_escape(char)
       char_value = char - '0'
       count = 1
-      while count <= 3 && '0' <= peek_nextch < '8'
+      while count <= 3 && '0' <= peekch < '8'
         nextch
         char_value = char_value * 8 + (curch - '0')
         count += 1
@@ -2983,7 +2974,7 @@ module Crystal
     end
 
     def consume_char_unicode_escape
-      char = peek_nextch
+      char = peekch
       if char == '{'
         nextch
         consume_braced_unicode_escape
@@ -2993,7 +2984,7 @@ module Crystal
     end
 
     def consume_string_unicode_escape
-      char = peek_nextch
+      char = peekch
       if char == '{'
         nextch
         consume_string_unicode_brace_escape
@@ -3199,7 +3190,7 @@ module Crystal
     # *TODO* can be removed thanks to @prev_token_type!
     def prev_char
       return '\0' if cur_pos <= 1
-      return unsafe_char_at(cur_pos - 1)
+      return peek_char_unsafe_at(cur_pos - 1)
     end
 
     def nc?(char)
@@ -3265,7 +3256,7 @@ module Crystal
       @reader.current_char
     end
 
-    def peek_nextch
+    def peekch
       @reader.peek_next_char
     end
 
@@ -3309,7 +3300,7 @@ module Crystal
       Slice.new(@reader.string.to_unsafe + start_pos, cur_pos - start_pos)
     end
 
-    def unsafe_char_at(i)
+    def peek_char_unsafe_at(i)
       @reader.unsafe_decode_char_at(i)
     end
 
@@ -3326,7 +3317,7 @@ module Crystal
     end
 
     def peek_not_idfr_part_or_end_nextch
-      !idfr_part_or_end?(peek_nextch) && nextch
+      !idfr_part_or_end?(peekch) && nextch
     end
 
     def closing_char(char = curch)

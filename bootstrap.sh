@@ -32,19 +32,17 @@ echo "Gets Crystal Version '${CRYSTAL_VERSION}'"
 wget "https://github.com/manastech/crystal/releases/download/${CRYSTAL_VERSION}/crystal-${CRYSTAL_VERSION}-1-linux-x86_64.tar.gz" -O - | tar zx
 echo "Installs Crystal ${CRYSTAL_VERSION} at /opt/cr-ox/"
 
-sudo mkdir -p /opt
+# sudo mkdir -p /opt
 sudo rm -rf /opt/cr-ox
 sudo cp -a "crystal-${CRYSTAL_VERSION}-1/" /opt/cr-ox
 sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox
 sudo ln -fs /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox
 
+
+exit 1
+
+
 rm -rf "crystal-${CRYSTAL_VERSION}-1"
-
-
-# echo "Get Onyx latest"
-
-# git clone --depth 1 --branch master https://github.com/ozra/onyx-lang
-# cd onyx-lang
 
 cd $onyx_repo
 

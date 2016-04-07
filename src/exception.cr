@@ -151,7 +151,7 @@ class Exception
 
   def to_s(io : IO)
     if @message
-      io << @message
+      io << ((mess = @message) ? "\e[31m#{mess}\e[39m" : mess)
     end
   end
 

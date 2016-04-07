@@ -783,11 +783,11 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : MacroExpression)
-      @str << (node.output ? "{{" : "{% ")
+      @str << (node.output ? "{=" : "{% ")
       @str << " " if node.output
       node.exp.accept self
       @str << " " if node.output
-      @str << (node.output ? "}}" : " %}")
+      @str << (node.output ? "=}" : " %}")
       false
    end
 
