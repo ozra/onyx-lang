@@ -30,10 +30,12 @@ module Crystal
       while ident_part?(current_char)
         next_char
       end
+
       case current_char
       when '!', '?'
         next_char
       end
+
       @token.type = :IDENT
 
       str = string_range(start)
@@ -146,9 +148,9 @@ module Crystal
       # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
         return if @dbg–tail–switch == false
         STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": /" + str +
-              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              ("  (at: '" + @token.type.to_s + "':'" + @token.value.to_s +
               "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
-              "])"
+              "])").green2
       end
     end
 
@@ -157,17 +159,17 @@ module Crystal
       # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
         return if @dbg–switch == false
         STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
-              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              ("  (at: '" + @token.type.to_s + "':'" + @token.value.to_s +
               "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
-              "])"
+              "])").green2
       end
     end
 
     def dbgXXX(str : String)
         STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
-              "  (now: '" + @token.type.to_s + "' : '" + @token.value.to_s +
+              ("  (at: '" + @token.type.to_s + "':'" + @token.value.to_s +
               "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
-              "])" + " XXX".red
+              "])".green2) + " XXX".red
 
         # STDOUT.flush
     end
@@ -175,14 +177,14 @@ module Crystal
     def dbg_lex(s)
       ifdef !release
         return if @dbg–switch == false
-        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}"
+        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}".blue2
       end
     end
 
     def dbg_ind(s)
       ifdef !release
         return if @dbg–switch == false
-        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}"
+        STDERR.puts "## #{s} @#{@line_number}:#{@column_number - 1}".blue2
       end
     end
 
@@ -284,7 +286,7 @@ module Crystal
         @line_number += 1
         @column_number = 1
 
-        dbg_ind  "Got into \\n"
+        # dbg_ind  "Got into \\n"
 
         while true
           indent_start = cur_pos - 1
@@ -303,7 +305,7 @@ module Crystal
           end
         end
 
-        dbg_lex "Collected pure ws"
+        # dbg_lex "Collected pure ws"
 
         # if curch == '\n'
         #   p "Got a new :NEWLINE - do nothing special"
@@ -341,9 +343,8 @@ module Crystal
                                       ContinuationTokens.includes?(@prev_token_type)
                                     )
 
-          dbg_ind "is_continuation == #{is_continuation}, cont_state == #{@next_token_continuation_state}"
+          dbg_ind "is_continuation == #{is_continuation}, cont_state == #{@next_token_continuation_state}, got ind = #{gotten_indent}, current = #{@indent}"
 
-          dbg_ind "gotten indent = #{gotten_indent}, current = #{@indent}"
           if gotten_indent != @indent && !is_continuation
             @token.value = gotten_indent
             if gotten_indent > @indent
@@ -1486,10 +1487,18 @@ module Crystal
           when 'm'
             return check_idfr_or_keyword(:sum, start)
           end
+        when 'w'
+          if  mnc?('i','t','c','h')
+            return check_idfr_or_keyword(:switch, start)
+          end
         end
         scan_idfr(start)
       when 't'
         case nextch
+        when 'e'
+          if mnc?('m','p','l','a','t','e')
+            return check_idfr_or_keyword(:template, start)
+          end
         when 'h'
           case nextch
           when 'e'
@@ -1950,12 +1959,18 @@ module Crystal
       while idfr_part?(curch)
         nextch
       end
+
       if special_end_chars
         case curch
         when '!', '?'
-          nextch
+          if (((c = peek_nextch) >= 'a' && c <= 'z') || (c == '_') || (c >= 'A' && c <= 'Z'))
+            # It's nil–sugar
+          else
+            nextch
+          end
         end
       end
+
       @token.type = :IDFR
 
       idfr_str = string_range start
@@ -1979,7 +1994,7 @@ module Crystal
         end
       end
 
-      # p "scanned idfr: '#{@token.value}'"
+      p "scanned idfr: '#{@token.value}', curch = #{curch}"
       nil
     end
 
@@ -2779,6 +2794,7 @@ module Crystal
             if nest == 0
               nextch
               @token.type = :MACRO_END
+              @token.value = "" # *TODO* debug only - so that no newline or crap is left in
               @token.macro_state = Token::MacroState.default
               return @token
             else

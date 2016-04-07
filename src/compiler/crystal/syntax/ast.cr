@@ -66,6 +66,13 @@ module Crystal
       0
     end
 
+    def visibility=(visibility : Visibility)
+    end
+
+    def visibility
+      Visibility::Public
+    end
+
     def nop?
       false
     end
@@ -390,11 +397,23 @@ module Crystal
     def_equals_and_hash elements
   end
 
+  module SpecialVar
+    def special_var?
+      @name.starts_with? '$'
+    end
+  end
+
   # A local variable or block argument.
   class Var < ASTNode
+    include SpecialVar
+
     property name : String
 
-    def initialize(@name : String, @type = nil)
+
+    property is_nil_sugared : Bool
+
+
+    def initialize(@name : String, @type = nil, @is_nil_sugared = false)
     end
 
     def name_size
@@ -402,7 +421,7 @@ module Crystal
     end
 
     def clone_without_location_individual
-      Var.new(@name)
+      Var.new(@name,  is_nil_sugared: @is_nil_sugared)
     end
 
     def_equals name, type?
@@ -454,6 +473,8 @@ module Crystal
   class Call < ASTNode
     @implicit_construction = false
 
+    property is_nil_sugared : Bool
+
     property obj : ASTNode?
     property name : String
     property args : Array(ASTNode)
@@ -465,13 +486,17 @@ module Crystal
     property has_parenthesis : Bool
     property name_size : Int32
     property doc : String?
+    property? is_expansion : Bool
+    property visibility : Visibility
 
     property? implicit_construction : Bool
 
-    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parenthesis = false, @implicit_construction = false)
+    def initialize(@obj, @name, @args = [] of ASTNode, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parenthesis = false, @implicit_construction = false, @is_nil_sugared = false)
       @name_size = -1
       @global = !!global
       @has_parenthesis = !!has_parenthesis
+      @is_expansion = false
+      @visibility = Visibility::Public
       if block = @block
         block.call = self
       end
@@ -509,7 +534,7 @@ module Crystal
     end
 
     def clone_without_location_individual
-      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction)
+      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction, @is_nil_sugared)
       clone.name_size = name_size
       clone.is_expansion = is_expansion?
       clone
@@ -810,6 +835,8 @@ module Crystal
 
   # A def argument.
   class Arg < ASTNode
+    include SpecialVar
+
     property name : String
     property default_value : ASTNode?
     property restriction : ASTNode?
@@ -832,13 +859,7 @@ module Crystal
     end
 
     def clone_without_location_individual
-      arg = Arg.new @name, @default_value.clone, @restriction.clone, nil, @mutability.clone
-
-      # An arg's type can sometimes be used as a restriction,
-      # and must be preserved when cloned
-      arg.set_type @type
-
-      arg
+      Arg.new @name, @default_value.clone, @restriction.clone, nil, @mutability.clone
     end
 
     def_equals_and_hash name, default_value, restriction, mutability
@@ -896,6 +917,7 @@ module Crystal
     property attributes : Array(Attribute)?
     property splat_index : Int32?
     property doc : String?
+    property visibility : Visibility
 
     def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil)
       @body = Expressions.from body
@@ -905,6 +927,7 @@ module Crystal
       @assigns_special_var = false
       @raises = false
       @name_column_number = 0
+      @visibility = Visibility::Public
     end
 
     def accept_children(visitor)
@@ -942,8 +965,6 @@ module Crystal
       a_def.uses_block_arg = uses_block_arg
       a_def.assigns_special_var = assigns_special_var
       a_def.name_column_number = name_column_number
-      a_def.previous = previous
-      a_def.raises = raises
       a_def
     end
 
@@ -958,9 +979,11 @@ module Crystal
     property name_column_number : Int32
     property splat_index : Int32?
     property doc : String?
+    property visibility : Visibility
 
     def initialize(@name, @args = [] of Arg, @body = Nop.new, @block_arg = nil, @splat_index = nil)
       @name_column_number = 0
+      @visibility = Visibility::Public
     end
 
     def accept_children(visitor)
@@ -2206,35 +2229,6 @@ module Crystal
     def_equals_and_hash constraint, exp
   end
 
-  # Fictitious node to represent primitives
-  class Primitive < ASTNode
-    getter name : Symbol
-
-    def initialize(@name : Symbol, @type : Type? = nil)
-    end
-
-    def clone_without_location_individual
-      Primitive.new(@name, @type)
-    end
-
-    def_equals_and_hash name
-  end
-
-  # Fictitious node to represent a tuple indexer
-  class TupleIndexer < Primitive
-    getter index : Int32
-
-    def initialize(@index : Int32)
-      super(:tuple_indexer_known_index)
-    end
-
-    def clone_without_location_individual
-      TupleIndexer.new(index)
-    end
-
-    def_equals_and_hash index
-  end
-
   # Fictitious node to represent an id inside a macro
   class MacroId < ASTNode
     property value : String
@@ -2251,22 +2245,6 @@ module Crystal
     end
 
     def_equals_and_hash value
-  end
-
-  # Fictitious node to represent a type
-  class TypeNode < ASTNode
-    def initialize(@type : Type)
-    end
-
-    def to_macro_id
-      @type.to_s
-    end
-
-    def clone_without_location_individual
-      self
-    end
-
-    def_equals_and_hash type
   end
 
   # Fictitious node that means "all these nodes come from this file"

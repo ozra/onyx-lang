@@ -72,8 +72,12 @@ module Crystal
     def parse_macro_source(expanded_macro, the_macro, node, vars, inside_def = false, inside_type = false, inside_exp = false)
       generated_source = expanded_macro.source
       begin
-        parser = Parser.new(generated_source, [vars.dup])
-        # parser = OnyxParser.new(generated_source, [vars.dup])
+        if the_macro.is_onyx
+          parser = OnyxParser.new(generated_source, [vars.dup])
+          parser.begin_macro_parse_mode
+        else
+          parser = Parser.new(generated_source, [vars.dup])
+        end
         parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
 
         parser.visibility = node.visibility
@@ -225,12 +229,12 @@ module Crystal
           vars[macro_block_arg.name] = call_block || Nop.new
         end
 
-        new(expander, mod, scope, a_macro.location, vars, call.block)
+        new(expander, mod, scope, a_macro.location, vars, call.block, a_macro.is_onyx)
       end
 
       record MacroVarKey, name : String, exps : Array(ASTNode)?
 
-      def initialize(@expander, @mod, @scope, @location, @vars = {} of String => ASTNode, @block = nil)
+      def initialize(@expander, @mod, @scope, @location, @vars = {} of String => ASTNode, @block = nil, @is_onyx = false)
         @str = MemoryIO.new(512)
         @last = Nop.new
       end
@@ -259,7 +263,7 @@ module Crystal
             yields[var_name] = @last
             @last = Var.new(var_name)
           end
-          @last.to_s(@str, as_kind: :crystal)
+          @last.to_s(@str, as_kind: @is_onyx ? :onyx : :crystal)
         end
 
         false
@@ -285,7 +289,7 @@ module Crystal
               str << exp.value
             else
               exp.accept self
-              @last.to_s(str, as_kind: :crystal)
+              @last.to_s(str, as_kind: @is_onyx ? :onyx : :crystal)
             end
           end
         end)
@@ -767,7 +771,7 @@ module Crystal
       end
 
       def to_s(io)
-        @str.to_s(io, as_kind: :crystal)
+        @str.to_s(io, as_kind: @is_onyx ? :onyx : :crystal)
       end
     end
   end

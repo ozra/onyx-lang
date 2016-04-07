@@ -20,6 +20,42 @@ say "\nLet's ROCK\n".red
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+p for y in [1,2,3]: say y
+say for y in [1,2,3]: say y
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+say "Nil-sugar"
+
+type Nilish
+   @val = 0
+
+   init(@nil-at = 0) ->
+
+   internal() ->
+      say (foo?bar?qwo || 0) + 200
+
+   foo() ->    @val = 1; if @nil-at >= 1 ? self : nil
+   bar?() ->   @val = 2; if @nil-at >= 2 ? self : nil
+   bar() ->    raise "don't call me!"
+   qwo() ->    @val = 3; if @nil-at >= 3 ? 46 : nil
+
+nfoo = Nilish 1
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
+
+say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
+
+nfoo = Nilish 2
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
+
+nfoo = Nilish 3
+say (nfoo?foo?bar?qwo || 0) + 100
+nfoo.internal
 
 '!literal-int = I64
 say "remove me for crash"
@@ -29,6 +65,8 @@ say "remove me for crash"
 -- suffix (int)      = Int _
 -- suffix (real)     = Real _
 -- suffix (number)r  = Real _
+-- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
+-- suffix (number)d  = _f64
 
 -- module Geometry.Suffixes[B = 1.0]
 --    BaseUnitFromMeter = B
@@ -312,27 +350,43 @@ say Xoo.get-count     --> 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- *TODO* maddafuckin templates and macros!
---
--- -- template pow2-round-up(v, r) =
--- -- template pow2-round-up(v, r) ->
--- macro pow2-round-up(v, r) =
---    {% if r != 2 || r != 4 || r != 8 || r != 16 || r != 32 || r != 64 ||
---          r != 128 || r != 256 || r != 512 || r != 1024 || r != 2048 ||
---          r != 4096 || r != 8192 || r != 16378 || r != 32768 || r != 65536
---    %}
---       raise "pow2-round-up requires a single power-of-two value as rounding ref"
---    {% else %}
---       (
---          -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
---          %ref-v = {{r}} - 1
---          ({{v}} + %ref-v) .&. (.~. %ref-v)
---       )
---    {% end %}
--- end
+say "- - Templates & Macros - -".yellow
 
--- pp 4096 == pow2-round-up 3027, 4096
--- pp 8192 == pow2-round-up 4097, 4096
+-- *TODO* maddafuckin templates and macros!
+
+-- template pow2-round-up(v, r) =
+-- template pow2-round-up(v, r) ->
+
+template pow2-round-up(v, r) =
+   {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
+         r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
+         r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
+   %}
+      raise "pow2-round-up requires a single power-of-two value as rounding ref! Got #{ {{r}} }"
+
+      if 1
+   {% else %}
+
+      (
+         -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
+         %ref-v = {{r}} - 1
+         ({{v}} + %ref-v) .&. (.~. %ref-v)
+
+         if true
+            say "fooo ya"
+         else
+            say "booo ya"
+         end
+      )
+
+      if 2
+   {% end %}
+         say "is true"
+      end
+end
+
+pp 4096 == pow2-round-up 3027, 4096
+pp 8192 == pow2-round-up 4097, 4096
 -- pp 8192 == pow2-round-up 4097, 4093 -- Should fail!
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -1039,20 +1093,27 @@ list = [47, 13, 42, 11]
 say "- - ACCESS TERSECUTS! - -".yellow
 
 say list.1, list.2?, list.4?
+say "With to-s: {list.1}, {list.2?to-s.+ "X"}, {list.4?to-s.+ "X"}"
 
 say tag-hash-2#katt
+say "with to_s: '{tag-hash-2#katt?to-s}'"
+
 say json-hash:katt, json-hash:panter
 
 if json-hash:katt: say "Yeeeaaaah"  -- syntactic test for the colon discrepancy
 
 say json-hash:neat-literal?
+say "with to_s: {json-hash:neat-literal?to-s}"
+
 json-hash:neat-literal = "47777777"
 say json-hash:neat-literal
+say "with to_s after: {json-hash:neat-literal?to-s}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- type TradeSide < Enum[I8]
+-- type TradeSide < Enum<I8>
 -- enum TradeSide I8
 type TradeSide < enum I8
    Unknown
@@ -1416,7 +1477,8 @@ end–trait
 -- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
 trait AnotherTrait[S1]
    -- *NOTE* should we allow member data in traits too?
-   -- another–val = 0  -- "can't use instance variables at the top level"
+   @another–val = 0  -- "can't use instance variables at the top level"
+   @a-t-val S1
 
    val() -> @another–val
    valhalla() -> abstract
