@@ -236,7 +236,7 @@ module Crystal
     def initialize(@name : Symbol, @type : Type? = nil)
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       Primitive.new(@name, @type)
     end
 
@@ -251,7 +251,7 @@ module Crystal
       super(:tuple_indexer_known_index)
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       TupleIndexer.new(index)
     end
 
@@ -267,7 +267,7 @@ module Crystal
       @type.to_s
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       self
     end
 
@@ -275,7 +275,7 @@ module Crystal
   end
 
   class Arg
-    def clone_without_location
+    def clone_without_location_individual
       arg = previous_def
 
       # An arg's type can sometimes be used as a restriction,
@@ -341,7 +341,7 @@ module Crystal
       end
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       a_def = previous_def
       a_def.raises = raises
       a_def.previous = previous
@@ -613,7 +613,7 @@ module Crystal
       name == other.name
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       self
     end
 

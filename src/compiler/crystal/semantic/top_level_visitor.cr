@@ -89,10 +89,14 @@ module Crystal
     def type_assign(target : Path, value, node)
       return if @lib_def_pass == 2
 
+      _dbg "TopLevelVisitor.type_assign Path #{target}, value = #{value}"
+
       # We are inside the assign, so we go outside it to check if we are inside an outer expression
       @exp_nest -= 1
       check_outside_block_or_exp node, "declare constant"
       @exp_nest += 1
+
+      target = babelfish_mangling target, @current_type
 
       type = current_type.types[target.names.first]?
       if type
@@ -137,6 +141,15 @@ module Crystal
       end
 
       scope, name = process_type_name(node.name)
+
+      babelfish_mangling node, scope # *TODO* for the type_vars - if any
+
+      _dbg_on # if node.name == "Gimp"
+      _dbg "TopLevelVisitor : visit ClassDef #{node.name}, #{node.is_onyx ? "ONYX" : "CRYSTAL"}"
+      _dbg_off if node.name == "BoogleGoo"
+
+
+      _dbg "TopLevelVisitor : visit ClassDef #{scope}, #{name} - after process_type_name"
 
       type = scope.types[name]?
 
@@ -236,6 +249,10 @@ module Crystal
 
       scope, name = process_type_name(node.name)
 
+      if node.type_vars
+        node = babelfish_mangling node, scope # *TODO* for the type_vars
+      end
+
       type = scope.types[name]?
       if type
         type = type.remove_alias
@@ -266,11 +283,16 @@ module Crystal
     end
 
     def visit(node : Alias)
+      # _dbg "TopLevelVisitor.visit(Alias) : #{node} (name = #{node.name}, value = #{node.value}) - @lib_def_pass = #{@lib_def_pass}"
       return false if @lib_def_pass == 2
+      _dbg "TopLevelVisitor.visit(Alias) : #{node} (name = #{node.name}, value = #{node.value}) - @lib_def_pass = #{@lib_def_pass}"
+
+      node = babelfish_mangling node, current_type
 
       check_outside_block_or_exp node, "declare alias"
-
       check_no_typeof node.value
+
+      _dbg "- TopLevelVisitor.visit(Alias) - All current types: #{current_type.types}"
 
       existing_type = current_type.types[node.name]?
       if existing_type
@@ -314,7 +336,6 @@ module Crystal
         true
       end
     end
-
     def visit(node : Macro)
       check_outside_block_or_exp node, "declare macro"
 
@@ -329,6 +350,8 @@ module Crystal
     end
 
     def visit(node : Def)
+      _dbg "TopLevelVisitor.visit Def #{node.name}"
+
       check_outside_block_or_exp node, "declare def"
 
       check_valid_attributes node, ValidDefAttributes, "def"
@@ -363,6 +386,24 @@ module Crystal
         end
       end
 
+
+
+      # Onyx babeling
+      node.args.each do |arg|
+        _dbg "- TopLevelVisitor.visit(Def) - arg: #{arg.name}, #{arg.restriction}, #{arg.restriction.class}"
+        if restriction = arg.restriction
+          restriction.tag_onyx node.is_onyx
+          babelfish_mangling restriction, current_type
+        end
+      end
+
+      if rtype = node.return_type
+        rtype.tag_onyx node.is_onyx
+        babelfish_mangling rtype, current_type
+      end
+
+
+
       target_type.add_def node
       node.set_type @mod.nil
 
@@ -393,9 +434,16 @@ module Crystal
     end
 
     def visit(node : LibDef)
+      _dbg "TopLevelVisitor.visit LibDef #{node}"
+
       check_outside_block_or_exp node, "declare lib"
 
       link_attributes = process_link_attributes
+
+
+      # *TODO* see below current_type|@mod
+      node.name = babelfish_detaint node.name
+
 
       type = current_type.types[node.name]?
       if type
@@ -641,6 +689,11 @@ module Crystal
     end
 
     def visit(node : TypeDeclaration)
+
+
+      babelfish_mangling node.declared_type, current_type
+
+
       false
     end
 
@@ -863,6 +916,10 @@ module Crystal
     end
 
     def process_struct_or_union_def(node, klass)
+      _dbg "TopLevelVisitor.process_struct_or_union_def #{node}"
+
+      node.name = babelfish_detaint node.name # babelfish_mangling node.name, current_type
+
       type = current_type.types[node.name]?
       if type
         yield type
@@ -893,11 +950,28 @@ module Crystal
       end
 
       def visit(field : Arg)
+        _dbg "muddafuckin StructOrUnionVisitor visit Arg #{field}"
+
         @type_inference.processing_types do
           field.accept @type_inference
         end
 
         restriction = field.restriction.not_nil!
+
+        # # Onyx babeling
+        # if field.is_onyx && restriction.is_a? Path
+        #     scope, type_name = @type_inference.process_type_name(restriction)
+        #     _dbg "process_type_name gives #{scope}, #{type_name}"
+        #     # # foo = Path.new (scope << type_name; scope.global = true; scope)
+        #     # if foreign = babelfish_to_foreign scope, type_name
+        #     #   _dbg "uses translation arg: #{arg.name}, #{restriction}, #{foreign}"
+        #     #   restriction.names[-1] = foreign.last
+        #     #   _dbg "after translation arg: #{arg}"
+        #     # end
+        #     restriction.names[-1] = type_name
+
+        # end
+
         field_type = @type_inference.check_primitive_like restriction
         if field_type.remove_typedef.void?
           if @struct_or_union.is_a?(CStructType)

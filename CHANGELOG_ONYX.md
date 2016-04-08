@@ -1,3 +1,9 @@
+## 0.104.1 - (2016-04-09) ##
+
+* First implementation of macros working with (few) tests. Expect bugs!
+* Nil-sugar call-chain: `x = foo?bar?qwo` => `x = foo.try ~.bar.try ~.qwo`. Methods with final question mark are used if available, else plain-name version (since de-facto `method?` returns Type|Nil.
+* Internal translations ("babelfishing") of type names and method names where needed between Onyx <-> Crystal worlds. WIP. Expect bugs.
+
 ## 0.104.0 - (2016-03-27) ##
 
 * **(breaking change)** Named arguments have been changed back to `name: value`. Space after colon is required! (`name:key` is shorthand subscripting with string key)

@@ -68,7 +68,7 @@ require "kernel"
 require "main"
 require "ext"
 
-require "onyx_type_additionals_layer"
+# require "onyx_type_additionals_layer"
 require "onyx_object_additions"
 require "onyx_set_additions"
 require "onyx_regex_additions"

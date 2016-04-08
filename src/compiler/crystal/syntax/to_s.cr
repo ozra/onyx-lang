@@ -732,9 +732,18 @@ module Crystal
     end
 
     def visit(node : Path)
-      node.names.each_with_index do |name, i|
-        @str << "::" if i > 0 || node.global
-        @str << name
+
+      # *TODO* temp special for macro–ing
+      if node.is_onyx
+        node.names.each_with_index do |name, i|
+          @str << "::" if i > 0 || node.global
+          @str << babelfish_taint name
+        end
+      else
+        node.names.each_with_index do |name, i|
+          @str << "::" if i > 0 || node.global
+          @str << name
+        end
       end
     end
 
@@ -1014,6 +1023,15 @@ module Crystal
       end
       false
     end
+
+    # def visit(node : BabelDef)
+    #   @str << keyword("babel")
+    #   @str << " "
+    #   @str << node.given_name.to_s
+    #   @str << " <== "
+    #   @str << node.foreign_name.to_s
+    #   false
+    # end
 
     def visit(node : TypeDef)
       @str << keyword("type")

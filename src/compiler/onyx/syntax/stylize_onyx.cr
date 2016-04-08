@@ -894,7 +894,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Macro)
-      @str << keyword("macro")
+      @str << keyword("template")
       @str << " "
       @str << node.name.to_s
       if node.args.size > 0 || node.block_arg
@@ -908,7 +908,7 @@ class StylizeOnyxVisitor < Visitor
             @str << "&"
             block_arg.accept self
          end
-         @str << ")"
+         @str << ") ="
       end
       newline
 
@@ -923,11 +923,11 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : MacroExpression)
-      @str << (node.output ? "{{" : "{% ")
+      @str << (node.output ? "{=" : "{% ")
       @str << " " if node.output
       node.exp.accept self
       @str << " " if node.output
-      @str << (node.output ? "}}" : " %}")
+      @str << (node.output ? "=}" : " %}")
       false
    end
 
@@ -1394,6 +1394,15 @@ class StylizeOnyxVisitor < Visitor
       end
       false
    end
+
+   # def visit(node : BabelDef)
+   #    @str << keyword("babel")
+   #    @str << " "
+   #    @str << node.given_name.to_s
+   #    @str << " <== "
+   #    @str << node.foreign_name.to_s
+   #    false
+   # end
 
    def visit(node : TypeDef)
       @str << keyword("ctype")

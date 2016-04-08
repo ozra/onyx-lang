@@ -126,10 +126,13 @@ module Crystal
         type_vars = [typeof_key, typeof_value] of ASTNode
       end
 
-      generic = Generic.new(Path.global("Hash"), type_vars).at(node)
+      hash_type_name = node.is_onyx ? "Map" : "Hash"
+
+      generic = Generic.new(Path.global(hash_type_name), type_vars).at(node)
       constructor = Call.new(generic, "new").at(node)
 
       if node.entries.empty?
+        constructor.tag_onyx node.is_onyx
         constructor
       else
         temp_var = new_temp_var
@@ -140,7 +143,9 @@ module Crystal
           exps << Call.new(temp_var.clone, "[]=", entry.key.clone, entry.value.clone).at(node)
         end
         exps << temp_var.clone
-        Expressions.new(exps).at(node)
+        ret = Expressions.new(exps).at(node)
+        ret.tag_onyx node.is_onyx
+        ret
       end
     end
 
@@ -448,6 +453,12 @@ module Crystal
                     final_if
                   end
       final_exp.location = node.location
+
+
+      final_exp.tag_onyx node.is_onyx
+
+      _dbg "final_exp: #{final_exp.to_s}".yellow
+
       final_exp
     end
 

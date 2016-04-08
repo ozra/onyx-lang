@@ -20,6 +20,10 @@ module Crystal
     @dead_code : Bool
     @current_def : Def?
 
+
+    @onyx_status_stack = [] of Bool
+
+
     def initialize(@program)
       @dead_code = false
       @current_def = nil
@@ -27,12 +31,17 @@ module Crystal
     end
 
     def normalize(node)
+      _dbg "Normalizer.normalize(#{node.class}) -> where node.is_onyx = #{node.is_onyx}:\nnode: (#{node})"
       node.transform(self)
     end
 
     def before_transform(node)
       @dead_code = false
       @exp_nest += 1 if nesting_exp?(node)
+
+      @onyx_status_stack << node.is_onyx if nesting_exp?(node)
+      nil
+
     end
 
     def after_transform(node)
@@ -46,6 +55,10 @@ module Crystal
       else
         @dead_code = false
       end
+
+      node.tag_onyx @onyx_status_stack.pop if nesting_exp?(node)
+      nil
+
     end
 
     def nesting_exp?(node)
@@ -311,7 +324,7 @@ module Crystal
     def transform(node : For) : ASTNode
 
       # *TODO* - after macros is fixed
-      # unless node.onyx_node
+      # unless node.is_onyx
       #   raise "There shouldn't be any For-nodes from Crystal sources!"
       # end
 
@@ -413,9 +426,9 @@ module Crystal
     def transform(node : Attribute) : ASTNode
 
       # *TODO* when macros are fixed
-      # return node unless node.onyx_node
+      # return node unless node.is_onyx
 
-      if ["int_literal", "real_literal"].includes? node.name
+      if ["!int_literal", "!real_literal"].includes? node.name
         Nop.new
       else
         node.name =

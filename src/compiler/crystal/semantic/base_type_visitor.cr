@@ -33,6 +33,12 @@ module Crystal
     end
 
     def visit(node : Path)
+      _dbg "BaseTypeVisitor.visit Path #{node}"
+
+
+      babelfish_mangling node, current_type
+
+
       type = resolve_ident(node)
       case type
       when Const
@@ -67,6 +73,9 @@ module Crystal
         node.syntax_replacement = type
         node.bind_to type
       end
+
+      _dbg "/BaseTypeVisitor.visit Path #{node}"
+
     end
 
     def end_visit(node : Fun)
@@ -123,14 +132,24 @@ module Crystal
     end
 
     def visit(node : Generic)
+      _dbg "BaseTypeVisitor.visit Generic #{node}"
+
+
+
+      babelfish_mangling node, current_type
+
+
+
       node.in_type_args = @in_type_args > 0
       node.scope = @scope
 
       node.name.accept self
 
+      _dbg "BaseTypeVisitor.visit Generic #{node} - iterate type_vars"
       @in_type_args += 1
       node.type_vars.each &.accept self
       @in_type_args -= 1
+      _dbg "BaseTypeVisitor.visit Generic #{node} - done iterating type_vars"
 
       return false if node.type?
 
@@ -158,6 +177,8 @@ module Crystal
     end
 
     def visit_fun_def(node : FunDef)
+      _dbg "BaseTypeVisitor.visit_fun_def #{node}"
+
       check_outside_block_or_exp node, "declare fun"
 
       if node.body && !current_type.is_a?(Program)
@@ -168,8 +189,14 @@ module Crystal
       check_valid_attributes node, ValidFunDefAttributes, "fun"
       node.doc ||= attributes_doc()
 
+      _dbg "- BaseTypeVisitor.visit_fun_def - do args"
       args = node.args.map do |arg|
         restriction = arg.restriction.not_nil!
+        restriction.tag_onyx node.is_onyx
+
+        restriction = babelfish_mangling restriction, current_type
+
+        _dbg "- BaseTypeVisitor.visit_fun_def - args #{arg} : #{restriction}"
         processing_types do
           restriction.accept self
         end
@@ -315,6 +342,8 @@ module Crystal
     end
 
     def lookup_path_type(node : Path, create_modules_if_missing = false)
+      _dbg "BaseTypeVisitor.lookup_path_type(Path: #{node})"
+
       target_type = resolve_ident(node, create_modules_if_missing)
       if target_type.is_a?(Type)
         target_type.remove_alias_if_simple
@@ -332,7 +361,28 @@ module Crystal
     end
 
     def resolve_ident(node : Path, create_modules_if_missing = false)
-      target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
+
+      if node.is_onyx || node.names.any? &.ends_with? "__X_" # *TODO*
+
+        tried_as_foreign_bak = node.tried_as_foreign
+        first_name_bak = node.names.first
+
+        node = babelfish_mangling node, mod # force foreign try _first_
+
+        target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
+
+        _dbg " - resolve_ident - Path got target_type: #{target_type}, #{target_type.class}"
+
+        if !target_type && !tried_as_foreign_bak
+          _dbg " - resolve_ident - retries node mangled as altneratively _not_ foreign #{node}, #{node.tried_as_foreign}"
+          node.tried_as_foreign = tried_as_foreign_bak
+          node.names[0] = first_name_bak
+          target_type, similar_name = resolve_ident? node, create_modules_if_missing
+        end
+
+      else
+        target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
+      end
 
       unless target_type
         TypeLookup.check_cant_infer_generic_type_parameter(@scope, node)
@@ -347,15 +397,31 @@ module Crystal
       target_type
     end
 
+
     def resolve_ident?(node : Path, create_modules_if_missing = false)
-      free_vars = @free_vars
-      if free_vars && !node.global && (type = free_vars[node.names.first]?)
+      _dbg "resolve_ident?(Path: #{node}) ->" # , auto-mod: #{create_modules_if_missing}"
+
+      if (free_vars = @free_vars) && !node.global
+        _dbg "detaint just for free_vars check in free_vars = #{free_vars}"
+        first_detainted = babelfish_detaint node.names.first
+        type = free_vars[first_detainted]?
+      end
+
+      if type
+        _dbg "- resolve_ident? - matched '#{first_detainted} in free_vars: #{free_vars}"
         target_type = type
+
         if node.names.size > 1
           target_type = lookup_type target_type, node.names[1..-1], node
         end
+
       else
         base_lookup = node.global ? mod : (@type_lookup || @scope || @types.last)
+
+        _dbg "- resolve_ident? - do a lookup_type '#{node.names} in #{base_lookup} of #{base_lookup.class}"
+
+        node = babelfish_mangling node, base_lookup
+
         target_type = lookup_type base_lookup, node, node
 
         unless target_type
@@ -395,13 +461,30 @@ module Crystal
     end
 
     def process_type_name(node_name)
+      _dbg "process_type_name #{node_name} (global == #{node_name.global})"
+
       if node_name.names.size == 1 && !node_name.global
         scope = current_type
+        node_name = babelfish_mangling node_name, scope
         name = node_name.names.first
+
+
+
       else
-        name = node_name.names.pop
-        scope = lookup_path_type node_name, create_modules_if_missing: true
+        # *TODO* additional not in original
+        if node_name.global
+          name = node_name.names.first
+          scope = mod
+        else
+
+
+          # node_name = babelfish_mangling node_name, scope
+          name = babelfish_detaint node_name.names.pop
+          scope = lookup_path_type node_name, create_modules_if_missing: true
+        end
+
       end
+
       {scope, name}
     end
 

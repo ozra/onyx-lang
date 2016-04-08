@@ -7,6 +7,7 @@ require "wild_colors"
 
 '!literal-int = I64
 
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
@@ -56,6 +57,9 @@ nfoo = Nilish 3
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
 
+'!literal-int = I64
+say "remove me for crash"
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- suffix (int)      = Int _
@@ -64,7 +68,7 @@ nfoo.internal
 -- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
 -- suffix (number)d  = _f64
 
--- module GeometricSuffixes[B = 1.0]
+-- module Geometry.Suffixes[B = 1.0]
 --    BaseUnitFromMeter = B
 
 --    suffix (number)mm    = _r * (1000r * BaseUnitFromMeter)
@@ -74,11 +78,11 @@ nfoo.internal
 --    suffix (number)km    = _r * (0.001r * BaseUnitFromMeter)
 --    suffix (number)svmil = _r * (0.0001r * BaseUnitFromMeter)
 
--- module GeometryUtils
---    mixin GeometricSuffixes
---    mixin GeometricCalcs
+-- module Geometry.All
+--    mixin Suffixes
+--    mixin Functions
 
--- using GeometryUtils
+-- using Geometry.All
 --    dist = 47km + 300m
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -298,7 +302,7 @@ FDSA
 >.downcase
 
 
-the-function(a Int64? = nil, b Int64? = nil) -> true
+the-function(a I64? = nil, b I64? = nil) -> true
 the-function         -- a is nil, #b is nil
 the-function 1       -- a is 1, #b is nil
 the-function b: 2  -- a is nil, #b is 2
@@ -308,12 +312,12 @@ if the-function a: 1, b: 2: say "the-function says yes!"
 if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
-my-foo(x, y, opts Hash<Str, Str|I64|Nil>) ->
+my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
    say "csx { opts["magic_port"]?.class }"
    say "csx { opts["x"]?.class }"
    say "csx { typeof(opts["x"]?) }"
    -- host = opts["host_name"] as Str? || "default_host"
-   -- magic-port = opts["magic_port"] as Int64? || 47
+   -- magic-port = opts["magic_port"] as I64? || 47
    -- p x, y, host, magic-port
 end
 my-foo 1, 2, Map[Str, Str|I64|Nil]{
@@ -346,28 +350,69 @@ say Xoo.get-count     --> 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- *TODO* maddafuckin templates and macros!
---
--- -- template pow2-round-up(v, r) =
--- -- template pow2-round-up(v, r) ->
--- macro pow2-round-up(v, r) =
---    {% if r != 2 || r != 4 || r != 8 || r != 16 || r != 32 || r != 64 ||
---          r != 128 || r != 256 || r != 512 || r != 1024 || r != 2048 ||
---          r != 4096 || r != 8192 || r != 16378 || r != 32768 || r != 65536
---    %}
---       raise "pow2-round-up requires a single power-of-two value as rounding ref"
---    {% else %}
---       (
---          -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
---          %ref-v = {{r}} - 1
---          ({{v}} + %ref-v) .&. (.~. %ref-v)
---       )
---    {% end %}
--- end
+say "- - Templates & Macros - -".yellow
 
--- pp 4096 == pow2-round-up 3027, 4096
--- pp 8192 == pow2-round-up 4097, 4096
--- pp 8192 == pow2-round-up 4097, 4093 -- Should fail!
+-- *TODO* maddafuckin templates and macros!
+
+-- template pow2-round-up(v, r) =
+-- template pow2-round-up(v, r) ->
+
+   -- {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
+   --       r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
+   --       r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
+
+module Mac
+   template horribly-formatted-pow2-round-up(v, r) =
+    (
+      {% if r != 64 &&
+            r != 4096 &&
+            r != 65536
+      %}
+         -- raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {{=r=}}"
+         raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {=r=}"
+
+          %z = nil
+         if 1
+
+      {% else %}
+         _debug_compiler_start_ = true
+
+         (do
+            -- silly thing to do, caching a constant expr, but we're testing all features here, m'kay!
+            %ref-v = {=r=} - 1
+            %z = ({=v=} + %ref-v) .&. (.~. %ref-v)
+
+            if true
+            say "fooo ya { %z }"
+            say "qwaaa {{=r=}}"
+         else
+               say "booo ya"
+        end
+   -- comm at 0
+         end
+               )
+
+         if 2
+
+      {% end %}
+
+            say "is true"
+            %z
+         end
+          %z
+     )
+
+include Mac
+
+horribly-formatted-pow2-round-up 3027, 4096
+horribly-formatted-pow2-round-up 4097, 4096
+horribly-formatted-pow2-round-up 4097, 65536
+
+pp 4096 == horribly-formatted-pow2-round-up 3027, 4096
+pp 8192 == horribly-formatted-pow2-round-up 4097, 4096
+pp 65536 == horribly-formatted-pow2-round-up 4097, 65536
+
+-- pp 8192 == horribly-formatted-pow2-round-up 4097, 4093  ---> Should fail!
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -377,12 +422,10 @@ say Xoo.get-count     --> 2
 '!literal-int = I64
 '!literal-real = Float32
 
--- *TODO* *TEMP*
-type Ints = StdInt
--- type Real = Float64
 
-type MoreInts = Int32 | Int64 | I8
-say MoreInts
+
+type MoreInt = I32 | I64 | I8
+say MoreInt
 
 type SomeFacts < flags U8
    AppleLover
@@ -392,7 +435,11 @@ end
 
 facts = SomeFacts.flags AppleLover, CoolDude
 say "facts: {facts}"
-say typeof(facts)
+say type-decl(facts)
+say typedecl facts
+say typeof facts, "blargh", 1
+say (type_decl facts, "blargh", 1)
+say type–decl(facts, "blargh", 1)
 
 facts .|.= SomeFacts.PearLover
 say "facts: {facts}"
@@ -401,9 +448,9 @@ say "facts: {facts}"
 
 MY_CONST = do
    x = 0
-   2.upto(4).each (a) ~>
+   2.upto(4).each (a, i)\
       x += a
-      say "calculating MY_CONST, {a}"
+      say "calculating MY_CONST, {a}, {i}"
    x
 
 pp MY_CONST
@@ -419,7 +466,7 @@ pp $.MY_CONST
 -- *TODO* ' should not be needed before I32!
 $my-global = 47
 $my-typed-global 'I32
-'!literal-int=Int32
+'!literal-int=I32
 $my-typed-and-assigned-global 'I32 = 47
 $my-global = $my-typed-and-assigned-global
 
@@ -436,19 +483,19 @@ module Djur
       Self.foo = 1
       Type.bar = 2
 
-      @foo     Ints
-      bar      Ints
-      @foo’    Ints  = 47
+      @foo     Int
+      bar      Int
+      @foo’    Int  = 47
       bar’           = 47
-      @foo’’   Ints
-      bar’’    Ints
+      @foo’’   Int
+      bar’’    Int
 
-      foo3     'Ints
-      bar3     ^Ints
-      qwo3     ~Ints
+      foo3     'Int
+      bar3     ^Int
+      qwo3     ~Int
 
-      -- xfoo! Ints = 47  -- should fail, and does
-      -- xbar? Ints = 42  -- should fail, and does
+      -- xfoo! Int = 47  -- should fail, and does
+      -- xbar? Int = 42  -- should fail, and does
 
       Type.my-def() -> say "Hit the spot! { Type.foo’ }, { @@bar }"
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
@@ -506,11 +553,11 @@ type Blk
    ;
 ;
 
-blk = Blk(4, (x) ~>
+blk = Blk(4, (x)\
    say "in blk init block: {x}"
 )
 
-blk2 = Blk 7, (x) ~>
+blk2 = Blk 7, (x)\
    say "in blk2 init block: {x}"
 
 
@@ -573,13 +620,13 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
 
    -- -- *TODO* after all basic control structs are implemented
 
-   -- zar2 ^Ints
+   -- zar2 ^Int
    -- zar4 'Real
    -- zar3 ~Str
 
-   -- -- zar4 'Ints = 1
-   -- -- zar5 ~Ints = 1
-   -- -- zar6 ^Ints = 1
+   -- -- zar4 'Int = 1
+   -- -- zar5 ~Int = 1
+   -- -- zar6 ^Int = 1
    -- -- zar7 '= 1
    -- -- zar8 '*= 1
    -- -- zar9 'auto = 1
@@ -675,12 +722,15 @@ w = list.map (x, y) ~> "{x} 47"
 i = list.map (x, y) ~> "{x} 13"
 -- i = list.map (x, y) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
 
-j = list.map ~> "{_1} 13"
+j = list.map \ "{_1} 13"
 
 puts "{v}, {w}"
 
-
 list = [47, 13, 42, 11]
+
+list.each (v, i) ~> say "each: v: {v}, i: {i}"
+list.each_ (v, i) ~> say "each-value: v: {v}, i: {i}"
+
 say " x:"
 x = list.each((v) ~> p v).map(~> _1 * 2)
 say " y:"
@@ -690,13 +740,16 @@ z = list.each((v) ~> p v).map ~> _1 * 2
 say " u:"
 u = list.each((v) ~> p v).map ~> _1 * 2
 say " v:"
-v = ( ( list.each((v) ~> p v) ).map ~.* 2 )
+v = ( ( list.each((v) ~> p v) ).map \.* 2 )
 say " w:"
 w = ( ( list.each((v) ~> p v) ).map(~.* 2))
 say " pw:"
-pw = (list.each ~> p _1).map ~.* 2
+
+pw = (list.each \p _1).map \.* 2
+
 
 say "All lists should equal [94, 26, 84, 22]"
+
 say x
 say y
 say z
@@ -705,24 +758,27 @@ say v
 say w
 say pw
 
+
 -- def say(s) -> puts s
 
+
 '!literal-int=I32
+
 
 DEBUG–SEPARATOR = 47
 
 
 -- Change array literal notation for typed arr (thus empty arr)!?
 
--- a = [32, 47 'Int32]
+-- a = [32, 47 'I32]
 --  or
--- a = [Int32: 32, 47]
+-- a = [I32: 32, 47]
 
--- a = [Int32:]
+-- a = [I32:]
 --  or
--- a = [] Int32
+-- a = [] I32
 
--- a = [200 x Int32]  -- static array literal
+-- a = [200 x I32]  -- static array literal
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -737,32 +793,32 @@ def f(y ()->) -> nil
 fn g(y ()->) -> nil
 g(y ()->) -> nil
 
---   -- (Seq[Int32]()).flat_map ~>
+--   -- (Seq[I32]()).flat_map ~>
 f () ->
-   ([] of Ints).flat-map ~>
-      [] of Ints
+   ([] of Int).flat-map ~>
+      [] of Int
 
 f(() ->
-   ([] of Ints).flat-map(~>
-      [] of Ints
+   ([] of Int).flat-map(~>
+      [] of Int
    )
 )
 
 (f () ->
-   (([] of Ints).flat-map ~>
-      [] of Ints
+   (([] of Int).flat-map ~>
+      [] of Int
    )
 )
 
 -- f(() ->
---    ([0 x Ints]).flat-map(~>
---       [0 x Ints]
+--    ([0 x Int]).flat-map(~>
+--       [0 x Int]
 --    )
 -- )
 
 -- (f () ->
---    ((['Ints]).flat-map ~>
---       ['Ints]
+--    ((['Int]).flat-map ~>
+--       ['Int]
 --    )
 -- )
 
@@ -893,7 +949,7 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
-def zoo*(a; b; ...c 'Ints) Str ->  'pure
+def zoo*(a; b; ...c 'Int) Str ->  'pure
    if true:
       i = 1
 
@@ -946,7 +1002,7 @@ def zoo*(a; b; ...c 'Ints) Str ->  'pure
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
 
-'literal-int=Ints
+'literal-int=Int
 
 p zoo 1, 2, 47, 42
 
@@ -962,14 +1018,14 @@ say "m2 = " + m2.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-def qwo(a 'Ints, b ~Ints) ->
+def qwo(a 'Int, b ~Int) ->
 end
 
-def qwo2(a ^Ints, b 'Ints) -> end
+def qwo2(a ^Int, b 'Int) -> end
 
-def qwo3(a 'Ints, b mut Ints) Str -> -- Str
+def qwo3(a 'Int, b mut Int) Str -> -- Str
 
-def qwo4(a Ints; b Ints) ->
+def qwo4(a Int; b Int) ->
 end
 
 qwo2 1, 2
@@ -1032,8 +1088,27 @@ say "tag–hash–2 value is {tag–hash–2}"
 
 
 
-tuple1 = <13, 32, 47, 2>
-tuple2 = <"foo", 1, {1, 2, 3}>
+tuple1a = <13, 32, 47, 2>
+tuple2a = <"foo", 1, {1, 2, 3}>
+
+tuple1b = (13, 32, 47, 2)
+tuple2b = ("foo", 1, {1, 2, 3})
+
+-- tuple1c = 〈13, 32, 47, 2〉
+-- tuple2c = 〈"foo", 1, {1, 2, 3}〉
+
+-- tuple1d = ‹13, 32, 47, 2›
+-- tuple2d = ‹"foo", 1, {1, 2, 3}›
+
+-- tuple1e = «13, 32, 47, 2»
+-- tuple2e = «"foo", 1, {1, 2, 3}»
+
+-- tuple1f = （13, 32, 47, 2）
+-- tuple2f = （"foo", 1, {1, 2, 3}）
+
+-- tuple1g = ⦅13, 32, 47, 2⦆
+-- tuple2g = ⦅"foo", 1, {1, 2, 3}⦆
+
 
 set1 = {1, 2, 3, 5}
 set2 = {"foo", 47, "mine", 13}
@@ -1062,12 +1137,14 @@ say "with to_s after: {json-hash:neat-literal?to-s}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- type TradeSide < Enum[Int8]
--- enum TradeSide Int8
-type TradeSide < enum Int8
+-- type TradeSide < Enum[I8]
+-- type TradeSide < Enum<I8>
+-- enum TradeSide I8
+type TradeSide < enum I8
    Unknown
    Buy
    Sell
+
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -1249,12 +1326,12 @@ end
 
 x = foo a, 2, "3"
 
-a = (a Ints, b Ints) -> (a + b).to–s; end
-b = (a Str, _ Ints, b 'Bool; c Real) ->
+a = (a Int, b Int) -> (a + b).to–s; end
+b = (a Str, _ Int, b 'Bool; c Real) ->
    "{a} {x}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Ints, b 'Str, c 'Ints) -> a.to–s + b + c.to–s
+c = (a ~Int, b 'Str, c 'Int) -> a.to–s + b + c.to–s
 
 '!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
@@ -1268,14 +1345,14 @@ type Fn = Proc
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
-def booze1(f1 Fn[I32,List<*>,List<List[Ptr<Int32>]>], f2 Fn[Str, Nil, List<Bool>]) ->
-def booze2(f1 (List<*>, List<List[Ptr<Int32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
+def booze1(f1 Fn[I32,List<*>,List<List[Ptr<I32>]>], f2 Fn[Str, Nil, List<Bool>]) ->
+def booze2(f1 (List<*>, List<List[Ptr<I32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
 
 -- New list type literal suggestion: cause problems in expressions!
--- booze3(f1 ([*], [[Ptr<Int32>]]) -> I32, f2 (Nil, [Bool]) -> Str) ->
--- say "[[Ptr[Int32]]] => " + '[[Ptr[Int32]]].to–s
+-- booze3(f1 ([*], [[Ptr<I32>]]) -> I32, f2 (Nil, [Bool]) -> Str) ->
+-- say "[[Ptr[I32]]] => " + '[[Ptr[I32]]].to–s
 
-say "List[List<Ptr[Int32]>] => " + List[List<Ptr[Int32]>].to–s
+say "List[List<Ptr[I32]>] => " + List[List<Ptr[I32]>].to–s
 
 booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 
@@ -1425,7 +1502,8 @@ end–trait
 -- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
 trait AnotherTrait[S1]
    -- *NOTE* should we allow member data in traits too?
-   -- another–val = 0  -- "can't use instance variables at the top level"
+   @another–val = 0  -- "can't use instance variables at the top level"
+   @a-t-val S1
 
    val() -> @another–val
    valhalla() -> abstract
@@ -1438,11 +1516,11 @@ type Qwa < abstract
 end–type
 
 type Bar < Qwa
-   Self.my–foo Int64 = 47i64
-   Self.some–other–foo 'Ints = 42
+   Self.my–foo I64 = 47i64
+   Self.some–other–foo 'Int = 42
    Self.yet–a-foo = 42
 
-   '!literal-int=Int32
+   '!literal-int=I32
 
    Type.RedFoo = 5
    Type.GreenFoo = 7
@@ -1451,7 +1529,7 @@ type Bar < Qwa
    GreenBar = 8
 
    foo–a Str = ""
-   foo–b Ints = 0_i64
+   foo–b Int = 0_i64
    foo–c I64 = 0_i64
    foo-ya I32 = 0
 
@@ -1475,8 +1553,11 @@ type Foo[S1] < Bar
    foo–x I64 = 47_i64  'get 'set
    foo–y = 48
    foo–z = "bongo"  'get
-   foo–u Ints = 47  'get 'set
-   foo–w = 47       'set
+   foo–u Int = 47  'get 'set
+
+   -- *TODO* WTF!
+   foo-w = 474242       'set
+   foo–w = 474747       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
@@ -1486,7 +1567,7 @@ type Foo[S1] < Bar
 
    bar–y        = 48
    bar–z        = "bongo"  'get
-   @bar–u  Ints = 47  'get 'set
+   @bar–u  Int = 47  'get 'set
    @bar–w       = 47  'get
 
    ifdef x86_64
@@ -1500,6 +1581,12 @@ type Foo[S1] < Bar
    init() ->
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
+
+
+
+   -- *TEMP*
+   get-foo-w() -> @foo-w
+
 
    'pure
    fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
@@ -1533,7 +1620,7 @@ type Foo[S1] < Bar
 
    fn–a(a, b) -> "a: {a}, {b}" 'pure
 
-   def fn–b(a S1, b Ints) -> -- fdsa
+   def fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
    fn–c*(a, b S1) S1 -> 'redef 'inline
@@ -1543,7 +1630,7 @@ type Foo[S1] < Bar
 
    --# protected
    -- fn–c(a, b I32) redef protected ->
-   fn–c**(a, b Ints) -> 'redef
+   fn–c**(a, b Int) -> 'redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1552,7 +1639,7 @@ type Foo[S1] < Bar
       fn–e
    end
 
-   fn–d2(a S1, b Ints) ->
+   fn–d2(a S1, b Int) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1587,7 +1674,7 @@ type FooStyle2<S1> < Bar
    @foo–x I64 = 47_i64  'get 'set
    @foo–y = 48
    @foo–z = "bongo"  'get
-   @foo–u Ints = 47  'get 'set
+   @foo–u Int = 47  'get 'set
    @foo–w = 47       'set
 
    -- at-notation at declaration too?
@@ -1598,7 +1685,7 @@ type FooStyle2<S1> < Bar
 
    @bar–y = 48
    @bar–z = "bongo"  'get
-   @bar–u Ints = 47  'get 'set
+   @bar–u Int = 47  'get 'set
    -- getter @bar–w = 47
    @bar–w = 47       'get
 
@@ -1653,15 +1740,15 @@ type FooStyle2<S1> < Bar
 
    fn fn–a(a, b) -> "a: {a}, {b}"
 
-   -- fn fn–b(a S1, b Ints) -- fdsa
-   fn fn–b(a S1, b Ints) -> -- fdsa
+   -- fn fn–b(a S1, b Int) -- fdsa
+   fn fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
    fn fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
    end–fn
 
-   fn fn–c**(a, b Ints) -> 'redef
+   fn fn–c**(a, b Int) -> 'redef
       "c: {a}, {b}"
 
    -- fn fn–d1(a, b)
@@ -1671,8 +1758,8 @@ type FooStyle2<S1> < Bar
       fn–e
    end
 
-   -- fn fn–d2(a S1, b Ints)
-   fn fn–d2(a S1, b Ints) ->
+   -- fn fn–d2(a S1, b Int)
+   fn fn–d2(a S1, b Int) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1685,7 +1772,6 @@ type FooStyle2<S1> < Bar
    fn [](i) -> @foo–b + i
 
 end–type
-
 -- *TODO* Anonymous types!
 -- anon-typed = new Bar
 --    mixin AnotherTrait<I64>
@@ -1697,7 +1783,12 @@ say "create a Foo instance"
 foo = Foo[Str]()
 
 pp foo.foo-x
-pp foo.foo-w = 46
+
+-- *TODO* this doesn't work out as it should! foo-w is never set!!!??
+say "foo.foo-w = 463"
+foo.foo-w = 463
+pp foo.foo-w = 461
+say "foo.get-foo-w {foo.get-foo-w}"
 -- pp foo.foo-y -- should fail
 -- pp foo.foo-w -- should fail
 
@@ -1789,14 +1880,14 @@ api MyLibGmp
    alias Double = LibC.Double
 
    ifdef x86_64
-      alias TestT = UInt64
+      alias TestT = U64
    else
-      alias TestT = UInt32
+      alias TestT = U32
    end
 
    struct Mpz
-      _mp_alloc Int32
-      _mp_size  Int32
+      _mp_alloc I32
+      _mp_size  I32
 
       -- Just testing ifdef in all contexts
       ifdef x86_64
@@ -1809,11 +1900,11 @@ api MyLibGmp
    alias MpzP = Ptr[Mpz]
 
    fun init = __gmpz_init(x MpzP)
-   fun init_set_si = __gmpz_init_set_si(rop Ptr<Mpz>, op Long)
-   fun init_set_str = __gmpz_init_set_str(rop MpzP, str Ptr[UInt8], base Int)
+   fun init_set_si = __gmpz_init_set_si(rop MpzP, op Long)
+   fun init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr[U8], base Int)
 
    fun get_si = __gmpz_get_si(op MpzP) Long
-   fun get_str = __gmpz_get_str(str Ptr[UInt8], base Int, op MpzP) Ptr[UInt8]
+   fun get_str = __gmpz_get_str(str Ptr[U8], base Int, op MpzP) Ptr[U8]
 
    fun add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP)
    fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr[Void], realloc (Ptr[Void], SizeT, SizeT) -> Ptr[Void], free (Ptr[Void], SizeT) -> Void )
@@ -1849,7 +1940,7 @@ add-as-big-ints(a, b) ->
    MyLibGmp.init out bigret
 
    -- if T == Str
-   if a.is-a? Str
+   if a.of? Str
       MyLibGmp.init-set-str pointerof(bigv1), a, 10
    else
       MyLibGmp.init-set-si pointerof(bigv1), a

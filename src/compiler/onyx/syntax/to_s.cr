@@ -4,7 +4,8 @@ module Crystal
 
 class ASTNode
    def to_s(io, as_kind = :auto)
-      if (as_kind == :auto && @onyx_node) || as_kind == :onyx
+      # if as_kind != :crystal # (as_kind == :auto && @is_onyx) || as_kind == :onyx
+      if (as_kind == :auto && @is_onyx) || as_kind == :onyx
          visitor = ToOnyxSVisitor.new(io)
          self.accept visitor
       else
@@ -15,6 +16,10 @@ class ASTNode
 end
 
 class ToSVisitor < Visitor
+
+   # If a for–node is passed to a macro expansion, is it normalized first?
+   # Double check. Otherwise it would go straight for crystal generation.
+   # (Crystal macros _must_ have nodes genned as crystal–code!)
    def visit(node : For)
       raise "Shouldn't possibly happen from Crystal code!"
    end
@@ -778,11 +783,11 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : MacroExpression)
-      @str << (node.output ? "{{" : "{% ")
+      @str << (node.output ? "{=" : "{% ")
       @str << " " if node.output
       node.exp.accept self
       @str << " " if node.output
-      @str << (node.output ? "}}" : " %}")
+      @str << (node.output ? "=}" : " %}")
       false
    end
 
@@ -1242,6 +1247,15 @@ class ToOnyxSVisitor < Visitor
       end
       false
    end
+
+   # def visit(node : BabelDef)
+   #    @str << keyword("babel")
+   #    @str << " "
+   #    @str << node.given_name.to_s
+   #    @str << " <== "
+   #    @str << node.foreign_name.to_s
+   #    false
+   # end
 
    def visit(node : TypeDef)
       @str << keyword("ctype")
