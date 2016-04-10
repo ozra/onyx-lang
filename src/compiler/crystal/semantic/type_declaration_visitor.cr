@@ -149,6 +149,8 @@ module Crystal
     end
 
     def visit(node : TypeDeclaration)
+      _dbg "TypeDeclarationVisitor.visit(#{node} TypeDeclaration) ->"
+
       case var = node.var
       when Var
         node.raise "declaring the type of a local variable is not yet supported"

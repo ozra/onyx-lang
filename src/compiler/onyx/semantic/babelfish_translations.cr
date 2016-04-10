@@ -13,16 +13,8 @@ macro babel_func(given, foreign, block_it = true)
   {% end %}
 end
 
-# macro babel_op(given, foreign, block_it = true)
-#   $babelfish_op_dict[{{given.id}}] = {{foreign.id}}
-#   # {% if block_it %}
-#   #   $babelfish_op_dict[{{foreign}}] = {{foreign}}__auto_babeled_
-#   # {% end %}
-# end
-
 $babelfish_type_dict = Hash(String, String).new
 $babelfish_func_dict = Hash(String, String).new
-# $babelfish_op_dict = Hash(Symbol, Symbol).new
 
 # *TODO* one for each - OR - simply flag renames, so they can be reversed! Yes.
 $babelfish_reverse_dict = Hash(String, String).new
@@ -123,6 +115,12 @@ def babelfish_mangling(node : Nil, scope) : Nil; node; end
 def babelfish_mangling(node : Self, scope) : Self; node; end
 def babelfish_mangling(node : Underscore, scope) : Underscore; node; end
 def babelfish_mangling(node : Metaclass, scope) : Metaclass; node; end
+
+def babelfish_mangling(node : TypeDeclaration, scope) : TypeDeclaration
+  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  node.declared_type = babelfish_mangling node.declared_type, scope
+  node
+end
 
 def babelfish_mangling(node : Union, scope) : Union
   _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"

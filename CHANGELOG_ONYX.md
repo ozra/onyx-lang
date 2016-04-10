@@ -1,3 +1,7 @@
+## 0.104.2 - (2016-04-11) ##
+* Fix ternary-if edge-cases
+* Stronger checking on globals with name-babeling
+
 ## 0.104.1 - (2016-04-09) ##
 
 * First implementation of macros working with (few) tests. Expect bugs!

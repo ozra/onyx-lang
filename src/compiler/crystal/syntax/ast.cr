@@ -1232,6 +1232,7 @@ module Crystal
     def clone_without_location_individual
       ident = Path.new(@names.clone, @global)
       ident.name_size = name_size
+      ident.tried_as_foreign = @tried_as_foreign
       ident
     end
 

@@ -131,8 +131,6 @@ class Nesting
    property indent
    property name
    property require_end_token
-   @auto_parametrization = false
-   #property auto_parametrization
    @block_auto_params : Array(Var)?
    property block_auto_params
    property location
@@ -143,15 +141,9 @@ class Nesting
 
    @@std_int : String
    @@std_int = "StdInt"
-   # @@std_int = Token.new
-   # @@std_int.type = :CONST
-   # @@std_int.value = "StdInt"
 
    @@std_real : String
    @@std_real = "StdReal"
-   # @@std_real = Token.new
-   # @@std_real.type = :CONST
-   # @@std_real.value = "StdReal"
 
    @@nesting_keywords = %w(
       program
@@ -176,13 +168,14 @@ class Nesting
       @@nesting_keywords
    end
 
-   def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token)
-      @int_type_mapping = @@std_int
-      @real_type_mapping = @@std_real
-
+   def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params = nil, @int_type_mapping = @@std_int, @real_type_mapping = @@std_real)
       if !Nesting.nesting_keywords.includes? @nest_kind.to_s
          raise "Shit went down - don't know about nesting kind '#{@nest_kind.to_s}'"
       end
+   end
+
+   def dup
+      Nesting.new @nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params.dup, @int_type_mapping, @real_type_mapping
    end
 
    def message_expected_end_tokens
@@ -219,6 +212,10 @@ class NestingStack
 
    def last
       @stack.last
+   end
+
+   def replace_last(nest : Nesting)
+      @stack[-1] = nest
    end
 
    def size
@@ -353,6 +350,7 @@ class OnyxParser < OnyxLexer
       @temp_token = Token.new
       @calls_super = false
       @calls_initialize = false
+      @calls_previous_def = false
       @uses_explicit_block_param = false
       @assigns_special_var = false
 
@@ -4754,6 +4752,7 @@ class OnyxParser < OnyxLexer
       a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
+      a_def.calls_previous_def = @calls_previous_def
       a_def.uses_block_arg = @uses_explicit_block_param
       a_def.assigns_special_var = @assigns_special_var
 
@@ -4807,12 +4806,14 @@ class OnyxParser < OnyxLexer
       a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
+      a_def.calls_previous_def = @calls_previous_def
       a_def.uses_block_arg = @uses_explicit_block_param
       a_def.assigns_special_var = @assigns_special_var
       a_def.doc = doc
       @instance_vars = nil
       @calls_super = false
       @calls_initialize = false
+      @calls_previous_def = false
       @uses_explicit_block_param = false
       @assigns_special_var = false
       @explicit_block_param_name = nil
@@ -4826,6 +4827,7 @@ class OnyxParser < OnyxLexer
    def prepare_parse_def
       @calls_super = false
       @calls_initialize = false
+      @calls_previous_def = false
       @uses_explicit_block_param = false
       @explicit_block_param_name = nil
       @assigns_special_var = false
@@ -5858,6 +5860,37 @@ class OnyxParser < OnyxLexer
       {arg_name, uses_arg}
    end
 
+   def check_if_ternary_if : Bool
+      dbg "check_if_ternary_if"
+
+      back = backup_full
+
+      if_indent = @indent
+      slash_is_regex!
+      next_token_skip_space_or_newline
+
+      if kwd? :likely, :unlikely
+         dbg "\n\ncheck_if_ternary_if - Got likely/unlikely keyword in if-expression! GHOST IMPLEMENTATION ATM. NO IR-GENERATION!\n\n".red
+         next_token_skip_space_or_newline
+      end
+
+      dbg "check_if_ternary_if condition"
+      @control_construct_parsing += 1  # for "indent is call" syntax excemption
+      cond = parse_op_assign_no_control allow_suffix: false
+      @control_construct_parsing -= 1
+
+      dbg "check_if_ternary_if - test if '?'"
+      if tok?(:"?")
+         ret = true
+      else
+         ret = false
+      end
+
+      restore_full back
+
+      ret
+   end
+
    def parse_if #(check_end = true)
       dbg "parse_if"
       # dbginc
@@ -6149,6 +6182,10 @@ class OnyxParser < OnyxLexer
       when "initialize"
          dbgtail_off!
          raise "initialize is a reserved internal method name. Use 'init' for 'constructor'-code."
+
+      when "previous_def"
+        @calls_previous_def = true
+
       end
 
 
@@ -6449,9 +6486,15 @@ class OnyxParser < OnyxLexer
 
       # *TODO* this fails when using `if x ? y : z`, since below assumes suffix if!
       # can be worked around by user with paren–call, but...
+      # *TODO* current way of checking if suffix–if or ternary–if requires a
+      # full parsing of the 'if', this could be optimized later on
       case @token.value
-      when :if, :unless, :while, :until, :rescue, :ensure, :do, :then
-         dbg "returns since if|unless|..."
+      when :if
+         dbg "checks if suffix if or ternary if"
+         return check_if_ternary_if == false
+
+      when :unless, :while, :until, :rescue, :ensure, :do, :then
+         dbg "returns since unless|while|..."
          return true
 
       when :yield
@@ -6602,7 +6645,8 @@ class OnyxParser < OnyxLexer
                next_token
             end
          end
-         arg = parse_op_assign_no_control
+         arg = parse_op_assign  # changed to support ternary–if in arg
+         # arg = parse_op_assign_no_control
          arg = Splat.new(arg).at(arg.location) if splat
          arg
       end
@@ -8607,6 +8651,8 @@ class OnyxParser < OnyxLexer
       token = Token.new
       token.copy_from @token
 
+      nestback = @nesting_stack.last.dup
+
       {
          current_pos,
          @line_number,
@@ -8618,6 +8664,7 @@ class OnyxParser < OnyxLexer
          @slash_is_regex,
 
          @nesting_stack.size,
+         nestback,
          @scope_stack.size,
 
          @control_construct_parsing
@@ -8644,6 +8691,7 @@ class OnyxParser < OnyxLexer
       @slash_is_regex,
 
       nest_count,
+      nestback,
       scope_count,
 
       @control_construct_parsing,
@@ -8658,7 +8706,10 @@ class OnyxParser < OnyxLexer
             backup
 
       @token.copy_from token
+
       hard_pop_nest nest_count
+      @nesting_stack.replace_last nestback
+
       hard_pop_scope scope_count
 
       dbg "NESTING STACK POST RESTORE:".red

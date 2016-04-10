@@ -25,6 +25,15 @@ say "\nLet's ROCK\n".red
 p for y in [1,2,3]: say y
 say for y in [1,2,3]: say y
 
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+say "Ternary if"
+
+tern-test(a) -> if a == true ? "tt ternary true" : "tt ternary false"
+
+say tern-test true
+say tern-test false
+say if true ? "ternary true" : "ternary false"
+say "suffix true" if true
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -42,6 +51,10 @@ type Nilish
    bar?() ->   @val = 2; if @nil-at >= 2 ? self : nil
    bar() ->    raise "don't call me!"
    qwo() ->    @val = 3; if @nil-at >= 3 ? 46 : nil
+
+nfoo = nil
+say (nfoo?foo?bar?qwo || 0) + 50
+nfoo?internal
 
 nfoo = Nilish 1
 say (nfoo?foo?bar?qwo || 0) + 100
@@ -352,26 +365,18 @@ say Xoo.get-count     --> 2
 
 say "- - Templates & Macros - -".yellow
 
--- *TODO* maddafuckin templates and macros!
 
--- template pow2-round-up(v, r) =
--- template pow2-round-up(v, r) ->
-
-   -- {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
-   --       r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
-   --       r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
 
 module Mac
    template horribly-formatted-pow2-round-up(v, r) =
     (
-      {% if r != 64 &&
-            r != 4096 &&
-            r != 65536
+      {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
+            r != 128 && r != 256 && r != 512 && r != 1024 && r != 2048 &&
+            r != 4096 && r != 8192 && r != 16378 && r != 32768 && r != 65536
       %}
-         -- raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {{=r=}}"
-         raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {=r=}"
+         raise "pow2-round-up requires a single power-of-two value as rounding ref! Got {{=r=}}"
 
-          %z = nil
+           %z = nil
          if 1
 
       {% else %}
@@ -388,7 +393,7 @@ module Mac
          else
                say "booo ya"
         end
-   -- comm at 0
+-- comm at 0
          end
                )
 
@@ -464,7 +469,10 @@ pp $.MY_CONST
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- *TODO* ' should not be needed before I32!
+'!literal-int = I32
 $my-global = 47
+'!literal-int = I64
+
 $my-typed-global 'I32
 '!literal-int=I32
 $my-typed-and-assigned-global 'I32 = 47
@@ -480,7 +488,7 @@ module Djur
    type Apa < object Reference
       '!literal-int=I64
 
-      Self.foo = 1
+      Self.foo’ = 1
       Type.bar = 2
 
       @foo     Int

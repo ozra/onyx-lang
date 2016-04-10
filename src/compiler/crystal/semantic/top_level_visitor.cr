@@ -692,11 +692,7 @@ module Crystal
     end
 
     def visit(node : TypeDeclaration)
-
-
-      babelfish_mangling node.declared_type, current_type
-
-
+      babelfish_mangling node, current_type
       false
     end
 
