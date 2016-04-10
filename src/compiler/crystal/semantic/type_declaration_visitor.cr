@@ -1,10 +1,58 @@
 require "./base_type_visitor"
+require "./type_guess_visitor"
 
 module Crystal
   class Program
     def visit_type_declarations(node)
-      node.accept TypeDeclarationVisitor.new(self)
+      # First check type declarations
+      visitor = TypeDeclarationVisitor.new(self)
+      node.accept visitor
+
+      # Use the last type found for global variables to declare them
+      visitor.globals.each do |name, type|
+        declare_meta_type_var(self.global_vars, self, name, type)
+      end
+
+      # Use the last type found for class variables to declare them
+      visitor.class_vars.each do |owner, vars|
+        vars.each do |name, type|
+          declare_meta_type_var(owner.class_vars, owner, name, type)
+        end
+      end
+
+      # Now use several syntactic rules to infer the types of
+      # variables that don't have an explicit type set
+      visitor = TypeGuessVisitor.new(self)
+      node.accept visitor
+
+      # Process global variables
+      visitor.globals.each do |name, info|
+        declare_meta_type_var(self.global_vars, self, name, info)
+      end
+
+      # Process class variables
+      visitor.class_vars.each do |owner, vars|
+        vars.each do |name, info|
+          declare_meta_type_var(owner.class_vars, owner, name, info)
+        end
+      end
+
       node
+    end
+
+    private def declare_meta_type_var(vars, owner, name, type : Type)
+      var = MetaTypeVar.new(name)
+      var.owner = owner
+      var.type = type
+      var.bind_to(var)
+      var.freeze_type = type
+      vars[name] = var
+    end
+
+    private def declare_meta_type_var(vars, owner, name, info : TypeGuessVisitor::TypeInfo)
+      type = info.type
+      type = Type.merge!(type, self.nil) unless info.outside_def
+      declare_meta_type_var(vars, owner, name, type)
     end
   end
 
@@ -23,43 +71,18 @@ module Crystal
   # we'll have a complete definition of the type hierarchy and
   # their instance/class variables types.
   class TypeDeclarationVisitor < BaseTypeVisitor
-    @process_types : Int32
+    getter globals
+    getter class_vars
 
     def initialize(mod)
       super(mod)
 
-      @process_types = 0
-    end
+      # The type of global variables. The last one wins.
+      @globals = {} of String => Type
 
-    def processing_types
-      @process_types += 1
-      value = yield
-      @process_types -= 1
-      value
-    end
-
-    def visit(node : Path)
-      @process_types > 0 ? super : false
-    end
-
-    def visit(node : Generic)
-      @process_types > 0 ? super : false
-    end
-
-    def visit(node : Fun)
-      @process_types > 0 ? super : false
-    end
-
-    def visit(node : Union)
-      @process_types > 0 ? super : false
-    end
-
-    def visit(node : Metaclass)
-      @process_types > 0 ? super : false
-    end
-
-    def visit(node : Self)
-      @process_types > 0 ? super : false
+      # The type of class variables. The last one wins.
+      # This is type => variables.
+      @class_vars = {} of ClassVarContainer => Hash(String, Type)
     end
 
     def visit(node : ClassDef)
@@ -78,6 +101,16 @@ module Crystal
 
       pushing_type(node.resolved_type) do
         node.body.accept self
+      end
+
+      false
+    end
+
+    def visit(node : EnumDef)
+      check_outside_block_or_exp node, "declare enum"
+
+      pushing_type(node.resolved_type) do
+        node.members.each &.accept self
       end
 
       false
@@ -122,31 +155,16 @@ module Crystal
       when InstanceVar
         declare_instance_var(node, var)
       when ClassVar
-        class_var = lookup_class_var(var, bind_to_nil_if_non_existent: false)
-
-        processing_types do
-          node.declared_type.accept self
-        end
-        var_type = check_declare_var_type node
-
-        class_var.freeze_type = var_type.virtual_type
+        owner = class_var_owner(node)
+        var_type = lookup_type(node.declared_type).virtual_type
+        var_type = check_declare_var_type(node, var_type)
+        owner_vars = @class_vars[owner] ||= {} of String => Type
+        owner_vars[var.name] = var_type
       when Global
-        global_var = mod.global_vars[var.name]?
-        unless global_var
-          global_var = Global.new(var.name)
-          mod.global_vars[var.name] = global_var
-        end
-
-        processing_types do
-          node.declared_type.accept self
-        end
-
-        var_type = check_declare_var_type node
-
-        global_var.freeze_type = var_type.virtual_type
+        var_type = lookup_type(node.declared_type).virtual_type
+        var_type = check_declare_var_type(node, var_type)
+        @globals[var.name] = var_type
       end
-
-      node.type = @mod.nil
 
       false
     end
@@ -155,10 +173,8 @@ module Crystal
       type = current_type
       case type
       when NonGenericClassType
-        processing_types do
-          node.declared_type.accept self
-        end
-        var_type = check_declare_var_type node
+        var_type = lookup_type(node.declared_type)
+        var_type = check_declare_var_type(node, var_type)
         type.declare_instance_var(var.name, var_type.virtual_type)
         return
       when GenericClassType
@@ -173,10 +189,8 @@ module Crystal
       when Program, FileModule
         # Error, continue
       when NonGenericModuleType
-        processing_types do
-          node.declared_type.accept self
-        end
-        var_type = check_declare_var_type node
+        var_type = lookup_type(node.declared_type)
+        var_type = check_declare_var_type(node, var_type)
         type.declare_instance_var(var.name, var_type.virtual_type)
         return
       end
@@ -212,6 +226,10 @@ module Crystal
       end
     end
 
+    def lookup_type(node)
+      TypeLookup.lookup(current_type, node, allow_typeof: false)
+    end
+
     def visit(node : UninitializedVar)
       false
     end
@@ -222,10 +240,6 @@ module Crystal
 
     def visit(node : FunLiteral)
       false
-    end
-
-    def visit(node : ASTNode)
-      true
     end
 
     def visit(node : IsA)
@@ -257,6 +271,34 @@ module Crystal
     end
 
     def visit(node : HashLiteral)
+      false
+    end
+
+    def visit(node : Path)
+      false
+    end
+
+    def visit(node : Generic)
+      false
+    end
+
+    def visit(node : Fun)
+      false
+    end
+
+    def visit(node : Union)
+      false
+    end
+
+    def visit(node : Metaclass)
+      false
+    end
+
+    def visit(node : Self)
+      false
+    end
+
+    def visit(node : TypeOf)
       false
     end
 

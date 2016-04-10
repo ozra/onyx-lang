@@ -38,14 +38,13 @@ module Crystal
   # subclasses or not and we can tag it as "virtual" (having subclasses), but that concept
   # might disappear in the future and we'll make consider everything as "maybe virtual".
   class TopLevelVisitor < BaseTypeVisitor
-    @process_types : Int32
     @inside_block : Int32
 
     def initialize(mod)
       super(mod)
 
-      @process_types = 0
       @inside_block = 0
+      @process_types = 0
     end
 
     def processing_types
@@ -72,6 +71,10 @@ module Crystal
     end
 
     def visit(node : Metaclass)
+      @process_types > 0 ? super : false
+    end
+
+    def visit(node : Self)
       @process_types > 0 ? super : false
     end
 
@@ -984,7 +987,7 @@ module Crystal
         if @struct_or_union.has_var?(field.name)
           field.raise "#{@struct_or_union.type_desc} #{@struct_or_union} already defines a field named '#{field.name}'"
         end
-        ivar = MetaInstanceVar.new(field.name, field_type)
+        ivar = MetaTypeVar.new(field.name, field_type)
         ivar.owner = @struct_or_union
         @struct_or_union.add_var ivar
       end

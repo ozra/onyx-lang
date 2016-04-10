@@ -182,11 +182,25 @@ module Crystal
         if @untyped_def
           node.raise "declaring the type of a class variable must be done at the class level"
         end
+
+        attributes = check_valid_attributes node, ValidClassVarAttributes, "class variable"
+        if Attribute.any?(attributes, "ThreadLocal")
+          var = lookup_class_var(var)
+          var.thread_local = true
+        end
       when Global
         if @untyped_def
           node.raise "declaring the type of a global variable must be done at the class level"
         end
+
+        attributes = check_valid_attributes node, ValidGlobalAttributes, "global variable"
+        if Attribute.any?(attributes, "ThreadLocal")
+          var = @mod.global_vars[var.name]
+          var.thread_local = true
+        end
       end
+
+      node.type = @mod.nil
 
       false
     end
@@ -294,15 +308,45 @@ module Crystal
     end
 
     def visit_global(node)
-      var = mod.global_vars[node.name]?
-      unless var
-        var = Global.new(node.name)
-        mod.global_vars[node.name] = var
+      var = lookup_global_variable(node)
+
+      if first_time_accessing_meta_type_var?(var)
+        var.bind_to mod.nil_var
       end
-      var.bind_to mod.nil_var unless var.dependencies?
+
       node.bind_to var
       node.var = var
       var
+    end
+
+    def lookup_global_variable(node)
+      var = mod.global_vars[node.name]?
+      undefined_global_variable(node) unless var
+      var
+    end
+
+    def undefined_global_variable(node)
+      similar_name = lookup_similar_global_variable_name(node)
+      mod.undefined_global_variable(node, similar_name)
+    end
+
+    def lookup_similar_global_variable_name(node)
+      Levenshtein.find(node.name) do |finder|
+        mod.global_vars.each_key do |name|
+          finder.test(name)
+        end
+      end
+    end
+
+    def first_time_accessing_meta_type_var?(var)
+      if var.freeze_type
+        deps = var.dependencies?
+        # If no dependencies it's the case of a global for a regex literal.
+        # If there are dependencies and it's just one, it's the same var
+        deps ? deps.size == 1 : false
+      else
+        !var.dependencies?
+      end
     end
 
     def visit(node : InstanceVar)
@@ -345,18 +389,46 @@ module Crystal
     end
 
     def visit(node : ClassVar)
-      visit_class_var node
+      attributes = check_valid_attributes node, ValidGlobalAttributes, "global variable"
+
+      var = visit_class_var node
+      var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
+
       false
     end
 
     def visit_class_var(node)
-      class_var = lookup_class_var(node)
-      check_valid_attributes class_var, ValidClassVarAttributes, "class variable"
+      var = lookup_class_var(node)
 
-      node.bind_to class_var
-      node.var = class_var
+      if first_time_accessing_meta_type_var?(var)
+        var.bind_to mod.nil_var
+      end
 
-      class_var
+      node.bind_to var
+      node.var = var
+      var
+    end
+
+    def lookup_class_var(node)
+      class_var_owner = class_var_owner(node)
+      var = class_var_owner.class_vars[node.name]?
+      unless var
+        undefined_class_variable(node, class_var_owner)
+      end
+      var
+    end
+
+    def undefined_class_variable(node, owner)
+      similar_name = lookup_similar_class_variable_name(node, owner)
+      @mod.undefined_class_variable(node, owner, similar_name)
+    end
+
+    def lookup_similar_class_variable_name(node, owner)
+      Levenshtein.find(node.name) do |finder|
+        owner.class_vars.each_key do |name|
+          finder.test(name)
+        end
+      end
     end
 
     def lookup_instance_var(node)
@@ -509,18 +581,17 @@ module Crystal
     def type_assign(target : Global, value, node)
       attributes = check_valid_attributes target, ValidGlobalAttributes, "global variable"
 
+      var = lookup_global_variable(target)
+
+      # If we are assigning to a global inside a method, make it nilable
+      # if this is the first time we are assigning to it, because
+      # the method might be called conditionally
+      if @typed_def && first_time_accessing_meta_type_var?(var)
+        var.bind_to mod.nil_var
+      end
+
       value.accept self
 
-      var = mod.global_vars[target.name]?
-      unless var
-        var = Global.new(target.name)
-
-        # If we are assigning to a global inside a method, make it nilable
-        # if this is the first time we are assigning to it, because
-        # the method might be called conditionally
-        var.bind_to mod.nil_var if @typed_def
-        mod.global_vars[target.name] = var
-      end
       var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
       target.var = var
 
@@ -531,17 +602,23 @@ module Crystal
     end
 
     def type_assign(target : ClassVar, value, node)
+      attributes = check_valid_attributes target, ValidClassVarAttributes, "class variable"
+
+      var = lookup_class_var(target)
+
       # If we are assigning to a class variable inside a method, make it nilable
       # if this is the first time we are assigning to it, because
       # the method might be called conditionally
-      var = lookup_class_var target, bind_to_nil_if_non_existent: !!@typed_def
-      attributes = check_valid_attributes target, ValidClassVarAttributes, "class variable"
+      if @typed_def && first_time_accessing_meta_type_var?(var)
+        var.bind_to mod.nil_var
+      end
 
       value.accept self
 
       var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
-      target.bind_to var
       target.var = var
+
+      target.bind_to var
 
       node.bind_to value
       var.bind_to node
@@ -600,8 +677,7 @@ module Crystal
         yield_vars.each_with_index do |var, i|
           exp = node.exps[i]?
           if exp
-            # TODO: this should really be var.type.implements?(exp.type)
-            if (exp_type = exp.type?) && !exp_type.is_restriction_of?(var.type, exp_type)
+            if (exp_type = exp.type?) && !exp_type.implements?(var.type)
               exp.raise "argument ##{i + 1} of yield expected to be #{var.type}, not #{exp_type}"
             end
 

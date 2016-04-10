@@ -74,7 +74,8 @@ class Reference
     nil
   end
 
-  @[ThreadLocal]
+  # TODO: Boehm GC doesn't scan thread local vars, so we can't use it yet
+  # @[ThreadLocal]
   $_exec_recursive : Hash({UInt64, Symbol}, Bool)?
 
   private def exec_recursive(method)

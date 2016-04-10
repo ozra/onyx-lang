@@ -78,7 +78,10 @@ module Crystal
 
     end
 
-    def end_visit(node : Fun)
+    def visit(node : Fun)
+      node.inputs.try &.each &.accept(self)
+      node.output.try &.accept(self)
+
       if inputs = node.inputs
         types = inputs.map &.type.instance_type.virtual_type
       else
@@ -92,9 +95,13 @@ module Crystal
       end
 
       node.type = mod.fun_of(types)
+
+      false
     end
 
-    def end_visit(node : Union)
+    def visit(node : Union)
+      node.types.each &.accept self
+
       old_in_is_a, @in_is_a = @in_is_a, false
 
       types = node.types.map do |subtype|
@@ -112,14 +119,20 @@ module Crystal
       else
         node.type = @mod.type_merge(types)
       end
+
+      false
     end
 
-    def end_visit(node : Virtual)
+    def visit(node : Virtual)
+      node.name.accept self
       node.type = check_type_in_type_args node.name.type.instance_type.virtual_type
+      false
     end
 
-    def end_visit(node : Metaclass)
-      node.type = node.name.type.virtual_type!.metaclass
+    def visit(node : Metaclass)
+      node.name.accept self
+      node.type = node.name.type.virtual_type.metaclass
+      false
     end
 
     def visit(node : Self)
@@ -865,22 +878,29 @@ module Crystal
       type
     end
 
-    def lookup_class_var(node, bind_to_nil_if_non_existent = true)
-      scope = (@scope || current_type).class_var_owner
-      if scope.is_a?(GenericClassType) || scope.is_a?(GenericModuleType)
-        node.raise "can't use class variable with generic types, only with generic types instances"
+    def check_declare_var_type(node, declared_type)
+      type = declared_type.instance_type
+
+      if type.is_a?(GenericClassType)
+        node.raise "can't declare variable of generic non-instantiated type #{type}"
       end
 
-      class_var_owner = scope as ClassVarContainer
+      Crystal.check_type_allowed_in_generics(node, type, "can't use #{type} as a Proc argument type")
 
-      var = class_var_owner.lookup_class_var node.name
-      var.bind_to mod.nil_var if bind_to_nil_if_non_existent && !var.dependencies?
+      declared_type
+    end
 
-      node.owner = class_var_owner
-      node.var = var
-      node.class_scope = !@typed_def
+    def class_var_owner(node)
+      scope = (@scope || current_type).class_var_owner
+      if scope.is_a?(Program)
+        node.raise "can't use class variables at the top level"
+      end
 
-      var
+      if scope.is_a?(GenericClassType) || scope.is_a?(GenericModuleType)
+        node.raise "can't use class variables in generic types"
+      end
+
+      scope as ClassVarContainer
     end
 
     def inside_exp?

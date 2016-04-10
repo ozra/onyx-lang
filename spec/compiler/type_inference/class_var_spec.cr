@@ -1,6 +1,36 @@
 require "../../spec_helper"
 
 describe "Type inference: class var" do
+  it "declares class variable" do
+    assert_error %(
+      class Foo
+        @@x : Int32
+        @@x = 1
+
+        def self.x=(x)
+          @@x = x
+        end
+      end
+
+      Foo.x = true
+      ),
+      "class variable '@@x' of Foo must be Int32, not Bool"
+  end
+
+  it "declares class variable (2)" do
+    assert_error %(
+      class Foo
+        @@x : Int32
+
+        def self.x
+          @@x
+        end
+      end
+
+      Foo.x
+      ),
+      "class variable '@@x' of Foo must be Int32, not Nil"
+  end
   it "types class var" do
     assert_type("
       class Foo
@@ -15,16 +45,17 @@ describe "Type inference: class var" do
       ") { int32 }
   end
 
-  it "types class var as nil" do
+  it "types class var as nil if not assigned at the top level" do
     assert_type("
       class Foo
         def self.foo
+          @@foo = 1
           @@foo
         end
       end
 
       Foo.foo
-      ") { |mod| mod.nil }
+      ") { nilable int32 }
   end
 
   it "types class var inside instance method" do
@@ -38,21 +69,6 @@ describe "Type inference: class var" do
       end
 
       Foo.new.foo
-      ") { int32 }
-  end
-
-  it "types class var of program" do
-    assert_type("
-      @@foo = 1
-      @@foo
-      ") { int32 }
-  end
-
-  it "types class var inside fun literal" do
-    assert_type("
-      @@foo = 1
-      f = -> { @@foo }
-      f.call
       ") { int32 }
   end
 
@@ -100,7 +116,7 @@ describe "Type inference: class var" do
       end
 
       Foo.bar
-      )) { (types["Bar"] as GenericClassType).instantiate([types["Foo"].virtual_type!.metaclass] of TypeVar) }
+      )) { (types["Bar"] as GenericClassType).instantiate([types["Foo"].virtual_type.metaclass] of TypeVar) }
   end
 
   it "errors if using self as type var but there's no self" do
@@ -127,18 +143,6 @@ describe "Type inference: class var" do
       ") { int32 }
   end
 
-  it "types class var in generic instance type (#726)" do
-    assert_type(%(
-      class Foo(T)
-        def self.bar
-          @@bar ||= 'a'
-        end
-      end
-
-      Foo(Int32).bar
-      )) { char }
-  end
-
   it "errors if using class var in generic type without instance" do
     assert_error %(
       class Foo(T)
@@ -149,7 +153,7 @@ describe "Type inference: class var" do
 
       Foo.bar
       ),
-      "can't use class variable with generic types, only with generic types instances"
+      "can't use class variables in generic types"
   end
 
   it "errors if using class var in generic type without instance (2)" do
@@ -158,7 +162,7 @@ describe "Type inference: class var" do
         @@bar = 1
       end
       ),
-      "can't use class variable with generic types, only with generic types instances"
+      "can't use class variables in generic types"
   end
 
   it "errors if using class var in generic module without instance (2)" do
@@ -167,7 +171,7 @@ describe "Type inference: class var" do
         @@bar = 1
       end
       ),
-      "can't use class variable with generic types, only with generic types instances"
+      "can't use class variables in generic types"
   end
 
   it "types class var as nil if assigned for the first time inside method (#2059)" do
@@ -181,5 +185,84 @@ describe "Type inference: class var" do
 
       Foo.foo
       ") { nilable int32 }
+  end
+
+  it "redefines class variable type" do
+    assert_type(%(
+      class Foo
+        @@x : Int32
+        @@x : Int32 | Float64
+        @@x = 1
+
+        def self.x
+          @@x
+        end
+      end
+
+      Foo.x
+      )) { union_of int32, float64 }
+  end
+
+  it "infers type from number literal" do
+    assert_type(%(
+      class Foo
+        @@x = 1
+
+        def self.x
+          @@x
+        end
+      end
+
+      Foo.x
+      )) { int32 }
+  end
+
+  it "infers type from T.new" do
+    assert_type(%(
+      class Foo
+        class Bar
+        end
+
+        @@x = Bar.new
+
+        def self.x
+          @@x
+        end
+      end
+
+      Foo.x
+      )) { types["Foo"].types["Bar"] }
+  end
+
+  it "says undefined class variable" do
+    assert_error "
+      class Foo
+        def self.foo
+          @@foo
+        end
+      end
+
+      Foo.foo
+      ",
+      "undefined class variable"
+  end
+
+  it "errors if using class variable at the top level" do
+    assert_error "
+      @@foo = 1
+      @@foo
+      ",
+      "can't use class variables at the top level"
+  end
+
+  it "errors when typing a class variable inside a method" do
+    assert_error %(
+      def foo
+        @@x : Int32
+      end
+
+      foo
+      ),
+      "declaring the type of a class variable must be done at the class level"
   end
 end

@@ -445,6 +445,7 @@ module Crystal
     def visit(node : StringInterpolation)
       check :DELIMITER_START
       is_regex = @token.delimiter_state.kind == :regex
+      indent_difference = @token.column_number - (@column + 1)
 
       write @token.raw
       next_string_token
@@ -453,7 +454,6 @@ module Crystal
       is_heredoc = @token.delimiter_state.kind == :heredoc
       @last_is_heredoc = is_heredoc
 
-      indent_difference = @token.column_number - (@column + 1)
       heredoc_line = @line
 
       node.expressions.each do |exp|
@@ -961,6 +961,13 @@ module Crystal
       paren_count = @paren_count
 
       node.types.each_with_index do |type, i|
+        if @token.type == :"?"
+          # This can happen if it's a nilable type written like T?
+          write "?"
+          next_token
+          break
+        end
+
         accept type
 
         last = last?(i, node.types)
@@ -969,12 +976,6 @@ module Crystal
         must_break = false
         while true
           case @token.type
-          when :"?"
-            # This can happen if it's a nilable type written like T?
-            write "?"
-            next_token
-            must_break = true
-            break
           when :"|"
             write " | "
             next_token
@@ -2091,6 +2092,7 @@ module Crystal
       if has_args || node.block_arg
         finish_args(has_parentheses, has_newlines, ends_with_newline, found_comment, column)
       elsif has_parentheses
+        skip_space_or_newline
         write_token :")"
       end
 

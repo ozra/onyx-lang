@@ -1,6 +1,6 @@
 require "../../spec_helper"
 
-describe "Type inference: type declaration" do
+describe "Type inference: instance var" do
   it "declares instance var which appears in initialize" do
     result = assert_type("
       class Foo
@@ -94,52 +94,6 @@ describe "Type inference: type declaration" do
       "can't declare variable of generic non-instantiated type Foo"
   end
 
-  it "declares global variable" do
-    assert_error %(
-      $x : Int32
-      $x = true
-      ),
-      "type must be Int32, not Bool"
-  end
-
-  it "declares global variable and reads it (nilable)" do
-    assert_error %(
-      $x : Int32
-      $x
-      ),
-      "type must be Int32, not Nil"
-  end
-
-  it "declares class variable" do
-    assert_error %(
-      class Foo
-        @@x : Int32
-
-        def self.x=(x)
-          @@x = x
-        end
-      end
-
-      Foo.x = true
-      ),
-      "type must be Int32, not Nil"
-  end
-
-  it "declares class variable (2)" do
-    assert_error %(
-      class Foo
-        @@x : Int32
-
-        def self.x
-          @@x
-        end
-      end
-
-      Foo.x
-      ),
-      "type must be Int32, not Nil"
-  end
-
   it "errors (for now) when typing a local variable" do
     assert_error %(
       x : Int32
@@ -156,28 +110,6 @@ describe "Type inference: type declaration" do
       foo
       ),
       "declaring the type of an instance variable must be done at the class level"
-  end
-
-  it "errors when typing a class variable inside a method" do
-    assert_error %(
-      def foo
-        @@x : Int32
-      end
-
-      foo
-      ),
-      "declaring the type of a class variable must be done at the class level"
-  end
-
-  it "errors when typing a global variable inside a method" do
-    assert_error %(
-      def foo
-        $x : Int32
-      end
-
-      foo
-      ),
-      "declaring the type of a global variable must be done at the class level"
   end
 
   it "declares instance var with union type with a virtual member" do
