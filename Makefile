@@ -22,6 +22,9 @@ all: onyx
 bootstrap:
 	./bootstrap.sh
 
+install:
+	./install.sh
+
 ifeq (${LLVM_CONFIG},)
 $(error Could not locate llvm-config, make sure it is installed and in your PATH)
 endif

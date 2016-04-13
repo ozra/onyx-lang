@@ -71,12 +71,12 @@ $babelfish_func_dict.each_with_index do |k, v|
 end
 
 
-STDERR.puts "BABELFISHING".red
-STDERR.puts $babelfish_type_dict.to_s
-STDERR.puts $babelfish_func_dict.to_s
+# STDERR.puts "BABELFISHING".red
+# STDERR.puts $babelfish_type_dict.to_s
+# STDERR.puts $babelfish_func_dict.to_s
 
-STDERR.puts "alles reversed:"
-STDERR.puts $babelfish_reverse_dict.to_s
+# STDERR.puts "alles reversed:"
+# STDERR.puts $babelfish_reverse_dict.to_s
 
 
 
