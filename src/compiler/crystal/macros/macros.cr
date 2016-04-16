@@ -1,7 +1,7 @@
 module Crystal
   class Program
     def push_def_macro(a_def)
-      @def_macros << a_def
+      def_macros << a_def
     end
 
     def expand_macro(a_macro : Macro, call : Call, scope : Type)
@@ -13,8 +13,8 @@ module Crystal
     end
 
     def expand_macro_defs
-      until @def_macros.empty?
-        def_macro = @def_macros.pop
+      until def_macros.empty?
+        def_macro = def_macros.pop
         expand_macro_def def_macro
       end
     end
@@ -76,7 +76,7 @@ module Crystal
           parser = OnyxParser.new(generated_source, [vars.dup])
           parser.begin_macro_parse_mode
         else
-          parser = Parser.new(generated_source, [vars.dup])
+          parser = Parser.new(generated_source, @program.string_pool, [vars.dup])
         end
         parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
 
@@ -109,10 +109,7 @@ module Crystal
     # `yields` hash.
     record ExpandedMacro, source : String, yields : Hash(String, ASTNode)?
 
-    @mod : Program
-    @cache : Hash(String, String)
-
-    def initialize(@mod)
+    def initialize(@mod : Program)
       @cache = {} of String => String
     end
 
@@ -166,15 +163,6 @@ module Crystal
       getter last : ASTNode
       getter yields : Hash(String, ASTNode)?
       property free_vars : Hash(String, Type)?
-
-      @expander : MacroExpander
-      @mod : Program
-      @scope : Type
-      @location : Location?
-      @vars : Hash(String, ASTNode)
-      @block : Block?
-      @str : MemoryIO
-      @macro_vars : Hash(MacroVarKey, String)?
 
       def self.new(expander, mod, scope, a_macro : Macro, call)
         vars = {} of String => ASTNode
@@ -234,7 +222,10 @@ module Crystal
 
       record MacroVarKey, name : String, exps : Array(ASTNode)?
 
-      def initialize(@expander, @mod, @scope, @location, @vars = {} of String => ASTNode, @block = nil, @is_onyx = false)
+      def initialize(@expander : MacroExpander, @mod : Program,
+                     @scope : Type, @location : Location?,
+                     @vars = {} of String => ASTNode, @block : Block? = nil,
+                     @is_onyx : Bool = false)
         @str = MemoryIO.new(512)
         @last = Nop.new
       end
@@ -401,7 +392,7 @@ module Crystal
 
         key = MacroVarKey.new(node.name, exps)
 
-        macro_vars = @macro_vars ||= Hash(MacroVarKey, String).new
+        macro_vars = @macro_vars ||= {} of MacroVarKey => String
         macro_var = macro_vars[key] ||= @mod.new_temp_var_name
         @str << macro_var
         false
@@ -777,7 +768,7 @@ module Crystal
   end
 
   class YieldsTransformer < Transformer
-    @yields : Hash(String, Crystal::ASTNode+)
+    @yields : Hash(String, Crystal::ASTNode)
 
     def initialize(@yields)
     end

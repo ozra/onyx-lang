@@ -22,7 +22,6 @@ module Crystal
     property observers : Dependencies?
     property input_observer : Call?
 
-    @dirty : Bool
     @dirty = false
 
     @type : Type?
@@ -244,11 +243,22 @@ module Crystal
     end
   end
 
+  class Var
+    def initialize(@name : String, @type : Type)
+    end
+
+    def_equals name, type?
+  end
+
   # Fictitious node to represent primitives
   class Primitive < ASTNode
-    getter name : Symbol
+    getter name : String
 
-    def initialize(@name : Symbol, @type : Type? = nil)
+    def self.new(name : Symbol, type : Type? = nil)
+      new(name.to_s, type)
+    end
+
+    def initialize(@name : String, @type : Type? = nil)
     end
 
     def clone_without_location_individual
@@ -263,7 +273,7 @@ module Crystal
     getter index : Int32
 
     def initialize(@index : Int32)
-      super(:tuple_indexer_known_index)
+      super("tuple_indexer_known_index")
     end
 
     def clone_without_location_individual
@@ -290,6 +300,9 @@ module Crystal
   end
 
   class Arg
+    def initialize(@name, @default_value : ASTNode? = nil, @restriction : ASTNode? = nil, @type : Type? = nil)
+    end
+
     def clone_without_location_individual
       arg = previous_def
 
@@ -759,7 +772,7 @@ module Crystal
   {% for name in %w(And Or
                    ArrayLiteral HashLiteral RegexLiteral RangeLiteral
                    Case StringInterpolation
-                   MacroExpression MacroIf MacroFor) %}
+                   MacroExpression MacroIf MacroFor MultiAssign) %}
     class {{name.id}}
       include ExpandableNode
     end

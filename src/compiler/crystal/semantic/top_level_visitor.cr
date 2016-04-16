@@ -389,8 +389,6 @@ module Crystal
         end
       end
 
-
-
       # Onyx babeling
       node.args.each do |arg|
         _dbg "- TopLevelVisitor.visit(Def) - arg: #{arg.name}, #{arg.restriction}, #{arg.restriction.class}"
@@ -405,7 +403,10 @@ module Crystal
         babelfish_mangling rtype, current_type
       end
 
-
+      primitive_attribute = node.attributes.try &.find { |attr| attr.name == "Primitive" }
+      if primitive_attribute
+        process_primitive_attribute(node, primitive_attribute)
+      end
 
       target_type.add_def node
       node.set_type @mod.nil
@@ -414,6 +415,25 @@ module Crystal
         run_hooks target_type.metaclass, target_type, :method_added, node, Call.new(nil, "method_added", [node] of ASTNode).at(node.location)
       end
       false
+    end
+
+    private def process_primitive_attribute(node, attribute)
+      if attribute.args.size != 1
+        attribute.raise "expected Primitive attribute to have one argument"
+      end
+
+      arg = attribute.args.first
+      unless arg.is_a?(SymbolLiteral)
+        arg.raise "expected Primitive argument to be a symbol literal"
+      end
+
+      value = arg.value
+
+      unless node.body.is_a?(Nop)
+        node.raise "method marked as Primitive must have an empty body"
+      end
+
+      node.body = Primitive.new(value)
     end
 
     def visit(node : Include)

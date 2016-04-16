@@ -27,7 +27,6 @@ class Crypto::Bcrypt::Password
   getter cost : Int32
   getter salt : String
   getter digest : String
-  @raw_hash : String
 
   # Loads a bcrypt hash.
   #
@@ -37,7 +36,7 @@ class Crypto::Bcrypt::Password
   # password.salt    # => X6rw/jDiLBuzHV./JjBNXe
   # password.digest  # => 8/Po4wTL0fhdDNdAdjcKN/Fup8tGCya
   # ```
-  def initialize(@raw_hash)
+  def initialize(@raw_hash : String)
     parts = @raw_hash.split("$")
 
     @version = parts[1]
@@ -59,7 +58,7 @@ class Crypto::Bcrypt::Password
   # ```
   def ==(password)
     hashed_password = Bcrypt.new(password, salt, cost)
-    Crypto::Subtle.constant_time_compare(@raw_hash.to_slice, hashed_password.to_slice) == 1
+    Crypto::Subtle.constant_time_compare(@raw_hash, hashed_password)
   end
 
   def to_s(io)

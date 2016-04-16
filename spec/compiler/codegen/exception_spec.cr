@@ -1028,6 +1028,8 @@ describe "Code gen: exception" do
       require "prelude"
 
       class Foo
+        @var : Var?
+
         def method1
           method2
         end
@@ -1063,5 +1065,38 @@ describe "Code gen: exception" do
       end
       a
       )).to_i.should eq(2)
+  end
+
+  it "doesn't crash on #1988" do
+    run(%(
+      require "prelude"
+
+      begin
+        x = 42
+      rescue
+      end
+
+      if x.is_a?(Int32)
+        x
+      else
+        21
+      end
+      )).to_i.should eq(42)
+  end
+
+  it "runs #2441" do
+    run(%(
+      require "prelude"
+
+      while true
+        begin
+          raise "foo"
+        rescue ex
+          break
+        end
+      end
+
+      ex.not_nil!.message.to_s
+      )).to_string.should eq("foo")
   end
 end

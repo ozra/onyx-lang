@@ -8,10 +8,7 @@ class Crystal::Doc::Method
   getter type : Type
   getter def : Def
 
-  @generator : Generator
-  @class_method : Bool
-
-  def initialize(@generator, @type, @def, @class_method)
+  def initialize(@generator : Generator, @type : Type, @def : Def, @class_method : Bool)
   end
 
   def name
@@ -24,10 +21,11 @@ class Crystal::Doc::Method
 
   def doc
     body = @def.body
-    if body.is_a?(Crystal::Primitive)
+    doc = @def.doc
+    if !doc && body.is_a?(Crystal::Primitive)
       Primitive.doc @def, body
     else
-      @def.doc
+      doc
     end
   end
 
@@ -98,7 +96,20 @@ class Crystal::Doc::Method
   end
 
   def args_to_html(io, links = true)
-    return unless has_args? || @def.return_type
+    return_type = @def.return_type
+
+    # If the def's body is a single instance variable, we include
+    # a return type since instance vars must have a fixed/guessed type,
+    # so docs will be better and easier to navigate.
+    if !return_type && (body = @def.body).is_a?(InstanceVar)
+      owner = type.type
+      if owner.is_a?(NonGenericClassType)
+        ivar = owner.lookup_instance_var?(body.name)
+        return_type = ivar.try &.type?
+      end
+    end
+
+    return unless has_args? || return_type
 
     if has_args?
       io << '('
@@ -118,9 +129,13 @@ class Crystal::Doc::Method
       io << ')'
     end
 
-    if return_type = @def.return_type
+    case return_type
+    when ASTNode
       io << " : "
       node_to_html return_type, io, links: links
+    when Crystal::Type
+      io << " : "
+      @type.type_to_html return_type, io, links: links
     end
 
     io

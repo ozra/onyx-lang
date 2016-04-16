@@ -4,7 +4,7 @@ describe "Code gen: cast" do
   it "allows casting object to pointer and back" do
     run(%(
       class Foo
-        def initialize(@x)
+        def initialize(@x : Int32)
         end
 
         def x
@@ -188,30 +188,6 @@ describe "Code gen: cast" do
         false
       rescue ex
         (ex.message.not_nil!.includes? "cast to Nil failed") && (ex.class == TypeCastError)
-      end
-      )).to_b.should be_true
-  end
-
-  it "casts from nilable to reference" do
-    run(%(
-      require "prelude"
-
-      a = 1 == 1 ? Reference.new : nil
-      c = a as Reference
-      c == nil
-      )).to_b.should be_false
-  end
-
-  it "casts from nilable to reference raises TypeCastError" do
-    run(%(
-      require "prelude"
-
-      a = 1 == 2 ? Reference.new : nil
-      begin
-        a as Reference
-        false
-      rescue ex
-        (ex.message == "cast to Reference failed") && (ex.class == TypeCastError)
       end
       )).to_b.should be_true
   end

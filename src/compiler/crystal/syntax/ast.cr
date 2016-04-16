@@ -408,10 +408,7 @@ module Crystal
     include SpecialVar
 
     property name : String
-
-
     property is_nil_sugared : Bool
-
 
     def initialize(@name : String, @type = nil, @is_nil_sugared = false)
     end
@@ -424,7 +421,7 @@ module Crystal
       Var.new(@name,  is_nil_sugared: @is_nil_sugared)
     end
 
-    def_equals name, type?
+    def_equals name
     def_hash name
   end
 
@@ -846,7 +843,7 @@ module Crystal
     @mutability : Symbol
     @mutability = :auto
 
-    def initialize(@name, @default_value = nil, @restriction = nil, @type = nil, @mutability = :auto)
+    def initialize(@name, @default_value : ASTNode? = nil, @restriction : ASTNode? = nil, @mutability = :auto)
     end
 
     def accept_children(visitor)
@@ -859,7 +856,7 @@ module Crystal
     end
 
     def clone_without_location_individual
-      Arg.new @name, @default_value.clone, @restriction.clone, nil, @mutability.clone
+      Arg.new @name, @default_value.clone, @restriction.clone, @mutability.clone
     end
 
     def_equals_and_hash name, default_value, restriction, mutability
@@ -907,7 +904,6 @@ module Crystal
     property? macro_def : Bool
     property return_type : ASTNode?
     property yields : Int32?
-    property instance_vars : Set(String)?
     property calls_super : Bool
     property calls_initialize : Bool
     property calls_previous_def : Bool
@@ -961,7 +957,6 @@ module Crystal
 
     def clone_without_location_individual
       a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index)
-      a_def.instance_vars = instance_vars
       a_def.calls_super = calls_super
       a_def.calls_initialize = calls_initialize
       a_def.calls_previous_def = calls_previous_def
@@ -1227,6 +1222,12 @@ module Crystal
 
     def self.global(names)
       new names, true
+    end
+
+    # Returns true if this path has a single component
+    # with the given name
+    def single?(name)
+      names.size == 1 && names.first == name
     end
 
     def clone_without_location_individual
@@ -1583,23 +1584,6 @@ module Crystal
     def_equals_and_hash types
   end
 
-  class Virtual < ASTNode
-    property name : ASTNode
-
-    def initialize(@name)
-    end
-
-    def accept_children(visitor)
-      @name.accept visitor
-    end
-
-    def clone_without_location_individual
-      Virtual.new(@name.clone)
-    end
-
-    def_equals_and_hash name
-  end
-
   class Self < ASTNode
     def ==(other : self)
       true
@@ -1874,7 +1858,7 @@ module Crystal
       @varargs = false
     end
 
-    def mangled_name(obj_type)
+    def mangled_name(program, obj_type)
       real_name
     end
 

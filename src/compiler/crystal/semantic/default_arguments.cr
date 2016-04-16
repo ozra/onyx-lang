@@ -84,7 +84,6 @@ class Crystal::Def
     end
 
     expansion = Def.new(new_name, new_args, nil, receiver.clone, block_arg.clone, return_type.clone, macro_def?, yields)
-    expansion.instance_vars = instance_vars
     expansion.args.each { |arg| arg.default_value = nil }
     expansion.calls_super = calls_super
     expansion.calls_initialize = calls_initialize
@@ -202,10 +201,7 @@ class Crystal::Def
   end
 
   class ReplaceFreeVarTransformer < Transformer
-    @free_var_name : String
-    @replacement_name : String
-
-    def initialize(@free_var_name, @replacement_name)
+    def initialize(@free_var_name : String, @replacement_name : String)
     end
 
     def transform(node : Generic)
