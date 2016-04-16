@@ -1,6 +1,14 @@
+## 0.104.3 - (2016-**-**) ##
+
+* User defined literal suffixes. Replaces the prior PoC-implementation of literal-type-redef pragmas with a much more generic usable construct.
+* 
+
+
 ## 0.104.2 - (2016-04-11) ##
+
 * Fix ternary-if edge-cases
 * Stronger checking on globals with name-babeling
+
 
 ## 0.104.1 - (2016-04-09) ##
 
@@ -8,9 +16,11 @@
 * Nil-sugar call-chain: `x = foo?bar?qwo` => `x = foo.try ~.bar.try ~.qwo`. Methods with final question mark are used if available, else plain-name version (since de-facto `method?` returns Type|Nil.
 * Internal translations ("babelfishing") of type names and method names where needed between Onyx <-> Crystal worlds. WIP. Expect bugs.
 
+
 ## 0.104.0 - (2016-03-27) ##
 
 * **(breaking change)** Named arguments have been changed back to `name: value`. Space after colon is required! (`name:key` is shorthand subscripting with string key)
+
 
 ## 0.103.0 - (2016-03-26) ##
 

@@ -17,7 +17,7 @@ module Crystal
 
   module MatchesLookup
     def lookup_matches_without_parents(signature, owner = self, type_lookup = self, matches_array = nil)
-      _dbg "lookup_matches_without_parents"
+      # _dbg "lookup_matches_without_parents"
 
       if defs = self.defs.try &.[signature.name]?
         context = MatchContext.new(owner, type_lookup)
@@ -55,7 +55,7 @@ module Crystal
     end
 
     def lookup_matches_with_modules(signature, owner = self, type_lookup = self, matches_array = nil)
-      _dbg "MatchesLookup.lookup_matches_with_modules signature: #{signature}"
+      # _dbg "MatchesLookup.lookup_matches_with_modules signature: #{signature}"
 
       matches = lookup_matches_without_parents(signature, owner, type_lookup, matches_array)
       return matches unless matches.empty?
@@ -69,13 +69,13 @@ module Crystal
         end
       end
 
-      _dbg "/MatchesLookup.lookup_matches_with_modules signature: #{signature}"
+      # _dbg "/MatchesLookup.lookup_matches_with_modules signature: #{signature}"
 
       Matches.new(matches_array, Cover.create(signature.arg_types, matches_array), owner, false)
     end
 
     def lookup_matches(signature, owner = self, type_lookup = self, matches_array = nil)
-      _dbg "MatchesLookup.lookup_matches signature: #{signature}"
+      # _dbg "MatchesLookup.lookup_matches signature: #{signature}"
 
       matches = lookup_matches_without_parents(signature, owner, type_lookup, matches_array)
       return matches if matches.cover_all?
@@ -95,7 +95,7 @@ module Crystal
         end
       end
 
-      _dbg "/MatchesLookup.lookup_matches signature: #{signature}"
+      # _dbg "/MatchesLookup.lookup_matches signature: #{signature}"
 
       Matches.new(matches_array, cover, owner, false)
     end

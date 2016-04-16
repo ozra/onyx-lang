@@ -572,6 +572,7 @@ module Crystal
     end
 
     def lookup_macro(name, args_size, named_args)
+      _dbg "MatchesLookup.lookup_macro #{name}".red
       if macros = self.macros.try &.[name]?
         match = macros.find &.matches?(args_size, named_args)
         return match if match
@@ -1409,7 +1410,7 @@ module Crystal
     end
 
     def instantiate(type_vars)
-      _dbg "GenericType.instantiate(#{type_vars})"
+      # _dbg "GenericType.instantiate(#{type_vars})"
 
       if (instance = generic_types[type_vars]?)
         return instance

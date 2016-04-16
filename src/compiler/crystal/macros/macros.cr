@@ -1,3 +1,11 @@
+#                      ##     ##    ###     ######  ########   #######   ######
+#                      ###   ###   ## ##   ##    ## ##     ## ##     ## ##    ##
+#                      #### ####  ##   ##  ##       ##     ## ##     ## ##
+#                      ## ### ## ##     ## ##       ########  ##     ##  ######
+#                      ##     ## ######### ##       ##   ##   ##     ##       ##
+#                      ##     ## ##     ## ##    ## ##    ##  ##     ## ##    ##
+#                      ##     ## ##     ##  ######  ##     ##  #######   ######
+
 module Crystal
   class Program
     def push_def_macro(a_def)
@@ -5,10 +13,12 @@ module Crystal
     end
 
     def expand_macro(a_macro : Macro, call : Call, scope : Type)
+      _dbg "Program.expand_macro Macro #{a_macro}, Call #{call} ->".red
       macro_expander.expand a_macro, call, scope
     end
 
     def expand_macro(node : ASTNode, scope : Type, free_vars = nil)
+      _dbg "Program.expand_macro ASTNode #{node} ->".red
       macro_expander.expand node, scope, free_vars
     end
 
@@ -20,7 +30,10 @@ module Crystal
     end
 
     def expand_macro_def(target_def)
+      _dbg "expand_macro_def target_def.is_onyx = #{target_def.is_onyx}".red
+
       the_macro = Macro.new("macro_#{target_def.object_id}", [] of Arg, target_def.body).at(target_def)
+      the_macro.tag_onyx target_def.is_onyx
 
       owner = target_def.owner
 
@@ -70,6 +83,9 @@ module Crystal
     end
 
     def parse_macro_source(expanded_macro, the_macro, node, vars, inside_def = false, inside_type = false, inside_exp = false)
+      _dbg "parse_macro_source the_macro.is_onyx = #{the_macro.is_onyx}, node.is_onyx = #{node.is_onyx}".red
+      # _dbg "parse_macro_source expanded_macro.is_onyx = #{expanded_macro.is_onyx}, the_macro.is_onyx = #{the_macro.is_onyx}, node.is_onyx = #{node.is_onyx}".red
+
       generated_source = expanded_macro.source
       begin
         if the_macro.is_onyx
@@ -99,6 +115,14 @@ module Crystal
     end
   end
 
+  # ######## ##     ## ########     ###    ##    ## ########  ######## ########
+  # ##        ##   ##  ##     ##   ## ##   ###   ## ##     ## ##       ##     ##
+  # ##         ## ##   ##     ##  ##   ##  ####  ## ##     ## ##       ##     ##
+  # ######      ###    ########  ##     ## ## ## ## ##     ## ######   ########
+  # ##         ## ##   ##        ######### ##  #### ##     ## ##       ##   ##
+  # ##        ##   ##  ##        ##     ## ##   ### ##     ## ##       ##    ##
+  # ######## ##     ## ##        ##     ## ##    ## ########  ######## ##     ##
+
   class MacroExpander
     # When a macro is expanded the result is a source code to be parsed.
     # When a macro contains `{{yield}}`, instead of transforming the yielded
@@ -117,6 +141,8 @@ module Crystal
     end
 
     def expand(a_macro : Macro, call : Call, scope : Type)
+      _dbg "MacroExpander.expand Macro a_macro.is_onyx = #{a_macro.is_onyx}".red
+
       visitor = MacroVisitor.new self, @mod, scope, a_macro, call
       a_macro.body.accept visitor
       source = visitor.to_s
@@ -124,6 +150,8 @@ module Crystal
     end
 
     def expand(node : ASTNode, scope : Type, free_vars = nil)
+      _dbg "MacroExpander.expand ASTNode node.is_onyx = #{node.is_onyx}".red
+
       visitor = MacroVisitor.new self, @mod, scope, node.location
       visitor.free_vars = free_vars
       node.accept visitor
@@ -162,6 +190,14 @@ module Crystal
       tempfile_path
     end
 
+    #                  ##     ## ####  ######  #### ########  #######  ########
+    #                  ##     ##  ##  ##    ##  ##     ##    ##     ## ##     ##
+    #                  ##     ##  ##  ##        ##     ##    ##     ## ##     ##
+    #                  ##     ##  ##   ######   ##     ##    ##     ## ########
+    #                   ##   ##   ##        ##  ##     ##    ##     ## ##   ##
+    #                    ## ##    ##  ##    ##  ##     ##    ##     ## ##    ##
+    #                     ###    ####  ######  ####    ##     #######  ##     ##
+
     class MacroVisitor < Visitor
       getter last : ASTNode
       getter yields : Hash(String, ASTNode)?
@@ -177,17 +213,27 @@ module Crystal
       @macro_vars : Hash(MacroVarKey, String)?
 
       def self.new(expander, mod, scope, a_macro : Macro, call)
+        _dbg "MacroVisitor..new".red
+        pp expander
+        pp a_macro
+        pp call
+        _dbg "\n"
+
         vars = {} of String => ASTNode
 
         marg_args_size = a_macro.args.size
         call_args_size = call.args.size
         splat_index = a_macro.splat_index || -1
 
+
         # Args before the splat argument
         0.upto(splat_index - 1) do |index|
           macro_arg = a_macro.args[index]
           call_arg = call.args[index]? || macro_arg.default_value.not_nil!
           call_arg = call_arg.expand_node(call.location) if call_arg.is_a?(MagicConstant)
+
+          _dbg "- MacroVisitor..new - arg.class = #{call_arg.class} : #{call_arg.inspect}".white
+
           vars[macro_arg.name] = call_arg
         end
 
@@ -229,12 +275,23 @@ module Crystal
           vars[macro_block_arg.name] = call_block || Nop.new
         end
 
+        # *TODO* DEBUG CODE
+        _dbg "- MacroVisitor..new - vars at end"
+        vars.each do |key, var|
+          _dbg "- MacroVisitor..new - '#{key}': var.class = #{var.class} : #{var.inspect}".white
+        end
+        # *TODO* DEBUG CODE
+
         new(expander, mod, scope, a_macro.location, vars, call.block, a_macro.is_onyx)
       end
 
       record MacroVarKey, name : String, exps : Array(ASTNode)?
 
-      def initialize(@expander, @mod, @scope, @location, @vars = {} of String => ASTNode, @block = nil, @is_onyx = false)
+      def initialize(
+        @expander, @mod, @scope, @location, @vars = {} of String => ASTNode,
+        @block = nil, @is_onyx = false
+      )
+        _dbg "MacroVisitor.initialize".red
         @str = MemoryIO.new(512)
         @last = Nop.new
       end
@@ -245,6 +302,8 @@ module Crystal
 
       def accept(node)
         node.accept self
+        _dbg "MacroVisitor.accept(#{node}) gave @last = '#{@last}'".yellow
+
         @last
       end
 
@@ -254,22 +313,32 @@ module Crystal
       end
 
       def visit(node : MacroExpression)
+        _dbg "MacroVisitor.visit MacroExpression: '#{node}'".yellow
         node.exp.accept self
 
         if node.output
+          _dbg "- MacroVisitor.visit MacroExpression - if output: '#{node.output}'"
           if node.exp.is_a?(Yield) && !@last.is_a?(Nop)
             var_name = @mod.new_temp_var_name
             yields = @yields ||= {} of String => ASTNode
             yields[var_name] = @last
             @last = Var.new(var_name)
           end
+          _dbg "- MacroVisitor.visit MacroExpression - to_s with @is_onyx = #{@is_onyx} where @last = #{@last}"
+
           @last.to_s(@str, as_kind: @is_onyx ? :onyx : :crystal)
+
+          _dbg "- MacroVisitor.visit MacroExpression - after to_s: '#{@str}'".white
+
+        else
+          _dbg "- MacroVisitor.visit MacroExpression - NO OUTPUT"
         end
 
         false
       end
 
       def visit(node : MacroLiteral)
+        _dbg "MacroVisitor.visit node MacroLiteral: '#{node.value}'".yellow
         @str << node.value
       end
 
@@ -283,6 +352,7 @@ module Crystal
       end
 
       def visit(node : StringInterpolation)
+        _dbg "MacroVisitor.visit node StringInterpolation: '#{node}'".yellow
         @last = StringLiteral.new(String.build do |str|
           node.expressions.each do |exp|
             if exp.is_a?(StringLiteral)
@@ -403,7 +473,10 @@ module Crystal
 
         macro_vars = @macro_vars ||= Hash(MacroVarKey, String).new
         macro_var = macro_vars[key] ||= @mod.new_temp_var_name
+
+        _dbg "MacroVisitor.visit node MacroVar: '#{macro_var.inspect}' : '#{macro_var.to_s}'".yellow
         @str << macro_var
+
         false
       end
 
@@ -767,15 +840,27 @@ module Crystal
       end
 
       def to_s
+        _dbg "MacroVisitor.to_s ->"
+        # _dbg @str.inspect
+        _dbg ".to_s -> '#{@str.to_s}'"
         @str.to_s
       end
 
+      # *TODO* is_onyx here completely errounous
       def to_s(io)
+        _dbg "MacroVisitor.to_s(io) ->"
         @str.to_s(io, as_kind: @is_onyx ? :onyx : :crystal)
       end
     end
   end
 
+  #         ##    ## ####         ######## ########     ###    ##    ##  ######
+  #          ##  ##   ##             ##    ##     ##   ## ##   ###   ## ##    ##
+  #           ####    ##             ##    ##     ##  ##   ##  ####  ## ##
+  #            ##     ##  #######    ##    ########  ##     ## ## ## ##  ######
+  #            ##     ##             ##    ##   ##   ######### ##  ####       ##
+  #            ##     ##             ##    ##    ##  ##     ## ##   ### ##    ##
+  #            ##    ####            ##    ##     ## ##     ## ##    ##  ######
   class YieldsTransformer < Transformer
     @yields : Hash(String, Crystal::ASTNode+)
 

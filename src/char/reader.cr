@@ -206,6 +206,14 @@ struct Char
       invalid_byte_sequence
     end
 
+    def unsafe_decode_char_at(i)
+      return '\0' if i < 0
+      return '\0' if i > @string.bytesize
+      decode_char_at(i) do |code_point, width|
+        code_point.chr
+      end
+    end
+
     private def invalid_byte_sequence
       raise InvalidByteSequenceError.new
     end

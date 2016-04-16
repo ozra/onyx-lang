@@ -336,7 +336,7 @@ module Crystal
     end
 
     def visit(node : NumberLiteral)
-      case node.kind
+      case @mod.terminal_number_kind node.kind
       when :i8
         @last = int8(node.value.to_i8)
       when :u8
@@ -357,6 +357,8 @@ module Crystal
         @last = LLVM.float(node.value)
       when :f64
         @last = LLVM.double(node.value)
+      else
+        raise "Internal bug: Codegen: unhandled NumberLiteral kind! '#{node.kind}'"
       end
     end
 

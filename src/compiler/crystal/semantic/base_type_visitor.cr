@@ -33,7 +33,7 @@ module Crystal
     end
 
     def visit(node : Path)
-      _dbg "BaseTypeVisitor.visit Path #{node}"
+      # _dbg "BaseTypeVisitor.visit Path #{node}"
 
 
       babelfish_mangling node, current_type
@@ -74,7 +74,7 @@ module Crystal
         node.bind_to type
       end
 
-      _dbg "/BaseTypeVisitor.visit Path #{node}"
+      # _dbg "/BaseTypeVisitor.visit Path #{node}"
 
     end
 
@@ -145,7 +145,7 @@ module Crystal
     end
 
     def visit(node : Generic)
-      _dbg "BaseTypeVisitor.visit Generic #{node}"
+      # _dbg "BaseTypeVisitor.visit Generic #{node}"
 
 
 
@@ -158,11 +158,11 @@ module Crystal
 
       node.name.accept self
 
-      _dbg "BaseTypeVisitor.visit Generic #{node} - iterate type_vars"
+      # _dbg "BaseTypeVisitor.visit Generic #{node} - iterate type_vars"
       @in_type_args += 1
       node.type_vars.each &.accept self
       @in_type_args -= 1
-      _dbg "BaseTypeVisitor.visit Generic #{node} - done iterating type_vars"
+      # _dbg "BaseTypeVisitor.visit Generic #{node} - done iterating type_vars"
 
       return false if node.type?
 
@@ -190,7 +190,7 @@ module Crystal
     end
 
     def visit_fun_def(node : FunDef)
-      _dbg "BaseTypeVisitor.visit_fun_def #{node}"
+      # _dbg "BaseTypeVisitor.visit_fun_def #{node}"
 
       check_outside_block_or_exp node, "declare fun"
 
@@ -202,14 +202,14 @@ module Crystal
       check_valid_attributes node, ValidFunDefAttributes, "fun"
       node.doc ||= attributes_doc()
 
-      _dbg "- BaseTypeVisitor.visit_fun_def - do args"
+      # _dbg "- BaseTypeVisitor.visit_fun_def - do args"
       args = node.args.map do |arg|
         restriction = arg.restriction.not_nil!
         restriction.tag_onyx node.is_onyx
 
         restriction = babelfish_mangling restriction, current_type
 
-        _dbg "- BaseTypeVisitor.visit_fun_def - args #{arg} : #{restriction}"
+        # _dbg "- BaseTypeVisitor.visit_fun_def - args #{arg} : #{restriction}"
         processing_types do
           restriction.accept self
         end
@@ -355,7 +355,7 @@ module Crystal
     end
 
     def lookup_path_type(node : Path, create_modules_if_missing = false)
-      _dbg "BaseTypeVisitor.lookup_path_type(Path: #{node})"
+      # _dbg "BaseTypeVisitor.lookup_path_type(Path: #{node})"
 
       target_type = resolve_ident(node, create_modules_if_missing)
       if target_type.is_a?(Type)
@@ -384,10 +384,10 @@ module Crystal
 
         target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
 
-        _dbg " - resolve_ident - Path got target_type: #{target_type}, #{target_type.class}"
+        # _dbg " - resolve_ident - Path got target_type: #{target_type}, #{target_type.class}"
 
         if !target_type && !tried_as_foreign_bak
-          _dbg " - resolve_ident - retries node mangled as altneratively _not_ foreign #{node}, #{node.tried_as_foreign}"
+          # _dbg " - resolve_ident - retries node mangled as altneratively _not_ foreign #{node}, #{node.tried_as_foreign}"
           node.tried_as_foreign = tried_as_foreign_bak
           node.names[0] = first_name_bak
           target_type, similar_name = resolve_ident? node, create_modules_if_missing
@@ -412,16 +412,16 @@ module Crystal
 
 
     def resolve_ident?(node : Path, create_modules_if_missing = false)
-      _dbg "resolve_ident?(Path: #{node}) ->" # , auto-mod: #{create_modules_if_missing}"
+      # _dbg "resolve_ident?(Path: #{node}) ->" # , auto-mod: #{create_modules_if_missing}"
 
       if (free_vars = @free_vars) && !node.global
-        _dbg "detaint just for free_vars check in free_vars = #{free_vars}"
+        # _dbg "detaint just for free_vars check in free_vars = #{free_vars}"
         first_detainted = babelfish_detaint node.names.first
         type = free_vars[first_detainted]?
       end
 
       if type
-        _dbg "- resolve_ident? - matched '#{first_detainted} in free_vars: #{free_vars}"
+        # _dbg "- resolve_ident? - matched '#{first_detainted} in free_vars: #{free_vars}"
         target_type = type
 
         if node.names.size > 1
@@ -431,7 +431,7 @@ module Crystal
       else
         base_lookup = node.global ? mod : (@type_lookup || @scope || @types.last)
 
-        _dbg "- resolve_ident? - do a lookup_type '#{node.names} in #{base_lookup} of #{base_lookup.class}"
+        # _dbg "- resolve_ident? - do a lookup_type '#{node.names} in #{base_lookup} of #{base_lookup.class}"
 
         node = babelfish_mangling node, base_lookup
 
@@ -474,7 +474,7 @@ module Crystal
     end
 
     def process_type_name(node_name)
-      _dbg "process_type_name #{node_name} (global == #{node_name.global})"
+      # _dbg "process_type_name #{node_name} (global == #{node_name.global})"
 
       if node_name.names.size == 1 && !node_name.global
         scope = current_type
@@ -554,6 +554,7 @@ module Crystal
     end
 
     def expand_macro(node, raise_on_missing_const = true, first_pass = false)
+      _dbg "BaseTypeVisitor.expand_macro node".red
       if expanded = node.expanded
         @exp_nest -= 1
         begin
@@ -565,25 +566,32 @@ module Crystal
         return true
       end
 
+      _dbg 1
       obj = node.obj
       case obj
       when Path
+        _dbg 2
         if raise_on_missing_const
           macro_scope = resolve_ident(obj)
         else
           macro_scope, similar_name = resolve_ident?(obj)
         end
         return false unless macro_scope.is_a?(Type)
-
+        _dbg 3
         the_macro = macro_scope.metaclass.lookup_macro(node.name, node.args.size, node.named_args)
       when Nil
+        _dbg 4
         return false if node.name == "super" || node.name == "previous_def"
+        _dbg 5
         the_macro = node.lookup_macro
       else
         return false
       end
 
+      _dbg 6
       return false unless the_macro
+
+      _dbg 7
 
       # If we find a macro outside a def/block and this is not the first pass it means that the
       # macro was defined before we first found this call, so it's an error
@@ -594,10 +602,13 @@ module Crystal
 
       expansion_scope = (macro_scope || @scope || current_type)
 
+      _dbg 8
+
       args = expand_macro_arguments(node, expansion_scope)
 
       @exp_nest -= 1
       generated_nodes = expand_macro(the_macro, node) do
+        _dbg 9
         old_args = node.args
         node.args = args
         expanded = @mod.expand_macro the_macro, node, expansion_scope
@@ -606,6 +617,8 @@ module Crystal
       end
       @exp_nest += 1
 
+      _dbg 10
+
       node.expanded = generated_nodes
       node.bind_to generated_nodes
 
@@ -613,6 +626,7 @@ module Crystal
     end
 
     def expand_macro(the_macro, node)
+      _dbg "BaseTypeVisitor.expand_macro the_macro".red
       begin
         expanded_macro = yield
       rescue ex : Crystal::Exception
@@ -634,6 +648,7 @@ module Crystal
     end
 
     def expand_macro_arguments(node, expansion_scope)
+      _dbg "BaseTypeVisitor.expand_macro_arguments".red
       # If any argument is a MacroExpression, solve it first and
       # replace Path with Const/TypeNode if it denotes such thing
       args = node.args

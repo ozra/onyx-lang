@@ -5,6 +5,9 @@ require "../syntax/transformer"
 module Crystal
   class Program
     def normalize(node, inside_exp = false)
+      # _dbg_overview "\nCompiler stage: Program.normalize\n\n".white
+      # *TODO* add "normalize_count" to nodes, to keep track of (lack of) efficiency
+
       normalizer = Normalizer.new(self)
       normalizer.exp_nest = 1 if inside_exp
       node = normalizer.normalize(node)
@@ -406,9 +409,17 @@ module Crystal
             else
               parser = Parser.new File.read(filename)
             end
+
+            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
+            _dbg_overview " parses \"#{filename}\"\n\n".white
+
             parser.filename = filename
             parser.wants_doc = @program.wants_doc?
             nodes << FileNode.new(parser.parse.transform(self), filename)
+
+          else
+            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
+            _dbg_overview " ALREADY PROCESSED \"#{filename}\"\n\n".white
           end
         end
         Expressions.from(nodes)

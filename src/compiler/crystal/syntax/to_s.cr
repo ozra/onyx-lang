@@ -7,10 +7,11 @@ module Crystal
       to_s(io)
     end
 
-    def to_s(io)
-      visitor = ToSVisitor.new(io)
-      self.accept visitor
-    end
+    # Implemented in "compiler/onyx/syntax/to_s.cr"
+    # def to_s(io)
+    #   visitor = ToSVisitor.new(io)
+    #   self.accept visitor
+    # end
   end
 
   class ToSVisitor < Visitor
@@ -36,10 +37,10 @@ module Crystal
 
     def visit(node : NumberLiteral)
       @str << node.value
-      if node.kind != :i32 && node.kind != :f64
-        @str << "_"
-        @str << node.kind.to_s
-      end
+      # if node.kind != :i32 && node.kind != :f64
+      @str << "§§"  # "Crox–syntax" for macros sake
+      @str << node.kind.to_s
+      # end
     end
 
     def visit(node : CharLiteral)

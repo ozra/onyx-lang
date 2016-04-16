@@ -57,7 +57,10 @@ echo ""
 
 # LIBRARY_PATH="/opt/crystal/embedded/lib/;$LIBRARY_PATH"
 # CRYSTAL_CONFIG_PATH=`pwd`/src crystal build --release --link-flags "-L/opt/crystal/embedded/lib" -o .build/onyx src/compiler/onyx.cr
-CRYSTAL_CONFIG_PATH=`pwd`/src ./bin/cr-ox build --release -o .build/onyx src/compiler/onyx.cr
+
+# CRYSTAL_CONFIG_PATH=`pwd`/src \
+#     ./bin/cr-ox build --release -o .build/onyx src/compiler/onyx.cr
+make all
 
 echo "Installs Onyx at /opt/onyx/"
 echo ""

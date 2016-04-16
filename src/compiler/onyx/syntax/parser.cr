@@ -5,26 +5,10 @@ require "../semantic/babelfish_translations"
 require "../../debug_utils/global_pollution"
 require "../../debug_utils/ast_dump"
 
-module Crystal
+require "./parser_scopes_and_nesting"
+require "./ast_onyx_tagger"
 
-abstract class ASTNode
-   macro def tag_onyx(val = true, visited = [] of ASTNode) : Nil
-      @is_onyx = val
-      {% for ivar, i in @type.instance_vars %}
-         _{{ivar}} = @{{ivar}}
-         if _{{ivar}}.is_a?(ASTNode)
-            if !visited.includes? _{{ivar}}
-               visited << _{{ivar}}
-               _{{ivar}}.tag_onyx val, visited
-               visited.pop
-            end
-         elsif _{{ivar}}.is_a?(Array(ASTNode))
-            _{{ivar}}.each &.tag_onyx(val, visited)
-         end
-      {% end %}
-      nil
-   end
-end
+module Crystal
 
 class WrongParsePathException < SyntaxException
 end
@@ -42,294 +26,17 @@ alias TagLiteral = SymbolLiteral
 MACRO_INDENT_FLAG = -99
 
 
-class Scope
-   property :name
-
-   def initialize(@vars = Set(String).new)
-   end
-
-   def includes?(name)
-      @vars.includes? name
-   end
-
-   def add(name)
-      @vars.add name
-   end
-
-   def dup
-      Scope.new @vars
-   end
-
-   def dbgstack
-      ifdef !release
-         STDERR.puts "VARS:".blue
-         STDERR.puts @vars
-      end
-   end
-
-end
-
-class ScopeStack
-   @scopes = Array(Scope).new
-   @current_scope = Scope.new # ugly way of avoiding null checks
-
-   def initialize
-      push_fresh_scope()
-   end
-   def initialize(vars_scopes_list : Array(Set(String)))
-      vars_scopes_list.each do |var_set|
-         push_scope Scope.new var_set
-      end
-   end
-   def cur_has?(name)
-      @scopes.last.includes? name
-   end
-   def last
-      @current_scope
-   end
-   def size
-      @scopes.size
-   end
-   def hard_pop(size) : Nil
-      while @scopes.size > size
-         @scopes.pop
-      end
-      @current_scope = @scopes.last
-      nil
-   end
-   def pop_scope
-      @scopes.pop
-      @current_scope = @scopes.last
-   end
-   def push_scope(scope : Scope)
-      @scopes.push scope
-      @current_scope = scope
-   end
-   def push_fresh_scope
-      push_scope Scope.new
-   end
-   def push_scope
-      push_scope @scopes.last.dup
-   end
-   def add_var(name : String)
-      @current_scope.add name
-   end
-   def dbgstack
-      ifdef !release
-         @scopes.each_with_index do |scope, i|
-            #@scopes[@scopes.size - 2].dbgstack
-            STDERR.puts "#{i}:"
-            scope.dbgstack
-         end
-      end
-   end
-end
-
-
-class Nesting
-   property nest_kind
-   property indent
-   property name
-   property require_end_token
-   @block_auto_params : Array(Var)?
-   property block_auto_params
-   property location
-   property single_line
-
-   property int_type_mapping : String
-   property real_type_mapping : String
-
-   @@std_int : String
-   @@std_int = "StdInt"
-
-   @@std_real : String
-   @@std_real = "StdReal"
-
-   @@nesting_keywords = %w(
-      program
-      module trait
-      type enum class struct
-      def fun block lambda
-      template macro
-      lib api
-      cfun cstruct cunion cenum
-      union ctype calias
-      where
-      scope scoped contain contained
-      if ifdef unless else
-      elif elsif
-      case when
-      while until for each loop
-      try rescue catch ensure
-      indent_call
-   )
-
-   def self.nesting_keywords
-      @@nesting_keywords
-   end
-
-   def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params = nil, @int_type_mapping = @@std_int, @real_type_mapping = @@std_real)
-      if !Nesting.nesting_keywords.includes? @nest_kind.to_s
-         raise "Shit went down - don't know about nesting kind '#{@nest_kind.to_s}'"
-      end
-   end
-
-   def dup
-      Nesting.new @nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params.dup, @int_type_mapping, @real_type_mapping
-   end
-
-   def message_expected_end_tokens
-      case @nest_kind
-      when :program then "EOF"
-         # when :module then "end or end-module"
-         # when :if then "end or end-if"
-         # when :try then "catch, end or end-try"
-      else
-         "\"end\" or \"end-" + @nest_kind.to_s + "\""
-      end
-   end
-
-   def match_end_token(end_token : Symbol)
-      end_token == :end || end_token.to_s == ("end_" + @nest_kind.to_s)
-   end
-end
-
-
-class NestingStack
-   @stack : Array(Nesting)
-
-   def initialize
-      @stack = [Nesting.new(:program, -1, "", Location.new(0, 0, ""), false, false)]
-   end
-
-   def add(kind : Symbol, indent : Int32, match_name, location, single_line, require_end_token)
-      indent = last.indent   if indent == -1
-      nest = Nesting.new kind, indent, match_name, location, single_line, require_end_token
-      nest.int_type_mapping = last.int_type_mapping
-      nest.real_type_mapping = last.real_type_mapping
-      @stack.push nest
-   end
-
-   def last
-      @stack.last
-   end
-
-   def replace_last(nest : Nesting)
-      @stack[-1] = nest
-   end
-
-   def size
-      @stack.size
-   end
-
-   def hard_pop(size) : Nil
-      while @stack.size > size
-         @stack.pop
-      end
-      nil
-   end
-
-   def in_auto_paramed?
-      @stack.reverse.each do |v|
-         if v.nest_kind == :block
-            return v.block_auto_params != nil
-         end
-         false
-      end
-
-   end
-
-   private def pop_and_status(indent : Int32, force : Bool) : Symbol
-      @stack.pop
-
-      # if indent <= last.indent && (force || !last.require_end_token) # *TODO* "no automatic dedent"
-      if indent != MACRO_INDENT_FLAG && indent <= last.indent && size > 1
-         # p @stack.to_s
-         :more
-      else
-         :done
-      end
-   end
-
-   def dedent(indent : Int32, end_token : Symbol, match_name : String, force = false) : Symbol | String
-      # while true
-      nest = @stack.last
-
-      if force
-         return pop_and_status indent, force
-
-      elsif indent < nest.indent
-         ifdef !release
-            STDERR.puts "indents left to match alignment in nesting_stack:"
-         end
-         (@stack.size - 1..0).each do |i|
-            ifdef !release
-               STDERR.puts "ind: #{@stack[i].indent}"
-            end
-            # *TODO*
-            # check so that the indent–level EXISTS further up (we don't allow dedent
-            # to an "unspecified level" (in between)
-         end
-
-         return pop_and_status indent, force
-
-      elsif nest.indent == indent
-         case
-         when end_token == :""
-            return pop_and_status indent, force
-
-         when nest.match_end_token end_token
-            case
-            when match_name == ""
-               return pop_and_status indent, force
-            when nest.name == match_name
-               return pop_and_status indent, force
-            else
-            # *TODO* start–row+col för nest ska lagras så den kan returneras med error
-            # så att matching start–part kan visas också (extra hjälp)
-
-               return "explicit end-token \"#{(end_token.to_s + " " + match_name).strip}\"" \
-               " doesn't match expected" \
-               " \"#{(nest.message_expected_end_tokens + " " + nest.name).strip}\""
-            end
-         else
-         # *TODO* start–row+col för nest ska lagras så den kan returneras med error
-         # så att matching start–part kan visas också (extra hjälp)
-
-            return "explicit end-token \"#{end_token}\"" \
-            " doesn't match expected #{nest.message_expected_end_tokens}"
-         end
-      else
-         return :"false" # NOTE! SYMBOL :false
-      end
-      # end
-   end
-
-   def dbgstack
-      ifdef !release
-         ret = "NEST-STACK:\n"
-         @stack.each do |v|
-            ret += "'#{v.nest_kind}', #{v.indent}, #{(v.single_line ? "S" : "m")}, \"#{v.name}\" @ #{v.location.line_number}:#{v.location.column_number}\n"
-         end
-         ret += "\n"
-         ret
-      else
-         ""
-      end
-   end
-end
-
-
-#       ########      ###   ########    ######   ######   ########
-#       ##       ##   ## ##    ##    ## ##      ## ##          ##    ##
-#       ##       ## ##    ##   ##    ## ##          ##          ##    ##
-#       ######## ##    ## ########    ######   ######   ########
-#       ##          ######### ##    ##          ## ##         ##    ##
-#       ##          ##    ## ##   ##   ##       ##   ##         ##   ##
-#       ##          ##    ## ##    ##   ######    ########   ##    ##
-
+         ########     ###    ########   ######  ######## ########
+         ##     ##   ## ##   ##     ## ##    ## ##       ##     ##
+         ##     ##  ##   ##  ##     ## ##       ##       ##     ##
+         ########  ##     ## ########   ######  ######   ########
+         ##        ######### ##   ##         ## ##       ##   ##
+         ##        ##     ## ##    ##  ##    ## ##       ##    ##
+         ##        ##     ## ##     ##  ######  ######## ##     ##
 
 class OnyxParser < OnyxLexer
+   include CommonParserMethods
+
    record Unclosed, name, location
 
    property visibility  # *TODO* must be handled for macros
@@ -1131,10 +838,20 @@ class OnyxParser < OnyxLexer
             right = parse_mul_or_div
             left = Call.new(left, method, [right] of ASTNode, name_column_number: method_column_number).at(location)
          when :NUMBER
+
+            # *TODO* suffixes!
+
             case char = @token.value.to_s[0]
             when '+', '-'
-               left = Call.new(left, char.to_s, [new_num_lit(@token.value.to_s.byte_slice(1), @token.number_kind)] of ASTNode, name_column_number: @token.column_number).at(location)
-               next_token_skip_space
+               method = char.to_s
+               method_column_number = @token.column_number
+
+               # Go back to the +/-, advance one char and continue from there
+               self.current_pos = @token.start + 1
+               next_token
+
+               right = parse_mul_or_div
+               left = Call.new(left, method, [right] of ASTNode, name_column_number: method_column_number).at(location).at_end(right)
             else
                return left
             end
@@ -1453,7 +1170,7 @@ class OnyxParser < OnyxLexer
       # dot–index : foo.1 => foo[1]
       elsif tok? :NUMBER
          args = [] of ASTNode
-         args << NumberLiteral.new(@token.value.to_s, :i32) # *TODO* should use current literal–int
+         args << new_numeric_literal @token
          next_token
 
          if @token.type == :"?"
@@ -1723,7 +1440,7 @@ class OnyxParser < OnyxLexer
       when :NUMBER
          dbg "when :NUMBER"
          @wants_regex = false
-         node_and_next_token new_num_lit(@token.value.to_s, @token.number_kind)
+         node_and_next_token new_numeric_literal(@token)
 
       when :CHAR
          node_and_next_token CharLiteral.new(@token.value as Char)
@@ -1777,7 +1494,7 @@ class OnyxParser < OnyxLexer
                method = "[]"
             end
             location = @token.location
-            node_and_next_token Call.new((Call.new(Var.new("$~").at(location), "not_nil!")).at(location), method, new_num_lit(value.to_i))
+            node_and_next_token Call.new((Call.new(Var.new("$~").at(location), "not_nil!")).at(location), method, new_numeric_literal(value.to_s))
          end
 
       when :__LINE__
@@ -2115,17 +1832,6 @@ class OnyxParser < OnyxLexer
          next_token
       end
 
-      # The "magic" renaming of Int and Real to their current default
-      # *TODO* just keep literals!?
-      # names.each_with_index do |name, ix|
-      #    if name == "Int"
-      #       names[ix] = @nesting_stack.last.int_type_mapping.value.to_s
-
-      #    elsif name == "Real"
-      #       names[ix] = @nesting_stack.last.real_type_mapping.value.to_s
-      #    end
-      # end
-
       const = Path.new(names, global).at(location)
       const.end_location = end_location
 
@@ -2144,15 +1850,14 @@ class OnyxParser < OnyxLexer
             raise "must specify at least one type var"
          end
 
-         raise "expected `>` or `]` ending type params" if !tok? generic_end
+         raise "expected `#{generic_end}` ending type params" if !tok? generic_end
          const = Generic.new(const, types).at(location)
          const.end_location = token_end_location
          next_token
       end
 
-      dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
-
       if allow_call_parsing
+         dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
          case
          when tok? :"("
             return parse_constish_type_new_call_sugar const, name_indent
@@ -2279,8 +1984,9 @@ class OnyxParser < OnyxLexer
       dbg "parse_pragma ->"
       doc = @token.doc
 
-      next_token # skip the pragma symbol `'`
-      skip_tokens :"!"
+      next_token # skip the pragma prefix symbol `'`
+
+      skip_tokens :"!"  # *TODO* this is either in or it's out.
 
       name = @token.value.to_s
       next_token_skip_space
@@ -2319,204 +2025,35 @@ class OnyxParser < OnyxLexer
          end
 
       else
-         # backed = backup_full
-
-         # begin
-         #    dbg "parse_pragma -> lex_style = :transform".yellow
-         #    lex_style = :transform
-
-         #    args << parse_call_arg
-
-         #    if !tok? :"=>"
-         #       Crystal.raise_wrong_parse_path
-         #    end
-         #    next_token_skip_space
-
-         #    args << parse_call_arg
-
-         # rescue
-         #    restore_full backed
-            lex_style = :statement
-         # end
+         lex_style = :statement
       end
 
       skip_space # _or_newline
 
       dbg "- parse_pragma #{name}, #{args}"
 
-
       pragma = Attribute.new(name, args, named_args, lex_style: lex_style)
       pragma.doc = doc
-
-      case pragma.name
-      when "lit_int", "int_lit", "literal_int", "int_literal"
-         pragma.name = "!int_literal"
-         dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-         @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
-
-      when "lit_real", "real_lit", "literal_real", "real_literal"
-         pragma.name = "!real_literal"
-         dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-         @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
-
-      end
-
+      handle_parse_time_pragmas pragma
       pragma
 
    ensure
       dbgtail "/parse_pragma"
    end
 
+   def handle_parse_time_pragmas(pragma)
+      # case pragma.name
+      # when "lit_int", "int_lit", "literal_int", "int_literal"
+      #    pragma.name = "!int_literal"
+      #    dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+      #    @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
 
-
-   # def parse_pragma_cluster() : Array(ASTNode)
-   #    if pragma_starter?
-   #       parse_pragma_cluster_style2
-   #    else
-   #       parse_pragma_cluster_style1
-   #    end
-   # end
-
-   # def parse_pragma_grouping() : Array(ASTNode)
-   #    if pragma_starter?
-   #       parse_pragma_grouping_style2
-   #    else
-   #       parse_pragma_grouping_style1
-   #    end
-   # end
-
-
-   # def parse_pragma_cluster_style1() : Array(ASTNode)
-   #    dbg "parse_pragma_cluster_style1 ->"
-   #    pragmas = [] of ASTNode
-
-   #    while tok? :PRAGMA
-   #       pragmas.concat parse_pragma_grouping_style1
-   #       skip_space_or_newline
-   #    end
-   #    pragmas
-   # end
-
-   # def parse_pragma_grouping_style1() : Array(ASTNode)
-   #    dbg "parse_pragma_grouping_style1 ->"
-   #    pragmas = [] of ASTNode
-
-   #    # while tok? :PRAGMA
-   #    while tok? :PRAGMA
-   #       pragmas << parse_pragma
-   #    end
-
-   #    pragmas
-   # end
-
-
-   # def parse_pragma_cluster_style2() : Array(ASTNode)
-   #    dbg "parse_pragma_cluster_style2 ->"
-   #    pragmas = [] of ASTNode
-
-   #    #while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
-   #    while pragma_starter?
-   #       next_token
-   #       skip_space
-
-   #       while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
-   #          pragmas << parse_pragma
-   #       end
-
-   #       if tok? :DEDENT
-   #          return pragmas
-   #       elsif tok? :INDENT
-   #          raise "indented pragmas blocks not implemented yet! /ozra"
-   #       end
-
-   #       next_token if tok? :";"
-   #       skip_space_or_newline
-   #    end
-   #    pragmas
-   # end
-
-   # def parse_pragma_grouping_style2() : Array(ASTNode)
-   #    dbg "parse_pragma_grouping_style2 ->"
-   #    pragmas = [] of ASTNode
-
-   #    next_token
-   #    skip_space
-
-   #    # while tok? :PRAGMA
-   #    while ! tok? :";", :NEWLINE, :INDENT, :DEDENT # :PRAGMA
-   #       pragmas << parse_pragma
-   #    end
-
-   #    next_token if tok? :";"
-   #    skip_space
-   #    # skip_space_or_newline
-
-   #    pragmas
-   # end
-
-
-   # def parse_pragma()
-   #    dbg "parse_pragma ->"
-   #    doc = @token.doc
-
-   #    name = @token.value.to_s
-   #    next_token #_skip_space
-
-   #    args = [] of ASTNode
-   #    named_args = nil # [] of ASTNode
-
-   #    if tok? :"="
-   #       next_token #_skip_space
-   #       args << Arg.new @token.value.to_s
-   #       next_token_skip_space
-
-   #    elsif tok? :"("
-   #       open("attribute") do
-   #          next_token_skip_space_or_newline
-
-   #          while @token.type != :")"
-   #             if @token.type == :IDFR && current_char == ':'
-   #                named_args = parse_named_args(allow_newline: true)
-   #                check :")"
-   #                break
-   #             else
-   #                args << parse_call_arg
-   #             end
-
-   #             skip_statement_end
-
-   #             if @token.type == :","
-   #                next_token_skip_space_or_newline
-   #             end
-   #          end
-
-   #          next_token_skip_space
-   #       end
-   #    end
-
-   #    skip_space # _or_newline
-
-   #    dbg "- parse_pragma #{name}, #{args}"
-
-
-   #    pragma = Attribute.new(name, args, named_args)
-   #    pragma.doc = doc
-
-   #    case pragma.name
-   #    when "lit_int", "int_lit", "literal_int", "int_literal"
-   #       dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-   #       @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
-
-   #    when "lit_real", "real_lit", "literal_real", "real_literal"
-   #       dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-   #       @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
-   #    end
-
-   #    pragma
-
-   # ensure
-   #    dbg "/parse_pragma"
-   # end
+      # when "lit_real", "real_lit", "literal_real", "real_literal"
+      #    pragma.name = "!real_literal"
+      #    dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
+      #    @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
+      # end
+   end
 
    def parse_try
       slash_is_regex!
@@ -2742,13 +2279,13 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
          dbg "parse range end expression"
          range_end_expr = parse_op_assign_no_control allow_suffix: false
-         iterable = RangeLiteral.new new_num_lit(0), range_end_expr, false
+         iterable = RangeLiteral.new new_numeric_literal("0"), range_end_expr, false
 
       when :til
          next_token_skip_space
          dbg "parse range end expression"
          range_end_expr = parse_op_assign_no_control allow_suffix: false
-         iterable = RangeLiteral.new new_num_lit(0), range_end_expr, true
+         iterable = RangeLiteral.new new_numeric_literal("0"), range_end_expr, true
 
       when :from
          next_token_skip_space
@@ -3138,10 +2675,14 @@ class OnyxParser < OnyxLexer
       skip_space
 
       type_vars = parse_type_vars
-      skip_statement_end
+      # skip_statement_end
+
+      dbg "- parse_trait_def - before parse_nest_start - macro_parse_mode_count = #{@macro_parse_mode_count}"
 
       nest_kind, dedent_level = parse_nest_start(:type, trait_indent)
       add_nest :trait, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
+
+      dbg "- parse_trait_def - nest_kind = #{nest_kind}, macro_parse_mode_count = #{@macro_parse_mode_count}"
 
       if nest_kind == :NIL_NEST
          body = Nop.new
@@ -3180,7 +2721,7 @@ class OnyxParser < OnyxLexer
       skip_space
 
       type_vars = parse_type_vars
-      skip_statement_end
+      # skip_statement_end
 
       nest_kind, dedent_level = parse_nest_start(:generic, mod_indent)
       add_nest :module, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
@@ -6225,6 +5766,9 @@ class OnyxParser < OnyxLexer
          else
             if args
                dbg "parse_var_or_call - got some kinda args"
+
+               # *TODO* NumLitTodo - also in crystal–parser
+
                if (!force_call && is_var) && args.size == 1 && (num = args[0]) && (num.is_a?(NumberLiteral) && num.has_sign?)
                   sign = num.value[0].to_s
                   num.value = num.value.byte_slice(1)
@@ -7046,7 +6590,7 @@ class OnyxParser < OnyxLexer
             end
          else
             if allow_primitives && tok? :NUMBER
-               num = new_num_lit(@token.value.to_s, @token.number_kind).at(@token.location)
+               num = new_numeric_literal(@token).at(@token.location)
                type = node_and_next_token(num)
                skip_space
                return type
@@ -8029,7 +7573,7 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_nest_start(kind : Symbol, indent : Int32) : {Symbol, Int32} #   = :generic
-      dbg "parse_nest_start".yellow
+      dbg "parse_nest_start ->".yellow
 
       dedent_level = kwd?(:begins) ? -1 : indent
       #compare_dedent_level = dedent_level == -1 ? indent - 1 : indent
@@ -8040,6 +7584,7 @@ class OnyxParser < OnyxLexer
 
       case
       when macro_parse_mode?
+         dbg "- parse_nest_start - macro_parse_mode? == true"
          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
          {:NEST, MACRO_INDENT_FLAG}
 
@@ -8324,7 +7869,10 @@ class OnyxParser < OnyxLexer
       end_token = @token.value as Symbol
       next_token
 
-      # is there a name–matching?
+      # *TODO* `=` should not be needed, just do `end Name`, `end type Name` etc.
+      # also simplifies token–parsing - and `end` can still be used as idfr in
+      # some cases. (Disallow anyway? For clarity? Yes, because of the implicit
+      # use that would be a good path!
       if tok? :"="
          next_token
          match_name = parse_constish.to_s # *TODO* WRONG!
@@ -8491,98 +8039,16 @@ class OnyxParser < OnyxLexer
 
    def parser_peek_non_ws_char(n = 1) : Char
       # *TODO* should skip comments too, and newlines - MAKE ANOTHER FOR THAT
-      cur_pos = current_pos || 1
-
+      backed_pos = current_pos || 1
       while current_char == ' '
          next_char
       end
-
       while n > 1
-         next_char
-         n -= 1
+         next_char; n -= 1
       end
-
       ch = current_char
-      set_pos cur_pos
+      set_pos backed_pos
       return ch
-   end
-
-   def new_num_lit(value, kind = :int)
-      dbg "new_num_lit ->"
-
-
-      # *TODO* this should _probably_ be done in a semantic stage
-      # (not absolutely necessarily though)
-
-      if kind == :int
-         confed_type = @nesting_stack.last.int_type_mapping #.value.to_s
-
-         dbg "- new_num_lit - int -> #{confed_type}"
-
-         case confed_type
-
-         # # *TODO*
-         # when "StdInt",  "Int"
-         #    look up int–width defined for StdInt
-         #    kind = :i32 | :i64    # *TODO* *9* look up CHOSEN architecture int width
-
-
-         when "I32", "Int32"
-            kind = :i32
-         when "I64", "Int64"
-            kind = :i64
-         else
-            # confed_type = "StdInt" if confed_type == "Int"  # *TODO*
-
-            return Call.new(
-               Path.new([confed_type], true), # .at(location)
-               "new",
-               [NumberLiteral.new(value, :i64)] of ASTNode+,
-               nil,
-               nil,
-               nil,
-               false,
-               0,
-               true,
-               true
-            )
-         end
-
-      elsif kind == :real
-         confed_type = @nesting_stack.last.real_type_mapping #.value.to_s
-
-         dbg "- new_num_lit - real -> #{confed_type}"
-
-         case confed_type
-         when "StdReal"
-            kind = :f64    # *TODO* Lookup from type–chain
-         when "F32", "Float32"
-            kind = :f32
-         when "F64", "Float64"
-            kind = :f64
-         else
-            return Call.new(
-               Path.new([confed_type], true), # .at(location)
-               "new",
-               [NumberLiteral.new(value, :f64)] of ASTNode+,
-               nil,
-               nil,
-               nil,
-               false,
-               0,
-               true,
-               true
-            )
-         end
-
-      else
-         dbg "- new_num_lit - #{kind}"
-      end
-
-      NumberLiteral.new(value, kind)
-
-   ensure
-      dbgtail "/new_num_lit"
    end
 
    def check_const
@@ -8625,16 +8091,11 @@ class OnyxParser < OnyxLexer
 
    def add_instance_var(name)
       return if @in_macro_expression
-
       @instance_vars.try &.add name
    end
 
    def self.free_var_name?(name)
-      # *TODO* - this should be changed in Onyx - any length free var names possible!
-      # *TODO* where does it fuck up atm? Must we make a lookup–table back and forth?
-
-      # name.size == 1 || (name.size == 2 && name[1].digit?)
-      true
+      name.size == 1 || (name.size == 2 && name[1].digit?)
    end
 
 

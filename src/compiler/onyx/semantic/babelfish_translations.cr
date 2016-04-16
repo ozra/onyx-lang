@@ -54,7 +54,7 @@ babel_type F64,    Float64,     true
 
 
 babel_func init,        initialize,         true
-# babel_func "of?",       "is_a?",          true
+
 babel_func :"~~",       :"==="
 
 babel_func each,        each_with_index,  false
@@ -71,12 +71,12 @@ $babelfish_func_dict.each_with_index do |k, v|
 end
 
 
-STDERR.puts "BABELFISHING".red
-STDERR.puts $babelfish_type_dict.to_s
-STDERR.puts $babelfish_func_dict.to_s
+# STDERR.puts "BABELFISHING".red
+# STDERR.puts $babelfish_type_dict.to_s
+# STDERR.puts $babelfish_func_dict.to_s
 
-STDERR.puts "alles reversed:"
-STDERR.puts $babelfish_reverse_dict.to_s
+# STDERR.puts "alles reversed:"
+# STDERR.puts $babelfish_reverse_dict.to_s
 
 
 
@@ -93,7 +93,7 @@ def babelfish_taint(name : String) : String
 end
 
 def babelfish_detaint(name : String) : String
-  _dbg "- babelfish_detaint - '#{name}"
+  # _dbg "- babelfish_detaint - '#{name}"
   if name.ends_with? "__X_"
     name[0..-5]
   else
@@ -102,11 +102,14 @@ def babelfish_detaint(name : String) : String
 end
 
 def babelfish_mangling(node : ASTNode, scope) : ASTNode
-  msg = "babelfish_mangling(ASTNode) -> for node.class = #{node} not implemented."
-  _dbg "*TODO*".red
-  _dbg msg.cyan
-  _dbg "*TODO*".yellow
-  # raise msg
+
+  # msg = "babelfish_mangling(ASTNode) -> for node.class = #{node} not implemented."
+  # _dbg "*TODO*".red
+  # _dbg msg.cyan
+  # _dbg "*TODO*".yellow
+
+  # # raise msg
+
   node
 end
 
@@ -117,136 +120,136 @@ def babelfish_mangling(node : Underscore, scope) : Underscore; node; end
 def babelfish_mangling(node : Metaclass, scope) : Metaclass; node; end
 
 def babelfish_mangling(node : TypeDeclaration, scope) : TypeDeclaration
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.declared_type = babelfish_mangling node.declared_type, scope
   node
 end
 
 def babelfish_mangling(node : Union, scope) : Union
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.types.each { |typ| babelfish_mangling typ, scope }
   node
 end
 
 def babelfish_mangling(node : Fun, scope) : Fun
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.inputs.try &.each { |inp| babelfish_mangling inp, scope }
   babelfish_mangling node.output, scope
   node
 end
 
 def babelfish_mangling(node : ClassDef, scope) : ClassDef
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.name = babelfish_mangling node.name, scope
   (t = node.type_vars) && t.each_with_index {|tvar, ix| _, t[ix] = babelfish_mangling_raw true, node.is_onyx, tvar, scope }
   node
 end
 
 def babelfish_mangling(node : ModuleDef, scope) : ModuleDef
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.name = babelfish_mangling node.name, scope
   (t = node.type_vars) && t.each_with_index {|tvar, ix| _, t[ix] = babelfish_mangling_raw true, node.is_onyx, tvar, scope }
   node
 end
 
 def babelfish_mangling(node : Generic, scope) : Generic
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.name = babelfish_mangling node.name, scope
   node.type_vars.each_with_index {|tvar, ix| node.type_vars[ix] = babelfish_mangling tvar, scope }
   node
 end
 
 def babelfish_mangling(node : Alias, scope) : Alias
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.tried_as_foreign, node.name = babelfish_mangling_raw node.tried_as_foreign, node.is_onyx, node.name, scope
   node.value = babelfish_mangling node.value, scope
   node
 end
 
 def babelfish_mangling(node : Path, scope) : Path
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  # _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
 
   unless node.is_onyx
     if node.names.any? &.ends_with? "__X_" # *TODO*
       node.is_onyx = true
-      _dbg "- babelfish_mangling - X X X ".red
-      _dbg "- babelfish_mangling - X X X ".yellow
-      _dbg "- babelfish_mangling - FUCK SHIT! is_onyx = false, but IT MUST BE ONYX!".cyan
-      _dbg "- babelfish_mangling - X X X ".yellow
-      _dbg "- babelfish_mangling - X X X ".red
+      # _dbg "- babelfish_mangling - X X X ".red
+      # _dbg "- babelfish_mangling - X X X ".yellow
+      # _dbg "- babelfish_mangling - FUCK SHIT! is_onyx = false, but IT MUST BE ONYX!".cyan
+      # _dbg "- babelfish_mangling - X X X ".yellow
+      # _dbg "- babelfish_mangling - X X X ".red
 
     else
-      _dbg "- babelfish_mangling - returns because is_onyx = false"
+      # _dbg "- babelfish_mangling - returns because is_onyx = false"
       return node
     end
   end
 
   if node.names.any? &.ends_with? "__X_" # *TODO*
-    if !node.names.first.ends_with? "__X_"
-      _dbg "- babelfish_mangling - detaints some of '#{node.names}'"
-      _dbg "- babelfish_mangling - X X X ".red
-      _dbg "- babelfish_mangling - X X X ".yellow
-      _dbg "- babelfish_mangling - SHIT SHIT! first is not tainted - but others are!".cyan
-      _dbg "- babelfish_mangling - X X X ".yellow
-      _dbg "- babelfish_mangling - X X X ".red
-    else
-      _dbg "- babelfish_mangling - detaints all '#{node.names}'"
-    end
+    # if !node.names.first.ends_with? "__X_"
+    #   _dbg "- babelfish_mangling - detaints some of '#{node.names}'"
+    #   _dbg "- babelfish_mangling - X X X ".red
+    #   _dbg "- babelfish_mangling - X X X ".yellow
+    #   _dbg "- babelfish_mangling - SHIT SHIT! first is not tainted - but others are!".cyan
+    #   _dbg "- babelfish_mangling - X X X ".yellow
+    #   _dbg "- babelfish_mangling - X X X ".red
+    # else
+    #   _dbg "- babelfish_mangling - detaints all '#{node.names}'"
+    # end
 
     node.names = node.names.map { |name| name.ends_with?("__X_") ? name.[0..-5] : name }
 
   end
 
   unless scope.is_a?(Program | Nil)
-    _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because scope isn't Prog|Nil (#{scope.class})"
+    # _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because scope isn't Prog|Nil (#{scope.class})"
     return node
   end
 
   if node.tried_as_foreign
-    _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
+    # _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
     return node
   end
 
   node.tried_as_foreign = true
 
   if (foreign = $babelfish_type_dict[node.names.first]?)
-    _dbg "- babelfish_mangling - found foreign name: #{foreign} for #{node}"
+    # _dbg "- babelfish_mangling - found foreign name: #{foreign} for #{node}"
     node.names[0] = foreign
     return node
   else
-    _dbg "- babelfish_mangling - returns '#{node}' because no foreign translation found"
+    # _dbg "- babelfish_mangling - returns '#{node}' because no foreign translation found"
     return node
   end
 end
 
 def babelfish_mangling_raw(tried_as_foreign : Bool, is_onyx : Bool, name : String, scope) : {Bool, String}
-  _dbg "babelfish_mangling_raw(#{tried_as_foreign}, #{is_onyx}, #{name}, #{scope}) ->"
+  # _dbg "babelfish_mangling_raw(#{tried_as_foreign}, #{is_onyx}, #{name}, #{scope}) ->"
 
   unless is_onyx
-    _dbg "- babelfish_mangling_raw - returns because is_onyx = false"
+    # _dbg "- babelfish_mangling_raw - returns because is_onyx = false"
     return {tried_as_foreign, name}
   end
 
   name = babelfish_detaint name
 
   unless scope.is_a?(Program | Nil)
-    _dbg "- babelfish_mangling_raw - returns '#{name}' un-foreigned because scope isn't Prog|Nil"
+    # _dbg "- babelfish_mangling_raw - returns '#{name}' un-foreigned because scope isn't Prog|Nil"
     return {tried_as_foreign, name}
   end
 
   if tried_as_foreign
-    _dbg "- babelfish_mangling_raw - returns '#{name}' because already foreigned"
+    # _dbg "- babelfish_mangling_raw - returns '#{name}' because already foreigned"
     return {tried_as_foreign, name}
   end
 
   tried_as_foreign = true
 
   if (foreign = $babelfish_type_dict[name]?)
-    _dbg "- babelfish_mangling_raw - found foreign name: #{foreign} for #{name}"
+    # _dbg "- babelfish_mangling_raw - found foreign name: #{foreign} for #{name}"
     name = foreign
     return {tried_as_foreign, name}
   else
-    _dbg "- babelfish_mangling_raw - returns '#{name}' because no foreign translation found"
+    # _dbg "- babelfish_mangling_raw - returns '#{name}' because no foreign translation found"
     return {tried_as_foreign, name}
   end
 end

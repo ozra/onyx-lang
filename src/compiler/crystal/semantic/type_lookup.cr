@@ -176,12 +176,12 @@ module Crystal
 
   class Type
     def lookup_type(node : Path, lookup_in_container = true)
-      _dbg "Type.lookup_type(Path #{node})"
+      # _dbg "Type.lookup_type(Path #{node})"
 
       scope = (node.global ? program : self)
 
       if node.is_onyx && node.names.size == 1 && node.tried_as_foreign == false
-        _dbg " - Type.lookup_type - onyx, one-type"
+        # _dbg " - Type.lookup_type - onyx, one-type"
         bak_name = node.names.first
         babelfish_mangling node, program
         if !(ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container))
@@ -210,7 +210,7 @@ module Crystal
 
   class NamedType
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      _dbg "NamedType.lookup_type(#{names}) - #{object_id}"
+      # _dbg "NamedType.lookup_type(#{names}) - #{object_id}"
 
       return nil if already_looked_up.includes?(object_id)
 
@@ -232,22 +232,22 @@ module Crystal
         break unless type
       end
 
-      _dbg "- NamedType.lookup_type(#{names}) - #{object_id} return if a type: #{type}"
+      # _dbg "- NamedType.lookup_type(#{names}) - #{object_id} return if a type: #{type}"
       return type if type
 
       parent_match = lookup_type_in_parents(names, already_looked_up)
-      _dbg "- NamedType.lookup_type(#{names}) - #{object_id} return if a parent_match: #{parent_match}"
+      # _dbg "- NamedType.lookup_type(#{names}) - #{object_id} return if a parent_match: #{parent_match}"
       return parent_match if parent_match
 
       if ret = lookup_in_container && container ? container.lookup_type(names, already_looked_up) : nil
-        _dbg "- NamedType.lookup_type(#{names}) - #{object_id} returns lookup in container #{ret}"
+        # _dbg "- NamedType.lookup_type(#{names}) - #{object_id} returns lookup in container #{ret}"
         return ret
       end
 
       nil
 
     ensure
-      _dbg "/NamedType.lookup_type(#{names}) - #{object_id}"
+      # _dbg "/NamedType.lookup_type(#{names}) - #{object_id}"
     end
 
     def lookup_type_in_parents(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = false)
@@ -274,7 +274,7 @@ module Crystal
 
   class GenericClassInstanceType
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      _dbg "GenericClassInstanceType.lookup_type(#{names}) - #{object_id}"
+      # _dbg "GenericClassInstanceType.lookup_type(#{names}) - #{object_id}"
 
       if !names.empty? && (type_var = type_vars[names[0]]?)
         case type_var
@@ -301,7 +301,7 @@ module Crystal
 
   class IncludedGenericModule
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      _dbg "IncludedGenericModule.lookup_type(#{names}) - #{object_id}"
+      # _dbg "IncludedGenericModule.lookup_type(#{names}) - #{object_id}"
       if (names.size == 1) && (m = @mapping[names[0]]?)
         case @including_class
         when GenericClassType, GenericModuleType
@@ -317,7 +317,7 @@ module Crystal
 
   class InheritedGenericClass
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      _dbg "InheritedGenericClass.lookup_type(#{names}) - #{object_id}"
+      # _dbg "InheritedGenericClass.lookup_type(#{names}) - #{object_id}"
       if (names.size == 1) && (m = @mapping[names[0]]?)
         case extending_class
         when GenericClassType

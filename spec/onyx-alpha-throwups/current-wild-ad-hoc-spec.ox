@@ -5,7 +5,12 @@ say "\n\nBefore requires!\n\n"
 require "./crystal-scopes"
 require "wild_colors"
 
-'!literal-int = I64
+
+'std-int-width = 64
+'std-real-width = 64
+
+
+-- '!literal-int = I64
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -19,6 +24,14 @@ say "\nLet's ROCK\n".red
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+
+template dpp(...exps) =
+   _debug_compiler_start_ = true
+  {% for exp in exps %}
+    $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
+  {% end %}
+end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -70,7 +83,7 @@ nfoo = Nilish 3
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
 
-'!literal-int = I64
+-- '!literal-int = I64
 say "remove me for crash"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -127,7 +140,7 @@ say typeof(good-ole-set)
 say good-ole-set.class
 
 
-pp 1 < 2 < 4
+dpp 1 < 2 < 4
 
 do-tup(x Tup) -> x
 
@@ -287,8 +300,8 @@ say foos
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-pp 1..2
-pp 1 .. 2
+dpp 1..2
+dpp 1 .. 2
 
 
 fun-a(x) -> say "fun-a says: '{x}' and '{x[String]}'"
@@ -413,9 +426,9 @@ horribly-formatted-pow2-round-up 3027, 4096
 horribly-formatted-pow2-round-up 4097, 4096
 horribly-formatted-pow2-round-up 4097, 65536
 
-pp 4096 == horribly-formatted-pow2-round-up 3027, 4096
-pp 8192 == horribly-formatted-pow2-round-up 4097, 4096
-pp 65536 == horribly-formatted-pow2-round-up 4097, 65536
+dpp 4096 == horribly-formatted-pow2-round-up 3027, 4096
+dpp 8192 == horribly-formatted-pow2-round-up 4097, 4096
+dpp 65536 == horribly-formatted-pow2-round-up 4097, 65536
 
 -- pp 8192 == horribly-formatted-pow2-round-up 4097, 4093  ---> Should fail!
 
@@ -424,8 +437,8 @@ pp 65536 == horribly-formatted-pow2-round-up 4097, 65536
 -- '!Int=I64
 -- '!Real=Float32
 
-'!literal-int = I64
-'!literal-real = Float32
+-- '!literal-int = I64
+-- '!literal-real = Float32
 
 
 
@@ -453,12 +466,14 @@ say "facts: {facts}"
 
 MY_CONST = do
    x = 0
-   2.upto(4).each (a, i)\
+   -- 2.upto(4).each (a, i)\
+   (2..4).each (a, i)\
       x += a
       say "calculating MY_CONST, {a}, {i}"
    x
 
 pp MY_CONST
+dpp MY_CONST
 -- *TODO* $.say / Program.say ?
 pp $.say "blargh"
 -- *TODO* $.MY_CONST / Program.MY_CONST ?
@@ -469,12 +484,12 @@ pp $.MY_CONST
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- *TODO* ' should not be needed before I32!
-'!literal-int = I32
+-- '!literal-int = I32
 $my-global = 47
-'!literal-int = I64
+-- '!literal-int = I64
 
 $my-typed-global 'I32
-'!literal-int=I32
+-- '!literal-int=I32
 $my-typed-and-assigned-global 'I32 = 47
 $my-global = $my-typed-and-assigned-global
 
@@ -486,7 +501,7 @@ module Djur
    APA = 47
 
    type Apa < object Reference
-      '!literal-int=I64
+      -- '!literal-int=I64
 
       Self.foo’ = 1
       Type.bar = 2
@@ -573,7 +588,6 @@ blk2 = Blk 7, (x)\
 
 trait Functor
 --   call() -> abstract
-end
 
 type MyFunctor
    mixin Functor
@@ -581,12 +595,8 @@ type MyFunctor
    foo = 47
 
    call() -> "call()"
-
    call(a, b) -> "call {a}, {b}, {@foo}"
-
    bar() -> true
-
-end
 
 myfu = MyFunctor()
 
@@ -709,7 +719,7 @@ say ""
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-'!literal-int=I64
+-- '!literal-int=I64
 
 foo-named(awol, foo = 47, bar = "fds") ->!
    say "foo-named: (awol): {awol}, foo: {foo}, bar: {bar}"
@@ -770,7 +780,7 @@ say pw
 -- def say(s) -> puts s
 
 
-'!literal-int=I32
+-- '!literal-int=I32
 
 
 DEBUG–SEPARATOR = 47
@@ -875,7 +885,7 @@ say "the 2nd broken str: {yet-a-str}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-'!literal-int=StdInt
+-- '!literal-int=StdInt
 
 -- first comment
 a = 47  --another comment
@@ -1010,7 +1020,7 @@ def zoo*(a; b; ...c 'Int) Str ->  'pure
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
 
-'literal-int=Int
+-- 'literal-int=Int
 
 p zoo 1, 2, 47, 42
 
@@ -1341,7 +1351,7 @@ b = (a Str, _ Int, b 'Bool; c Real) ->
 say "23.4 def lambda c"
 c = (a ~Int, b 'Str, c 'Int) -> a.to–s + b + c.to–s
 
-'!real-literal=Float64
+-- '!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
 p b "23.5b Closured Lambda says", 1, true, 0.47
 
@@ -1528,7 +1538,7 @@ type Bar < Qwa
    Self.some–other–foo 'Int = 42
    Self.yet–a-foo = 42
 
-   '!literal-int=I32
+   -- '!literal-int=I32
 
    Type.RedFoo = 5
    Type.GreenFoo = 7
@@ -1795,7 +1805,9 @@ pp foo.foo-x
 -- *TODO* this doesn't work out as it should! foo-w is never set!!!??
 say "foo.foo-w = 463"
 foo.foo-w = 463
-pp foo.foo-w = 461
+
+dpp foo.foo-w = 461
+
 say "foo.get-foo-w {foo.get-foo-w}"
 -- pp foo.foo-y -- should fail
 -- pp foo.foo-w -- should fail
@@ -2014,7 +2026,7 @@ p "CrystalModule2.root_def", CrystalModule2.root_def
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- This module begins here and continues to EOF
-module AllTheRest begins
+module AllTheRest begins -- follows, below, throughout
 
 type RestFoo < value
    rest-foo() ->

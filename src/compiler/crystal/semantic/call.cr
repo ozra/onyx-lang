@@ -223,8 +223,8 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, self_type, def_name, search_in_parents)
-    _dbg_on
-    _dbg "lookup_matches_in_type #{owner} #{def_name}, where arg_types = (#{arg_types})"
+    # _dbg_on
+    # _dbg "lookup_matches_in_type #{owner} #{def_name}, where arg_types = (#{arg_types})"
 
     signature = CallSignature.new(def_name, arg_types, block, named_args)
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
@@ -249,7 +249,7 @@ class Crystal::Call
     # - - - - - - - - - - - - - - - - - - - -
     # Onyx Babelfishing
     if matches.empty?
-      _dbg "Matches are empty - is it xyz-special? #{def_name}"
+      # _dbg "Matches are empty - is it xyz-special? #{def_name}"
 
       retry_def_name = case def_name
       # when "init"         then  "initialize"
@@ -341,10 +341,10 @@ class Crystal::Call
     # If this call is an expansion (because of default or named args) we must
     # resolve the call in the type that defined the original method, without
     # triggering a virtual lookup. But the context of lookup must be preseved.
-    _dbg "lookup_matches_checking_expansion"
+    # _dbg "lookup_matches_checking_expansion"
 
     if is_expansion?
-      _dbg "lookup_matches_checking_expansion - if is_expansion?"
+      _dbg "lookup_matches_checking_expansion - is_expansion!"
       matches = bubbling_exception do
         target = parent_visitor.typed_def.original_owner
         if search_in_parents
@@ -359,27 +359,27 @@ class Crystal::Call
       end
       matches
     else
-      _dbg "lookup_matches_checking_expansion - else"
+      # _dbg "lookup_matches_checking_expansion - else"
       bubbling_exception { lookup_matches_with_signature(owner, signature, search_in_parents) }
     end
   end
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
-    _dbg "lookup_matches_with_signature Program"
+    # _dbg "lookup_matches_with_signature Program"
 
     location = self.location
     if location && (filename = location.original_filename)
-      _dbg "- lookup_matches_with_signature Program - 1"
+      # _dbg "- lookup_matches_with_signature Program - 1"
       matches = owner.lookup_private_matches filename, signature
     end
 
     if matches
       if matches.empty?
-      _dbg "- lookup_matches_with_signature Program - 2"
+      # _dbg "- lookup_matches_with_signature Program - 2"
         matches = owner.lookup_matches signature
       end
     else
-      _dbg "- lookup_matches_with_signature Program - 3"
+      # _dbg "- lookup_matches_with_signature Program - 3"
       matches = owner.lookup_matches signature
     end
 
@@ -387,7 +387,7 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner, signature, search_in_parents)
-    _dbg "lookup_matches_with_signature General"
+    # _dbg "lookup_matches_with_signature General"
 
     if search_in_parents
       owner.lookup_matches signature
@@ -398,9 +398,9 @@ class Crystal::Call
 
   def instantiate(matches, owner, self_type = nil)
     if matches.first?.try &.def.is_onyx
-      _dbg "instantiate".yellow + " #{matches}"
-      _dbg ""
-      _dbg "instantiate matches.matches.try &.[0].def.is_onyx = #{matches.matches.try &.[0].def.is_onyx}"
+      # _dbg "instantiate".yellow + " #{matches}"
+      # _dbg ""
+      # _dbg "instantiate matches.matches.try &.[0].def.is_onyx = #{matches.matches.try &.[0].def.is_onyx}"
     end
 
     block = @block
@@ -413,12 +413,12 @@ class Crystal::Call
 
 
       if match.def.is_onyx
-        _dbg "match is an is_onyx #{match.def}"
-        _dbg "owner is #{owner}"
+        # _dbg "match is an is_onyx #{match.def}"
+        # _dbg "owner is #{owner}"
 
         if owner == mod
           match.arg_types.each do |arg_type|
-            _dbg "arg_type: #{arg_type}"
+            # _dbg "arg_type: #{arg_type}"
           end
         end
 
@@ -458,7 +458,7 @@ class Crystal::Call
 
       unless typed_def
         if match.def.is_onyx
-          _dbg "calls prepare_typed_def_with_args for #{match.def}"
+          # _dbg "calls prepare_typed_def_with_args for #{match.def}"
         end
 
         typed_def, typed_def_args = prepare_typed_def_with_args(match.def, match_owner, lookup_self_type, match.arg_types, block_arg_type)
@@ -474,7 +474,7 @@ class Crystal::Call
           end
 
           check_recursive_splat_call match.def, typed_def_args do
-            _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
+            # _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
             bubbling_exception do
               visitor = MainVisitor.new(mod, typed_def_args, typed_def)
               visitor.yield_vars = yield_vars
@@ -505,7 +505,7 @@ class Crystal::Call
         end
       else
         if match.def.is_onyx
-          _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
+          # _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
         end
       end
 
@@ -970,7 +970,7 @@ class Crystal::Call
     def lookup_node_type(node)
       @type = nil
 
-      _dbg "lookup_node_type - before bubbling_exception accept"
+      # _dbg "lookup_node_type - before bubbling_exception accept"
 
       @call.bubbling_exception do
         node.accept self

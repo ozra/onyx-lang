@@ -2,11 +2,32 @@ require "../../crystal/syntax/to_s"
 
 module Crystal
 
+
+class ToOnyxSVisitor < Visitor
+end
+
+$tos_visitors = [] of ToSVisitor
+$onyx_tos_visitors : Array(ToOnyxSVisitor)
+$onyx_tos_visitors = [] of ToOnyxSVisitor
+
+def get_onyx_tos_visitor(io) : ToOnyxSVisitor
+   if visitor = $onyx_tos_visitors.try &.pop
+      visitor.initialize io
+      visitor
+   else
+      ToOnyxSVisitor.new(io)
+   end
+end
+
+def return_onyx_tos_visitor(visitor : ToOnyxSVisitor)
+   $onyx_tos_visitors << visitor
+end
+
 class ASTNode
    def to_s(io, as_kind = :auto)
       # if as_kind != :crystal # (as_kind == :auto && @is_onyx) || as_kind == :onyx
       if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-         visitor = ToOnyxSVisitor.new(io)
+         visitor = get_onyx_tos_visitor(io) # ToOnyxSVisitor.new(io)
          self.accept visitor
       else
          visitor = ToSVisitor.new(io)
@@ -14,6 +35,7 @@ class ASTNode
       end
    end
 end
+
 
 class ToSVisitor < Visitor
 
@@ -46,8 +68,8 @@ class ToOnyxSVisitor < Visitor
 
    def visit(node : NumberLiteral)
       @str << node.value
-      if node.kind != :i32 && node.kind != :f64
-         @str << "_"
+      if node.kind != :int && !node.kind.to_s.starts_with? "unspec_" # != :i32 && node.kind != :f64
+         @str << "___" # *TEMP* *DEBUG*
          @str << node.kind.to_s
       end
    end

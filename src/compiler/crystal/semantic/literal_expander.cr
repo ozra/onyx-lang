@@ -30,6 +30,7 @@ module Crystal
     #       3
     #     end
     def expand(node : ArrayLiteral)
+      # _dbg "LiteralExpander.expand(#{node} #{node.class}) ->"
       if node_of = node.of
         if node.elements.size == 0
           generic = Generic.new(Path.global("Array"), node_of).at(node)
@@ -477,7 +478,7 @@ module Crystal
 
       final_exp.tag_onyx node.is_onyx
 
-      _dbg "final_exp: #{final_exp.to_s}".yellow
+      # _dbg "- LiteralExpander.expand Case - final_exp: #{final_exp.to_s}".yellow
 
       final_exp
     end

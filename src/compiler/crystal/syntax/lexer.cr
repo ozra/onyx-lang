@@ -1,5 +1,6 @@
 require "./token"
 require "../exception"
+require "../../onyx/syntax/number_verification_utils"
 
 module Crystal
   class Lexer
@@ -1125,8 +1126,33 @@ module Crystal
         next_char
       end
       @token.type = :IDENT
-      @token.value = string_range(start)
+      str = string_range(start)
+      @token.value = canonicalize_identifier str
+      @token.raw = str
       @token
+    end
+
+    def canonicalize_identifier(idfr_str)
+      do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
+
+      ret = String.build idfr_str.size * 3, do |str|
+        idfr_str.each_char_with_index do |chr, i|
+          if chr == '-'
+            str << '_'
+
+          elsif chr == '–'
+            str << '_'
+
+          elsif do_hump_magic && ('A' <= chr <= 'Z')
+            str << '_'
+            str << chr.downcase
+
+          else
+            str << chr
+          end
+        end
+      end
+      ret
     end
 
     def next_char_and_symbol(value)
@@ -1141,6 +1167,7 @@ module Crystal
     end
 
     def scan_number(start, negative = false)
+      _dbg "scan_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
       @token.type = :NUMBER
 
       has_underscore = false
@@ -1239,6 +1266,22 @@ module Crystal
         @token.number_kind = :i32
       end
 
+      # - - - - - -
+      # Onyx–through–macro-suffix?
+      _dbg "- crystal-parse - at suffix_size == #{suffix_size}?: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      if suffix_size == 0 && current_char == '§' && peek_next_char == '§'
+        suffix_pos = current_pos
+        next_char; next_char  # skip the `§§`
+        suffix, kind = scan_onyx_number_suffix
+        suffix_size = current_pos - suffix_pos
+        @token.number_kind = kind
+      else
+        suffix = @token.number_kind.to_s
+      end
+
+      @token.number_suffix = suffix
+      # - - - - - -
+
       end_pos = current_pos - suffix_size
 
       string_value = string_range(start, end_pos)
@@ -1257,6 +1300,30 @@ module Crystal
 
       @token.value = string_value
       set_token_raw_from_start(start)
+    end
+
+    def scan_onyx_number_suffix : {String?, Symbol}
+      _dbg "scan_onyx_number_suffix: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      start = current_pos
+
+      if ident_part?(current_char) && !ident_start?(current_char)
+        raise "seems to be a number suffix with a first character that's out of line: '#{current_char}'"
+      end
+
+      while ident_part? current_char
+        next_char
+      end
+
+      if start == current_pos
+        suffix = nil
+        kind = :unspec
+      else
+        suffix = string_range(start, current_pos).gsub(/[-–]/, '_')
+        kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
+        _dbg "scanned suffix '#{suffix}'"
+      end
+
+      {suffix, kind}
     end
 
     macro gen_check_int_fits_in_size(type, method, size)
@@ -1361,6 +1428,9 @@ module Crystal
     end
 
     def scan_zero_number(start, negative = false)
+      _dbg "scan_zero_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      @token.number_suffix = nil
+
       case peek_next_char
       when 'x'
         scan_hex_number(start, negative)
@@ -1368,8 +1438,8 @@ module Crystal
         scan_octal_number(start, negative)
       when 'b'
         scan_bin_number(start, negative)
-      when '.'
-        scan_number(start)
+      when '.', 'e', 'E' # *TODO* the 0e[+-\d] is not a normal number to give - it makes non normalized 0!
+        return scan_number(start)
       when 'i'
         @token.type = :NUMBER
         @token.value = "0"
@@ -1407,7 +1477,7 @@ module Crystal
           next_char
           consume_uint_suffix
         else
-          scan_number(start)
+          return scan_number(start)
         end
       else
         if next_char.digit?
@@ -1416,6 +1486,18 @@ module Crystal
           finish_scan_prefixed_number 0_u64, false, start
         end
       end
+
+      # Onyx–through–macro-suffix?
+      if current_char == '§' && peek_next_char == '§'
+        next_char; next_char  # skip the `§§`
+        suffix, kind = scan_onyx_number_suffix
+        @token.number_kind = kind
+      else
+        suffix = @token.number_kind.to_s
+      end
+
+      @token.number_suffix = suffix
+      @token
     end
 
     def scan_bin_number(start, negative)

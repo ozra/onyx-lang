@@ -4,7 +4,10 @@ module Crystal
   class Token
     property type : Symbol
     property value : Char | String | Symbol | Int32 | Nil
+
     property number_kind : Symbol
+    property number_suffix : String | Nil
+
     property line_number : Int32
     property column_number : Int32
     property filename : String | VirtualFile | Nil

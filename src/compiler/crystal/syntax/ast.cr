@@ -203,12 +203,13 @@ module Crystal
   # kind stores a symbol indicating which type is it: i32, u16, f32, f64, etc.
   class NumberLiteral < ASTNode
     property value : String
+    # property suffix : String?
     property kind : Symbol
 
-    def initialize(@value : String, @kind = :i32)
+    def initialize(@value : String, @kind = :i32) # , @suffix = nil)
     end
 
-    def initialize(value : Number, @kind = :i32)
+    def initialize(value : Number, @kind = :i32) # , @suffix = nil)
       @value = value.to_s
     end
 
@@ -217,11 +218,11 @@ module Crystal
     end
 
     def clone_without_location_individual
-      NumberLiteral.new(@value, @kind)
+      NumberLiteral.new(@value, @kind) # , @suffix)
     end
 
-    def_equals value.to_f64, kind
-    def_hash value, kind
+    def_equals value.to_f64, kind  # *TODO* to_f64? Really??!!
+    def_hash value, kind # , suffix
   end
 
   # A char literal.
@@ -1988,6 +1989,9 @@ module Crystal
     property args : Array(ASTNode)
     property named_args : Array(NamedArgument)?
     property doc : String?
+
+    property processed : Bool
+    @processed = false
 
     property lex_style : Symbol
 

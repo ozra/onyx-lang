@@ -30,6 +30,7 @@ module Crystal
     @flags : Set(String)?
 
     def initialize
+      # *TODO* consider moving this down past type definitions
       super(self, self, "main")
 
       @symbols = Set(String).new
@@ -85,6 +86,34 @@ module Crystal
 
       types["Float32"] = @float32 = FloatType.new self, self, "Float32", float, 4, 9
       types["Float64"] = @float64 = FloatType.new self, self, "Float64", float, 8, 10
+
+
+      if has_flag? "x86_64"
+        types["ArchInt"] = @archint = @int64.not_nil!
+        types["ArchNat"] = @archnat = @int64.not_nil!
+        types["ArchUInt"] = @archuint = @int64.not_nil!
+        types["ArchReal"] = @archreal = @float64.not_nil!
+
+        types["StdInt"] = @stdint = @int64.not_nil!
+        types["StdNat"] = @stdnat = @int64.not_nil!
+        types["StdUInt"] = @stduint = @uint64.not_nil!
+        types["StdReal"] = @stdreal = @float64.not_nil!
+
+      elsif has_flag?("i386") || has_flag?("i686")
+        types["ArchInt"] = @archint = @int32.not_nil!
+        types["ArchNat"] = @archnat = @int32.not_nil!
+        types["ArchUInt"] = @archuint = @int32.not_nil!
+        types["ArchReal"] = @archreal = @float64.not_nil!
+
+        types["StdInt"] = @stdint = @int32.not_nil!
+        types["StdNat"] = @stdnat = @int32.not_nil!
+        types["StdUInt"] = @stduint = @uint32.not_nil!
+        types["StdReal"] = @stdreal = @float64.not_nil!
+
+      else
+        raise "Type definer haven't been told how to handle non x86 arches yet!"
+      end
+
 
       types["Symbol"] = @symbol = SymbolType.new self, self, "Symbol", value, 4
       types["Pointer"] = pointer = @pointer = PointerType.new self, self, "Pointer", value, ["T"]
@@ -149,6 +178,15 @@ module Crystal
       @literal_expander = LiteralExpander.new self
       @macro_expander = MacroExpander.new self
       @nil_var = Var.new("<nil_var>", nil_t)
+
+
+
+      @stdint = int64
+      @archint = int64
+      @stdreal = float64
+      @archreal = float64
+
+
 
       define_primitives
     end
@@ -335,6 +373,8 @@ module Crystal
       end
     end
 
+    # *TODO* if initialize() -> super(self) could be inferred more exactly, then these
+    # don't have to be T|Nil
     @class : MetaclassType?
     @proc : FunType?
     @enum : NonGenericClassType?
@@ -369,16 +409,79 @@ module Crystal
     @array : GenericClassType?
     @struct_t : NonGenericClassType?
 
+    @archint : IntegerType?
+    @archnat : IntegerType?
+    @archuint : IntegerType?
+    @archreal : FloatType?
+
+    @stdint : IntegerType?
+    @stdnat : IntegerType?
+    @stduint : IntegerType?
+    @stdreal : FloatType?
+
     {% for name in %w(object no_return value number reference void nil bool char int int8 int16 int32 int64
                      uint8 uint16 uint32 uint64 float float32 float64 string symbol pointer array static_array
+                     archint archreal archuint archnat
+                     stdint stdreal stduint stdnat
                      exception tuple proc enum range regex) %}
       def {{name.id}}
         @{{name.id}}.not_nil!
       end
     {% end %}
 
+    {% for name in %w(StdInt StdReal StdUInt StdNat) %}
+      def define_{{name.id.downcase}}(type)
+        @{{name.id.downcase}} = type
+        types["{{name.id}}"] = type
+      end
+    {% end %}
+
     def hash_type
       @hash_type.not_nil!
+    end
+
+    def type_from_literal_kind(kind)
+      case kind
+
+
+      # *TODO* *TEMP*
+      when :unspec_int       then  stdint
+      when :unspec_real      then  stdreal
+
+
+
+      when :int       then  stdint
+      when :nat       then  stdnat
+      when :uint      then  stduint
+      when :real      then  stdreal
+
+      when :archint   then  archint
+      when :archnat   then  archnat
+      when :archuint  then  archuint
+      when :archreal  then  archreal
+
+      when :i8        then  int8
+      when :i16       then  int16
+      when :i32       then  int32
+      when :i64       then  int64
+      when :u8        then  uint8
+      when :u16       then  uint16
+      when :u32       then  uint32
+      when :u64       then  uint64
+      when :f32       then  float32
+      when :f64       then  float64
+      else            raise "Invalid node kind: #{kind}"
+      end
+    end
+
+    def terminal_number_kind(kind)
+      case kind
+      when :unspec_int  then  terminal_number_kind :int
+      when :unspec_real then  terminal_number_kind :real
+      when :int         then  (stdint == int32 ? :i32 : :i64) # *TODO* think about if a more elegant solution should be used
+      when :real        then  (stdreal == float32 ? :f32 : :f64) # *TODO* think about if a more elegant solution should be used
+      else              kind
+      end
     end
 
     # Finds the IntegerType that matches the given Int value
@@ -392,6 +495,11 @@ module Crystal
       when UInt16 then uint16
       when UInt32 then uint32
       when UInt64 then uint64
+
+      # *TODO*
+      # when StdInt then stdint
+      # when StdReal then stdreal
+
       else
         nil
       end

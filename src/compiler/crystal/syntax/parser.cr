@@ -3,7 +3,42 @@ require "./ast"
 require "./lexer"
 
 module Crystal
+  # *TODO* Move!
+  module CommonParserMethods
+     def new_numeric_literal(token : Token)
+        new_numeric_literal token.value.to_s, token.number_kind, token.number_suffix
+     end
+
+     def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil)
+        _dbg "new_numeric_literal -> #{value} '#{suffix}'"
+
+        if kind == :user_suffix
+           new_kind = (/[.eE]/ =~ value) ? :unspec_real : :unspec_int
+           Call.new(
+              nil,
+              "suffix_number_#{suffix}",
+              [ NumberLiteral.new(value, new_kind) ] of ASTNode,
+              nil,
+              nil,
+              nil,
+              false,
+              0,
+              has_parenthesis: true,
+              implicit_construction: true,
+              is_nil_sugared: false
+           )
+        else
+           NumberLiteral.new(value, kind)
+        end
+
+     ensure
+        _dbg "/new_numeric_literal"
+     end
+  end
+
   class Parser < Lexer
+    include CommonParserMethods
+
     record Unclosed, name : String, location : Location
 
     property visibility : Visibility?
@@ -881,7 +916,7 @@ module Crystal
         parse_attribute
       when :NUMBER
         @wants_regex = false
-        node_and_next_token NumberLiteral.new(@token.value.to_s, @token.number_kind)
+        node_and_next_token new_numeric_literal @token
       when :CHAR
         node_and_next_token CharLiteral.new(@token.value as Char)
       when :STRING, :DELIMITER_START
@@ -927,7 +962,7 @@ module Crystal
             method = "[]"
           end
           location = @token.location
-          node_and_next_token Call.new(Call.new(Var.new("$~").at(location), "not_nil!").at(location), method, NumberLiteral.new(value.to_i))
+          node_and_next_token Call.new(Call.new(Var.new("$~").at(location), "not_nil!").at(location), method, new_numeric_literal(value.to_s))
         end
       when :__LINE__
         node_and_next_token MagicConstant.expand_line_node(@token.location)
@@ -3348,6 +3383,9 @@ module Crystal
           Call.new nil, name, (args || [] of ASTNode), block, block_arg, named_args, global, name_column_number, last_call_has_parenthesis
         else
           if args
+
+            # *TODO* NumLitTodo
+
             if (!force_call && is_var) && args.size == 1 && (num = args[0]) && (num.is_a?(NumberLiteral) && num.has_sign?)
               sign = num.value[0].to_s
               num.value = num.value.byte_slice(1)
@@ -3888,7 +3926,7 @@ module Crystal
           if allow_primitives
             case @token.type
             when :NUMBER
-              num = NumberLiteral.new(@token.value.to_s, @token.number_kind).at(@token.location)
+              num = new_numeric_literal(@token).at(@token.location)
               types << node_and_next_token(num)
               skip_space
               return types

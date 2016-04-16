@@ -102,6 +102,36 @@ struct Char
     '0' <= self <= '9'
   end
 
+  # Returns true if this char is an ASCII hexadecimal digit ([0-9a–zA–Z]).
+  #
+  # ```
+  # 'A'.hex_digit? # => true
+  # 'z'.hex_digit? # => false
+  # ```
+  def hex_digit?
+    '0' <= self <= '9' || 'a' <= self <= 'z' || 'A' <= self <= 'Z'
+  end
+
+  # Returns true if this char is an ASCII octal digit ([0-7]).
+  #
+  # ```
+  # '7'.oct_digit? # => true
+  # '8'.oct_digit? # => false
+  # ```
+  def oct_digit?
+    '0' <= self <= '7'
+  end
+
+  # Returns true if this char is an ASCII binary digit (0 or 1).
+  #
+  # ```
+  # '0'.binary_digit? # => true
+  # '2'.binary_digit? # => false
+  # ```
+  def binary_digit?
+    '0' <= self <= '1'
+  end
+
   # Returns true if this char is a lowercase ASCII letter.
   #
   # ```

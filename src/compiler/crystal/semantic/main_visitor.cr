@@ -2316,19 +2316,7 @@ module Crystal
     end
 
     def visit(node : NumberLiteral)
-      node.type = case node.kind
-                  when :i8  then mod.int8
-                  when :i16 then mod.int16
-                  when :i32 then mod.int32
-                  when :i64 then mod.int64
-                  when :u8  then mod.uint8
-                  when :u16 then mod.uint16
-                  when :u32 then mod.uint32
-                  when :u64 then mod.uint64
-                  when :f32 then mod.float32
-                  when :f64 then mod.float64
-                  else           raise "Invalid node kind: #{node.kind}"
-                  end
+      node.type = mod.type_from_literal_kind node.kind
     end
 
     def visit(node : CharLiteral)

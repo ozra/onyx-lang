@@ -48,8 +48,8 @@ module Crystal
       @dump_ll = false
       @color = true
       @no_codegen = false
-      @n_threads = 4.to_i32 # saner default!
-      @prelude = "prelude"
+      @n_threads = 3.to_i32 # saner default!
+      @prelude = "onyx_prelude"
       @release = false
       @single_module = false
       @stats = false
@@ -113,7 +113,13 @@ module Crystal
     end
 
     private def parse(source)
-      parser = Parser.new(source.code)
+      _dbg_overview "\nCompiler stage: Compiler.parse \"#{source.filename}\"\n\n".white
+
+      if source.filename.ends_with? ".cr"
+        parser = Parser.new(source.code)
+      else # .ox, .onyx
+        parser = OnyxParser.new(source.code)
+      end
       parser.filename = source.filename
       parser.wants_doc = wants_doc?
       parser.parse

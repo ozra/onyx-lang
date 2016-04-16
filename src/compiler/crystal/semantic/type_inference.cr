@@ -22,30 +22,48 @@ module Crystal
     # - main: process "main" code, calls and method bodies (the whole program).
     # - check recursive structs (RecursiveStructChecker): check that structs are not recursive (impossible to codegen)
     def infer_type(node, stats = false)
-      # result = Crystal.timing("Semantic (first top level - program-wide affecting pragmas)", stats) do
-      #   visit_top_level_pragmas(node)
-      # end
-      result = Crystal.timing("Semantic (second top level)", stats) do
+      _dbg_overview "\nCompiler stage: Semantic (program wide pragmas):\n\n".white
+      result = Crystal.timing("Semantic (program wide pragmas)", stats) do
+        visit_program_wide_pragmas(node)
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (top level):\n\n".white
+      result = Crystal.timing("Semantic (top level)", stats) do
         visit_top_level(node)
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (abstract def check):\n\n".white
       Crystal.timing("Semantic (abstract def check)", stats) do
         check_abstract_defs
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (type declarations):\n\n".white
       result = Crystal.timing("Semantic (type declarations)", stats) do
         visit_type_declarations(node)
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (initializers):\n\n".white
       result = Crystal.timing("Semantic (initializers)", stats) do
         visit_initializers(node)
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (main):\n\n".white
       result = Crystal.timing("Semantic (main)", stats) do
         visit_main(node)
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (cleanup):\n\n".white
       Crystal.timing("Semantic (cleanup)", stats) do
         cleanup_types
       end
+
+      _dbg_overview "\nCompiler stage: Semantic (recursive struct check):\n\n".white
       Crystal.timing("Semantic (recursive struct check)", stats) do
         check_recursive_structs
       end
+
+      _dbg_overview "\nType-inference stages completed:\n\n".white
+
       result
     end
   end

@@ -1,14 +1,14 @@
 # Some globally polluting ugly helpers
-require "wild_colors"
+require "../../wild_colors"
 
 $dbg_output_on = false
 
 def _dbg_on()
-    $dbg_output_on = true
+  $dbg_output_on = true
 end
 
 def _dbg_off()
-    $dbg_output_on = false
+  $dbg_output_on = false
 end
 
 def _dbg(*objs)
@@ -16,6 +16,12 @@ def _dbg(*objs)
     if $dbg_output_on
       STDERR.puts objs.join ", "
     end
+  end
+end
+
+def _dbg_overview(*objs)
+  ifdef !release
+    STDERR.puts objs.join ", "
   end
 end
 
