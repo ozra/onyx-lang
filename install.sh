@@ -10,7 +10,7 @@ sudo cp -a src /opt/onyx/
 sudo cp .build/onyx /opt/onyx/embedded/bin/onyx
 
 echo '#!/usr/bin/env bash
-INSTALL_DIR="$(dirname $(readlink $0 || echo $0))/.."
+INSTALL_DIR="$(dirname $(realpath $(readlink $0 || echo $0)))/.."
 export CRYSTAL_PATH=${CRYSTAL_PATH:-"libs:$INSTALL_DIR/src"}
 export PATH="$INSTALL_DIR/embedded/bin:$PATH"
 export LIBRARY_PATH="$INSTALL_DIR/embedded/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
