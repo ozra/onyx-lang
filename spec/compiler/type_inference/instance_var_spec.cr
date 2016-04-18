@@ -2060,6 +2060,103 @@ describe "Type inference: instance var" do
       "this 'initialize' doesn't initialize instance variable '@x', rendering it nilable"
   end
 
+  it "doesn't complain if not initliazed in one initialize, but has initializer (#2465)" do
+    assert_type(%(
+      class Foo
+        @x = 1
+
+        def initialize(@x)
+        end
+
+        def initialize
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "can declare type even if included module has a guessed var" do
+    assert_type(%(
+      module Moo
+        def foo
+          @x = 1
+        end
+      end
+
+      class Foo
+        include Moo
+
+        @x : Int32 | Float64
+
+        def initialize
+          @x = 1.5
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of int32, float64 }
+  end
+
+  it "doesn't complain if declared type is recursive alias that's nilable" do
+    assert_type(%(
+      class Bar(T)
+      end
+
+      alias Rec = Int32 | Nil | Bar(Rec)
+
+      class Foo
+        @x : Rec
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Rec"] }
+  end
+
+  it "infers from assign to local var (#2467)" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = x = 1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers from assign to local var in generic type (#2467)" do
+    assert_type(%(
+      class Foo(T)
+        def initialize
+          @x = x = 1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Float64).new.x
+      )) { int32 }
+  end
+
   # -----------------
   # ||| OLD SPECS |||
   # vvv           vvv

@@ -734,6 +734,10 @@ module Crystal
     end
 
     def guess_type(node : Assign)
+      if node.target.is_a?(Var)
+        return guess_type(node.value)
+      end
+
       type_var = process_assign(node)
       type_var.is_a?(Type) ? type_var : nil
     end
@@ -951,6 +955,10 @@ module Crystal
     end
 
     def guess_type_vars(node : Assign)
+      if node.target.is_a?(Var)
+        return guess_type_vars(node.value)
+      end
+
       type_vars = process_assign(node)
       if type_vars.is_a?(Array(TypeVar))
         type_vars
