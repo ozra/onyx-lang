@@ -3,18 +3,12 @@ module Crystal
     getter mod : Program
     property types : Array(Type)
 
-    @exp_nest : Int32
-    @attributes : Array(Attribute)?
-    @lib_def_pass : Int32
-    @in_type_args : Int32
-    @block_nest : Int32
-    @vars : MetaVars
     @free_vars : Hash(String, Type)?
     @type_lookup : Type?
     @scope : Type?
     @typed_def : Def?
-    @in_is_a : Bool
     @last_doc : String?
+    @block : Block?
 
     def initialize(@mod, @vars = MetaVars.new)
       @types = [@mod] of Type
@@ -120,12 +114,6 @@ module Crystal
         node.type = @mod.type_merge(types)
       end
 
-      false
-    end
-
-    def visit(node : Virtual)
-      node.name.accept self
-      node.type = check_type_in_type_args node.name.type.instance_type.virtual_type
       false
     end
 
@@ -304,7 +292,9 @@ module Crystal
     end
 
     def visit_any(node)
-      @exp_nest += 1 if nesting_exp?(node)
+      if nesting_exp?(node)
+        @exp_nest += 1
+      end
 
       true
     end
@@ -335,7 +325,7 @@ module Crystal
       case node
       when Expressions, LibDef, ClassDef, ModuleDef, FunDef, Def, Macro,
            Alias, Include, Extend, EnumDef, VisibilityModifier, MacroFor, MacroIf, MacroExpression,
-           FileNode
+           FileNode, TypeDeclaration
         false
       else
         true
@@ -718,8 +708,10 @@ module Crystal
             attr.raise "illegal attribute '#{attr.name}' for #{desc}, valid attributes are: #{valid_attributes.join ", "}"
           end
 
-          if !attr.args.empty? || attr.named_args
-            attr.raise "#{attr.name} attribute can't receive arguments"
+          if attr.name != "Primitive"
+            if !attr.args.empty? || attr.named_args
+              attr.raise "#{attr.name} attribute can't receive arguments"
+            end
           end
         end
         node.attributes = attributes
@@ -916,6 +908,28 @@ module Crystal
       end
 
       scope as ClassVarContainer
+    end
+
+    def lookup_class_var(node)
+      class_var_owner = class_var_owner(node)
+      var = class_var_owner.class_vars[node.name]?
+      unless var
+        undefined_class_variable(node, class_var_owner)
+      end
+      var
+    end
+
+    def undefined_class_variable(node, owner)
+      similar_name = lookup_similar_class_variable_name(node, owner)
+      @mod.undefined_class_variable(node, owner, similar_name)
+    end
+
+    def lookup_similar_class_variable_name(node, owner)
+      Levenshtein.find(node.name) do |finder|
+        owner.class_vars.each_key do |name|
+          finder.test(name)
+        end
+      end
     end
 
     def inside_exp?

@@ -14,16 +14,21 @@ end
 
 module Crystal
   class OnyxLexer
-    property? doc_enabled
-    property? comments_enabled
-    property? count_whitespace
-    property? wants_raw
-    property? slash_is_regex
-    getter reader
-    getter token
-    getter line_number
+    property? doc_enabled : Bool
+    property? comments_enabled : Bool
+    property? count_whitespace : Bool
+    property? wants_raw : Bool
+    property? slash_is_regex : Bool
+    getter reader : Char::Reader
+    getter token : Token
+    getter line_number : Int32
 
-    property prev_token_type
+    # *TODO* look at cr–lexer
+    @filename : String | VirtualFile | Nil
+    # @token_end_location : Location?
+    # @string_pool : StringPool
+
+    property prev_token_type : Symbol
 
     def initialize(string)
       @reader = Char::Reader.new(string)

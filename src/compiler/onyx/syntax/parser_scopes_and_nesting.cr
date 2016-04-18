@@ -85,17 +85,16 @@ end
 
 
 class Nesting
-   property nest_kind
-   property indent
-   property name
-   property location
-   property single_line
+   property nest_kind : Symbol
+   property indent : Int32
+   property name : String
+   property location : Location
+   property single_line : Bool
 
 
-   property require_end_token
+   property require_end_token : Bool
 
-   @block_auto_params : Array(Var)?
-   property block_auto_params
+   property block_auto_params : Array(Var)?
 
    # property int_type_mapping : String
    # property real_type_mapping : String

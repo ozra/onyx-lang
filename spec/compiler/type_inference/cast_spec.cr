@@ -186,12 +186,12 @@ describe "Type inference: cast" do
       "can't cast Int32 to Bool"
   end
 
-  it "casts to target type even if can't infer casted value type" do
+  it "casts to target type even if can't infer casted value type (obsolete)" do
     assert_type(%(
       require "prelude"
 
       class Foo
-        property! x
+        property! x : Int32
       end
 
       a = [1, 2, 3]
@@ -227,7 +227,7 @@ describe "Type inference: cast" do
     assert_error %(
       nil as Object
       ),
-      "useless cast"
+      "can't cast to Object yet"
   end
 
   it "doesn't allow upcast of generic type var (#996)" do
@@ -254,5 +254,28 @@ describe "Type inference: cast" do
 
       foo as Int32
       )) { no_return }
+  end
+
+  it "errors if casting nil to Object inside typeof (#2403)" do
+    assert_error %(
+      require "prelude"
+
+      puts(typeof(nil as Object))
+      ),
+      "can't cast to Object yet"
+  end
+
+  it "disallows casting to Reference" do
+    assert_error %(
+      "foo" as Reference
+      ),
+      "can't cast to Reference yet"
+  end
+
+  it "disallows casting to Class" do
+    assert_error %(
+      nil as Class
+      ),
+      "can't cast to Class yet"
   end
 end

@@ -16,10 +16,6 @@ module Crystal
 
   class ToSVisitor < Visitor
     @str : IO
-    @indent : Int32
-    @inside_macro : Int32
-    @inside_lib : Bool
-    @inside_struct_or_union : Bool
 
     def initialize(@str = MemoryIO.new)
       @indent = 0
@@ -792,12 +788,6 @@ module Crystal
         @str << " | " if i > 0
         ident.accept self
       end
-      false
-    end
-
-    def visit(node : Virtual)
-      node.name.accept self
-      @str << "+"
       false
     end
 

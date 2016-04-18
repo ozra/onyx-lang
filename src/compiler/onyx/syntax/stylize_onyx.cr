@@ -8,7 +8,11 @@ class ASTNode
 end
 
 class StylizeOnyxVisitor < Visitor
-   def initialize(@str = MemoryIO.new, conf = Tuple.new, source = "")
+   @str : IO
+
+   def initialize(@str = MemoryIO.new,
+                  conf : Hash(String, String) = Hash(String, String).new,
+                  source = "")
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
@@ -360,8 +364,8 @@ class StylizeOnyxVisitor < Visitor
             node.args.each_with_index do |arg, i|
                @str << ", " if i > 0
 
-# *TODO* break with a line 
-# several can be defined on one row 
+# *TODO* break with a line
+# several can be defined on one row
 # create each own row for then
 # possible are :name, "name", name, TypeDeclaration
 
@@ -1114,11 +1118,11 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
-   def visit(node : Virtual)
-      node.name.accept self
-      @str << "+"
-      false
-   end
+   # def visit(node : Virtual)
+   #    node.name.accept self
+   #    @str << "+"
+   #    false
+   # end
 
    def visit(node : Metaclass)
       node.name.accept self

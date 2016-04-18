@@ -46,7 +46,7 @@ USAGE
     new(options).run
   end
 
-  def initialize(@options)
+  def initialize(@options : Array(String))
     @color = true
   end
 
@@ -361,7 +361,7 @@ USAGE
       parser.filename = source.filename
       parser.wants_doc = true
       node = parser.parse
-      node.stylize STDOUT, {nop: true}, source.code
+      node.stylize STDOUT, {"foo" => "bar"}, source.code
     end
   end
 

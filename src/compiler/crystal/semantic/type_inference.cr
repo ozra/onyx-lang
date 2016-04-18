@@ -9,7 +9,7 @@ module Crystal
   ValidExternalVarAttributes = ThreadLocalAttributes
   ValidClassVarAttributes    = ThreadLocalAttributes
   ValidStructDefAttributes   = %w(Packed)
-  ValidDefAttributes         = %w(AlwaysInline Naked NoInline Raises ReturnsTwice)
+  ValidDefAttributes         = %w(AlwaysInline Naked NoInline Raises ReturnsTwice Primitive)
   ValidFunDefAttributes      = %w(AlwaysInline Naked NoInline Raises ReturnsTwice CallConvention)
   ValidEnumDefAttributes     = %w(Flags)
 
@@ -18,7 +18,8 @@ module Crystal
     # - top level (TopLevelVisitor): declare clases, modules, macros, defs and other top-level stuff
     # - check abstract defs (AbstractDefChecker): check that abstract defs are implemented
     # - type declarations (TypeDeclarationVisitor): process type declarations like `@x : Int32`
-    # - initializers (InitializerVisitor): process initializers like `@x = 1`
+    # - instance_vars_initializers (InstanceVarsInitializerVisitor): process initializers like `@x = 1`
+    # - class_vars_initializers (ClassVarsInitializerVisitor): process initializers like `@@x = 1`
     # - main: process "main" code, calls and method bodies (the whole program).
     # - check recursive structs (RecursiveStructChecker): check that structs are not recursive (impossible to codegen)
     def infer_type(node, stats = false)
@@ -42,9 +43,14 @@ module Crystal
         visit_type_declarations(node)
       end
 
-      _dbg_overview "\nCompiler stage: Semantic (initializers):\n\n".white
-      result = Crystal.timing("Semantic (initializers)", stats) do
-        visit_initializers(node)
+      _dbg_overview "\nCompiler stage: Semantic (ivars initializers):\n\n".white
+      result = Crystal.timing("Semantic (ivars initializers)", stats) do
+        visit_instance_vars_initializers(node)
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (cvars initializers):\n\n".white
+      result = Crystal.timing("Semantic (cvars initializers)", stats) do
+        visit_class_vars_initializers(node)
       end
 
       _dbg_overview "\nCompiler stage: Semantic (main):\n\n".white

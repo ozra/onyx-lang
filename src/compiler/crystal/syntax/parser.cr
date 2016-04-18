@@ -45,29 +45,14 @@ module Crystal
     property def_nest : Int32
     property type_nest : Int32
     getter? wants_doc : Bool
-    @def_vars : Array(Set(String))
-    @last_call_has_parenthesis : Bool
-    @temp_token : Token
-    @unclosed_stack : Array(Unclosed)
-    @calls_super : Bool
-    @calls_initialize : Bool
-    @uses_block_arg : Bool
-    @assigns_special_var : Bool
-    @block_arg_count : Int32
-    @in_macro_expression : Bool
-    @stop_on_yield : Int32
-    @inside_c_struct : Bool
-    @no_type_declaration : Int32
-    @yields : Int32?
-    @instance_vars : Set(String)?
     @block_arg_name : String?
 
-    def self.parse(str, def_vars = [Set(String).new])
-      new(str, def_vars).parse
+    def self.parse(str, string_pool : StringPool? = nil, def_vars = [Set(String).new])
+      new(str, string_pool, def_vars).parse
     end
 
-    def initialize(str, @def_vars = [Set(String).new])
-      super(str)
+    def initialize(str, string_pool : StringPool? = nil, @def_vars = [Set(String).new])
+      super(str, string_pool)
       @last_call_has_parenthesis = true
       @temp_token = Token.new
       @unclosed_stack = [] of Unclosed
@@ -182,11 +167,6 @@ module Crystal
       end
 
       targets = exps[0...assign_index].map { |exp| to_lhs(exp) }
-      if ivars = @instance_vars
-        targets.each do |target|
-          ivars.add target.name if target.is_a?(InstanceVar)
-        end
-      end
 
       assign = exps[assign_index]
       values = [] of ASTNode
@@ -353,6 +333,8 @@ module Crystal
               needs_new_scope = true
             when InstanceVar
               needs_new_scope = @def_nest == 0
+            when ClassVar
+              needs_new_scope = @def_nest == 0
             when Var
               @assigns_special_var = true if atomic.special_var?
             else
@@ -436,17 +418,9 @@ module Crystal
           else
             case token_type
             when :"&&="
-              if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-                ivars.add atomic.name
-              end
-
               assign = Assign.new(atomic, value).at(location)
               atomic = And.new(atomic.clone, assign).at(location)
             when :"||="
-              if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-                ivars.add atomic.name
-              end
-
               assign = Assign.new(atomic, value).at(location)
               atomic = Or.new(atomic.clone, assign).at(location)
             else
@@ -1113,9 +1087,7 @@ module Crystal
       when :CONST
         parse_ident_or_literal
       when :INSTANCE_VAR
-        new_node_check_type_declaration(InstanceVar) do |name|
-          add_instance_var(name)
-        end
+        new_node_check_type_declaration InstanceVar
       when :CLASS_VAR
         new_node_check_type_declaration ClassVar
       when :UNDERSCORE
@@ -2383,15 +2355,11 @@ module Crystal
     end
 
     def parse_to_def(a_def)
-      instance_vars = prepare_parse_def
+      prepare_parse_def
       @def_nest += 1
 
       result = parse
 
-      # Small memory optimization: don't keep the Set in the Def if it's empty
-      instance_vars = nil if instance_vars.empty?
-
-      a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
@@ -2404,20 +2372,15 @@ module Crystal
     def parse_def(is_abstract = false, is_macro_def = false, doc = nil)
       doc ||= @token.doc
 
-      instance_vars = prepare_parse_def
+      prepare_parse_def
       a_def = parse_def_helper is_abstract: is_abstract, is_macro_def: is_macro_def
 
-      # Small memory optimization: don't keep the Set in the Def if it's empty
-      instance_vars = nil if instance_vars.empty?
-
-      a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
       a_def.uses_block_arg = @uses_block_arg
       a_def.assigns_special_var = @assigns_special_var
       a_def.doc = doc
-      @instance_vars = nil
       @calls_super = false
       @calls_initialize = false
       @calls_previous_def = false
@@ -2434,7 +2397,6 @@ module Crystal
       @uses_block_arg = false
       @block_arg_name = nil
       @assigns_special_var = false
-      @instance_vars = Set(String).new
     end
 
     def parse_macro
@@ -3152,7 +3114,6 @@ module Crystal
         else
           raise "can't use @instance_variable here"
         end
-        add_instance_var ivar.name
         uses_arg = true
       when :CLASS_VAR
         arg_name = @token.value.to_s[2..-1]
@@ -3697,9 +3658,6 @@ module Crystal
       when :INSTANCE_VAR
         ivar = InstanceVar.new(name).at(location)
         ivar_out = Out.new(ivar).at(location)
-
-        add_instance_var name
-
         next_token
         ivar_out
       when :UNDERSCORE
@@ -3968,9 +3926,6 @@ module Crystal
           check :"]"
           next_token_skip_space
           type = make_static_array_type(type, size)
-        when :"+"
-          type = Virtual.new(type)
-          next_token_skip_space
         when :"."
           next_token
           check_ident :class
@@ -4858,12 +4813,6 @@ module Crystal
 
       name = name.to_s
       name == "self" || @def_vars.last.includes?(name)
-    end
-
-    def add_instance_var(name)
-      return if @in_macro_expression
-
-      @instance_vars.try &.add name
     end
 
     def self.free_var_name?(name)

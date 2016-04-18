@@ -511,7 +511,7 @@ describe "Type inference: class" do
   it "reads an object instance var" do
     assert_type(%(
       class Foo
-        def initialize(@x)
+        def initialize(@x : Int32)
         end
       end
 
@@ -523,7 +523,7 @@ describe "Type inference: class" do
   it "reads a virtual type instance var" do
     assert_type(%(
       class Foo
-        def initialize(@x)
+        def initialize(@x : Int32)
         end
       end
 
@@ -543,14 +543,14 @@ describe "Type inference: class" do
       foo = Foo.new
       foo.@y
       ),
-      "Foo doesn't have an instance var named '@y'"
+      "Can't infer the type of instance variable '@y' of Foo"
   end
 
   it "errors if reading ivar from non-ivar container" do
     assert_error %(
       1.@y
       ),
-      "Int32 doesn't have instance vars"
+      "can't use instance variables inside primitive types (at Int32)"
   end
 
   it "says that instance vars are not allowed in metaclass" do
@@ -611,7 +611,7 @@ describe "Type inference: class" do
   end
 
   it "types bug #168 (it inherits instance var even if not mentioned in initialize)" do
-    result = assert_type("
+    assert_error "
       class A
         def foo
           x = @x
@@ -624,14 +624,13 @@ describe "Type inference: class" do
       end
 
       class B < A
-        def initialize(@x)
+        def initialize(@x : A)
         end
       end
 
       B.new(A.new).foo
-      ") { int32 }
-    b = result.program.types["B"] as InstanceVarContainer
-    b.instance_vars.size.should eq(0)
+      ",
+      "Can't infer the type of instance variable '@x' of A"
   end
 
   it "doesn't mark instance variable as nilable if calling another initialize" do
@@ -641,7 +640,7 @@ describe "Type inference: class" do
           initialize(x)
         end
 
-        def initialize(@x)
+        def initialize(@x : Int32)
         end
 
         def x
@@ -775,7 +774,7 @@ describe "Type inference: class" do
       end
 
       class Bar < Foo
-        def initialize(@x)
+        def initialize(@x : Int32)
         end
 
         def x
@@ -805,7 +804,7 @@ describe "Type inference: class" do
   it "correctly types #680" do
     assert_type(%(
       class Foo
-        def initialize(@method)
+        def initialize(@method : Int32?)
         end
 
         def method
@@ -820,7 +819,29 @@ describe "Type inference: class" do
       end
 
       Bar.new.method
-      )) { |mod| mod.nil }
+      )) { nilable int32 }
+  end
+
+  it "correctly types #680 (2)" do
+    assert_error %(
+      class Foo
+        def initialize(@method : Int32)
+        end
+
+        def method
+          @method
+        end
+      end
+
+      class Bar < Foo
+        def initialize
+          super(method)
+        end
+      end
+
+      Bar.new.method
+      ),
+      "instance variable '@method' of Foo must be Int32, not Nil"
   end
 
   it "can invoke method on abstract type without subclasses nor instances" do
@@ -966,8 +987,8 @@ describe "Type inference: class" do
       )) { int32 }
   end
 
-  it "types read-instance-var without a type as nil" do
-    assert_type(%(
+  it "errors if using read-instance-var with non-typed variable" do
+    assert_error %(
       class Foo
         def foo
           @foo
@@ -976,6 +997,7 @@ describe "Type inference: class" do
 
       f = Foo.new
       f.@foo
-      )) { |mod| mod.nil }
+      ),
+      "Can't infer the type of instance variable '@foo' of Foo"
   end
 end

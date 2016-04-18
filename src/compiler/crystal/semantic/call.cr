@@ -27,8 +27,6 @@ class Crystal::Call
   getter? raises : Bool
   @raises = false
 
-  @subclass_notifier : ModuleType?
-
   def mod
     scope.program
   end
@@ -1051,7 +1049,7 @@ class Crystal::Call
       args["self"] = MetaVar.new("self", self_type)
     end
 
-    strict_check = body.is_a?(Primitive) && body.name == :fun_call
+    strict_check = body.is_a?(Primitive) && body.name == "fun_call"
 
     arg_types.each_index do |index|
       arg = typed_def.args[index]
@@ -1114,7 +1112,7 @@ class Crystal::Call
     {typed_def, args}
   end
 
-  def attach_subclass_observer(type)
+  def attach_subclass_observer(type : ModuleType)
     detach_subclass_observer
     type.add_subclass_observer(self)
     @subclass_notifier = type

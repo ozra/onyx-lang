@@ -29,13 +29,13 @@ CRYSTAL_VERSION="0.15.0"
 echo "Gets Crystal Version '${CRYSTAL_VERSION}'"
 
 # curl can't handle the redirect to data-store!
-wget "https://github.com/manastech/crystal/releases/download/${CRYSTAL_VERSION}/crystal-${CRYSTAL_VERSION}-1-linux-x86_64.tar.gz" -O - | tar zx
+wget "https://github.com/manastech/crystal/releases/download/${CRYSTAL_VERSION}/crystal-${CRYSTAL_VERSION}-1-linux-x86_64.tar.gz" -O - | tar zx || exit 1
 echo "Installs Crystal ${CRYSTAL_VERSION} at /opt/cr-ox/"
 
 # sudo mkdir -p /opt
 sudo rm -rf /opt/cr-ox
-sudo cp -a "crystal-${CRYSTAL_VERSION}-1/" /opt/cr-ox
-sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox
+sudo cp -a "crystal-${CRYSTAL_VERSION}-1/" /opt/cr-ox || exit 1
+sudo mv /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox || exit 1
 sudo ln -fs /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox
 
 rm -rf "crystal-${CRYSTAL_VERSION}-1"
@@ -56,31 +56,11 @@ echo "  - whatever makes your clock tick (literally)"
 echo ""
 
 # LIBRARY_PATH="/opt/crystal/embedded/lib/;$LIBRARY_PATH"
-# CRYSTAL_CONFIG_PATH=`pwd`/src crystal build --release --link-flags "-L/opt/crystal/embedded/lib" -o .build/onyx src/compiler/onyx.cr
 
 # CRYSTAL_CONFIG_PATH=`pwd`/src \
 #     ./bin/cr-ox build --release -o .build/onyx src/compiler/onyx.cr
-make all
-
-echo "Installs Onyx at /opt/onyx/"
-echo ""
-
-sudo rm -rf /opt/onyx
-sudo mkdir -p /opt/onyx/bin
-sudo cp -a /opt/cr-ox/embedded/ /opt/onyx/
-sudo cp -a src /opt/onyx/
-sudo cp .build/onyx /opt/onyx/embedded/bin/onyx
-
-echo '#!/usr/bin/env bash
-INSTALL_DIR="$(dirname $(readlink $0 || echo $0))/.."
-export CRYSTAL_PATH=${CRYSTAL_PATH:-"libs:$INSTALL_DIR/src"}
-export PATH="$INSTALL_DIR/embedded/bin:$PATH"
-export LIBRARY_PATH="$INSTALL_DIR/embedded/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
-"$INSTALL_DIR/embedded/bin/onyx" "$@"
-' | sudo tee /opt/onyx/bin/onyx > /dev/null
-
-sudo chmod 755 /opt/onyx/bin/onyx
-sudo ln -fs /opt/onyx/bin/onyx /usr/local/bin/onyx
+make all || exit 1
+make install || exit 1
 
 echo "All done! Enjoy, and don't let the beta-bugs bite!"
 echo ""

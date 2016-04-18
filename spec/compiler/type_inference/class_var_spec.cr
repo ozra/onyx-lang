@@ -244,7 +244,7 @@ describe "Type inference: class var" do
 
       Foo.foo
       ",
-      "undefined class variable"
+      "Can't infer the type of class variable '@@foo' of Foo"
   end
 
   it "errors if using class variable at the top level" do
@@ -264,5 +264,17 @@ describe "Type inference: class var" do
       foo
       ),
       "declaring the type of a class variable must be done at the class level"
+  end
+
+  it "errors if using local variable in initializer" do
+    assert_error %(
+      class Foo
+        @@x : Int32
+
+        a = 1
+        @@x = a
+      end
+      ),
+      "undefined local variable or method 'a'"
   end
 end

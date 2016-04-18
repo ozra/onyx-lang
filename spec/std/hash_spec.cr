@@ -302,28 +302,6 @@ describe "Hash" do
     h.has_key?(1).should be_true
   end
 
-  it "initializes with comparator" do
-    h = Hash(String, Int32).new(Hash::CaseInsensitiveComparator)
-    h["foo"] = 1
-    h["foo"].should eq(1)
-    h["FoO"].should eq(1)
-  end
-
-  it "initializes with block and comparator" do
-    h1 = Hash(String, Array(Int32)).new(Hash::CaseInsensitiveComparator) { |h, k| h[k] = [] of Int32 }
-    h1["foo"].should eq([] of Int32)
-    h1["bar"] = [2]
-    h1["BAR"].should eq([2])
-  end
-
-  it "initializes with default value and comparator" do
-    h = Hash(String, Int32).new(10, Hash::CaseInsensitiveComparator)
-    h["x"].should eq(10)
-    h.has_key?("x").should be_false
-    h["foo"] = 5
-    h["FoO"].should eq(5)
-  end
-
   it "merges" do
     h1 = {1 => 2, 3 => 4}
     h2 = {1 => 5, 2 => 3}
@@ -457,13 +435,6 @@ describe "Hash" do
     h.shift?.should eq({1, 2})
     h.empty?.should be_true
     h.shift?.should be_nil
-  end
-
-  it "works with custom comparator" do
-    h = Hash(String, Int32).new(Hash::CaseInsensitiveComparator)
-    h["FOO"] = 1
-    h["foo"].should eq(1)
-    h["Foo"].should eq(1)
   end
 
   it "gets key index" do
@@ -695,6 +666,7 @@ describe "Hash" do
   describe "reject" do
     assert { {a: 2, b: 3}.reject(:b, :d).should eq({a: 2}) }
     assert { {a: 2, b: 3}.reject(:b, :a).should eq({} of Symbol => Int32) }
+    assert { {a: 2, b: 3}.reject([:b, :a]).should eq({} of Symbol => Int32) }
     it "does not change currrent hash" do
       h = {a: 3, b: 6, c: 9}
       h2 = h.reject(:b, :c)
@@ -705,6 +677,7 @@ describe "Hash" do
   describe "reject!" do
     assert { {a: 2, b: 3}.reject!(:b, :d).should eq({a: 2}) }
     assert { {a: 2, b: 3}.reject!(:b, :a).should eq({} of Symbol => Int32) }
+    assert { {a: 2, b: 3}.reject!([:b, :a]).should eq({} of Symbol => Int32) }
     it "changes currrent hash" do
       h = {a: 3, b: 6, c: 9}
       h.reject!(:b, :c)
@@ -716,6 +689,7 @@ describe "Hash" do
     assert { {a: 2, b: 3}.select(:b, :d).should eq({b: 3}) }
     assert { {a: 2, b: 3}.select.should eq({} of Symbol => Int32) }
     assert { {a: 2, b: 3}.select(:b, :a).should eq({a: 2, b: 3}) }
+    assert { {a: 2, b: 3}.select([:b, :a]).should eq({a: 2, b: 3}) }
     it "does not change currrent hash" do
       h = {a: 3, b: 6, c: 9}
       h2 = h.select(:b, :c)
@@ -727,6 +701,7 @@ describe "Hash" do
     assert { {a: 2, b: 3}.select!(:b, :d).should eq({b: 3}) }
     assert { {a: 2, b: 3}.select!.should eq({} of Symbol => Int32) }
     assert { {a: 2, b: 3}.select!(:b, :a).should eq({a: 2, b: 3}) }
+    assert { {a: 2, b: 3}.select!([:b, :a]).should eq({a: 2, b: 3}) }
     it "does change currrent hash" do
       h = {a: 3, b: 6, c: 9}
       h.select!(:b, :c)

@@ -1,9 +1,10 @@
+require "../onyx/version_number"
+
 module Crystal
   module Config
-    PATH      = {{ env("CRYSTAL_CONFIG_PATH") || "" }}
-    VERSION   = {{ env("CRYSTAL_CONFIG_VERSION") || `(git describe --tags --long 2>/dev/null)`.stringify.chomp }}
-    # CACHE_DIR = ENV["CRYSTAL_CACHE_DIR"]? || ".crystal"
-    CACHE_DIR = ENV["CRYSTAL_CACHE_DIR"]? || ".onyx-cache"
+    PATH      = {{ env("ONYX_CONFIG_PATH") || env("CRYSTAL_CONFIG_PATH") || "" }}
+    VERSION   = ONYX_VERSION
+    CACHE_DIR = ENV["ONYX_CACHE_DIR"]? || ENV["CRYSTAL_CACHE_DIR"]? || ".onyx-cache"
 
     @@cache_dir : String?
 

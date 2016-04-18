@@ -4,20 +4,31 @@ _debug_compiler_start_ = 1
 type Ohm
    init(@value Real) ->
 
+
+-- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
+-- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
+
+template suffix-number-g(val) =
+   {=val=}_real
+
 template suffix-number-kg(val) =
-   {=val.id=}_real * 1000_real
+   {=val=}g * 1000_real
 
 template suffix-number-Ω(val) =
-   Ohm {=val.id=}_real
+   Ohm {=val=}_real
 
-say "ona"
+say "create code via inline macro expr"
 
 {% for x in ["a", "b", "c"] %}
    say "macroed {=x.id=} + " + {=x=}
 {% end %}
 
-say "doce"
+say "Try each suffix"
+pp 0.47g
+pp 0.47kg
+pp 0.47Ω
 
+say "First run through, no crystal macro surrounds"
 
 a1 = 1
 a2 = 1i8
@@ -119,11 +130,12 @@ pp p2 = 0e-1f32
 say "Should fail for various reasons:"
 -- f-a = 0b012
 -- f-b = 0o1234823
--- f-c = 0xffi8
--- f-d = 0xff_i8
-
 -- f-e = 123-kg
 -- f-f = 123–kg
 -- pp f-e = 123-kg
 -- pp f-f = 123–kg
+
+-- *TODO* this should be caught earlier!
+-- f-c = 0xffi8
+-- f-d = 0xff_i8
 

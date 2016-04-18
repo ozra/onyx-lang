@@ -37,13 +37,13 @@ MACRO_INDENT_FLAG = -99
 class OnyxParser < OnyxLexer
    include CommonParserMethods
 
-   record Unclosed, name, location
+   record Unclosed, name : String, location : Location
 
-   property visibility  # *TODO* must be handled for macros
-
-   property def_nest
-   property type_nest
-   getter? wants_doc
+   property visibility : Visibility?
+   property def_nest : Int32
+   property type_nest : Int32
+   getter? wants_doc : Bool
+   @explicit_block_param_name : String?
 
    def self.parse(str, scope_stack = ScopeStack.new)
       new(str, scope_stack).parse
@@ -103,8 +103,9 @@ class OnyxParser < OnyxLexer
       @macro_parse_mode_count > 0
    end
 
-   def wants_doc=(@wants_doc)
-      @doc_enabled = @wants_doc
+   def wants_doc=(wants_doc)
+      @wants_doc = !!wants_doc
+      @doc_enabled = !!wants_doc
    end
 
 
@@ -491,6 +492,8 @@ class OnyxParser < OnyxLexer
                   needs_new_scope = true
                when InstanceVar
                   needs_new_scope = @def_nest == 0
+               when ClassVar
+                  needs_new_scope = @def_nest == 0
                when Var
                   @assigns_special_var = true if atomic.special_var?
                else
@@ -594,17 +597,9 @@ class OnyxParser < OnyxLexer
             else
                case token_type
                when :"&&="
-                  if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-                     ivars.add atomic.name
-                  end
-
                   assign = Assign.new(atomic, value).at(location)
                   atomic = And.new(atomic.clone, assign).at(location)
                when :"||="
-                  if (ivars = @instance_vars) && atomic.is_a?(InstanceVar)
-                     ivars.add atomic.name
-                  end
-
                   assign = Assign.new(atomic, value).at(location)
                   atomic = Or.new(atomic.clone, assign).at(location)
                else
@@ -1642,9 +1637,11 @@ class OnyxParser < OnyxLexer
          parse_constish_or_type_tied_literal
 
       when :INSTANCE_VAR
+         # *TODO* unless we change back type–def parsing to utilize
+         # parse_expressions, since we do want code to be runnable and macros
          dbg "found reference to instance var"
          name = @token.value.to_s
-         add_instance_var name
+         # add_instance_var name
          ivar = InstanceVar.new(name).at(@token.location)
          ivar.end_location = token_end_location
          @wants_regex = false
@@ -2571,7 +2568,7 @@ class OnyxParser < OnyxLexer
          body = case
          when body.is_a? Expressions
             body.expressions
-         when body.is_a? Array(ASTNode+)
+         when body.is_a? Array(ASTNode)
             body
          else
             [body]
@@ -2649,7 +2646,7 @@ class OnyxParser < OnyxLexer
       the_members = case
       when members.is_a? Expressions
          members.expressions
-      when members.is_a? Array(ASTNode+)
+      when members.is_a? Array(ASTNode)
          members
       else
          [members]
@@ -2987,10 +2984,10 @@ class OnyxParser < OnyxLexer
             name = ensure_at_prefix name
          end
 
-         if ! on_self
-            # *TODO*
-            add_instance_var name
-         end
+         # if ! on_self
+         #    # *TODO*
+         #    add_instance_var name
+         # end
 
          if tok?(:CLASS_VAR) || on_self
             var = ClassVar.new(name).at(@token.location)
@@ -3601,6 +3598,7 @@ class OnyxParser < OnyxLexer
       next_string_token(delimiter_state)
       delimiter_state = @token.delimiter_state
 
+      # *TODO* check out cr–parse for line–number addition here
       pieces = [] of ASTNode | String
       has_interpolation = false
 
@@ -3831,11 +3829,11 @@ class OnyxParser < OnyxLexer
       end
 
       targets = exps.map { |exp| to_lhs(exp) }
-      if ivars = @instance_vars
-         targets.each do |target|
-            ivars.add target.name if target.is_a?(InstanceVar)
-         end
-      end
+      # if ivars = @instance_vars
+      #    targets.each do |target|
+      #       ivars.add target.name if target.is_a?(InstanceVar)
+      #    end
+      # end
 
       if values.size != 1 && targets.size != 1 && targets.size != values.size
          dbgtail_off!
@@ -4282,15 +4280,16 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_to_def(a_def)
-      instance_vars = prepare_parse_def
+      # instance_vars = prepare_parse_def
+      prepare_parse_def
       @def_nest += 1
 
-      # Small memory optimization: don't keep the Set in the Def if it's empty
-      instance_vars = nil if instance_vars.empty?
+      # # Small memory optimization: don't keep the Set in the Def if it's empty
+      # instance_vars = nil if instance_vars.empty?
 
       result = parse
 
-      a_def.instance_vars = instance_vars
+      # a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
@@ -4338,20 +4337,21 @@ class OnyxParser < OnyxLexer
       @def_parsing += 1
       doc ||= @token.doc
 
-      instance_vars = prepare_parse_def
+      # instance_vars = prepare_parse_def
+      prepare_parse_def
       a_def = parse_def_helper is_abstract: is_abstract, is_macro_def: is_macro_def
 
       # Small memory optimization: don't keep the Set in the Def if it's empty
-      instance_vars = nil if instance_vars.empty?
+      # instance_vars = nil if instance_vars.empty?
 
-      a_def.instance_vars = instance_vars
+      # a_def.instance_vars = instance_vars
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
       a_def.uses_block_arg = @uses_explicit_block_param
       a_def.assigns_special_var = @assigns_special_var
       a_def.doc = doc
-      @instance_vars = nil
+      # @instance_vars = nil
       @calls_super = false
       @calls_initialize = false
       @calls_previous_def = false
@@ -4372,7 +4372,7 @@ class OnyxParser < OnyxLexer
       @uses_explicit_block_param = false
       @explicit_block_param_name = nil
       @assigns_special_var = false
-      @instance_vars = Set(String).new
+      # @instance_vars = Set(String).new
    end
 
    MACRO_CTRL_START_DELIMITER = :"{%"
@@ -5232,7 +5232,10 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   record ArgExtras, explicit_block_param, default_value, splat
+   record ArgExtras,
+      explicit_block_param : Arg?,
+      default_value : Bool,
+      splat : Bool
 
    def parse_param(arg_list, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
       if @token.type == :"&"
@@ -5379,7 +5382,7 @@ class OnyxParser < OnyxLexer
             dbgtail_off!
             raise "can't use @instance_variable here"
          end
-         add_instance_var ivar.name
+         # add_instance_var ivar.name
          uses_arg = true
       when :CLASS_VAR
          arg_name = @token.value.to_s[2..-1]
@@ -5740,9 +5743,8 @@ class OnyxParser < OnyxLexer
       # else
       #    parse args and that
 
-      @temp_temp__curr_namish = name # *TODO* remove after test!
-
-      has_parens, call_args = parse_call_args true, curr_indent
+      current_name = name
+      has_parens, call_args = parse_call_args true, curr_indent, current_name
 
       instance = nil
 
@@ -5814,9 +5816,16 @@ class OnyxParser < OnyxLexer
       dbgtail "/parse_var_or_call"
    end
 
-   record CallArgs, args, block, explicit_block_param, named_args, stopped_on_do_after_space, end_location
+   record CallArgs,
+      args : Array(ASTNode)?,
+      block : Block?,
+      explicit_block_param : ASTNode?,
+      named_args : Array(NamedArgument)?,
+      stopped_on_do_after_space : Bool,
+      end_location : Location?
 
-   def parse_call_args(allow_curly, curr_indent)
+   # current_name is only used by parse_call_args_indented
+   def parse_call_args(allow_curly, curr_indent, current_name = "__foo__temp__call_args__debug__")
       dbg "parse_call_args ->"
 
       case @token.type
@@ -5844,7 +5853,7 @@ class OnyxParser < OnyxLexer
          dbg "- parse_call_args -> INDENT"
          end_location = token_end_location
          next_token
-         {true, parse_call_args_indented curr_indent, check_plus_and_minus: true, allow_curly: allow_curly}
+         {true, parse_call_args_indented curr_indent, current_name, check_plus_and_minus: true, allow_curly: allow_curly}
 
       else
          {false, nil}
@@ -6049,16 +6058,14 @@ class OnyxParser < OnyxLexer
       false
    end
 
-   def parse_call_args_indented(indent_level, block = nil, check_plus_and_minus = true, allow_curly = false)
+   def parse_call_args_indented(indent_level, current_name, block = nil, check_plus_and_minus = true, allow_curly = false)
       dbg "parse_call_args_indented ->"
       return nil if parse_call_args_spaced_any_non_call_hints?(check_plus_and_minus, allow_curly)
 
       call_indent_level = indent_level # @indent
-      da_name_muddafuckas = @temp_temp__curr_namish.to_s
-
       dbg_prev_nest_is = @nesting_stack.last
 
-      add_nest :indent_call, call_indent_level, da_name_muddafuckas, false, false
+      add_nest :indent_call, call_indent_level, current_name, false, false
 
       args = [] of ASTNode
       end_location = nil
@@ -6095,7 +6102,7 @@ class OnyxParser < OnyxLexer
          skip_space
 
          if handle_nest_end
-            dbg "- parse_call_args_indented - handled active dedent for '#{da_name_muddafuckas}'!!!".red
+            dbg "- parse_call_args_indented - handled active dedent for '#{current_name}'!!!".red
             break
 
          elsif tok?(:",", :NEWLINE) || tok?(:DEDENT) || @indent > call_indent_level
@@ -6107,7 +6114,7 @@ class OnyxParser < OnyxLexer
             skip_tokens :SPACE, :NEWLINE, :DEDENT, :","
 
          else
-            dbg "- parse_call_args_indented - seems we're done collecting args for '#{da_name_muddafuckas}'!".red
+            dbg "- parse_call_args_indented - seems we're done collecting args for '#{current_name}'!".red
             break
          end
       end
@@ -6115,7 +6122,7 @@ class OnyxParser < OnyxLexer
       dbg "- parse_call_args_indented - after 'while' - do next_token_skip_space".red
 
       if dbg_prev_nest_is != @nesting_stack.last
-         raise "dbg_prev_nest_is != @nesting_stack.last doesn't match - de-nest missed for #{da_name_muddafuckas}!"
+         raise "dbg_prev_nest_is != @nesting_stack.last doesn't match - de-nest missed for #{current_name}!"
       end
 
       CallArgs.new args, block, nil, named_args, false, end_location
@@ -6212,9 +6219,7 @@ class OnyxParser < OnyxLexer
       when :INSTANCE_VAR
          ivar = InstanceVar.new(name).at(location)
          ivar_out = Out.new(ivar).at(location)
-
-         add_instance_var name
-
+         # add_instance_var name
          next_token
          ivar_out
       when :UNDERSCORE
@@ -6639,9 +6644,9 @@ class OnyxParser < OnyxLexer
             check :"]"
             next_token_skip_space
             type = make_static_array_type(type, size)
-         when :"+"
-            type = Virtual.new(type)
-            next_token_skip_space
+         # when :"+"
+         #    type = Virtual.new(type)
+         #    next_token_skip_space
          when :"."
             next_token
             check_idfr :type  # *TODO* `oftype` | `curtype` | `typenow` (vs `typedecl`/`decltype`) or similar
@@ -8089,10 +8094,10 @@ class OnyxParser < OnyxLexer
       ret
    end
 
-   def add_instance_var(name)
-      return if @in_macro_expression
-      @instance_vars.try &.add name
-   end
+   # def add_instance_var(name)
+   #    return if @in_macro_expression
+   #    @instance_vars.try &.add name
+   # end
 
    def self.free_var_name?(name)
       name.size == 1 || (name.size == 2 && name[1].digit?)

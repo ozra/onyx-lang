@@ -92,10 +92,7 @@ class HTTP::Server
     property ssl : OpenSSL::SSL::Context?
   end
 
-  @wants_close : Bool
   @wants_close = false
-  @host : String
-  @port : Int32
 
   def self.new(port, &handler : Context ->)
     new("127.0.0.1", port, &handler)
@@ -113,22 +110,34 @@ class HTTP::Server
     new("127.0.0.1", port, handler)
   end
 
-  def initialize(@host, @port, &@handler : Context ->)
+  def initialize(@host : String, @port : Int32, &@handler : Context ->)
   end
 
-  def initialize(@host, @port, handlers : Array(HTTP::Handler), &handler : Context ->)
+  def initialize(@host : String, @port : Int32, handlers : Array(HTTP::Handler), &handler : Context ->)
     @handler = HTTP::Server.build_middleware handlers, handler
   end
 
-  def initialize(@host, @port, handlers : Array(HTTP::Handler))
+  def initialize(@host : String, @port : Int32, handlers : Array(HTTP::Handler))
     @handler = HTTP::Server.build_middleware handlers
   end
 
-  def initialize(@host, @port, @handler)
+  def initialize(@host : String, @port : Int32, @handler : HTTP::Handler | HTTP::Handler::Proc)
+  end
+
+  def port
+    if server = @server
+      server.local_address.port.to_i
+    else
+      @port
+    end
+  end
+
+  def bind
+    @server ||= TCPServer.new(@host, @port)
   end
 
   def listen
-    server = TCPServer.new(@host, @port)
+    server = bind
     until @wants_close
       spawn handle_client(server.accept)
     end
@@ -136,6 +145,10 @@ class HTTP::Server
 
   def close
     @wants_close = true
+    if server = @server
+      server.close
+      @server = nil
+    end
   end
 
   private def handle_client(io)

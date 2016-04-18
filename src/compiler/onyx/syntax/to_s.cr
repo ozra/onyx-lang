@@ -2,33 +2,41 @@ require "../../crystal/syntax/to_s"
 
 module Crystal
 
+# class ToOnyxSVisitor < Visitor
+# end
 
-class ToOnyxSVisitor < Visitor
-end
+# class ToOnyxSVisitorsPool
+#    # @@onyx_tos_visitors = [] of ToOnyxSVisitor
+#    @@onyx_tos_visitors : Array(ToOnyxSVisitor)
+#    @@onyx_tos_visitors = [] of ToOnyxSVisitor
 
-$tos_visitors = [] of ToSVisitor
-$onyx_tos_visitors : Array(ToOnyxSVisitor)
-$onyx_tos_visitors = [] of ToOnyxSVisitor
+#    def self.borrow_onyx_tos_visitor(io) : ToOnyxSVisitor
+#       if @@onyx_tos_visitors.size > 0
+#          visitor = @@onyx_tos_visitors.pop.not_nil!
+#          visitor.re_init io
+#          visitor.not_nil!
+#       else
+#          ToOnyxSVisitor.new(io)
+#       end
+#    end
 
-def get_onyx_tos_visitor(io) : ToOnyxSVisitor
-   if visitor = $onyx_tos_visitors.try &.pop
-      visitor.initialize io
-      visitor
-   else
-      ToOnyxSVisitor.new(io)
-   end
-end
+#    def self.leave_onyx_tos_visitor(visitor : ToOnyxSVisitor) : Nil
+#       @@onyx_tos_visitors << visitor
+#       nil
+#    end
+# end
 
-def return_onyx_tos_visitor(visitor : ToOnyxSVisitor)
-   $onyx_tos_visitors << visitor
-end
+# foo = ToOnyxSVisitorsPool.new
 
 class ASTNode
    def to_s(io, as_kind = :auto)
-      # if as_kind != :crystal # (as_kind == :auto && @is_onyx) || as_kind == :onyx
+      # _dbg "ASTNode.to_s -> as_kind = #{as_kind}, self.class = #{self.class}"
       if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-         visitor = get_onyx_tos_visitor(io) # ToOnyxSVisitor.new(io)
-         self.accept visitor
+         # visitor = ToOnyxSVisitorsPool.borrow_onyx_tos_visitor(io) # ToOnyxSVisitor.new(io)
+         visitor = ToOnyxSVisitor.new(io)
+         ret = self.accept visitor
+         # ToOnyxSVisitorsPool.leave_onyx_tos_visitor visitor
+         ret
       else
          visitor = ToSVisitor.new(io)
          self.accept visitor
@@ -37,7 +45,7 @@ class ASTNode
 end
 
 
-class ToSVisitor < Visitor
+class ToSVisitor
 
    # If a for–node is passed to a macro expansion, is it normalized first?
    # Double check. Otherwise it would go straight for crystal generation.
@@ -48,10 +56,16 @@ class ToSVisitor < Visitor
 end
 
 class ToOnyxSVisitor < Visitor
+   @str : IO
+
    def initialize(@str = MemoryIO.new)
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
+   end
+
+   def re_init(str = MemoryIO.new)
+      initialize str
    end
 
    def visit(node : Primitive)
@@ -993,12 +1007,6 @@ class ToOnyxSVisitor < Visitor
          @str << " | " if i > 0
          ident.accept self
       end
-      false
-   end
-
-   def visit(node : Virtual)
-      node.name.accept self
-      @str << "+"
       false
    end
 

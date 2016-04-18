@@ -23,7 +23,10 @@ class Def < ASTNode
 end
 
 class StyleParseVisitor < Visitor
-   def initialize(@conf, src)
+   @src : Array(Array(Char))
+
+   def initialize(conf : Hash(String, String), src : String)
+      @conf = conf || Hash(String, String).new
       @org_src = src
       @src = src.split(/\n/).map &.chars
       @inside_macro = 0
@@ -196,8 +199,8 @@ class StyleParseVisitor < Visitor
    def visit(node : Union)
    end
 
-   def visit(node : Virtual)
-   end
+   # def visit(node : Virtual)
+   # end
 
    def visit(node : Metaclass)
    end
