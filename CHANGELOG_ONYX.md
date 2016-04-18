@@ -1,7 +1,7 @@
-## 0.104.3 - (2016-**-**) ##
+## 0.105.1 - (2016-04-18) ##
 
-* User defined literal suffixes. Replaces the prior PoC-implementation of literal-type-redef pragmas with a much more generic usable construct.
-* 
+* User defined literal suffixes, stage 1, WIP.
+* "Upgraded" to new type-def member-vars inference.
 
 
 ## 0.104.2 - (2016-04-11) ##
