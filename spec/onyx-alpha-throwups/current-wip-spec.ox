@@ -10,6 +10,9 @@ type Foo
 
 foo Foo("Named")
 
-foo ("Anon") <:
-    init(@str Str) ->
-    action(str) -> say "{@str}: {str}"
+bar() ->
+    foo ("Anon") <:
+        init(@str Str) ->
+        action(str) -> say "{@str}: {str}"
+
+bar

@@ -412,7 +412,7 @@ module Crystal
         if must_compile
           File.rename(bc_name_new, bc_name)
           if compiler.release?
-            timing("LLVM Optimizer") do
+            Crystal.timing("LLVM Optimizer", @compiler.stats?) do
               compiler.optimize llvm_mod
             end
           end
