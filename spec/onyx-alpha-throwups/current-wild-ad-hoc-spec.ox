@@ -485,12 +485,12 @@ pp $.MY_CONST
 
 -- *TODO* ' should not be needed before I32!
 -- '!literal-int = I32
-$my-global = 47
+$my-global = 47_i32
 -- '!literal-int = I64
 
 $my-typed-global 'I32
 -- '!literal-int=I32
-$my-typed-and-assigned-global 'I32 = 47
+$my-typed-and-assigned-global 'I32 = 47i32
 $my-global = $my-typed-and-assigned-global
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -516,6 +516,15 @@ module Djur
       foo3     'Int
       bar3     ^Int
       qwo3     ~Int
+
+      init() ->
+         @foo = 47
+         @bar = 42
+         @foo’’ = 0
+         @bar’’ = 0
+         @foo3 = 47
+         @bar3 = 47
+         @qwo3 = 47
 
       -- xfoo! Int = 47  -- should fail, and does
       -- xbar? Int = 42  -- should fail, and does
@@ -1519,11 +1528,11 @@ end–trait
 
 -- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
 trait AnotherTrait[S1]
-   -- *NOTE* should we allow member data in traits too?
-   @another–val = 0  -- "can't use instance variables at the top level"
+   -- *TODO* inited another-val below doesn't catch-all in sub-types!
+   -- @another–val = 0  -- "can't use instance variables at the top level"
    @a-t-val S1
 
-   val() -> @another–val
+   -- val() -> @another–val
    valhalla() -> abstract
    -- valhalla2() -> abstract; say 47 -- should fail - and does
    valhalla3() -> abstract
@@ -1549,7 +1558,7 @@ type Bar < Qwa
    foo–a Str = ""
    foo–b Int = 0_i64
    foo–c I64 = 0_i64
-   foo-ya I32 = 0
+   foo-ya I32 = 0i32
 
    Self.set–foo(v) ->
       Self.my–foo = v
@@ -1591,12 +1600,15 @@ type Foo[S1] < Bar
    ifdef x86_64
     init(a S1) ->
        @foo–a = a
+       @a-t-val = a
    else
     init(b S1) ->
        @foo–a = b
+       @a-t-val = a
    end
 
    init() ->
+      @a-t-val = ""
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
@@ -1712,14 +1724,17 @@ type FooStyle2<S1> < Bar
       -- fn init(a S1)
       fn init(a S1) ->
          @foo–a = a
+         @a-t-val = b
    else
       -- fn init(b S1)
       fn init(b S1) ->
          @foo–a = b
+         @a-t-val = b
    end
 
    -- fn init()
    fn init() ->
+       @a-t-val = ""
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 

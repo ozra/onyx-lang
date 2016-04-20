@@ -43,7 +43,6 @@ module Crystal
     @stdreal : FloatType?
 
     def initialize
-      # *TODO* consider moving this down past type definitions
       super(self, self, "main")
 
       @symbols = Set(String).new

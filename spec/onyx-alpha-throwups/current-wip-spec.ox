@@ -1,18 +1,27 @@
 
 _debug_compiler_start_ = 1
 
-foo(obj) ->
-    obj.action "hey"
 
-type Foo
-    init(@str Str) ->
-    action(str) -> say str
-
-foo Foo("Named")
-
-bar() ->
-    foo ("Anon") <:
+My.Nested:
+    type Foo
         init(@str Str) ->
-        action(str) -> say "{@str}: {str}"
+        action(str) -> say str
 
-bar
+    Module:
+        extend self
+        foo(obj) ->
+            obj.action "hey"
+
+
+OtherModule:
+    bar() ->
+        My.Nested.Module.foo My.Nested.Foo("Named")
+
+        -- foo new ("Anon")
+        --     init(@str Str) ->
+        --     action(str) -> say "{@str}: {str}"
+
+OtherModule:
+    extend self
+
+    bar

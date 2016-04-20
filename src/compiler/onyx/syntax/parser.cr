@@ -248,10 +248,6 @@ class OnyxParser < OnyxLexer
       dbgtail "/parse_expressions".yellow
    end
 
-   def last_was_newline_or_dedent
-      (prev_token_type == :NEWLINE || prev_token_type == :DEDENT || prev_token_type == :ACTUAL_BOF)
-   end
-
    def parse_expression
       dbg "parse_expression ->"
       dbginc
@@ -262,7 +258,12 @@ class OnyxParser < OnyxLexer
 
       # when explicit keyword fun - then it's better to parse via the usual
       # expression route
-      possible_def_context = last_was_newline_or_dedent
+      possible_def_context = (
+         prev_token_type == :NEWLINE ||
+         prev_token_type == :DEDENT ||
+         prev_token_type == :INDENT ||
+         prev_token_type == :ACTUAL_BOF
+      )
       can_be_arrow_func_def = possible_def_context && (
          # kwd?(:def, :fn, :fu, :mf, :fun, :own, :me, :func, :meth, :pure, :proc) ||
          (
@@ -1635,7 +1636,19 @@ class OnyxParser < OnyxLexer
          end
 
       when :CONST
-         parse_constish_or_type_tied_literal
+         name_column_number = @token.column_number
+         constish = parse_constish_or_type_tied_literal
+
+         if (constish.is_a?(Path) &&
+            (current_char == '<' || current_char == '[') ||
+            nest_start_token? # Terse module syntax
+         )
+            check_not_inside_def("can't define module inside def") do
+               parse_module_def name_column_number, constish
+            end
+         else
+            constish
+         end
 
       when :INSTANCE_VAR
          # *TODO* unless we change back type–def parsing to utilize
@@ -2702,7 +2715,7 @@ class OnyxParser < OnyxLexer
       module_def
    end
 
-   def parse_module_def
+   def parse_module_def(name_column_number = 0, terse_named = nil)
       dbg "parse_module_def ->"
 
       @type_nest += 1
@@ -2712,11 +2725,15 @@ class OnyxParser < OnyxLexer
       location = @token.location
       doc = @token.doc
 
-      next_token_skip_space_or_newline
+      unless terse_named
+         next_token_skip_space_or_newline
+         name_column_number = @token.column_number
+         name = parse_constish allow_type_vars: false
+         skip_space
 
-      name_column_number = @token.column_number
-      name = parse_constish allow_type_vars: false
-      skip_space
+      else
+         name = terse_named
+      end
 
       type_vars = parse_type_vars
       # skip_statement_end
@@ -7375,7 +7392,7 @@ class OnyxParser < OnyxLexer
    end
 
    def nest_start_token?
-      tok?(:"=>", :":") || kwd?(:do, :then, :begins)
+      tok?(:"=>", :":") || kwd?(:do, :then, :begins, :below, :throughout)
    end
 
    def end_token? : Bool
@@ -8101,6 +8118,9 @@ class OnyxParser < OnyxLexer
    # end
 
    def self.free_var_name?(name)
+      name = babelfish_detaint name # *TODO* *TEMP*
+      # _dbg_on
+      # _dbg "self.free_var_name? '#{name}'"
       name.size == 1 || (name.size == 2 && name[1].digit?)
    end
 

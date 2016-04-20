@@ -23,7 +23,7 @@ Commands:
 
   Analytics:
     context                  show context for given location
-    hierarchy                show type hierarchy
+    tree                     show type hierarchy
     implementations          show implementations for given call in location
     types                    show type of main variables
 
@@ -93,7 +93,7 @@ USAGE
       when "context".starts_with?(command)
         options.shift
         context
-      when "hierarchy".starts_with?(command)
+      when "tree".starts_with?(command)
         options.shift
         hierarchy
       when "implementations".starts_with?(command)
