@@ -20,6 +20,7 @@ optional_require 'pry'
 
 DPKG_AND_APT_GET = "dpkg and apt-get"
 $logfile = Pathname(Dir.pwd) + Pathname($0).sub_ext('.log')
+File.open($logfile, ?w) {}		# Clear the log
 
 def does_command_exist?(command)
 	`which #{command}` !~ /(?:^$|not found)/
@@ -46,6 +47,7 @@ def spout(*lines)
 end
 def execute(cmd, flags = {})
 	cmd = "sudo " + cmd if flags[:sudo] && sudo?
+	# spout "  [current directory: #{Dir.pwd}]"
 	spout "  > " + cmd
 	output = `#{cmd} 2>&1`
 	unless $?.exitstatus == 0
@@ -53,6 +55,19 @@ def execute(cmd, flags = {})
 		raise "%s exited with code %s" % [cmd, $?.exitstatus]
 	end
 	output
+end
+def prompt(message)
+	loop do
+		print message
+		answer = gets.chomp
+		case answer.downcase
+			when ?y, 'yes', ''
+				return true
+			when ?n, 'no'
+				return false
+		end
+		puts "'%s' is not a valid response!" % answer
+	end
 end
 
 module Kernel
@@ -106,14 +121,6 @@ def main!
 	$verbose = ARGV.include? '--verbose'
 	Dir.chdir Pathname(__FILE__).dirname
 	tasks = []
-	# tasks << ["Checking for dependencies", ->{
-	# 	commands = %w{ git wget tar apt-cache }
-	# 	commands.each do |cmd|
-	# 		next if does_command_exist? cmd
-	# 		puts "We require the '%s' command. Install it using your package manager." % cmd; raise
-	# 	end
-	# 	puts "  Done"
-	# }]
 	tasks << ["Checking for root access", ->{
 		(puts "  We are root"; return) if Process.euid == 0
 		(puts "  Sudo not found"; raise GracefulFailure, "You must install and configure sudo, or run this installation as root.") unless does_sudo_exist?
@@ -129,11 +136,12 @@ def main!
 	tasks << ["Checking for sufficient memory", ->{
 		ram = get_total_ram.to_f / (1024 * 1024 * 1024)
 		swap = get_total_swap.to_f / (1024 * 1024 * 1024)
-		puts "  Found %.2fGB RAM and %.2fGB swap" % [ram, swap]
+		print "  Found %.2fGB RAM and %.2fGB swap." % [ram, swap]
 		if ram + swap < ($is64bit ? 2.9 : 1.9)		# When is a gig not a gig? When a graphics card is stealing some of it!
-			puts "  Failed"
+			puts "", "  Failed"
 			raise GracefulFailure, "Requires at least #{$is64bit ? 2.5 : 2}GB memory or swap"
 		end
+		puts ram + swap < 3 ? " It'll do I suppose." : " That's plenty."
 	}]
 	tasks << ["Checking for compatible package manager", ->{
 		$package_manager = case
@@ -186,6 +194,7 @@ def main!
 		Dir.chdir $tempdir do
 			execute %{wget#{' -q' unless $verbose} "#{href}" -O - | tar zx}
 		end
+		puts "  Done"
 	}]
 	tasks << ["Checking if Crystal works", ->{
 		begin
@@ -193,7 +202,6 @@ def main!
 			execute "echo 'puts' | #{crystal} >/dev/null 2>/dev/null eval"
 			puts "  Yes it does. Will wonders never cease?"
 		rescue
-			binding.pry
 			puts "  Of course not. That would be too easy."
 			tasks.unshift ["Installing Crystal prerequisites", ->{
 				workingdir = Pathname(Dir.mktmpdir "crystal-env")
@@ -224,12 +232,26 @@ def main!
 						end
 						puts "" if $verbose
 						spout "  Deleting old versions"
-						rm_f "/usr/lib/libgc.so*"
+						if Dir.glob("/usr/lib/libgc.so*").some?
+							if prompt "Going to delete /usr/lib/libgc.so*\nOkay to delete? (Y/n): "
+								rm_f "/usr/lib/libgc.so*"
+								puts "  Deleted /usr/lib/libgc.so*"
+							else
+								puts "  You have elected not to delete these files. Therefore this installation will probably fail.\n  If we didn't need it, we wouldn't have asked for it."
+							end
+						end
+						# begin
+						# 	puts "  Uninstalling libgc-dev"
+						# 	uninstall_package("libgc-dev")
+						# rescue
+						# 	puts "  Failed to uninstall package: libgc-dev\n  You must remove it yourself if it is installed."
+						# end if is_package_installed? "libgc-dev"
 						begin
-							uninstall_package("libpcl1-dev") if is_package_installed? "libpcl1-dev"
+							puts "  Uninstalling libpcl1-dev"
+							uninstall_package("libpcl1-dev")
 						rescue
 							puts "  Failed to uninstall package: libpcl1-dev\n  You must remove it yourself if it is installed."
-						end
+						end if is_package_installed? "libpcl1-dev"
 					end
 				ensure
 					rm_rf workingdir if Dir.exist? workingdir
@@ -248,11 +270,12 @@ def main!
 		puts "  Done"
 	}]
 	tasks << [->{"Compiling Onyx in %d-bit release mode" % ($is64bit ? 64 : 32)}, ->{
-		mkdir_p '.build'
-		#execute %{CRYSTAL_CONFIG_PATH=#{Dir.pwd}/src /opt/cr-ox/bin/cr-ox build --release --verbose --link-flags "-L/opt/cr-ox/embedded/lib" -o .build/onyx src/compiler/onyx.cr}
-		execute "make all"
-		execute "make install", sudo: true
-		puts "  Done"
+		# begin
+			mkdir_p '.build'
+			#execute %{CRYSTAL_CONFIG_PATH=#{Dir.pwd}/src /opt/cr-ox/bin/cr-ox build --release --verbose --link-flags "-L/opt/cr-ox/embedded/lib" -o .build/onyx src/compiler/onyx.cr}
+			execute "make all"
+			execute "make install", sudo: true
+			puts "  Done"
 	}]
 	# tasks << ["Installing Onyx", ->{
 	# 	rm_rf '/opt/onyx'
@@ -382,7 +405,7 @@ def install_package(package, force = false)
 	end
 end
 def uninstall_package(package)
-	execute %{apt-get remove "#{package}"}, sudo: true
+	execute %{apt-get remove -y "#{package}"}, sudo: true
 end
 def openurl(domain, path = nil)
 	url = path ? CombineURL(domain, path) : domain
