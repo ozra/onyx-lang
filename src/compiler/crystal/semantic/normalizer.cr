@@ -325,7 +325,7 @@ module Crystal
         filenames.each do |filename|
           if @program.add_to_requires(filename)
             if filename.ends_with? ".ox"
-              parser = OnyxParser.new File.read(filename)
+              parser = OnyxParser.new File.read(filename), @program.string_pool
             else
               parser = Parser.new File.read(filename), @program.string_pool
             end

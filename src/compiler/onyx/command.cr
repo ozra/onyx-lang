@@ -655,8 +655,9 @@ USAGE
           lflags + " -L/usr/local/lib/onyx/embedded/lib"
 
         else
-          lflags
-          # We don't know how to try to help - let's hope the system is actually setup right ;-)
+          lflags + " -L/usr/local/lib"
+          # We don't know how to try to help more detailed - let's hope the
+          # system is actually setup "pretty" right ;-)
         end
 
       _dbg "compiler.link_flags massaged to: #{out_flags}"

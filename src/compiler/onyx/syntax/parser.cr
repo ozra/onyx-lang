@@ -45,12 +45,13 @@ class OnyxParser < OnyxLexer
    getter? wants_doc : Bool
    @explicit_block_param_name : String?
 
-   def self.parse(str, scope_stack = ScopeStack.new)
-      new(str, scope_stack).parse
+
+   def self.parse(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
+      new(str, string_pool, deffed_vars_list).parse
    end
 
-   def initialize(str, deffed_vars_list = [Set(String).new])
-      super(str)
+   def initialize(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
+      super(str, string_pool)
 
       @scope_stack = ScopeStack.new deffed_vars_list
 

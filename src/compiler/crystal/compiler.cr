@@ -10,6 +10,8 @@ module Crystal
     DataLayout64 = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 
     CC = ENV["CC"]? || "cc"
+    LD_ADD = "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH"
+    DEFAULT_LIBBING = "-L/opt/onyx/embedded/lib -L/usr/local/lib"
 
     record Source,
       filename : String,
@@ -118,7 +120,7 @@ module Crystal
       if source.filename.ends_with? ".cr"
         parser = Parser.new(source.code, program.string_pool)
       else # .ox, .onyx
-        parser = OnyxParser.new(source.code)
+        parser = OnyxParser.new(source.code, program.string_pool)
       end
       parser.filename = source.filename
       parser.wants_doc = wants_doc?
@@ -149,9 +151,12 @@ module Crystal
     end
 
     private def codegen(program : Program, node, sources, output_filename)
+
+      _dbg_overview "\nCompiler stage: Compiler.codegen (node) \"#{output_filename}\"\n\n".white
+
       lib_flags = program.lib_flags
 
-      llvm_modules = timing("Codegen (crystal)") do
+      llvm_modules = timing("Codegen (onyx)") do
         program.codegen node, debug: @debug, single_module: @single_module || @release || @cross_compile_flags || @emit, expose_crystal_main: false
       end
 
@@ -177,6 +182,9 @@ module Crystal
     end
 
     private def cross_compile(program, units, lib_flags, output_filename)
+
+      _dbg_overview "\nCompiler stage: Compiler.cross_compile \"#{output_filename}.o\"\n\n".white
+
       llvm_mod = units.first.llvm_mod
       o_name = "#{output_filename}.o"
 
@@ -187,7 +195,9 @@ module Crystal
       end
 
       if @release
-        optimize llvm_mod
+        timing("LLVM Optimizer") do
+          optimize llvm_mod
+        end
       end
 
       if dump_ll?
@@ -196,16 +206,20 @@ module Crystal
 
       target_machine.emit_obj_to_file llvm_mod, o_name
 
-      puts "#{CC} #{o_name} -o #{output_filename} #{@link_flags} #{lib_flags}"
+      puts "\nUse the following command on the target platform to link the cross compiled object:"
+      puts "#{LD_ADD}  #{CC} #{o_name} -o #{output_filename} #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}".yellow
     end
 
     private def codegen(program, units : Array(CompilationUnit), lib_flags, output_filename, output_dir)
+
+      _dbg_overview "\nCompiler stage: Compiler.codegen (units) \"#{output_filename}\"\n\n".white
+
       object_names = units.map &.object_filename
       multithreaded = LLVM.start_multithreaded
 
       # First write bitcodes: it breaks if we paralellize it
       unless multithreaded
-        timing("Codegen (cyrstal)") do
+        timing("Codegen (onyx)") do
           units.each &.write_bitcode
         end
       end
@@ -236,7 +250,7 @@ module Crystal
 
       timing("Codegen (linking)") do
         Dir.cd(output_dir) do
-          system %(#{CC} -o "#{output_filename}" "${@}" #{@link_flags} #{lib_flags}), object_names
+          system %(#{LD_ADD}  #{CC} -o "#{output_filename}" "${@}" #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}), object_names
         end
       end
     end
@@ -396,7 +410,9 @@ module Crystal
         if must_compile
           File.rename(bc_name_new, bc_name)
           if compiler.release?
-            compiler.optimize llvm_mod
+            timing("LLVM Optimizer") do
+              compiler.optimize llvm_mod
+            end
           end
           compiler.target_machine.emit_obj_to_file llvm_mod, o_name
         end

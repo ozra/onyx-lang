@@ -89,7 +89,7 @@ module Crystal
       generated_source = expanded_macro.source
       begin
         if the_macro.is_onyx
-          parser = OnyxParser.new(generated_source, [vars.dup])
+          parser = OnyxParser.new(generated_source, @program.string_pool, [vars.dup])
           parser.begin_macro_parse_mode
         else
           parser = Parser.new(generated_source, @program.string_pool, [vars.dup])
@@ -202,9 +202,9 @@ module Crystal
 
       def self.new(expander, mod, scope, a_macro : Macro, call)
         _dbg "MacroVisitor..new".red
-        pp expander
-        pp a_macro
-        pp call
+        _dbg " expander = #{expander}"
+        _dbg " a_macro = #{a_macro}"
+        _dbg " call = #{call}"
         _dbg "\n"
 
         vars = {} of String => ASTNode

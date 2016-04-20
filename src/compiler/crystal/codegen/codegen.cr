@@ -17,6 +17,7 @@ module Crystal
 
   class Program
     def run(code, filename = nil)
+      # *TODO* branching ox|cr !
       parser = Parser.new(code)
       parser.filename = filename
       node = parser.parse
@@ -149,7 +150,7 @@ module Crystal
         @symbols[sym] = index
         @symbol_table_values << build_string_constant(sym, sym)
 
-        STDERR.puts "SYMBOL: #{sym} => #{index}"
+        # _dbg "SYMBOL: #{sym} => #{index}"
 
       end
 

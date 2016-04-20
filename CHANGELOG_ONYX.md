@@ -1,3 +1,9 @@
+## 0.105.2 - (2016-04-20) ##
+
+* Tiny touches regarding safety-belting compilation and lib-paths, better than nothing
+* StringPooling in Onyx-lexer added too.
+
+
 ## 0.105.1 - (2016-04-18) ##
 
 * User defined literal suffixes, stage 1, WIP.

@@ -26,11 +26,11 @@ module Crystal
     # *TODO* look at cr–lexer
     @filename : String | VirtualFile | Nil
     # @token_end_location : Location?
-    # @string_pool : StringPool
+    @string_pool : StringPool
 
     property prev_token_type : Symbol
 
-    def initialize(string)
+    def initialize(string, string_pool : StringPool? = nil)
       @reader = Char::Reader.new(string)
       @token = Token.new
       @token.type = :ACTUAL_BOF
@@ -44,6 +44,7 @@ module Crystal
       @count_whitespace = false
       @slash_is_regex = true
       @wants_raw = false
+      @string_pool = string_pool || StringPool.new
 
       @dbg–switch = false
       @dbg–tail–switch = false
@@ -768,7 +769,7 @@ module Crystal
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
-            @token.value = string_range(start).tr("-–", "__")
+            @token.value = @string_pool.get string_range(start).tr("-–", "__")
           else
             unknown_token
           end
@@ -879,7 +880,7 @@ module Crystal
           end
 
           @token.type = :TAG
-          @token.value = string_range(start)
+          @token.value = string_range_from_pool(start)
           nextch
           set_token_raw_from_start(start - 2)
         else
@@ -892,7 +893,7 @@ module Crystal
               nextch
             end
             @token.type = :TAG
-            @token.value = string_range(start)
+            @token.value = string_range_from_pool(start)
             set_token_raw_from_start(start - 1)
           else
             @token.type = :"#"
@@ -922,14 +923,14 @@ module Crystal
             char = nextch if char == '?'
           end
           @token.type = :GLOBAL_MATCH_DATA_INDEX
-          @token.value = string_range(start)
+          @token.value = string_range_from_pool(start)
         else
           if idfr_start?(curch)
             while idfr_part?(nextch)
               # Nothing to do
             end
             @token.type = :GLOBAL
-            @token.value = string_range(start)
+            @token.value = string_range_from_pool(start)
           else
             unknown_token
           end
@@ -1644,7 +1645,7 @@ module Crystal
             # Nothing to do
           end
           @token.type = :CONST
-          @token.value = string_range(start)
+          @token.value = string_range_from_pool(start)
         elsif ('a' <= curch <= 'z') || curch == '_' || curch == '-' || curch.ord > 0x9F
           nextch
           scan_idfr(start)
@@ -1772,7 +1773,7 @@ module Crystal
     def consume_comment(start_pos)
       skip_comment
       @token.type = :COMMENT
-      @token.value = string_range(start_pos)
+      @token.value = string_range_from_pool(start_pos)
       @token
     end
 
@@ -1838,7 +1839,7 @@ module Crystal
       end
       if @count_whitespace
         # p "consume_whitespace: counts spaces"
-        @token.value = string_range(start_pos)
+        @token.value = string_range_from_pool(start_pos)
       end
       # p "consume_whitespace: all done"
 
@@ -1925,9 +1926,9 @@ module Crystal
 
       @token.type = :IDFR
 
-      idfr_str = string_range start
+      idfr_str = string_range_from_pool start
 
-      @token.value = String.build idfr_str.size * 2, do |str|
+      @token.value = @string_pool.get String.build idfr_str.size * 2, do |str|
         idfr_str.each_char_with_index do |chr, i|
           if chr == '-'
             str << '_'
@@ -1946,7 +1947,7 @@ module Crystal
         end
       end
 
-      p "scanned idfr: '#{@token.value}', curch = #{curch}"
+      dbg_lex "scanned idfr: '#{@token.value}', curch = #{curch}"
       nil
     end
 
@@ -2027,7 +2028,7 @@ module Crystal
         suffix = nil
         kind = :unspec
       else
-        suffix = string_range(start, cur_pos).gsub(/[-–]/, '_')
+        suffix = @string_pool.get string_range(start, cur_pos).gsub(/[-–]/, '_')
         kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
       end
 
@@ -2324,7 +2325,7 @@ module Crystal
 
         @token.type = :STRING
         # @token.literal_style = (delimiter_state.kind == :straight_string ? :straight : :interpolated)
-        @token.value = string_range(start)
+        @token.value = string_range_from_pool(start)
       end
 
       @token
@@ -2412,7 +2413,7 @@ module Crystal
           end
 
           @token.type = :MACRO_LITERAL
-          @token.value = string_range(start)
+          @token.value = string_range_from_pool(start)
           @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
           return @token
 
@@ -2485,19 +2486,19 @@ module Crystal
         end
 
         @token.type = :MACRO_LITERAL
-        @token.value = string_range(start)
+        @token.value = string_range_from_pool(start)
         @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
         return @token
       end
 
-      if curch == '%' && idfr_start?(peekch)
+      if curch == '%' && idfr_start?(peekch) # && !delimiter_state # *TODO* add back when true recursive str/interpol nesting is in place
         char = nextch
         start = cur_pos
         while idfr_part?(char)
           char = nextch
         end
         @token.type = :MACRO_VAR
-        @token.value = string_range(start)
+        @token.value = string_range_from_pool(start)
         @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
         return @token
       end
@@ -2555,7 +2556,7 @@ module Crystal
           end
           next
 
-        when '\'', '"'
+        when '"' # '\'', '"'
           if delimiter_state
             delimiter_state = nil if delimiter_state.end == char
           else
@@ -2566,7 +2567,7 @@ module Crystal
         when '%'
           if delimiter_state
             whitespace = false
-            break if idfr_start?(peekch)
+            break if idfr_start?(peekch) # *TODO* remove when delimiter–nesting is fixed - otherwise "str w %s in it" fucks up!
           else
             case peekch
             when '(', '[', '<', '{'
@@ -2619,7 +2620,7 @@ module Crystal
       end
 
       @token.type = :MACRO_LITERAL
-      @token.value = string_range(start)
+      @token.value = string_range_from_pool(start)
       @token.macro_state = Token::MacroState.new(whitespace, 0, delimiter_state, beginning_of_line, yields, comment)
 
       @token
@@ -2768,7 +2769,7 @@ module Crystal
       end
 
       @token.type = :STRING
-      @token.value = string_range(start)
+      @token.value = string_range_from_pool(start)
 
       @token
     end
@@ -2799,7 +2800,7 @@ module Crystal
         end
       end
 
-      filename = string_range(filename_pos)
+      filename = string_range_from_pool(filename_pos)
 
       # skip '"'
       nextch
@@ -2965,8 +2966,20 @@ module Crystal
       @reader.string.byte_slice(start_pos, end_pos - start_pos)
     end
 
+    def string_range_from_pool(start_pos)
+      string_range_from_pool(start_pos, current_pos)
+    end
+
+    def string_range_from_pool(start_pos, end_pos)
+      @string_pool.get slice_range(start_pos, end_pos)
+    end
+
     def slice_range(start_pos)
-      Slice.new(@reader.string.to_unsafe + start_pos, cur_pos - start_pos)
+      slice_range(start_pos, current_pos)
+    end
+
+    def slice_range(start_pos, end_pos)
+      Slice.new(@reader.string.to_unsafe + start_pos, end_pos - start_pos)
     end
 
     def peek_char_unsafe_at(i)
