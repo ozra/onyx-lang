@@ -60,7 +60,8 @@ class StylizeOnyxVisitor < Visitor
 
    def visit(node : NumberLiteral)
       @str << node.value
-      if node.kind != :i32 && node.kind != :f64
+      # if node.kind != :i32 && node.kind != :f64
+      if node.kind != :int && !node.kind.to_s.starts_with? "unspec_"
          @str << "_"
          @str << node.kind.to_s
       end
@@ -279,7 +280,7 @@ class StylizeOnyxVisitor < Visitor
          @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
-            @str << type_var.to_s
+            @str << babelfish_detaint type_var.to_s
          end
          @str << ">"
       end
@@ -323,7 +324,7 @@ class StylizeOnyxVisitor < Visitor
          @str << "<"
          type_vars.each_with_index do |type_var, i|
             @str << ", " if i > 0
-            @str << type_var
+            @str << babelfish_detaint type_var
          end
          @str << ">"
       end
@@ -1064,10 +1065,10 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Path)
-      @str << "$." if node.global
+      @str << "$." if node.global  # *TODO* only if explicitly set in source!
       node.names.each_with_index do |name, i|
          @str << "." if i > 0
-         @str << name
+         @str << babelfish_detaint name
       end
    end
 
@@ -1344,7 +1345,7 @@ class StylizeOnyxVisitor < Visitor
    def visit(node : LibDef)
       @str << keyword("lib")
       @str << " "
-      @str << node.name
+      @str << babelfish_detaint node.name
       newline
       @inside_lib = true
       accept_with_indent(node.body)
@@ -1411,7 +1412,7 @@ class StylizeOnyxVisitor < Visitor
    def visit(node : TypeDef)
       @str << keyword("ctype")
       @str << " "
-      @str << node.name.to_s
+      @str << babelfish_detaint node.name.to_s
       @str << " = "
       node.type_spec.accept self
       false
@@ -1428,7 +1429,7 @@ class StylizeOnyxVisitor < Visitor
    def visit_struct_or_union(name, node)
       @str << keyword(name)
       @str << " "
-      @str << node.name.to_s
+      @str << babelfish_detaint node.name.to_s
       newline
       @inside_struct_or_union = true
       accept_with_indent node.body
@@ -1441,7 +1442,7 @@ class StylizeOnyxVisitor < Visitor
    def visit(node : EnumDef)
       @str << keyword("type")
       @str << " "
-      @str << node.name.to_s
+      @str << babelfish_detaint node.name.to_s
       @str << " < "
       @str << keyword("enum")
       if base_type = node.base_type
@@ -1634,7 +1635,7 @@ class StylizeOnyxVisitor < Visitor
    def visit(node : Alias)
       @str << keyword("alias")
       @str << " "
-      @str << node.name
+      @str << babelfish_detaint node.name
       @str << " = "
       node.value.accept self
       false

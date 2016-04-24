@@ -11,8 +11,12 @@ abstract class ASTNode
                _{{ivar}}.tag_onyx val, visited
                visited.pop
             end
-         elsif _{{ivar}}.is_a?(Array(ASTNode))
-            _{{ivar}}.each &.tag_onyx(val, visited)
+         elsif _{{ivar}}.is_a?(Array)
+            _{{ivar}}.each do |item|
+               if item.is_a?(ASTNode)
+                  item.tag_onyx(val, visited)
+               end
+            end
          end
       {% end %}
       nil

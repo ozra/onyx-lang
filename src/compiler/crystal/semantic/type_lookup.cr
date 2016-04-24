@@ -182,16 +182,21 @@ module Crystal
 
   class Type
     def lookup_type(node : Path, lookup_in_container = true)
-      # _dbg "Type.lookup_type(Path #{node})"
+      _dbg "Type.lookup_type(Path #{node})"
 
       scope = (node.global ? program : self)
 
-      if node.is_onyx && node.names.size == 1 && node.tried_as_foreign == false
-        # _dbg " - Type.lookup_type - onyx, one-type"
+      # Also, mangling should be looked up non–foreign first, but if non foreign
+      # hit is at Program, it should be tested as foreign and that takes
+      # precedence. Also consider using–clause, multiple parallel lookups
+
+      if node.is_onyx && node.names.size == 1 && node.is_foreign == false
+        _dbg " - Type.lookup_type - onyx, one-type"
         bak_name = node.names.first
         babelfish_mangling node, program
         if !(ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container))
-          node.tried_as_foreign = false
+          _dbg " - Type.lookup_type - regretted hard-forced foreign lookup"
+          node.is_foreign = false
           node.names[0] = bak_name
           babelfish_mangling node, scope
           ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
@@ -216,7 +221,7 @@ module Crystal
 
   class NamedType
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
-      # _dbg "NamedType.lookup_type(#{names}) - #{object_id}"
+      _dbg "NamedType.lookup_type(#{names}) - #{object_id}"
 
       return nil if already_looked_up.includes?(object_id)
 

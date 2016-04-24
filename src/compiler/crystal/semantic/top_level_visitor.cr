@@ -393,13 +393,13 @@ module Crystal
       node.args.each do |arg|
         _dbg "- TopLevelVisitor.visit(Def) - arg: #{arg.name}, #{arg.restriction}, #{arg.restriction.class}"
         if restriction = arg.restriction
-          restriction.tag_onyx node.is_onyx
+          # restriction.tag_onyx node.is_onyx
           babelfish_mangling restriction, current_type
         end
       end
 
       if rtype = node.return_type
-        rtype.tag_onyx node.is_onyx
+        # rtype.tag_onyx node.is_onyx
         babelfish_mangling rtype, current_type
       end
 
@@ -712,6 +712,7 @@ module Crystal
     end
 
     def visit(node : TypeDeclaration)
+      _dbg "TopLevelVisitor:visit(#{node} TypeDeclaration) ->"
       babelfish_mangling node, current_type
       false
     end

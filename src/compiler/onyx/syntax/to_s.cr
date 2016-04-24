@@ -2,9 +2,6 @@ require "../../crystal/syntax/to_s"
 
 module Crystal
 
-# class ToOnyxSVisitor < Visitor
-# end
-
 # class ToOnyxSVisitorsPool
 #    # @@onyx_tos_visitors = [] of ToOnyxSVisitor
 #    @@onyx_tos_visitors : Array(ToOnyxSVisitor)
@@ -20,13 +17,18 @@ module Crystal
 #       end
 #    end
 
+      # def self.with_borrowed_tos_visitor(io, &block)
+      #    visitor = borrow_tos_visitor io
+      #    ret = yield visitor
+      #    leave_tos_visitor visitor
+      #    ret
+      # end
+
 #    def self.leave_onyx_tos_visitor(visitor : ToOnyxSVisitor) : Nil
 #       @@onyx_tos_visitors << visitor
 #       nil
 #    end
 # end
-
-# foo = ToOnyxSVisitorsPool.new
 
 class ASTNode
    def to_s(io, as_kind = :auto)
@@ -83,7 +85,7 @@ class ToOnyxSVisitor < Visitor
    def visit(node : NumberLiteral)
       @str << node.value
       if node.kind != :int && !node.kind.to_s.starts_with? "unspec_" # != :i32 && node.kind != :f64
-         @str << "___" # *TEMP* *DEBUG*
+         @str << "_" # *TEMP* *DEBUG*
          @str << node.kind.to_s
       end
    end

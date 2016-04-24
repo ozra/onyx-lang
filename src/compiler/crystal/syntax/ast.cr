@@ -91,8 +91,10 @@ module Crystal
   end
 
   module BabelManagment
-    property tried_as_foreign : Bool
-    @tried_as_foreign = false
+    # property tried_as_foreign : Bool
+    # @tried_as_foreign = false
+    property is_foreign : Bool
+    @is_foreign = false
 
   end
 
@@ -1236,11 +1238,12 @@ module Crystal
     def clone_without_location_individual
       ident = Path.new(@names.clone, @global)
       ident.name_size = name_size
-      ident.tried_as_foreign = @tried_as_foreign
+      # ident.tried_as_foreign = @tried_as_foreign
+      ident.is_foreign = @is_foreign
       ident
     end
 
-    def_equals_and_hash @names, @global
+    def_equals_and_hash @names, @global, @is_foreign
   end
 
   # Class definition:

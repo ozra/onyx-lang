@@ -5,10 +5,40 @@ type Ohm
    init(@value Real) ->
 
 
--- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
--- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
+
+-- *TODO* suffix specific syntax - doesn't get prettier :-/ the important thing
+-- we want to get at is additional checks for non-ok suffix-identifiers
+-- (clashing with number literal syntax: e3, e-1, etc...)
+
+suffix (val IntLiteral) =
+   {=val=}_int
+
+suffix (val RealLiteral) =
+   {=val=}_real
+
+suffix (val)g1 =
+   {=val=}_real
+
+suffix (val NumberLiteral)g2 =
+   {=val=}_real
+
+suffix (val IntLiteral)g3 =
+   {=val=}_real
+
+suffix (val RealLiteral)g4 =
+   {=val=}_real
+
+
+
+
+
+-- is (foo = Foo.new).@value legal crystal code!!??
+
+
 
 template suffix-number-g(val) =
+    -- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
+    -- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
    {=val=}_real
 
 template suffix-number-kg(val) =
@@ -16,6 +46,8 @@ template suffix-number-kg(val) =
 
 template suffix-number-Ω(val) =
    Ohm {=val=}_real
+
+
 
 say "create code via inline macro expr"
 
@@ -70,6 +102,7 @@ k = 1kg
 l = 1.3kg
 m = 0o1345
 
+-- *TODO* these are not realistic exponent uses!
 o1 = 0e+1
 o2 = 0e+1f32
 

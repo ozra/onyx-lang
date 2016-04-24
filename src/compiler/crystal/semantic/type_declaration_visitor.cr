@@ -167,6 +167,7 @@ module Crystal
     end
 
     def declare_global_var(node, var)
+      _dbg "TypeDeclarationVisitor.declare_global_var #{node}"
       var_type = lookup_type(node.declared_type).virtual_type
       var_type = check_declare_var_type(node, var_type)
       @globals[var.name] = var_type

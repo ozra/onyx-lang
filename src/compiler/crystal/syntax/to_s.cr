@@ -729,13 +729,21 @@ module Crystal
     end
 
     def visit(node : Path)
-
-      # *TODO* temp special for macro–ing
       if node.is_onyx
+        if node.is_foreign
+          saved_name = node.names[0]
+          node.names[0] = babelfish_reverse node.names[0]
+        end
+
         node.names.each_with_index do |name, i|
           @str << "::" if i > 0 || node.global
-          @str << babelfish_taint name
+          @str << babelfish_ensure_croxtaint name
         end
+
+        if saved_name
+          node.names[0] = saved_name
+        end
+
       else
         node.names.each_with_index do |name, i|
           @str << "::" if i > 0 || node.global
@@ -1237,7 +1245,11 @@ module Crystal
     def visit(node : Alias)
       @str << keyword("alias")
       @str << " "
-      @str << node.name
+      if node.is_onyx
+        @str << babelfish_ensure_croxtaint node.name
+      else
+        @str << node.name
+      end
       @str << " = "
       node.value.accept self
       false

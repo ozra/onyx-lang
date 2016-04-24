@@ -3717,7 +3717,7 @@ module Crystal
         next_token
       end
 
-      const = Path.new(names, global).at(location)
+      const = new_path(names, global).at(location)
       const.end_location = end_location
 
       token_location = @token.location
@@ -4656,6 +4656,19 @@ module Crystal
       node.end_location = token_end_location
       next_token
       node
+    end
+
+    def new_path(names, global = false)
+      if names.any? &.babelfish_croxtainted?
+        names = names.map { |name| babelfish_croxdetaint name }
+        is_onyx = true
+      else
+        is_onyx = false
+      end
+
+      ret = Path.new(names, global)
+      ret.is_onyx = is_onyx
+      ret
     end
 
     def is_end_token

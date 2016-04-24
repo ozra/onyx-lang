@@ -27,7 +27,7 @@ module Crystal
     end
 
     def visit(node : Path)
-      # _dbg "BaseTypeVisitor.visit Path #{node}"
+      _dbg "BaseTypeVisitor.visit Path #{node}"
 
 
       babelfish_mangling node, current_type
@@ -73,6 +73,8 @@ module Crystal
     end
 
     def visit(node : Fun)
+      _dbg "BaseTypeVisitor.visit Fun: #{node}"
+
       node.inputs.try &.each &.accept(self)
       node.output.try &.accept(self)
 
@@ -178,7 +180,7 @@ module Crystal
     end
 
     def visit_fun_def(node : FunDef)
-      # _dbg "BaseTypeVisitor.visit_fun_def #{node}"
+      _dbg "BaseTypeVisitor.visit_fun_def #{node}"
 
       check_outside_block_or_exp node, "declare fun"
 
@@ -190,7 +192,8 @@ module Crystal
       check_valid_attributes node, ValidFunDefAttributes, "fun"
       node.doc ||= attributes_doc()
 
-      # _dbg "- BaseTypeVisitor.visit_fun_def - do args"
+      _dbg "- BaseTypeVisitor.visit_fun_def - do args"
+
       args = node.args.map do |arg|
         restriction = arg.restriction.not_nil!
         restriction.tag_onyx node.is_onyx
@@ -365,20 +368,23 @@ module Crystal
 
     def resolve_ident(node : Path, create_modules_if_missing = false)
 
-      if node.is_onyx || node.names.any? &.ends_with? "__X_" # *TODO*
+      # *TODO* Resolution order - try un–foreigned first, if match at Prog
+      # re–try with possible foreign and favour that
 
-        tried_as_foreign_bak = node.tried_as_foreign
-        first_name_bak = node.names.first
+      if node.is_onyx # || node.names.any? &.babelfish_tainted? # *TODO*
 
-        node = babelfish_mangling node, mod # force foreign try _first_
+        if !node.is_foreign
+          first_name_bak = node.names.first
+          node = babelfish_mangling node, mod # force foreign try _first_
+        end
 
         target_type, similar_name = resolve_ident?(node, create_modules_if_missing)
 
         # _dbg " - resolve_ident - Path got target_type: #{target_type}, #{target_type.class}"
 
-        if !target_type && !tried_as_foreign_bak
+        if !target_type && first_name_bak
           # _dbg " - resolve_ident - retries node mangled as altneratively _not_ foreign #{node}, #{node.tried_as_foreign}"
-          node.tried_as_foreign = tried_as_foreign_bak
+          node.is_foreign = false
           node.names[0] = first_name_bak
           target_type, similar_name = resolve_ident? node, create_modules_if_missing
         end
@@ -544,7 +550,7 @@ module Crystal
     end
 
     def expand_macro(node, raise_on_missing_const = true, first_pass = false)
-      _dbg "BaseTypeVisitor.expand_macro node".red
+      _dbg "BaseTypeVisitor.expand_macro node #{node}".red
       if expanded = node.expanded
         @exp_nest -= 1
         begin
