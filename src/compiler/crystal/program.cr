@@ -12,7 +12,7 @@ module Crystal
     getter! symbols : Set(String)
     getter! global_vars : Hash(String, MetaTypeVar)
     getter target_machine : LLVM::TargetMachine?
-    getter! splat_expansions : Hash(Def, Type)
+    getter! splat_expansions : Hash(UInt64, Type)
     getter! after_inference_types : Set(Type)
     getter! file_modules : Hash(String, FileModule)
     property! vars : Hash(String, MetaVar)
@@ -27,7 +27,6 @@ module Crystal
     getter! def_macros : Array(Def)
     getter! unions : Hash(Array(UInt64), Type)
     getter! file_modules : Hash(String, FileModule)
-    getter! class_var_initializers : Array(ClassVarInitializer)
     getter! string_pool
     @flags : Set(String)?
 
@@ -42,6 +41,15 @@ module Crystal
     @stduint : IntegerType?
     @stdreal : FloatType?
 
+    # Here we store class var initializers and constants, in the
+    # order that they are used. They will be initialized as soon
+    # as the program starts, before the main code.
+    getter! class_var_and_const_initializers
+
+    # The list of class vars and const being typed, to check
+    # a recursive dependency.
+    getter! class_var_and_const_being_typed
+
     def initialize
       super(self, self, "main")
 
@@ -52,7 +60,7 @@ module Crystal
       @crystal_path = CrystalPath.new
       @vars = MetaVars.new
       @def_macros = [] of Def
-      @splat_expansions = {} of Def => Type
+      @splat_expansions = {} of UInt64 => Type
       @initialized_global_vars = Set(String).new
       @file_modules = {} of String => FileModule
       @unions = {} of Array(UInt64) => Type
@@ -60,6 +68,8 @@ module Crystal
       @color = true
       @after_inference_types = Set(Type).new
       @string_pool = StringPool.new
+      @class_var_and_const_initializers = [] of ClassVarInitializer | Const
+      @class_var_and_const_being_typed = [] of MetaTypeVar | Const
 
       types = @types = {} of String => Type
 
@@ -177,8 +187,18 @@ module Crystal
       proc.variadic = true
       proc.allowed_in_generics = false
 
-      types["ARGC_UNSAFE"] = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", Primitive.new(:argc)
-      types["ARGV_UNSAFE"] = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", Primitive.new(:argv)
+      argc_primitive = Primitive.new(:argc)
+      argc_primitive.type = int32
+
+      argv_primitive = Primitive.new(:argv)
+      argv_primitive.type = pointer_of(pointer_of(uint8))
+
+      types["ARGC_UNSAFE"] = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", argc_primitive
+      types["ARGV_UNSAFE"] = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", argv_primitive
+
+      # Make sure to initialize ARGC and ARGV as soon as the program starts
+      class_var_and_const_initializers << argc_unsafe
+      class_var_and_const_initializers << argv_unsafe
 
       argc_unsafe.initialized = true
       argv_unsafe.initialized = true

@@ -143,7 +143,7 @@ class Crystal::Call
     end
 
     # If it's on an initialize method and there's a similar method name, it's probably a typo
-    if def_name == "initialize" && (similar_def = owner.lookup_similar_def(def_name, self.args.size, block))
+    if (def_name == "initialize" || def_name == "new") && (similar_def = owner.instance_type.lookup_similar_def("initialize", self.args.size, block))
       inner_msg = colorize("do you maybe have a typo in this '#{similar_def.name}' method?").yellow.bold.to_s
       inner_exception = TypeException.for_node(similar_def, inner_msg)
     end
@@ -495,14 +495,14 @@ class Crystal::Call
   def check_recursive_splat_call(a_def, args)
     if a_def.splat_index
       current_splat_type = args.values.last.type
-      if previous_splat_type = mod.splat_expansions[a_def]?
+      if previous_splat_type = mod.splat_expansions[a_def.object_id]?
         if current_splat_type.has_in_type_vars?(previous_splat_type)
           raise "recursive splat expansion: #{previous_splat_type}, #{current_splat_type}, ..."
         end
       end
-      mod.splat_expansions[a_def] = current_splat_type
+      mod.splat_expansions[a_def.object_id] = current_splat_type
       yield
-      mod.splat_expansions.delete a_def
+      mod.splat_expansions.delete a_def.object_id
     else
       yield
     end

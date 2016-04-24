@@ -33,6 +33,11 @@ module Crystal
         visit_top_level(node)
       end
 
+      _dbg_overview "\nCompiler stage: Semantic (new):\n\n".white
+      Crystal.timing("Semantic (new)", stats) do
+        define_new_methods
+      end
+
       _dbg_overview "\nCompiler stage: Semantic (abstract def check):\n\n".white
       Crystal.timing("Semantic (abstract def check)", stats) do
         check_abstract_defs

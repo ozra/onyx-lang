@@ -229,4 +229,34 @@ describe "Code gen: enum" do
       Foo::Bar.value
       )).to_i.should eq(~1)
   end
+
+  it "uses enum value before declaration (hoisting)" do
+    run(%(
+      x = Bar.bar
+
+      enum Foo
+        A = 1
+      end
+
+      class Bar
+        def self.bar
+          Foo::A
+        end
+      end
+
+      x
+      )).to_i.should eq(1)
+  end
+
+  it "casts All value to base type" do
+    run(%(
+      @[Flags]
+      enum Foo
+        A = 1 << 30
+        B = 1 << 31
+      end
+
+      Foo::All.value
+      )).to_i.should eq(-1073741824)
+  end
 end

@@ -399,6 +399,11 @@ module Crystal
     def visit_class_var(node)
       var = lookup_class_var(node)
 
+      existing = @mod.class_var_and_const_being_typed.find &.same?(var)
+      if existing
+        raise_recursive_dependency node, var
+      end
+
       if first_time_accessing_meta_type_var?(var)
         var.bind_to mod.nil_var
       end
@@ -1832,9 +1837,9 @@ module Crystal
       when "pointer_add"
         node.type = scope
       when "argc"
-        node.type = @mod.int32
+        # Already typed
       when "argv"
-        node.type = @mod.pointer_of(@mod.pointer_of(@mod.uint8))
+        # Already typed
       when "struct_new"
         node.type = scope.instance_type
       when "struct_set"

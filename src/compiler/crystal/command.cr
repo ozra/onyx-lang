@@ -172,7 +172,7 @@ class Crystal::Command
 
     vars = {
       "CRYSTAL_CACHE_DIR": CacheDir.instance.dir,
-      "CRYSTAL_PATH":      CrystalPath::DEFAULT_PATH,
+      "CRYSTAL_PATH":      CrystalPath.default_path,
       "CRYSTAL_VERSION":   Config::VERSION || "",
     }
 
@@ -407,7 +407,7 @@ class Crystal::Command
       end
       status = $?
     ensure
-      File.delete output_filename
+      File.delete(output_filename) rescue nil
     end
 
     if status.normal_exit?

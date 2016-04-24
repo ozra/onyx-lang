@@ -89,7 +89,7 @@ end
 
 # :nodoc:
 module AtExitHandlers
-  @@running : Bool?
+  @@running = false
 
   def self.add(handler)
     handlers = @@handlers ||= [] of Int32 ->
@@ -162,8 +162,8 @@ class Process
   end
 end
 
-Signal::PIPE.ignore
-Signal::CHLD.reset
+Signal.setup_default_handlers
+
 at_exit { Event::SignalHandler.close }
 
 # Background loop to cleanup unused fiber stacks
