@@ -1,38 +1,48 @@
+class BabelData
+  @@stringpool = StringPool.new
+  @@type_dict = Hash(String, String).new
+  @@func_dict = Hash(String, String).new
+  @@reverse_dict = Hash(String, String).new
 
-class BabelStringPool
-  @@babel_stringpool = StringPool.new
+  def self.get_str(str : String)
+    @@stringpool.get str
+  end
 
-  # *TODO* *TEMP*
-  @@babel_stringpool_tmp : StringPool | Nil
-  @@babel_stringpool_tmp = @@babel_stringpool
+  def self.types()
+    @@type_dict
+  end
 
-  def self.get(name : String)
-    @@babel_stringpool_tmp.not_nil!.get name
+  def self.funcs()
+    @@func_dict
+  end
+
+  def self.reverse()
+    @@reverse_dict
   end
 end
 
+babelfish_type_dict = BabelData.types
+babelfish_func_dict = BabelData.funcs
+babelfish_reverse_dict = BabelData.reverse
+
 macro babel_type(given, foreign, block_it = true)
-  $babelfish_type_dict["{{given.id}}"] = "{{foreign.id}}"
+  babelfish_type_dict["{{given.id}}"] = "{{foreign.id}}"
+  babelfish_reverse_dict["{{foreign.id}}"] = "{{given.id}}"
   {% if block_it %}
-    $babelfish_type_dict["{{foreign.id}}"] = "{{foreign.id}}__auto_babeled_"
+    babelfish_type_dict["{{foreign.id}}"] = "{{foreign.id}}__auto_babeled_"
+    babelfish_reverse_dict["{{foreign.id}}__auto_babeled_"] = "{{foreign.id}}"
   {% end %}
 end
 
 macro babel_func(given, foreign, block_it = true)
-  $babelfish_func_dict["{{given.id}}"] = "{{foreign.id}}"
+  babelfish_func_dict["{{given.id}}"] = "{{foreign.id}}"
+  babelfish_reverse_dict["{{foreign.id}}"] = "{{given.id}}"
   {% if block_it %}
-    $babelfish_func_dict["{{foreign.id}}"] = "{{foreign.id}}__auto_babeled_"
+    babelfish_func_dict["{{foreign.id}}"] = "{{foreign.id}}__auto_babeled_"
+    babelfish_reverse_dict["{{foreign.id}}__auto_babeled_"] = "{{foreign.id}}"
   {% end %}
 end
 
-$babelfish_type_dict = Hash(String, String).new
-$babelfish_func_dict = Hash(String, String).new
-
-# *TODO* one for each - OR - simply flag renames, so they can be reversed! Yes.
-$babelfish_reverse_dict = Hash(String, String).new
-
-$babelfish_reverse_dict_temp : Hash(String, String)?
-$babelfish_reverse_dict_temp = $babelfish_reverse_dict
 
 babel_type Any,    Object,      true
 
@@ -44,14 +54,14 @@ babel_type Real,   StdReal,     false
 babel_type Tag,    Symbol,      true
 babel_type Ptr,    Pointer,     true
 
-# babel Str,    String, false
+# babel_type Str,    String,      false  -- added as alias instead currently
 babel_type List,   Array,       true
 babel_type Tup,    Tuple,       false
 
 babel_type Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
 
-babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
-babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+# babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+# babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
 
 babel_type I8,     Int8,        true
 babel_type I16,    Int16,       true
@@ -76,35 +86,6 @@ babel_func each_,       each,             false
 
 
 
-$babelfish_type_dict.each do |k, v|
-  $babelfish_reverse_dict[v] = k
-end
-
-$babelfish_func_dict.each_with_index do |k, v|
-  $babelfish_reverse_dict[v] = k
-end
-
-
-def babelfish_reverse(name : String) : String
-  # *TODO* the bullshit code here shouldn't have to be - it may be fixed in Crystal 0.16
-  if br = $babelfish_reverse_dict_temp
-    br[name]
-  else
-    raise "muddafuck"
-  end
-end
-# STDERR.puts "BABELFISHING".red
-# STDERR.puts $babelfish_type_dict.to_s
-# STDERR.puts $babelfish_func_dict.to_s
-
-# STDERR.puts "alles reversed:"
-# STDERR.puts $babelfish_reverse_dict.to_s
-
-
-
-
-
-
 
 
 # require "../../crystal/semantic/ast"
@@ -121,7 +102,7 @@ ifdef !release
 
   @[AlwaysInline]
   def babelfish_taint(name : String) : String
-    BabelStringPool.get name + BABELFISH_TAINT_TOKEN
+    BabelData.get_str name + BABELFISH_TAINT_TOKEN
   end
 
   @[AlwaysInline]
@@ -132,7 +113,7 @@ ifdef !release
   @[AlwaysInline]
   def babelfish_detaint(name : String) : String
     # _dbg "- babelfish_detaint - '#{name}"
-    babelfish_tainted?(name) ? BabelStringPool.get(name[0..-6]) : name
+    babelfish_tainted?(name) ? BabelData.get_str(name[0..-6]) : name
   end
 
   class String
@@ -178,7 +159,7 @@ end
 
 @[AlwaysInline]
 def babelfish_croxtaint(name : String) : String
-  BabelStringPool.get name + BABELFISH_CROSSTAINT_TOKEN
+  BabelData.get_str name + BABELFISH_CROSSTAINT_TOKEN
 end
 
 @[AlwaysInline]
@@ -189,7 +170,7 @@ end
 @[AlwaysInline]
 def babelfish_croxdetaint(name : String) : String
   # _dbg "- babelfish_detaint - '#{name}"
-  babelfish_croxtainted?(name) ? BabelStringPool.get(name[0..-13]) : name
+  babelfish_croxtainted?(name) ? BabelData.get_str(name[0..-13]) : name
 end
 
 class String
@@ -198,7 +179,9 @@ class String
   end
 end
 
-
+def babelfish_reverse(name : String) : String
+  BabelData.reverse[name]? || name
+end
 
 def babelfish_mangling(node : ASTNode, scope) : ASTNode
 
@@ -309,7 +292,7 @@ def babelfish_mangling(node : Path, scope) : Path
   # node.tried_as_foreign = true. Revisit if `using`-clause is painstakingly
   # implemented
 
-  if (foreign = $babelfish_type_dict[node.names.first]?)
+  if (foreign = BabelData.types[node.names.first]?)
     # _dbg "- babelfish_mangling - found foreign name: #{foreign} for #{node}"
     node.is_foreign = true
     node.names[0] = foreign
@@ -348,7 +331,7 @@ def babelfish_mangling_raw(is_foreign : Bool, is_onyx : Bool, name : String, sco
 
   is_foreign = true
 
-  if (foreign = $babelfish_type_dict[name]?)
+  if (foreign = BabelData.types[name]?)
     # _dbg "- babelfish_mangling_raw - found foreign name: #{foreign} for #{name}"
     name = foreign
     return {is_foreign, name}

@@ -1194,7 +1194,7 @@ class OnyxParser < OnyxLexer
 
          name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
 
-         if foreign = $babelfish_func_dict[name]?
+         if foreign = BabelData.funcs[name]?
             dbg "Got foreign '#{foreign}' for function #{name}".magenta
             name = foreign
          end
@@ -4914,7 +4914,7 @@ class OnyxParser < OnyxLexer
       end
 
 
-      if foreign = $babelfish_func_dict[@token.value.to_s]?
+      if foreign = BabelData.funcs[@token.value.to_s]?
          dbg "Got foreign name '#{foreign}' for function #{@token.value}".magenta
          name = foreign
       end
@@ -5683,7 +5683,7 @@ class OnyxParser < OnyxLexer
       doc = @token.doc
       curr_indent = @indent
 
-      if foreign = $babelfish_func_dict[@token.value.to_s]?
+      if foreign = BabelData.funcs[@token.value.to_s]?
          dbg "Got foreign '#{foreign}' for function #{@token.value}".magenta
          token.value = foreign
       end

@@ -3,7 +3,7 @@ require "../crystal/crystal_path"
 module Crystal
   struct CrystalPath
 
-    def initialize(path = DEFAULT_PATH)
+    def initialize(path = CrystalPath.default_path)
       @crystal_path = path.split ':'
     end
 
