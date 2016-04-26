@@ -21,7 +21,11 @@ module HTTP
         if body_type.prohibited?
           body = nil
         elsif content_length = headers["Content-Length"]?
-          body = FixedLengthContent.new(io, content_length.to_u64)
+          content_length = content_length.to_u64
+          if content_length != 0
+            # Don't create IO for Content-Length == 0
+            body = FixedLengthContent.new(io, content_length)
+          end
         elsif headers["Transfer-Encoding"]? == "chunked"
           body = ChunkedContent.new(io)
         elsif body_type.mandatory?
@@ -189,7 +193,7 @@ module HTTP
     ComputedContentTypeHeader.new(content_type.strip, nil)
   end
 
-  def self.parse_time(time_str : String)
+  def self.parse_time(time_str : String) : Time?
     DATE_PATTERNS.each do |pattern|
       begin
         return Time.parse(time_str, pattern)
@@ -206,7 +210,7 @@ module HTTP
   end
 
   # Returns the default status message of the given HTTP status code.
-  def self.default_status_message_for(status_code : Int)
+  def self.default_status_message_for(status_code : Int) : String
     case status_code
     when 100 then "Continue"
     when 101 then "Switching Protocols"

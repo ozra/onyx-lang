@@ -1,4 +1,4 @@
-require "./lib_gmp"
+require "./*"
 
 # A BigInt can represent arbitrarily large integers.
 #
@@ -208,6 +208,10 @@ struct BigInt < Int
     to_s io
   end
 
+  def hash
+    to_u64
+  end
+
   # Returns a string representation of self.
   #
   # ```
@@ -283,7 +287,7 @@ struct BigInt < Int
   end
 
   def to_u64
-    LibGMP.get_ui(self)
+    LibGMP.get_ui(self).to_u64
   end
 
   def to_f

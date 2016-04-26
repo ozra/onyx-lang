@@ -15,7 +15,7 @@ class HTTP::Client::Response
     if Response.mandatory_body?(@status_code)
       @body = "" unless @body || @body_io
     else
-      if @body || @body_io
+      if (@body || @body_io) && (headers["Content-Length"]? != "0")
         raise ArgumentError.new("status #{status_code} should not have a body")
       end
     end
@@ -75,11 +75,11 @@ class HTTP::Client::Response
     end
   end
 
-  def self.mandatory_body?(status_code)
+  def self.mandatory_body?(status_code) : Bool
     !(status_code / 100 == 1 || status_code == 204 || status_code == 304)
   end
 
-  def self.supports_chunked?(version)
+  def self.supports_chunked?(version) : Bool
     version == "HTTP/1.1"
   end
 
