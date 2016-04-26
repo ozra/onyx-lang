@@ -1349,7 +1349,7 @@ class OnyxParser < OnyxLexer
 
    def parse_responds_to_name
       if !tok? :TAG, :IDFR
-         unexpected_token "expected name or symbol"
+         unexpected_token "expected name or tag"
       end
 
       @token.value.to_s
