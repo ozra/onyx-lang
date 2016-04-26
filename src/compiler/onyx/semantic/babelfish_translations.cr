@@ -45,8 +45,10 @@ end
 
 
 babel_type Any,    Object,      true
+babel_type Object, Class,       true
+babel_type Record, Struct,      true
+babel_type AnyInt, Int,         false
 
-babel_type AnyInt, CrystalInt,  true
 
 babel_type Int,    StdInt,      false
 babel_type Real,   StdReal,     false
@@ -59,6 +61,8 @@ babel_type List,   Array,       true
 babel_type Tup,    Tuple,       false
 
 babel_type Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
+
+babel_type Lambda, Proc,        true
 
 # babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
 # babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!

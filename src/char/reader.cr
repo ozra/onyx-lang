@@ -108,6 +108,26 @@ struct Char
       end
     end
 
+    # Returns the next character in the `#string`
+    # without incrementing `#pos`.
+    # Returns nil if the reader is at
+    # the end of the `#string`
+    #
+    # ```
+    # reader = Char::Reader.new("ab")
+    # reader.peek_next_char # => 'b'
+    # reader.current_char   # => 'a'
+    # ```
+    def peek_next_char?
+      next_pos = @pos + @current_char_width
+
+      return nil if next_pos > @string.bytesize
+
+      decode_char_at(next_pos) do |code_point, width|
+        code_point.chr
+      end
+    end
+
     # Sets `#pos` to *pos*.
     #
     # ```

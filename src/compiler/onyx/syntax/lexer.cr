@@ -2927,11 +2927,11 @@ module Crystal
     end
 
     def peekch
-      @reader.peek_next_char
+      @reader.peek_next_char? || '\0'
     end
 
     def peek_next_char # *TODO* alias
-      @reader.peek_next_char
+      @reader.peek_next_char? || '\0'
     end
 
     def cur_pos

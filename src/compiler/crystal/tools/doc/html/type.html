@@ -26,7 +26,7 @@
 <% if type.program? %>
   <%= type.full_name %>
 <% else %>
-  <span class="kind"><%= type.abstract? ? "abstract " : ""%><%= type.kind %></span> <%= type.full_name %>
+  <span class="kind"><%= type.kind %></span> <%= type.full_name %> <span class="kind"><%= type.abstract? ? "'abstract " : ""%></span>
 <% end %>
 </h1>
 
@@ -46,13 +46,13 @@
   <code><%= type.formatted_alias_definition %></code>
 <% end %>
 
-<%= OtherTypesTemplate.new("Included Modules", type, type.included_modules) %>
+<%= OtherTypesTemplate.new("Mixed In Traits", type, type.included_modules) %>
 <%= OtherTypesTemplate.new("Extended Modules", type, type.extended_modules) %>
-<%= OtherTypesTemplate.new("Direct Known Subclasses", type, type.subclasses) %>
-<%= OtherTypesTemplate.new("Direct including types", type, type.including_types) %>
+<%= OtherTypesTemplate.new("Known Direct Subtypes", type, type.subclasses) %>
+<%= OtherTypesTemplate.new("Known Types Using This Trait", type, type.including_types) %>
 
 <% if locations = type.locations %>
-  <h2>Defined in:</h2>
+  <h2>Defined in</h2>
   <% locations.each do |location| %>
     <% if url = location.url %>
       <a href="<%= url %>" target="_blank"><%= location.filename %></a>
@@ -67,7 +67,7 @@
   <% if type.enum? %>
     <h2>Enum Members</h2>
   <% else %>
-    <h2>Constant Summary</h2>
+    <h2>Constants</h2>
   <% end %>
   <dl>
     <% type.constants.each do |const| %>
@@ -83,20 +83,47 @@
   </dl>
 <% end %>
 
-<%= MethodSummaryTemplate.new(type.program? ? "Method Summary" : "Class Method Summary", type.class_methods) %>
-<%= MethodSummaryTemplate.new("Instance Method Summary", type.instance_methods) %>
-<%= MethodSummaryTemplate.new("Macro Summary", type.macros) %>
 
-<div class="methods-inherited">
-  <% type.ancestors.each do |ancestor| %>
-    <%= MethodsInheritedTemplate.new(type, ancestor, ancestor.instance_methods, "Instance") %>
-    <%= MethodsInheritedTemplate.new(type, ancestor, ancestor.class_methods, "Class") %>
-  <% end %>
-</div>
+<% if !type.class_methods.empty? || type.ancestors.any?{|it| !it.class_methods.empty?} %>
+  <%= type.program? ?
+    "<h2>Functions</h2>" :
+    "<h2>Type-Scoped Functions</h2>"
+  %>
 
-<%= MethodDetailTemplate.new(type.program? ? "Method Detail" : "Class Method Detail", type.class_methods) %>
-<%= MethodDetailTemplate.new("Instance Method Detail", type.instance_methods) %>
-<%= MethodDetailTemplate.new("Macro Detail", type.macros) %>
+  <div class="methods-inherited">
+    <% type.ancestors.each do |ancestor| %>
+      <%= MethodsInheritedTemplate.new(type, ancestor, ancestor.class_methods, "") %>
+    <% end %>
+  </div>
+<% end %>
+
+<% if !type.class_methods.empty? %>
+  <h3>Defined for <%= type.full_name %></h3>
+  <%= MethodDetailTemplate.new(type.program? ? "Functions" : "Type-Scoped Functions", type.class_methods) %>
+<% end %>
+
+
+<% if !type.instance_methods.empty? || type.ancestors.any?{|it| !it.instance_methods.empty?} %>
+  <h2>Methods</h2>
+
+  <div class="methods-inherited">
+    <% type.ancestors.each do |ancestor| %>
+      <%= MethodsInheritedTemplate.new(type, ancestor, ancestor.instance_methods, "") %>
+    <% end %>
+  </div>
+<% end %>
+
+<% if !type.instance_methods.empty? %>
+  <h3>Defined for <%= type.full_name %></h3>
+  <%= MethodDetailTemplate.new("Methods", type.instance_methods) %>
+<% end %>
+
+
+<% unless type.macros.empty? %>
+  <h2>Macros</h2>
+  <%= MethodDetailTemplate.new("Macros", type.macros) %>
+<% end %>
+
 </div>
 
 </body>

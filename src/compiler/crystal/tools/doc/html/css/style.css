@@ -207,7 +207,7 @@ h1.type-name {
 }
 
 .entry-detail {
-  padding: 30px 0;
+  padding-bottom: 50px;
 }
 
 .entry-detail .signature {
@@ -227,14 +227,21 @@ h1.type-name {
   border: 1px solid #624288;
 }
 
-.entry-detail .signature .method-permalink {
-  position: absolute;
+.entry-detail .signature .method-permalink,
+.entry-detail .signature .source-link {
+/*  position: absolute;
   top: 0;
   right: 0;
-  padding: 5px 15px;
+*/
+  float: right;
+  padding-right: 15px;
   text-decoration: none;
   font-weight: bold;
   color: #624288;
+}
+
+.entry-detail .signature .source-link.intrinsic {
+  color: #B2A2C8;
 }
 
 .methods-inherited {
@@ -266,14 +273,23 @@ h1.type-name {
 }
 
 pre {
-  padding: 10px 20px;
-  margin-top: 4px;
   border-radius: 3px;
   line-height: 1.45;
   overflow: auto;
   color: #333;
   background: #f7f7f7;
   font-size: 14px;
+}
+
+.entry-detail pre {
+  padding: 10px 20px;
+  margin-top: 4px;
+}
+
+.methods-inherited pre {
+  padding: 0px 0.2em;
+  margin: 0px;
+  overflow: inherit;
 }
 
 code {

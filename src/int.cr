@@ -557,5 +557,3 @@ struct UInt64
     Intrinsics.popcount64(self)
   end
 end
-
-alias CrystalInt = Int

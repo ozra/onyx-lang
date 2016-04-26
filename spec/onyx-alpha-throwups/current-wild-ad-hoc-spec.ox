@@ -1351,7 +1351,7 @@ def foo(a, b, c Str) ->
    (a + b).to–s + c
 end
 
-x = foo a, 2, "3"
+x = foo a, 2, "1"
 
 a = (a Int, b Int) -> (a + b).to–s; end
 b = (a Str, _ Int, b 'Bool; c Real) ->
@@ -1368,11 +1368,11 @@ pp typeof(b), b.class
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-type Fn = Proc
+type Fn = Lambda
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
-def booze1(f1 Fn[I32,List<*>,List<List[Ptr<I32>]>], f2 Fn[Str, Nil, List<Bool>]) ->
+def booze1(f1 Fn[I32,List<*>,List<List[Ptr<I32>]>], f2 Lambda[Str, Nil, List<Bool>]) ->
 def booze2(f1 (List<*>, List<List[Ptr<I32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
 
 -- New list type literal suggestion: cause problems in expressions!
@@ -1449,6 +1449,28 @@ list.each–with–index (v, i) ~>
 list.each–with–index ~>
    p _1
    break if _2 == 4
+
+-- list.each–with–index \
+--    p %1
+--    break if %2 == 4
+
+-- (list.map \%1 + "X").each–with–index \
+--    p %1
+--    break if %2 == 4
+
+-- list.each–with–index \v, i
+--    p v
+--    break if i == 4
+
+-- (list.map \x\ x + "X").each–with–index \x, y\
+--    p x
+--    break if y == 4
+
+-- list.each–with–index \
+--    p %1
+--    break if %2 == 4
+
+
 
 -- for i from 0 til 10
 --    say "from til loop {i}"

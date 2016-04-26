@@ -15,9 +15,9 @@ class Crystal::Doc::Type
     when .struct?
       :struct
     when .class?, .metaclass?
-      :class
+      :type
     when .module?
-      :module
+      :trait
     when AliasType
       :alias
     when EnumType
@@ -27,7 +27,7 @@ class Crystal::Doc::Type
     when InheritedGenericClass
       :class
     when IncludedGenericModule
-      :module
+      :trait
     else
       raise "Unhandled type in `kind`: #{@type}"
     end
@@ -38,7 +38,7 @@ class Crystal::Doc::Type
     when Program
       "Top Level Namespace"
     when NamedType
-      type.name
+      babelfish_reverse type.name  # *TODO* checks that it is deffed in Program level!
     when NoReturnType
       "NoReturn"
     when VoidType
@@ -217,7 +217,7 @@ class Crystal::Doc::Type
               body = a_def.body
 
               # Skip auto-generated allocate method
-              if body.is_a?(Crystal::Primitive) && body.name == :allocate
+              if body.is_a?(Crystal::Primitive) && body.name == "allocate"
                 next
               end
 
@@ -399,9 +399,9 @@ class Crystal::Doc::Type
   def full_name_without_type_vars(io)
     if container = container()
       container.full_name_without_type_vars(io)
-      io << "::"
+      io << "."
     end
-    io << name
+    io << babelfish_reverse name # *TODO* name reverse babel mangling
   end
 
   def path
@@ -519,10 +519,10 @@ class Crystal::Doc::Type
   private def append_type_vars(io)
     type = @type
     if type_vars = type_vars()
-      io << '('
+      io << "&lt;"
       type_vars.join(", ", io)
-      io << '*' if type.is_a?(GenericType) && type.variadic
-      io << ')'
+      io << "..." if type.is_a?(GenericType) && type.variadic
+      io << "&gt;"
     end
   end
 
@@ -566,11 +566,11 @@ class Crystal::Doc::Type
     else
       io << node.name
     end
-    io << "("
+    io << "&lt;"
     node.type_vars.join(", ", io) do |type_var|
       node_to_html type_var, io, links: links
     end
-    io << ")"
+    io << "&gt;"
   end
 
   def node_to_html(node : Fun, io, links = true)
@@ -579,7 +579,7 @@ class Crystal::Doc::Type
         node_to_html input, io, links: links
       end
     end
-    io << " -> "
+    io << " -&gt; "
     if output = node.output
       node_to_html output, io, links: links
     end
@@ -615,11 +615,11 @@ class Crystal::Doc::Type
   end
 
   def type_to_html(type : Crystal::TupleInstanceType, io, text = nil, links = true)
-    io << "{"
+    io << "("
     type.tuple_types.join(", ", io) do |tuple_type|
       type_to_html tuple_type, io, links: links
     end
-    io << "}"
+    io << ")"
   end
 
   def type_to_html(type : Crystal::GenericClassInstanceType, io, text = nil, links = true)
@@ -645,7 +645,7 @@ class Crystal::Doc::Type
         generic_class.full_name_without_type_vars(io)
       end
     end
-    io << '('
+    io << "&lt;"
     type.type_vars.values.join(", ", io) do |type_var|
       case type_var
       when Var
@@ -654,7 +654,7 @@ class Crystal::Doc::Type
         type_to_html type_var, io, links: links
       end
     end
-    io << ')'
+    io << "&gt;"
   end
 
   def type_to_html(type : Crystal::VirtualType, io, text = nil, links = true)
@@ -673,18 +673,22 @@ class Crystal::Doc::Type
         io << %(">)
       end
       if text
-        io << text
+        io << babelfish_reverse text
+        # io << "__U"
       else
         type.full_name(io)
+        # io << "__X"
       end
       if links
         io << "</a>"
       end
     else
       if text
-        io << text
+        io << babelfish_reverse text
+        # io << "__Y"
       else
         type.full_name(io)
+        # io << "__Z"
       end
     end
   end

@@ -12,7 +12,7 @@ class Crystal::Doc::Method
   end
 
   def name
-    @def.name
+    @def.name.gsub(/_/, '-') # *TODO* reverse-babeling if needed!
   end
 
   def args
@@ -40,7 +40,7 @@ class Crystal::Doc::Method
     when @class_method
       "."
     else
-      "#"
+      ""
     end
   end
 
@@ -51,11 +51,11 @@ class Crystal::Doc::Method
   def kind
     case
     when @type.program?
-      "def "
+      :program_method
     when @class_method
-      "def self."
+      :class_method
     else
-      "def "
+      :instance_method
     end
   end
 
@@ -109,32 +109,39 @@ class Crystal::Doc::Method
       end
     end
 
-    return unless has_args? || return_type
+    # return unless has_args? || return_type
 
     if has_args?
       io << '('
+
       @def.args.each_with_index do |arg, i|
         io << ", " if i > 0
-        io << '*' if @def.splat_index == i
+        io << "..." if @def.splat_index == i
         arg_to_html arg, io, links: links
       end
+
       if block_arg = @def.block_arg
         io << ", " unless @def.args.empty?
         io << '&'
         arg_to_html block_arg, io, links: links
+
       elsif @def.yields
         io << ", " unless @def.args.empty?
         io << "&block"
       end
+
       io << ')'
+
+    else
+      io << "()"
     end
 
     case return_type
     when ASTNode
-      io << " : "
+      io << ' '
       node_to_html return_type, io, links: links
     when Crystal::Type
-      io << " : "
+      io << ' '
       @type.type_to_html return_type, io, links: links
     end
 
@@ -144,10 +151,10 @@ class Crystal::Doc::Method
   def arg_to_html(arg : Arg, io, links = true)
     io << arg.name
     if restriction = arg.restriction
-      io << " : "
+      io << " "
       node_to_html restriction, io, links: links
     elsif type = arg.type?
-      io << " : "
+      io << " "
       @type.type_to_html type, io, links: links
     end
     if default_value = arg.default_value

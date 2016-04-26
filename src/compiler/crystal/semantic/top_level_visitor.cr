@@ -148,7 +148,7 @@ module Crystal
       babelfish_mangling node, scope # *TODO* for the type_vars - if any
 
       _dbg_on # if node.name == "Gimp"
-      _dbg "TopLevelVisitor : visit ClassDef #{node.name}, #{node.is_onyx ? "ONYX" : "CRYSTAL"}"
+      _dbg "TopLevelVisitor : visit ClassDef #{node.name} #{node.is_onyx ? "(is onyx)" : "(is crystal)"}"
       _dbg_off if node.name == "BoogleGoo"
 
 

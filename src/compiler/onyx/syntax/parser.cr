@@ -1190,7 +1190,7 @@ class OnyxParser < OnyxLexer
          end
 
       else
-         dbg "parse_atomic_method_suffix_dot else"
+         dbg "parse_atomic_method_suffix_dot else "
 
          name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
 

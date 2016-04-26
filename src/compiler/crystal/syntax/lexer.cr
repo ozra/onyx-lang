@@ -2476,7 +2476,7 @@ module Crystal
     end
 
     def peek_next_char
-      @reader.peek_next_char
+      @reader.peek_next_char? || '\0'
     end
 
     def current_pos

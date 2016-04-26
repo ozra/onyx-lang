@@ -6,7 +6,7 @@ class Crystal::Doc::Generator
   def initialize(@program : Program, @included_dirs : Array(String), @dir = "./doc")
     @base_dir = `pwd`.chomp
     @types = {} of Crystal::Type => Doc::Type
-    @is_crystal_repository = false
+    @is_onyx_official_repo = false
     @repo_name = ""
     compute_repository
   end
@@ -35,7 +35,11 @@ class Crystal::Doc::Generator
   end
 
   def generate_readme(program_type, types)
-    if File.file?("README.md")
+    if File.file?("docs/README.md")
+      filename = "docs/README.md"
+    elsif File.file?("docs/Readme.md")
+      filename = "docs/Readme.md"
+    elsif File.file?("README.md")
       filename = "README.md"
     elsif File.file?("Readme.md")
       filename = "Readme.md"
@@ -114,7 +118,7 @@ class Crystal::Doc::Generator
   end
 
   def must_include?(a_def : Crystal::Def)
-    if @is_crystal_repository && (body = a_def.body).is_a?(Crystal::Primitive)
+    if @is_onyx_official_repo && (body = a_def.body).is_a?(Crystal::Primitive)
       doc = Primitive.doc(a_def, body)
       return !nodoc?(doc)
     end
@@ -177,10 +181,11 @@ class Crystal::Doc::Generator
         next
       end
 
+      # _dbg "collect_subtypes : #{type}"
       types << type(type) if must_include? type
     end
 
-    types.sort_by! &.name.downcase
+    types.uniq.sort_by! &.name.downcase  # Added uniq
   end
 
   def collect_constants(parent)
@@ -254,7 +259,7 @@ class Crystal::Doc::Generator
     @repository = "https://github.com/#{user}/#{repo}/blob/#{rev}"
     @repo_name = "github.com/#{user}/#{repo}"
 
-    @is_crystal_repository ||= (user == "crystal-lang" && repo == "crystal")
+    @is_onyx_official_repo ||= (user == "ozra" && repo == "onyx-lang")
   end
 
   def source_link(node)
