@@ -505,7 +505,6 @@ module Crystal
       def bc_name_new
         # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
         @bc_name_new ||= "#{@output_dir}/#{@name}.new.bc"
-        # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
       end
 
       def ll_name
