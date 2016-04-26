@@ -18,6 +18,8 @@ lib LibLLVM
   type PassManagerRef = Void*
   type PassRegistryRef = Void*
 
+  type MemoryBufferRef = Void*
+
   struct JITCompilerOptions
     opt_level : UInt32
     code_model : LLVM::CodeModel
@@ -252,4 +254,10 @@ lib LibLLVM
   fun dispose_pass_manager = LLVMDisposePassManager(PassManagerRef)
   fun dispose_target_data = LLVMDisposeTargetData(TargetDataRef)
   fun dispose_pass_manager_builder = LLVMPassManagerBuilderDispose(PassManagerBuilderRef)
+
+  fun write_bitcode_to_memory_buffer = LLVMWriteBitcodeToMemoryBuffer(mod : ModuleRef) : MemoryBufferRef
+  fun dispose_memory_buffer = LLVMDisposeMemoryBuffer(buf : MemoryBufferRef) : Void
+  fun get_buffer_start = LLVMGetBufferStart(buf : MemoryBufferRef) : UInt8*
+  fun get_buffer_size = LLVMGetBufferSize(buf : MemoryBufferRef) : LibC::SizeT
+
 end

@@ -285,9 +285,9 @@ USAGE
   end
 
   private def deps
-    path_to_shards = `which shards`.chomp
+    path_to_shards = `which gravel`.chomp
     if path_to_shards.empty?
-      error "`shards` executable is missing. Please install shards: https://github.com/ysbaddaden/shards"
+      error "`gravel` executable is missing. - This is WIP - not done yet - sorry!"
     end
 
     Process.run(path_to_shards, args: options, output: true, error: true)

@@ -50,7 +50,7 @@ module Crystal
       @dump_ll = false
       @color = true
       @no_codegen = false
-      @n_threads = 3.to_i32 # saner default!
+      @n_threads = 32.to_i32  # try 8 again
       @prelude = "onyx_prelude"
       @release = false
       @single_module = false
@@ -136,23 +136,25 @@ module Crystal
       program.infer_type node, @stats
     end
 
-    private def check_bc_flags_changed(output_dir)
-      bc_flags_changed = true
-      current_bc_flags = "#{@target_triple}|#{@mcpu}|#{@release}|#{@link_flags}"
-      bc_flags_filename = "#{output_dir}/bc_flags"
-      if File.file?(bc_flags_filename)
-        previous_bc_flags = File.read(bc_flags_filename).strip
-        bc_flags_changed = previous_bc_flags != current_bc_flags
-      end
-      File.open(bc_flags_filename, "w") do |file|
-        file.puts current_bc_flags
-      end
-      bc_flags_changed
-    end
+    # private def check_bc_flags_changed(output_dir)
+    #   bc_flags_changed = true
+    #   current_bc_flags = "#{@target_triple}|#{@mcpu}|#{@release}|#{@link_flags}"
+    #   bc_flags_filename = "#{output_dir}/bc_flags"
+    #   if File.file?(bc_flags_filename)
+    #     previous_bc_flags = File.read(bc_flags_filename).strip
+    #     bc_flags_changed = previous_bc_flags != current_bc_flags
+    #   end
+    #   File.open(bc_flags_filename, "w") do |file|
+    #     file.puts current_bc_flags
+    #   end
+    #   bc_flags_changed
+    # end
 
     private def codegen(program : Program, node, sources, output_filename)
 
       _dbg_overview "\nCompiler stage: Compiler.codegen (node) \"#{output_filename}\"\n\n".white
+
+      bc_flags_md5 = Crypto::MD5.hex_digest "#{@target_triple}#{@mcpu}#{@release}#{@link_flags}"
 
       lib_flags = program.lib_flags
 
@@ -170,10 +172,10 @@ module Crystal
 
       cache_dir.cleanup
 
-      bc_flags_changed = check_bc_flags_changed output_dir
+      # bc_flags_changed = check_bc_flags_changed output_dir
 
       units = llvm_modules.map do |type_name, llvm_mod|
-        CompilationUnit.new(self, type_name, llvm_mod, output_dir, bc_flags_changed)
+        CompilationUnit.new(self, type_name, llvm_mod, output_dir, bc_flags_md5)
       end
 
       if @cross_compile_flags
@@ -279,7 +281,9 @@ module Crystal
 
     private def fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
       spawn do
-        codegen_process = fork { codegen_single_unit(program, unit, target_triple, multithreaded) }
+        codegen_process = fork { 
+          codegen_single_unit(program, unit, target_triple, multithreaded) 
+        }
         codegen_process.wait
         wait_channel.send nil
       end
@@ -292,8 +296,10 @@ module Crystal
       else
         unit.llvm_mod.data_layout = DataLayout32
       end
-      unit.write_bitcode if multithreaded
+
+      # unit.write_bitcode if multithreaded
       unit.compile
+
     end
 
     def target_machine
@@ -365,9 +371,10 @@ module Crystal
 
       @name : String
       @output_dir : String
-      @bc_flags_changed : Bool
+      # @bc_flags_changed : Bool
+      @bc_name_new : String?
 
-      def initialize(@compiler, type_name, @llvm_mod, @output_dir, @bc_flags_changed)
+      def initialize(@compiler, type_name, @llvm_mod, @output_dir, bc_flags_md5)
         type_name = "_main" if type_name == ""
         @name = type_name.gsub do |char|
           case char
@@ -377,6 +384,7 @@ module Crystal
             char.ord
           end
         end
+        @name += bc_flags_md5
 
         if @name.size > 50
           # 17 chars from name + 1 (dash) + 32 (md5) = 50
@@ -399,18 +407,55 @@ module Crystal
 
         must_compile = true
 
-        if !compiler.emit && !@bc_flags_changed && File.exists?(bc_name) && File.exists?(o_name)
-          if FileUtils.cmp(bc_name, bc_name_new)
-            # If the user cancelled a previous compilation it might be that the .o file is empty
-            if File.size(o_name) > 0
-              File.delete bc_name_new
-              must_compile = false
+        bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
+        bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
+        bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
+
+        if !compiler.emit && File.exists?(bc_name) && File.exists?(o_name)
+
+          _dbg "File.size(bc_name) == #{File.size(bc_name)}, LibLLVM.get_buffer_size(bc_buf) == #{LibLLVM.get_buffer_size(bc_buf)}"
+          compare_ok = File.size(bc_name) == bc_buf_size
+
+          if compare_ok
+            walk_ptr = bc_buf_ptr
+            File.open(bc_name, "rb") do |file|
+              buf = uninitialized UInt8[8192]
+              while true
+                gotten = file.read buf.to_slice
+                _dbg "gotten bytes from disk == #{gotten}"
+                break if gotten == 0
+                if buf.to_unsafe.memcmp(walk_ptr, gotten) != 0
+                  _dbg "memcmp NOT ok!".red
+                  compare_ok = false
+                  break
+                end
+                walk_ptr += gotten
+                _dbg "another memcmp ok"
+              end
             end
+          end
+
+          # if FileUtils.cmp(bc_name, bc_name_new)
+          if compare_ok && File.size(o_name) > 0
+            # If the user cancelled a previous compilation it might be that the .o file is empty
+            # if File.size(o_name) > 0
+              _dbg "we don't need #{bc_name_new}".yellow
+              # File.delete bc_name_new
+              must_compile = false
+            # end
           end
         end
 
         if must_compile
+          _dbg "needs to write bitcode to disk"
+
+          File.open(bc_name_new, "w") do |file|
+            file.write(bc_buf_ptr.to_slice(bc_buf_size))
+          end
+
           File.rename(bc_name_new, bc_name)
+
+
           if compiler.release?
             Crystal.timing("LLVM Optimizer", @compiler.stats?) do
               compiler.optimize llvm_mod
@@ -418,6 +463,8 @@ module Crystal
           end
           compiler.target_machine.emit_obj_to_file llvm_mod, o_name
         end
+
+        LibLLVM.dispose_memory_buffer bc_buf
 
         if compiler.dump_ll?
           llvm_mod.print_to_file ll_name
@@ -456,7 +503,9 @@ module Crystal
       end
 
       def bc_name_new
-        "#{@output_dir}/#{@name}.new.bc"
+        # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
+        @bc_name_new ||= "#{@output_dir}/#{@name}.new.bc"
+        # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
       end
 
       def ll_name

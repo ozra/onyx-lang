@@ -31,8 +31,8 @@ module Crystal
     def directory_for(filename : String)
       dir = compute_dir
 
-      name = filename.gsub('/', '-')
-      while name.starts_with?('-')
+      name = filename.gsub('/', "__")
+      while name.starts_with?('_')
         name = name[1..-1]
       end
       output_dir = File.join(dir, name)
@@ -68,11 +68,11 @@ module Crystal
 
       # Try to use one of these as a cache directory, in order
       candidates = [
-        ENV["CRYSTAL_CACHE_DIR"]?,
-        ENV["XDG_CACHE_HOME"]?.try { |home| "#{home}/crystal" },
-        ENV["HOME"]?.try { |home| "#{home}/.cache/crystal" },
-        ENV["HOME"]?.try { |home| "#{home}/.crystal" },
-        ".crystal",
+        ENV["ONYX_CACHE_DIR"]?,
+        ENV["XDG_CACHE_HOME"]?.try { |home| "#{home}/onyx" },
+        ENV["HOME"]?.try { |home| "#{home}/.cache/onyx" },
+        ENV["HOME"]?.try { |home| "#{home}/.onyx-cache" },
+        ".onyx-cache",
       ]
       candidates = candidates
         .compact
