@@ -153,8 +153,10 @@ class Exception
   end
 
   def to_s(io : IO)
-    if @message
-      io << ((mess = @message) ? "\e[31m#{mess}\e[39m" : mess)
+    if mess = @message
+      io << "\e[31m"
+      io << mess  # don't put this in interpolation - that calls to_s, and then we're dependency fucked
+      io << "\e[39m"
     end
   end
 
@@ -165,7 +167,7 @@ class Exception
   end
 
   def inspect_with_backtrace(io : IO)
-    io << self << " (" << self.class << ")\n"
+    io << @message << " (" << self.class << ")\n"
     backtrace.each do |frame|
       io.puts frame
     end
