@@ -1113,11 +1113,11 @@ class OnyxParser < OnyxLexer
 
 
 
-      if @token.value == "of?"
-         atomic = parse_is_a(atomic).at(location)
+      if @token.value == :of?
+         atomic = parse_of_t(atomic).at(location)
 
-      elsif @token.value == :responds_to?
-         atomic = parse_responds_to(atomic).at(location)
+      elsif @token.value == :implements?
+         atomic = parse_implements(atomic).at(location)
 
 
 
@@ -1306,8 +1306,8 @@ class OnyxParser < OnyxLexer
       end
    end
 
-   def parse_is_a(atomic)
-      dbg "parse_is_a ->".red
+   def parse_of_t(atomic)
+      dbg "parse_of_t ->".red
 
       next_token_skip_space
 
@@ -1324,35 +1324,45 @@ class OnyxParser < OnyxLexer
       IsA.new(atomic, type)
    end
 
-   def parse_responds_to(atomic)
+   def parse_implements(atomic)
+      dbg "parse_implements"
+
       next_token
 
       if @token.type == :"("
          next_token_skip_space_or_newline
-         name = parse_responds_to_name
+         name = parse_implements_name
          next_token_skip_space_or_newline
          check :")"
          next_token_skip_space
 
       elsif @token.type == :SPACE
          next_token
-         name = parse_responds_to_name
+         name = parse_implements_name
          next_token_skip_space
 
       else
          dbgtail_off!
-         raise "unexpected token when parsing is-a? / of?"
+         raise "unexpected token when parsing implements?"
       end
 
-      RespondsTo.new(atomic, name)
+      if name.is_a? String
+         RespondsTo.new(atomic, name)
+      else
+         IsA.new(atomic, name)
+      end
    end
 
-   def parse_responds_to_name
-      if !tok? :TAG, :IDFR
-         unexpected_token "expected name or tag"
-      end
+   def parse_implements_name
+      dbg "parse_implements_name"
 
-      @token.value.to_s
+      if tok? :TAG, :IDFR
+         @token.value.to_s.gsub(/[-–]/, "_")
+      elsif tok? :CONST
+         parse_single_type
+      else
+         unexpected_token "expected name, tag or trait"
+      end
    end
 
    def parse_atomic
@@ -5688,13 +5698,13 @@ class OnyxParser < OnyxLexer
          token.value = foreign
       end
 
-      if token.value == "of?"
+      if token.value == :of?
          obj = Var.new("self").at(location)
-         return parse_is_a(obj)
+         return parse_of_t(obj)
 
-      elsif @token.value == :responds_to?
+      elsif @token.value == :implements?
          obj = Var.new("self").at(location)
-         return parse_responds_to(obj)
+         return parse_implements(obj)
       end
 
       name = @token.value.to_s
@@ -6300,10 +6310,10 @@ class OnyxParser < OnyxLexer
 
       location = @token.location
 
-      if @token.value == "is_a?" || @token.value == "of?" # :is_a?
-         call = parse_is_a(obj).at(location)
-      elsif @token.value == :responds_to?
-         call = parse_responds_to(obj).at(location)
+      if @token.value == :of?
+         call = parse_of_t(obj).at(location)
+      elsif @token.value == :implements?
+         call = parse_implements(obj).at(location)
       elsif @token.type == :"["
          call = parse_atomic_method_suffix obj, location
 

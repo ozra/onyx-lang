@@ -1,8 +1,14 @@
+## 0.105.3 - (2016-04-27) ##
+
+* (WIP) Doc-gen - details regarding babeling left to fix
+* Attempt at optimizing codegen, at least it avoids writing about 800 temp files now (speed up? Not measurable :-/ ).
+* `implements?` use either method-name or trait as arg. some edge cases to fix.
+
+
 ## 0.105.2 - (2016-04-20) ##
 
 * Tiny touches regarding safety-belting compilation and lib-paths, better than nothing
 * StringPooling in Onyx-lexer added too.
-
 
 ## 0.105.1 - (2016-04-18) ##
 

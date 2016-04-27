@@ -1242,6 +1242,11 @@ module Crystal
           else
             return check_idfr_or_keyword(:if, start)
           end
+        when 'm'
+          if mnc?('p','l','e','m','e','n','t','s','?')
+            return check_idfr_or_keyword(:implements?, start)
+          end
+
         when 'n'
           if idfr_part_or_end?(peekch)
             case nextch
@@ -1342,7 +1347,12 @@ module Crystal
             return check_idfr_or_keyword(:object, start)
           end
         when 'f'
-          return check_idfr_or_keyword(:of, start)
+          if peek_next_char == '?'
+            next_char
+            return check_idfr_or_keyword(:of?, start)
+          else
+            return check_idfr_or_keyword(:of, start)
+          end
         when 'r'
           return check_idfr_or_token(:or, "", start)
         when 'u'
@@ -1386,10 +1396,10 @@ module Crystal
               if mnc?('u','e')
                 return check_idfr_or_keyword(:rescue, start)
               end
-            when 'p'
-              if mnc?('o','n','d','s','_','t','o','?')
-                return check_idfr_or_keyword(:responds_to?, start)
-              end
+            # when 'p'
+            #   if mnc?('o','n','d','s','_','t','o','?')
+            #     return check_idfr_or_keyword(:responds_to?, start)
+            #   end
             end
           when 't'
             if mnc?('u','r','n')

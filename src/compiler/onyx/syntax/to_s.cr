@@ -1403,7 +1403,7 @@ class ToOnyxSVisitor < Visitor
 
    def visit(node : RespondsTo)
       node.obj.accept self
-      @str << ".responds_to?(" << node.name << ")"
+      @str << ".implements?(" << node.name << ")"
       false
    end
 

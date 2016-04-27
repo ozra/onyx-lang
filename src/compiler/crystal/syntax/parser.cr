@@ -4666,6 +4666,8 @@ module Crystal
         is_onyx = false
       end
 
+      _dbg "crystal-parse:new_path #{names} is_onyx = #{is_onyx}"
+
       ret = Path.new(names, global)
       ret.is_onyx = is_onyx
       ret

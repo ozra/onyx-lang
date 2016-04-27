@@ -1833,9 +1833,23 @@ end–type
 
 --    fn-x(x) -> "I am Anon"
 
-
 say "create a Foo instance"
 foo = Foo[Str]()
+
+pp foo.implements? #foo-x
+pp foo.implements? #foo_x
+pp foo.implements? foo-x
+pp foo.implements? foo_x
+pp foo.implements? foo_zz
+pp foo.implements? TradeSide
+pp foo.implements? Foo
+pp foo.implements? Bar
+pp foo.implements? AnotherTrait
+-- pp foo.implements? Any  *TODO*
+-- pp foo.implements? Record
+pp foo.implements? Int
+-- pp 1_u8.implements? Int *TODO*
+-- pp 1_u8.implements? I32 -- *TODO*
 
 pp foo.foo-x
 

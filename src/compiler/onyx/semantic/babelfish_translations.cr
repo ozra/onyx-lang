@@ -258,7 +258,7 @@ def babelfish_mangling(node : Alias, scope) : Alias
 end
 
 def babelfish_mangling(node : Path, scope) : Path
-  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}, is_onyx == #{node.is_onyx}) ->"
 
   unless node.is_onyx
     ifdef !release
@@ -282,12 +282,12 @@ def babelfish_mangling(node : Path, scope) : Path
   # end
 
   unless scope.is_a?(Program | Nil)
-    # _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because scope isn't Prog|Nil (#{scope.class})"
+    _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because scope isn't Prog|Nil (#{scope.class})"
     return node
   end
 
   if node.is_foreign
-    # _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
+    _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
     return node
   end
 

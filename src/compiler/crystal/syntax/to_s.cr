@@ -733,6 +733,7 @@ module Crystal
     end
 
     def visit(node : Path)
+      # _dbg "crystal-to_s: #{node}"
       if node.is_onyx
         if node.is_foreign
           saved_name = node.names[0]
@@ -1145,7 +1146,7 @@ module Crystal
 
     def visit(node : RespondsTo)
       node.obj.accept self
-      @str << ".responds_to?(" << node.name << ")"
+      @str << ".responds_to?(:" << node.name << ")"
       false
     end
 
