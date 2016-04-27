@@ -41,6 +41,10 @@ module Crystal
     property emit : Array(String)?
     property original_output_filename : String?
 
+
+    property test_opt_mode : Int32
+    @test_opt_mode = 1
+
     @target_machine : LLVM::TargetMachine?
     @pass_manager_builder : LLVM::PassManagerBuilder?
     @module_pass_manager : LLVM::ModulePassManager?
@@ -272,8 +276,14 @@ module Crystal
       jobs_count = 0
       wait_channel = Channel(Nil).new(@n_threads)
 
+      perf_tmp = Time.now
+
       while unit = units.pop?
-        fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+        if @test_opt_mode == 1 || @test_opt_mode == 2
+          fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+        else
+          spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+        end
         jobs_count += 1
 
         if jobs_count >= @n_threads
@@ -282,18 +292,30 @@ module Crystal
         end
       end
 
+      puts "All units kicked off: #{Time.now - perf_tmp}"
+
       while jobs_count > 0
         wait_channel.receive
         jobs_count -= 1
       end
+
+      puts "And all units DONE (acc): #{Time.now - perf_tmp}"
+
     end
 
     private def fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
       spawn do
-        codegen_process = fork { 
-          codegen_single_unit(program, unit, target_triple, multithreaded) 
+        codegen_process = fork {
+          codegen_single_unit(program, unit, target_triple, multithreaded)
         }
         codegen_process.wait
+        wait_channel.send nil
+      end
+    end
+
+    private def spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+      spawn do
+        codegen_single_unit(program, unit, target_triple, multithreaded)
         wait_channel.send nil
       end
     end
@@ -409,6 +431,11 @@ module Crystal
         llvm_mod.write_bitcode output_name
       end
 
+      def say_stats(msg : String)
+        return unless @compiler.stats?
+        puts msg
+      end
+
       def compile
         bc_name = bc_name()
         bc_name_new = bc_name_new()
@@ -416,11 +443,24 @@ module Crystal
 
         must_compile = true
 
-        bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
-        bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
-        bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
+        # perf_tmp = Time.now
+        # mod_hash = llvm_mod.hash
+        # say_stats "get mod_hash #{mod_hash}: #{Time.now - perf_tmp}"
 
-        if !compiler.emit && File.exists?(bc_name) && File.exists?(o_name)
+        perf_tmp = Time.now
+
+        if @compiler.test_opt_mode == 1 || @compiler.test_opt_mode == 3
+          bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
+          bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
+          bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
+        end
+
+        # say_stats "write_bitcode_to_memory_buffer : #{Time.now - perf_tmp}"
+
+        perf_tmp = Time.now
+
+        if bc_buf && bc_buf_ptr && bc_buf_size &&
+           !compiler.emit && File.exists?(bc_name) && File.exists?(o_name)
 
           _dbg "File.size(bc_name) == #{File.size(bc_name)}, LibLLVM.get_buffer_size(bc_buf) == #{LibLLVM.get_buffer_size(bc_buf)}"
           compare_ok = File.size(bc_name) == bc_buf_size
@@ -455,25 +495,32 @@ module Crystal
           end
         end
 
+        # say_stats "noop verification : #{Time.now - perf_tmp}"
+
         if must_compile
           _dbg "needs to write bitcode to disk"
 
-          File.open(bc_name_new, "w") do |file|
-            file.write(bc_buf_ptr.to_slice(bc_buf_size))
+          if bc_buf_ptr && bc_buf_size
+            File.open(bc_name_new, "w") do |file|
+              file.write(bc_buf_ptr.to_slice(bc_buf_size))
+            end
+
+            File.rename(bc_name_new, bc_name)
           end
-
-          File.rename(bc_name_new, bc_name)
-
 
           if compiler.release?
             Crystal.timing("LLVM Optimizer", @compiler.stats?) do
               compiler.optimize llvm_mod
             end
           end
+          perf_tmp = Time.now
           compiler.target_machine.emit_obj_to_file llvm_mod, o_name
+          # say_stats "emit obj-file: #{Time.now - perf_tmp}"
         end
 
-        LibLLVM.dispose_memory_buffer bc_buf
+        if bc_buf
+          LibLLVM.dispose_memory_buffer bc_buf
+        end
 
         if compiler.dump_ll?
           llvm_mod.print_to_file ll_name

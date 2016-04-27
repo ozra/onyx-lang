@@ -565,6 +565,20 @@ USAGE
           compiler.verbose = true
         end
 
+
+        opts.on("--internal-test-a", "Internal: Test codegen opt 1") do
+          compiler.test_opt_mode = 1
+        end
+        opts.on("--internal-test-b", "Internal: Test codegen opt 2") do
+          compiler.test_opt_mode = 2
+        end
+        opts.on("--internal-test-c", "Internal: Test codegen opt 3") do
+          compiler.test_opt_mode = 3
+        end
+        opts.on("--internal-test-d", "Internal: Test codegen opt 4") do
+          compiler.test_opt_mode = 4
+        end
+
         # if debug_release_flags > 1  # both debug and release (!?)
         #   error "can't supply both --debug and --release - pick one!"
 
