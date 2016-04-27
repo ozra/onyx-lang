@@ -23,38 +23,15 @@ module Crystal
     # - main: process "main" code, calls and method bodies (the whole program).
     # - check recursive structs (RecursiveStructChecker): check that structs are not recursive (impossible to codegen)
     def infer_type(node, stats = false)
-      _dbg_overview "\nCompiler stage: Semantic (program wide pragmas):\n\n".white
-      result = Crystal.timing("Semantic (program wide pragmas)", stats) do
-        visit_program_wide_pragmas(node)
-      end
-
-      _dbg_overview "\nCompiler stage: Semantic (top level):\n\n".white
-      result = Crystal.timing("Semantic (top level)", stats) do
-        visit_top_level(node)
-      end
-
-      _dbg_overview "\nCompiler stage: Semantic (new):\n\n".white
-      Crystal.timing("Semantic (new)", stats) do
-        define_new_methods
-      end
-
-      _dbg_overview "\nCompiler stage: Semantic (abstract def check):\n\n".white
-      Crystal.timing("Semantic (abstract def check)", stats) do
-        check_abstract_defs
-      end
-
-      _dbg_overview "\nCompiler stage: Semantic (type declarations):\n\n".white
-      result = Crystal.timing("Semantic (type declarations)", stats) do
-        visit_type_declarations(node)
-      end
+      infer_type_top_level(node, stats: stats)
 
       _dbg_overview "\nCompiler stage: Semantic (ivars initializers):\n\n".white
-      result = Crystal.timing("Semantic (ivars initializers)", stats) do
+      Crystal.timing("Semantic (ivars initializers)", stats) do
         visit_instance_vars_initializers(node)
       end
 
       _dbg_overview "\nCompiler stage: Semantic (cvars initializers):\n\n".white
-      result = Crystal.timing("Semantic (cvars initializers)", stats) do
+      Crystal.timing("Semantic (cvars initializers)", stats) do
         visit_class_vars_initializers(node)
       end
 
@@ -76,6 +53,38 @@ module Crystal
       _dbg_overview "\nType-inference stages completed:\n\n".white
 
       result
+    end
+
+    # Processes type declarations and instance/class/global vars
+    # types are guessed or followed according to type annotations.
+    #
+    # This alone is useful for some tools like doc or hierarchy
+    # where a full semantic of the program is not needed.
+    def infer_type_top_level(node, stats = false)
+      _dbg_overview "\nCompiler stage: Semantic (program wide pragmas):\n\n".white
+      Crystal.timing("Semantic (program wide pragmas)", stats) do
+        visit_program_wide_pragmas(node)
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (top level):\n\n".white
+      Crystal.timing("Semantic (top level)", stats) do
+        visit_top_level(node)
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (new):\n\n".white
+      Crystal.timing("Semantic (new)", stats) do
+        define_new_methods
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (abstract def check):\n\n".white
+      Crystal.timing("Semantic (abstract def check)", stats) do
+        check_abstract_defs
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (type declarations):\n\n".white
+      Crystal.timing("Semantic (type declarations)", stats) do
+        visit_type_declarations(node)
+      end
     end
   end
 
