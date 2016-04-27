@@ -1,3 +1,9 @@
+## 0.105.4 - (2016-04-27) ##
+
+* Optimized codegen, now compile speed is up to 400% greater for devel (!) Can't believe the timings. More tests required.
+* Fixes to certain cases of babeling in cross-language macroing
+
+
 ## 0.105.3 - (2016-04-27) ##
 
 * (WIP) Doc-gen - details regarding babeling left to fix

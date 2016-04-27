@@ -43,7 +43,7 @@ module Crystal
 
 
     property test_opt_mode : Int32
-    @test_opt_mode = 1
+    @test_opt_mode = 3
 
     @target_machine : LLVM::TargetMachine?
     @pass_manager_builder : LLVM::PassManagerBuilder?
@@ -277,6 +277,11 @@ module Crystal
       wait_channel = Channel(Nil).new(@n_threads)
 
       perf_tmp = Time.now
+
+      # *TEMP*
+      if @test_opt_mode == 3 || @test_opt_mode == 4
+        @n_threads = 9999
+      end
 
       while unit = units.pop?
         if @test_opt_mode == 1 || @test_opt_mode == 2

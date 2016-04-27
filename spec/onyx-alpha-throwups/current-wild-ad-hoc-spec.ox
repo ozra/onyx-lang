@@ -1,3 +1,4 @@
+#!/usr/bin/env onyx
 
 -- Test all possible constructs in one go
 say "\n\nBefore requires!\n\n"
