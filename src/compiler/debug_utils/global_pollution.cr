@@ -18,31 +18,38 @@ ifdef !release
       @@dbg_output_on
     end
   end
-  # foo = DebuggingData.new
 end
-
-# $dbg_output_on : Bool
-# $dbg_output_on = false
 
 def _dbg_on()
   ifdef !release
-    # $dbg_output_on = true
     DebuggingData.dbg_on
   end
 end
 
 def _dbg_off()
   ifdef !release
-    # $dbg_output_on = false
     DebuggingData.dbg_off
   end
 end
+
+# *TODO* *TEMP* until the globals orderings and deps are resolved in Crystal
+class StderrWrapperTemp
+  @@maybe_stderr : IO::FileDescriptor?
+  def self.set_stderr(io)
+    @@maybe_stderr = io
+  end
+  def self.maybe_stderr?
+    @@maybe_stderr
+  end
+end
+
+StderrWrapperTemp.set_stderr STDERR
 
 def _dbg(*objs)
   ifdef !release
     # if $dbg_output_on
     if DebuggingData.dbg_output_on?
-      STDERR.puts objs.join ", "
+      StderrWrapperTemp.maybe_stderr?.try &.puts objs.join ", "
     end
   end
 end
