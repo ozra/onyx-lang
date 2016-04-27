@@ -23,10 +23,6 @@ module Crystal
     @dead_code : Bool
     @current_def : Def?
 
-
-    @onyx_status_stack = [] of Bool
-
-
     def initialize(@program)
       @dead_code = false
       @current_def = nil
@@ -41,10 +37,7 @@ module Crystal
     def before_transform(node)
       @dead_code = false
       @exp_nest += 1 if nesting_exp?(node)
-
-      @onyx_status_stack << node.is_onyx if nesting_exp?(node)
       nil
-
     end
 
     def after_transform(node)
@@ -58,10 +51,7 @@ module Crystal
       else
         @dead_code = false
       end
-
-      node.tag_onyx @onyx_status_stack.pop if nesting_exp?(node)
       nil
-
     end
 
     def nesting_exp?(node)

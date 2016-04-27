@@ -733,7 +733,8 @@ module Crystal
     end
 
     def visit(node : Path)
-      # _dbg "crystal-to_s: #{node}"
+      _dbg "crystal-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
+
       if node.is_onyx
         if node.is_foreign
           saved_name = node.names[0]

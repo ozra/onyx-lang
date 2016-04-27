@@ -10,7 +10,7 @@ module Crystal
      end
 
      def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil)
-        _dbg "new_numeric_literal -> #{value} '#{suffix}'"
+        _dbg "crystal-parse: new_numeric_literal -> #{value} '#{suffix}'"
 
         if kind == :user_suffix
            new_kind = (/[.eE]/ =~ value) ? :unspec_real : :unspec_int
@@ -32,7 +32,7 @@ module Crystal
         end
 
      ensure
-        _dbg "/new_numeric_literal"
+        _dbg "crystal-parse: /new_numeric_literal"
      end
   end
 
@@ -4666,7 +4666,7 @@ module Crystal
         is_onyx = false
       end
 
-      _dbg "crystal-parse:new_path #{names} is_onyx = #{is_onyx}"
+      _dbg "crystal-parse: new_path #{names} is_onyx = #{is_onyx}"
 
       ret = Path.new(names, global)
       ret.is_onyx = is_onyx

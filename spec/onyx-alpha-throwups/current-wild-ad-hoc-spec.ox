@@ -183,13 +183,20 @@ fdf = 5 < 7 < 23 && vx > + vy
 
 x = a < b > c
 
-say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
+say "x0"
+
+-- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
 
 -- PAREN TUPLE SYNTAX
+
+say "x1"
 
 tup1 = ( 47, 13, "yo" )
 tup2 = (#exacto, that)
 tup3 = (that,)
+
+say "x2"
+
 tup4 = (,)
 
 tup5 = (
@@ -224,7 +231,9 @@ fdf = 5 < 7 < 23 && vx > + vy
 
 x = a < b > c
 
-say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
+say "x3"
+
+-- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -1845,11 +1854,19 @@ pp foo.implements? TradeSide
 pp foo.implements? Foo
 pp foo.implements? Bar
 pp foo.implements? AnotherTrait
--- pp foo.implements? Any  *TODO*
--- pp foo.implements? Record
+pp foo.implements? Any
+pp foo.implements? Record
+pp foo.implements? Value
 pp foo.implements? Int
--- pp 1_u8.implements? Int *TODO*
--- pp 1_u8.implements? I32 -- *TODO*
+pp 1_u8.implements? Any
+pp 1_u8.implements? Value
+pp 1_u8.implements? Record
+pp 1_u8.implements? Int
+pp 1_u8.implements? AnyInt
+pp 1_u8.implements? I32
+say 1_u8.implements? I32
+pp 1_u8.implements? U8
+say 1_u8.implements? U8
 
 pp foo.foo-x
 

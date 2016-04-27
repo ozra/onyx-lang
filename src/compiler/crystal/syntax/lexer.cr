@@ -1168,7 +1168,7 @@ module Crystal
     end
 
     def scan_number(start, negative = false)
-      _dbg "scan_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      _dbg "crystal-lex: scan_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
       @token.type = :NUMBER
 
       has_underscore = false
@@ -1269,7 +1269,7 @@ module Crystal
 
       # - - - - - -
       # Onyx–through–macro-suffix?
-      _dbg "- crystal-parse - at suffix_size == #{suffix_size}?: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      _dbg "- crystal-lex - at suffix_size == #{suffix_size}?: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
       if suffix_size == 0 && current_char == '§' && peek_next_char == '§'
         suffix_pos = current_pos
         next_char; next_char  # skip the `§§`
@@ -1309,7 +1309,7 @@ module Crystal
     end
 
     def scan_onyx_number_suffix : {String?, Symbol}
-      _dbg "scan_onyx_number_suffix: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      _dbg "crystal-lex: scan_onyx_number_suffix: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
       start = current_pos
 
       if ident_part?(current_char) && !ident_start?(current_char)
@@ -1326,7 +1326,7 @@ module Crystal
       else
         suffix = string_range(start, current_pos).gsub(/[-–]/, '_')
         kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
-        _dbg "scanned suffix '#{suffix}'"
+        _dbg "crystal-lex: scanned suffix '#{suffix}'"
       end
 
       {suffix, kind}
@@ -1434,7 +1434,7 @@ module Crystal
     end
 
     def scan_zero_number(start, negative = false)
-      _dbg "scan_zero_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
+      _dbg "crystal-lex: scan_zero_number: current_char = #{current_char}, peek_next_char = #{peek_next_char}"
       @token.number_suffix = nil
 
       case peek_next_char

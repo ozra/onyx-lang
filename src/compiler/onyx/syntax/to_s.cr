@@ -958,6 +958,8 @@ class ToOnyxSVisitor < Visitor
    end
 
    def visit(node : Path)
+      _dbg "onyx-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
+
       @str << "$." if node.global
       node.names.each_with_index do |name, i|
          @str << "." if i > 0
