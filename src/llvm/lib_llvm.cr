@@ -117,6 +117,12 @@ lib LibLLVM
   fun dump_module = LLVMDumpModule(module : ModuleRef)
   fun dump_value = LLVMDumpValue(val : ValueRef)
   fun target_machine_emit_to_file = LLVMTargetMachineEmitToFile(t : TargetMachineRef, m : ModuleRef, filename : UInt8*, codegen : LLVM::CodeGenFileType, error_msg : UInt8**) : Int32
+
+  fun target_machine_emit_to_memory_buffer =
+        LLVMTargetMachineEmitToMemoryBuffer(t : TargetMachineRef, m : ModuleRef, codegen : LLVM::CodeGenFileType, error_msg : UInt8**, out_mem_buf : MemoryBufferRef*) : Bool
+
+
+
   fun float_type = LLVMFloatType : TypeRef
   fun function_type = LLVMFunctionType(return_type : TypeRef, param_types : TypeRef*, param_count : UInt32, is_var_arg : Int32) : TypeRef
   fun generic_value_to_float = LLVMGenericValueToFloat(type : TypeRef, value : GenericValueRef) : Float64

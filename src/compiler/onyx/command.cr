@@ -575,9 +575,6 @@ USAGE
         opts.on("--internal-test-c", "Internal: Test codegen opt 3") do
           compiler.test_opt_mode = 3
         end
-        opts.on("--internal-test-d", "Internal: Test codegen opt 4") do
-          compiler.test_opt_mode = 4
-        end
 
         # if debug_release_flags > 1  # both debug and release (!?)
         #   error "can't supply both --debug and --release - pick one!"

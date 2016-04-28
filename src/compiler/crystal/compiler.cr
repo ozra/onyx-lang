@@ -43,7 +43,7 @@ module Crystal
 
 
     property test_opt_mode : Int32
-    @test_opt_mode = 3
+    @test_opt_mode = 2
 
     @target_machine : LLVM::TargetMachine?
     @pass_manager_builder : LLVM::PassManagerBuilder?
@@ -279,12 +279,12 @@ module Crystal
       perf_tmp = Time.now
 
       # *TEMP*
-      if @test_opt_mode == 3 || @test_opt_mode == 4
+      if @test_opt_mode > 1
         @n_threads = 9999
       end
 
       while unit = units.pop?
-        if @test_opt_mode == 1 || @test_opt_mode == 2
+        if @test_opt_mode == 1
           fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
         else
           spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
@@ -441,95 +441,119 @@ module Crystal
         puts msg
       end
 
-      def compile
-        bc_name = bc_name()
-        bc_name_new = bc_name_new()
-        o_name = object_name()
-
-        must_compile = true
-
-        # perf_tmp = Time.now
-        # mod_hash = llvm_mod.hash
-        # say_stats "get mod_hash #{mod_hash}: #{Time.now - perf_tmp}"
-
-        perf_tmp = Time.now
-
-        if @compiler.test_opt_mode == 1 || @compiler.test_opt_mode == 3
-          bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
-          bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
-          bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
-        end
-
-        # say_stats "write_bitcode_to_memory_buffer : #{Time.now - perf_tmp}"
-
-        perf_tmp = Time.now
-
-        if bc_buf && bc_buf_ptr && bc_buf_size &&
-           !compiler.emit && File.exists?(bc_name) && File.exists?(o_name)
-
-          _dbg "File.size(bc_name) == #{File.size(bc_name)}, LibLLVM.get_buffer_size(bc_buf) == #{LibLLVM.get_buffer_size(bc_buf)}"
-          compare_ok = File.size(bc_name) == bc_buf_size
-
-          if compare_ok
-            walk_ptr = bc_buf_ptr
-            File.open(bc_name, "rb") do |file|
-              buf = uninitialized UInt8[8192]
-              while true
-                gotten = file.read buf.to_slice
-                _dbg "gotten bytes from disk == #{gotten}"
-                break if gotten == 0
-                if buf.to_unsafe.memcmp(walk_ptr, gotten) != 0
-                  _dbg "memcmp NOT ok!".red
-                  compare_ok = false
-                  break
-                end
-                walk_ptr += gotten
-                _dbg "another memcmp ok"
-              end
+      def compare_mem_to_file(buf_ptr, buf_size, filename)
+        return false if !File.exists?(filename)
+        return false if File.size(filename) != buf_size
+        walk_ptr = buf_ptr
+        File.open(filename, "rb") do |file|
+          read_buf = uninitialized UInt8[8192]
+          while true
+            gotten = file.read read_buf.to_slice
+            _dbg "gotten bytes from disk == #{gotten}"
+            return true if gotten == 0
+            if read_buf.to_unsafe.memcmp(walk_ptr, gotten) != 0
+              _dbg "memcmp NOT ok!".red
+              return false
             end
+            walk_ptr += gotten
+            _dbg "another memcmp ok"
           end
+        end
+        return false
+      end
 
-          # if FileUtils.cmp(bc_name, bc_name_new)
-          if compare_ok && File.size(o_name) > 0
-            # If the user cancelled a previous compilation it might be that the .o file is empty
-            # if File.size(o_name) > 0
-              _dbg "we don't need #{bc_name_new}".yellow
-              # File.delete bc_name_new
-              must_compile = false
-            # end
+      def tempify_name(filename)
+        filename + "___writing___.tmp" # Reasonable insurance it won't clash with a real filename
+      end
+
+      def write_mem_to_file_via_tmp(buf_ptr, buf_size, filename)
+        # *TODO* error handling
+        filename_tmp = tempify_name filename
+        File.open(filename_tmp, "w") do |file|
+          file.write(buf_ptr.to_slice(buf_size))
+        end
+        File.rename(filename_tmp, filename)
+      end
+
+      def compile
+        if @compiler.test_opt_mode == 3
+          compile_c
+        else
+          compile_a_b
+        end
+      end
+
+      def compile_c
+        # *TODO* another model for release...
+        if compiler.release?
+          Crystal.timing("LLVM Optimizer", @compiler.stats?) do
+            compiler.optimize llvm_mod
           end
         end
 
-        # say_stats "noop verification : #{Time.now - perf_tmp}"
+        obj_buf = uninitialized LibLLVM::MemoryBufferRef
+        # *TODO* buf as out buf, but initialize value to 0 (the void ptr) to
+        # to ensure stable null value on error
+
+        _dbg "emit_obj_to_mem"
+        compiler.target_machine.emit_obj_to_mem llvm_mod, pointerof(obj_buf)
+
+        obj_buf_ptr = LibLLVM.get_buffer_start(obj_buf)
+        obj_buf_size = LibLLVM.get_buffer_size(obj_buf)
+
+        # We read in existing obj–file and compare. Why? Because it gets it in
+        # to file–cache which is good for the linking stage. And opposite: if
+        # we write to it although the same, we destroy the file–caching. Slow!
+        compare_ok = compare_mem_to_file obj_buf_ptr, obj_buf_size, object_name
+
+        if !compare_ok
+          # Render to tmp name to never leave partial obj–files in real name
+          write_mem_to_file_via_tmp obj_buf_ptr, obj_buf_size, object_name
+        end
+
+        _dbg "dispose_memory_buffer obj_buf"
+        LibLLVM.dispose_memory_buffer obj_buf
+
+        llvm_mod.print_to_file ll_name if compiler.dump_ll?
+        nil
+      end
+
+      def compile_a_b
+        must_compile = true
+        # Do this before mem–allocation to keep mem total down (many concurrent)
+        noop_checks_ok = File.exists?(bc_name) && File.exists?(object_name)
+
+        bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
+        bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
+        bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
+
+        if !compiler.emit && noop_checks_ok
+          _dbg "File.size(bc_name) == #{File.size(bc_name)}, LibLLVM.get_buffer_size(bc_buf) == #{LibLLVM.get_buffer_size(bc_buf)}"
+          must_compile = !compare_mem_to_file bc_buf_ptr, bc_buf_size, bc_name
+          _dbg "we don't need #{bc_name_new}".yellow if !must_compile
+        end
 
         if must_compile
-          _dbg "needs to write bitcode to disk"
-
-          if bc_buf_ptr && bc_buf_size
-            File.open(bc_name_new, "w") do |file|
-              file.write(bc_buf_ptr.to_slice(bc_buf_size))
-            end
-
-            File.rename(bc_name_new, bc_name)
-          end
+          _dbg "needs to compile '#{bc_name}'"
+          write_mem_to_file_via_tmp bc_buf_ptr, bc_buf_size, bc_name
+          # dispose memory as early as possible - many concurrent ops!
+          LibLLVM.dispose_memory_buffer bc_buf if bc_buf
 
           if compiler.release?
             Crystal.timing("LLVM Optimizer", @compiler.stats?) do
               compiler.optimize llvm_mod
             end
           end
-          perf_tmp = Time.now
-          compiler.target_machine.emit_obj_to_file llvm_mod, o_name
-          # say_stats "emit obj-file: #{Time.now - perf_tmp}"
+          tmp_object_name = tempify_name object_name
+          compiler.target_machine.emit_obj_to_file llvm_mod, tmp_object_name
+          File.rename tmp_object_name, object_name
+
+        else
+          LibLLVM.dispose_memory_buffer bc_buf if bc_buf
         end
 
-        if bc_buf
-          LibLLVM.dispose_memory_buffer bc_buf
-        end
-
-        if compiler.dump_ll?
-          llvm_mod.print_to_file ll_name
-        end
+        llvm_mod.print_to_file ll_name if compiler.dump_ll?
+        nil
       end
 
       def emit(values : Array, output_filename)
@@ -555,6 +579,10 @@ module Crystal
         Crystal.relative_filename("#{@output_dir}/#{object_filename}")
       end
 
+      def object_name_tmp
+        Crystal.relative_filename("#{@output_dir}/#{object_filename}____.tmp") # *TODO* safen up name
+      end
+
       def object_filename
         "#{@name}.o"
       end
@@ -565,7 +593,7 @@ module Crystal
 
       def bc_name_new
         # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
-        @bc_name_new ||= "#{@output_dir}/#{@name}.new.bc"
+        @bc_name_new ||= "#{@output_dir}/#{@name}.new.bc" # *TODO* safen up name
       end
 
       def ll_name

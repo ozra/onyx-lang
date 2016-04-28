@@ -33,6 +33,30 @@ class LLVM::TargetMachine
     true
   end
 
+  def emit_obj_to_mem(llvm_mod, buffer_ptr) : Bool
+    emit_to_mem llvm_mod, buffer_ptr, LLVM::CodeGenFileType::ObjectFile
+  end
+
+  def emit_to_mem(llvm_mod, buffer_ptr, type) : Bool # Bool is bad since we're raising
+    status = LibLLVM.target_machine_emit_to_memory_buffer(self, llvm_mod, type, out error_msg, buffer_ptr)
+    unless status == false
+      _dbg "emit_to_mem - status true (err)"
+      _dbg "dispose_memory_buffer buffer_ptr.value"
+      LibLLVM.dispose_memory_buffer buffer_ptr.value # *TODO* bad pointer
+      _dbg "string_and_dispose error_msg"
+      raise LLVM.string_and_dispose(error_msg)
+    end
+    true
+  end
+
+  private def emit_to_file(llvm_mod, filename, type)
+    status = LibLLVM.target_machine_emit_to_file(self, llvm_mod, filename, type, out error_msg)
+    unless status == 0
+      raise LLVM.string_and_dispose(error_msg)
+    end
+    true
+  end
+
   def abi
     triple = self.triple
     case triple
