@@ -1760,6 +1760,14 @@ class OnyxParser < OnyxLexer
       end
    end
 
+   def check_if_type_declaration() : Bool
+
+   end
+
+   def parse_type_declaration(var, require_type_prefix)
+
+   end
+
    def parse_constish_or_type_tied_literal
       constish = parse_constish allow_call_parsing: true
 

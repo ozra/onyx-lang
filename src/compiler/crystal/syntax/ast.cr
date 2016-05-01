@@ -1421,13 +1421,15 @@ module Crystal
 
     property var : ASTNode
     property declared_type : ASTNode
+    property value : ASTNode?
 
-    def initialize(@var, @declared_type, @is_assign_composite = false, @mutability = :auto)
+    def initialize(@var, @declared_type, @value = nil, @is_assign_composite = false, @mutability = :auto)
     end
 
     def accept_children(visitor)
       var.accept visitor
       declared_type.accept visitor
+      value.try &.accept visitor
     end
 
     def name_size
@@ -1447,10 +1449,10 @@ module Crystal
     end
 
     def clone_without_location_individual
-      TypeDeclaration.new(@var.clone, @declared_type.clone, @is_assign_composite.clone, @mutability.clone)
+      TypeDeclaration.new(@var.clone, @declared_type.clone, @value.clone, @is_assign_composite.clone, @mutability.clone)
     end
 
-    def_equals_and_hash @var, @declared_type, @is_assign_composite, @mutability
+    def_equals_and_hash @var, @declared_type, @value, @is_assign_composite, @mutability
   end
 
   class UninitializedVar < ASTNode

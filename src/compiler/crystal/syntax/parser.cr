@@ -833,7 +833,7 @@ module Crystal
 
     def parse_responds_to_name
       if @token.type != :SYMBOL
-        unexpected_token msg: "expected name or symbol"
+        unexpected_token msg: "expected symbol"
       end
 
       @token.value.to_s
@@ -1103,13 +1103,22 @@ module Crystal
         var = Var.new(name).at(@token.location)
         next_token_skip_space
         check :":"
-        next_token_skip_space_or_newline
-        var_type = parse_single_type
-        type_declaration = TypeDeclaration.new(var, var_type).at(var.location)
+        type_declaration = parse_type_declaration(var)
         set_visibility type_declaration
       else
         yield
       end
+    end
+
+    def parse_type_declaration(var)
+      next_token_skip_space_or_newline
+      var_type = parse_single_type
+      skip_space
+      if @token.type == :"="
+        next_token_skip_space_or_newline
+        value = parse_op_assign_no_control
+      end
+      TypeDeclaration.new(var, var_type, value).at(var.location)
     end
 
     def next_comes_colon_space?
@@ -1141,9 +1150,7 @@ module Crystal
       next_token_skip_space
 
       if @no_type_declaration == 0 && @token.type == :":"
-        next_token_skip_space
-        var_type = parse_single_type
-        TypeDeclaration.new(var, var_type).at(var.location)
+        parse_type_declaration(var)
       else
         var
       end
@@ -3356,9 +3363,7 @@ module Crystal
             end
           else
             if @no_type_declaration == 0 && @token.type == :":"
-              next_token_skip_space_or_newline
-              declared_type = parse_single_type
-              declare_var = TypeDeclaration.new(Var.new(name).at(location), declared_type).at(location)
+              declare_var = parse_type_declaration(Var.new(name).at(location))
               push_var declare_var
               declare_var
             elsif (!force_call && is_var)
