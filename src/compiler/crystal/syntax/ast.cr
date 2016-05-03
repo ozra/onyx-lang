@@ -4,6 +4,8 @@ module Crystal
     property location : Location?
     property end_location : Location?
 
+    # *TODO* opt to struct! And optimally to file_loc, start_loc, end_loc
+
     property is_onyx
     property? parenthesized
     @is_onyx = false
@@ -33,6 +35,7 @@ module Crystal
       clone.location = location
       clone.end_location = end_location
       clone.attributes = attributes
+      clone.parenthesized = parenthesized?
       clone
     end
 

@@ -23,9 +23,8 @@ module Crystal
     getter token : Token
     getter line_number : Int32
 
-    # *TODO* look at cr–lexer
     @filename : String | VirtualFile | Nil
-    # @token_end_location : Location?
+    @token_end_location : Location?
     @string_pool : StringPool
 
     property prev_token_type : Symbol
