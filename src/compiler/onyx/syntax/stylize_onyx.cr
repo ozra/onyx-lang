@@ -585,63 +585,90 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   # def stylize_idfr(str, literal_style : Symbol)
+   #    case literal_style
+   #    when :dash, :endash
+   #       encountered_alpha = false
+   #       delimiter_count = 0
+   #       String.build str.size, do |ret|
+   #          str.each_char_with_index do |chr, i|
+   #             is_last_char = (i + 1 == str.size)
+
+   #             if chr == '_'
+   #                delimiter_count += 1
+   #             end
+
+   #             if chr != '_' || is_last_char
+   #                if delimiter_count > 0
+   #                   if encountered_alpha
+   #                      if literal_style == :dash
+   #                         ret << "-"
+   #                      else
+   #                         ret << "–"
+   #                      end
+   #                   else
+   #                      ret << "_" unless is_last_char # done below
+   #                   end
+   #                   delimiter_count = 0
+   #                end
+
+   #                ret << chr
+   #                encountered_alpha = true
+   #             end
+   #          end
+   #       end
+
+   #    when :camel
+   #       encountered_alpha = false
+   #       was_delimit = false
+   #       String.build str.size, do |ret|
+   #          str.each_char_with_index do |chr, i|
+   #             if chr == '_'
+   #                if encountered_alpha
+   #                   was_delimit = true
+   #                else
+   #                   ret << chr
+   #                end
+   #             elsif was_delimit
+   #                ret << chr.upcase
+   #                was_delimit = false
+
+   #             else
+   #                ret << chr
+   #                encountered_alpha = true
+   #             end
+   #          end
+   #       end
+
+   #    else
+   #       str
+   #    end
+   # end
    def stylize_idfr(str, literal_style : Symbol)
-      case literal_style
-      when :dash, :endash
-         encountered_alpha = false
-         delimiter_count = 0
-         String.build str.size, do |ret|
-            str.each_char_with_index do |chr, i|
-               is_last_char = (i + 1 == str.size)
+      encountered_alpha = false
+      delimiter_count = 0
+      delimiter_char = literal_style == :dash ? "-" : "–"
 
-               if chr == '_'
-                  delimiter_count += 1
-               end
-
-               if chr != '_' || is_last_char
-                  if delimiter_count > 0
-                     if encountered_alpha
-                        if literal_style == :dash
-                           ret << "-"
-                        else
-                           ret << "–"
-                        end
-                     else
-                        ret << "_" unless is_last_char # done below
-                     end
-                     delimiter_count = 0
-                  end
-
-                  ret << chr
-                  encountered_alpha = true
-               end
+      String.build str.size, do |ret|
+         str.each_char_with_index do |chr, i|
+            is_last_char = (i + 1 == str.size)
+            if chr == '_'
+               delimiter_count += 1
             end
-         end
-
-      when :camel
-         encountered_alpha = false
-         was_delimit = false
-         String.build str.size, do |ret|
-            str.each_char_with_index do |chr, i|
-               if chr == '_'
-                  if encountered_alpha
-                     was_delimit = true
+            if chr != '_' || is_last_char
+               if delimiter_count > 0
+                  if is_last_char || !encountered_alpha
+                     ret << "_" * delimiter_count
                   else
-                     ret << chr
+                     ret << delimiter_char * delimiter_count
                   end
-               elsif was_delimit
-                  ret << chr.upcase
-                  was_delimit = false
-
-               else
-                  ret << chr
-                  encountered_alpha = true
+                  delimiter_count = 0
                end
+
+               ret << chr unless chr == '_'
+               encountered_alpha = true
             end
          end
-
-      else
-         str
       end
    end
 
@@ -1217,6 +1244,10 @@ class StylizeOnyxVisitor < Visitor
       @str << " "
       to_s_mutability node.mutability
       node.declared_type.accept self
+      if value = node.value
+        @str << " = "
+        value.accept self
+      end
       false
    end
 

@@ -160,6 +160,10 @@ module Crystal
         if node.struct? != superclass.struct?
           node.raise "can't make #{node.struct? ? "struct" : "class"} '#{node.name}' inherit #{superclass.type_desc} '#{superclass.to_s}'"
         end
+
+        if superclass.struct? && !superclass.abstract?
+          node.raise "can't extend non-abstract struct #{superclass}"
+        end
       end
 
       created_new_type = false
@@ -743,19 +747,7 @@ module Crystal
       false
     end
 
-    def visit(node : TypeOf)
-      false
-    end
-
     def visit(node : PointerOf)
-      false
-    end
-
-    def visit(node : ArrayLiteral)
-      false
-    end
-
-    def visit(node : HashLiteral)
       false
     end
 

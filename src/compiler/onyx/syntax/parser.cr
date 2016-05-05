@@ -59,7 +59,7 @@ class OnyxParser < OnyxLexer
       @calls_super = false
       @calls_initialize = false
       @calls_previous_def = false
-      @uses_explicit_block_param = false
+      @uses_explicit_fragment_param = false
       @assigns_special_var = false
 
       # *TODO* clean these three up - similar chores
@@ -253,40 +253,23 @@ class OnyxParser < OnyxLexer
       dbginc
       location = @token.location
 
-      # *TODO* this methodology ain't good - anyway - it's now put inside "parse_op_assign"
-      #@was_just_nest_end = false # is for catching the suffix part..
-
       # when explicit keyword fun - then it's better to parse via the usual
       # expression route
-      possible_def_context = (
+      possible_func_def_context = (
          prev_token_type == :NEWLINE ||
          prev_token_type == :DEDENT ||
          prev_token_type == :INDENT ||
-         prev_token_type == :ACTUAL_BOF
-      )
-      can_be_arrow_func_def = possible_def_context && (
-         # kwd?(:def, :fn, :fu, :mf, :fun, :own, :me, :func, :meth, :pure, :proc) ||
-         (
-            tok?(DefOrMacroCheck1) &&
-            (curch == '(' || (curch == '*' && peek_next_char == '('))
-         )
+         prev_token_type == :ACTUAL_BOF ||
+         prev_token_type == :SPACE ||
+         prev_token_type == :":" ||
+         prev_token_type == :"=>"
       )
 
-      chars_snap_pos = current_pos
-      def_chars = 0
-      expr_chars = 0
-
-      if can_be_arrow_func_def
+      if possible_func_def_context && possible_func_def?
          dbg "- parse_expression - tries pre-emptive def parse".white
 
-         # *TODO* the chars count can be dropped now!
-         if (ret = try_parse_def).is_a? Int32
-            def_chars = ret - chars_snap_pos
-         else
-            return ret as ASTNode
-         end
-
-         backed = backup_full
+         ret = try_parse_def
+         return ret as ASTNode if ret
 
          dbg "- parse_expression - after pre-emptive def parse, tries expr".white
          atomic = parse_op_assign
@@ -295,8 +278,6 @@ class OnyxParser < OnyxLexer
          dbg "- parse_expression - plain expr parsing".white
          atomic = parse_op_assign
       end
-
-      atomic = atomic.not_nil! # Crystal doesn't handle above rescue mess well in inference
 
       dbg "- parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
 
@@ -457,7 +438,7 @@ class OnyxParser < OnyxLexer
             next
 
          when :IDFR
-            break if kwd? :then, :do, :by, :step, :begins # *TODO* is_end_keyword???
+            break if kwd? :then, :do, :by, :step, :begins, :below, :throughout # *TODO* is_end_keyword???
 
             unexpected_token "suffix not allowed in the context" unless allow_suffix
             break
@@ -517,8 +498,21 @@ class OnyxParser < OnyxLexer
                   add_var atomic
 
                   dbg "creates Assign"
+                  prev_atomic = atomic
                   atomic = Assign.new(atomic, value).at(location)
                   atomic.doc = doc
+
+                  if pragmas? && (prev_atomic.is_a?(InstanceVar) || prev_atomic.is_a?(ClassVar))
+                     if prev_atomic.responds_to?(:name)
+                        name = prev_atomic.name.to_s
+                     else
+                        raise "can't happen"
+                     end
+
+                     rets = [atomic] of ASTNode
+                     parse_member_var_pragmas rets, name, prev_atomic, nil
+                     atomic = Expressions.from(rets) if rets.size > 1
+                  end
                end
 
                atomic
@@ -1087,7 +1081,7 @@ class OnyxParser < OnyxLexer
       return atomic
    end
 
-   def parse_atomic_method_suffix_dot(atomic, location)
+   def parse_atomic_method_suffix_dot(atomic : ASTNode, location : Location?)
       dbg "parse_atomic_method_suffix_dot".green
       check_void_value atomic, location
 
@@ -1101,6 +1095,7 @@ class OnyxParser < OnyxLexer
       else
          next_token_skip_space_or_newline
 
+         # *TODO* should we allow this in Onyx?
          if @token.type == :INSTANCE_VAR
             dbg "parse_atomic_method_suffix_dot instance var"
             ivar_name = @token.value.to_s
@@ -1117,14 +1112,11 @@ class OnyxParser < OnyxLexer
       check AtomicWithMethodCheck
       name_column_number = @token.column_number
 
-
-
       if @token.value == :of?
-         atomic = parse_of_t(atomic).at(location)
+         return parse_of_t(atomic).at(location)
 
       elsif @token.value == :implements?
-         atomic = parse_implements(atomic).at(location)
-
+         return parse_implements(atomic).at(location)
 
 
       # `x.=y 47`  => `x= x.y 47`
@@ -1205,11 +1197,15 @@ class OnyxParser < OnyxLexer
             name = foreign
          end
 
+         if possible_func_def?
+            fdef = try_parse_def supplied_receiver: atomic
+            return fdef if fdef
+         end
+
          name_indent = @indent
          end_location = token_end_location
          next_token
 
-         # *TODO* indented cal
          if @token.type == :SPACE
             next_token
             space_consumed = true
@@ -1223,7 +1219,7 @@ class OnyxParser < OnyxLexer
          when :"="
             # Rewrite 'f.x = arg' as f.x=(arg)
             next_token
-            if @token.type == :"("
+            if tok? :"("
                next_token_skip_space
                arg = parse_single_arg
                check :")"
@@ -1261,10 +1257,13 @@ class OnyxParser < OnyxLexer
             ).at(location)
 
          else
-            if space_consumed
+            if tok? :INDENT
+               next_token
+               call_args = parse_call_args_indented name_indent, name, check_plus_and_minus: true, allow_curly: true
+
+            elsif space_consumed
                call_args = parse_call_args_spaced
 
-            # *TODO* indented call
             else
                has_parens, call_args = parse_call_args true, name_indent
             end
@@ -1277,29 +1276,28 @@ class OnyxParser < OnyxLexer
             else
                args = block = explicit_block_param = nil
             end
-         end
 
-         if block || explicit_block_param
-            atomic = Call.new(
-               atomic,
-               name,
-               (args || [] of ASTNode),
-               block,
-               explicit_block_param, named_args,
-               name_column_number: name_column_number,
-               has_parenthesis: has_parens
-            )
-         else
-            atomic = args ?
-               (Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number, has_parenthesis: has_parens)
-            :
-               (Call.new atomic, name, name_column_number: name_column_number, has_parenthesis: has_parens)
+            if block || explicit_block_param
+               atomic = Call.new(
+                  atomic,
+                  name,
+                  (args || [] of ASTNode),
+                  block,
+                  explicit_block_param, named_args,
+                  name_column_number: name_column_number,
+                  has_parenthesis: has_parens
+               )
+            elsif args
+               atomic = (Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number, has_parenthesis: has_parens)
+            else
+               atomic = (Call.new atomic, name, name_column_number: name_column_number, has_parenthesis: has_parens)
+            end
+            atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
+            atomic.at(location)
+            return atomic # *TODO* *BUG* - if we return here, atomic below has no type (!)
          end
-         atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
-         atomic.at(location)
-         return atomic
       end
-      return atomic
+      # return atomic
    end
 
    def parse_single_arg
@@ -1384,28 +1382,20 @@ class OnyxParser < OnyxLexer
    def parse_atomic_without_location
       dbg "parse_atomic_without_location"
 
+      # if @token.type == :CONST && ([:Self, :Type, :Class].includes? @token.value)
+      #    dbg "Found CONST with value Self, Type or Class"
+      #    @token.type = :IDFR
+      #    @token.value = :self
 
-      # *TODO* *9* LEXICAL LEVEL REWRITE - REALLY MOVE THIS PoC *TODO*!
-      # While the lang is in volatile state this is OK
-      # Could actually be done already in the Lexer! (for to_s / formatting -
-      # always use source as reference for construct kind
-      if @token.type == :CONST && ([:Self, :Type, :Class].includes? @token.value)
-         dbg "Found CONST with value Self, Type or Class"
-         if current_char == '.'
-            dbg "AND curch == '.'"
+      #    # # *TODO* it might also be a call damn it!
+      #    # if current_char == '.'
+      #    #    next_token_skip_space # to the dot
+      #    #    next_token_skip_space # to the idfr
+      #    #    # *TODO* use generic resolution, just add parse_def_or_call to path–ends
+      #    #    return Expressions.from parse_typedef_body_var_or_const true, :MODULE
+      #    # end
 
-            next_token # to the :"." TOKEN
-            next_token # to next token
-
-            # rewrite token in–place - *UGLY*!
-            @token.type = :CLASS_VAR
-            @token.value = ensure_atat_prefix @token.value.to_s
-         else
-            dbg "curch == '#{current_char}'"
-         end
-      end
-      # *TODO*
-
+      # end
 
       if pragmas?
          pragmas = parse_pragma_cluster
@@ -1626,14 +1616,16 @@ class OnyxParser < OnyxLexer
          name_column_number = @token.column_number
          constish = parse_constish_or_type_tied_literal
 
+         dbg "say :CONST - after parse_constish_or..."
+
          if (constish.is_a?(Path) &&
-            (current_char == '<' || current_char == '[') ||
-            nest_start_token? # Terse module syntax
+            (generics_delimiter?(current_char) || nest_start_token?) # Terse module syntax
          )
             check_not_inside_def("can't define module inside def") do
                parse_module_def name_column_number, constish
             end
          else
+            # calls / func–defs, etc. on this path is handled in ...suffix_dot
             constish
          end
 
@@ -1761,8 +1753,8 @@ class OnyxParser < OnyxLexer
          const.name_size = token_location.column_number - start_column
       end
 
-      if allow_type_vars && tok? :"<", :"["
-         generic_end = tok?(:"<") ? :">" : :"]"
+      if allow_type_vars && generics_delimiter?
+         generic_end = tok?(:"<") ? :">" : :"›"
          next_token_skip_space
 
          types = parse_types allow_primitives: true
@@ -1780,10 +1772,8 @@ class OnyxParser < OnyxLexer
       if allow_call_parsing
          dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
          case
-         when tok? :"("
+         when tok? :"(", :INDENT
             return parse_constish_type_new_call_sugar const, name_indent
-
-         # *TODO* indent calls here too!
 
          when tok? :SPACE
             # *TODO* we should probably pre–parse and just make sure it's not a
@@ -2618,7 +2608,7 @@ class OnyxParser < OnyxLexer
 
       @type_nest -= 1
 
-      # *TODO* ModuelDef will do for now unti we know if we go with the trait notation
+      # *TODO* ModuleDef will do for now
       module_def = ModuleDef.new name, body, type_vars, name_column_number
       module_def.doc = doc
       module_def.end_location = end_location
@@ -2646,7 +2636,6 @@ class OnyxParser < OnyxLexer
       end
 
       type_vars = parse_type_vars
-      # skip_statement_end
 
       nest_kind, dedent_level = parse_nest_start(:generic, mod_indent)
       add_nest :module, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
@@ -2658,6 +2647,18 @@ class OnyxParser < OnyxLexer
          body = parse_expressions
       end
 
+      # Ensure modules ALWAYS "extend self" (traits don't)
+      # *TODO* should be solved at one point in a semantic stage to reduce
+      # unnecessary redundancy!
+      if body.is_a? Expressions
+         body.expressions.unshift Extend.new(Self.new.at(location))
+      else
+         exprs = [] of ASTNode
+         exprs << Extend.new(Self.new.at(location))
+         exprs << body unless body.is_a? Nop
+         body = Expressions.from exprs
+      end
+
       end_location = token_end_location
 
       raise "Bug: ModuleDef name can only be a Path" unless name.is_a?(Path)
@@ -2666,7 +2667,8 @@ class OnyxParser < OnyxLexer
 
       module_def = ModuleDef.new name, body, type_vars, name_column_number
       module_def.doc = doc
-      module_def.end_location = end_location
+      module_def.at location
+      module_def.at_end end_location
       module_def
 
    ensure
@@ -2674,7 +2676,7 @@ class OnyxParser < OnyxLexer
    end
 
 
-   def parse_type_def_body(def_kind) : ASTNode # Expressions
+   def parse_type_def_body(typedef_kind) : ASTNode # Expressions
       dbg "parse_type_def_body ->"
 
       members = [] of ASTNode
@@ -2723,9 +2725,9 @@ class OnyxParser < OnyxLexer
                   members << parse_macro # *TODO* parse_run_macro
                end
             when :ifdef
-               members << parse_ifdef def_kind
+               members << parse_ifdef typedef_kind
             else
-               members.concat parse_typedef_body_var_or_const on_self: false
+               members.concat parse_typedef_body_var_or_const false, typedef_kind
             end
 
 
@@ -2745,10 +2747,10 @@ class OnyxParser < OnyxLexer
                end
                next_token_skip_space
 
-               members.concat parse_typedef_body_var_or_const on_self: true
+               members.concat parse_typedef_body_var_or_const true, typedef_kind
 
             else
-               if def_kind == :ENUM_DEF
+               if typedef_kind == :ENUM_DEF
                   dbg "is \"generic enum const\""
 
                   location = @token.location
@@ -2777,18 +2779,18 @@ class OnyxParser < OnyxLexer
 
                else
                   dbg "is \"generic\" const"
-                  members.concat parse_typedef_body_var_or_const on_self: false
+                  members.concat parse_typedef_body_var_or_const false, typedef_kind
                end
             end
          elsif tok? :INSTANCE_VAR  # when :INSTANCE_VAR
-            members.concat parse_typedef_body_var_or_const on_self: false
+            members.concat parse_typedef_body_var_or_const false, typedef_kind
 
          elsif tok? :CLASS_VAR # when :CLASS_VAR
-            members.concat parse_typedef_body_var_or_const on_self: true
+            members.concat parse_typedef_body_var_or_const false, typedef_kind
 
          else
             # we try method parse on most things simplt ( [](), +(), etc!!)
-            members.concat parse_typedef_body_var_or_const on_self: false
+            members.concat parse_typedef_body_var_or_const false, typedef_kind
             #raise "Wtf, etc. mm. and so on.: unexpected #{@token}"
 
          end
@@ -2803,17 +2805,17 @@ class OnyxParser < OnyxLexer
       dbgtail "/parse_type_def_body"
    end
 
-   def ensure_at_prefix(s)
-      return s if s.starts_with? "@"
-      return "@#{s}"
-   end
+   # def ensure_at_prefix(s)
+   #    return s if s.starts_with? "@"
+   #    return "@#{s}"
+   # end
 
-   def ensure_atat_prefix(s)
-      return s if s.starts_with? "@@"
-      return "@@#{s}"
-   end
+   # def ensure_atat_prefix(s)
+   #    return s if s.starts_with? "@@"
+   #    return "@@#{s}"
+   # end
 
-   def parse_typedef_body_var_or_const(on_self = false) : Array(ASTNode)
+   def parse_typedef_body_var_or_const(on_self : Bool, typedef_kind : Symbol) : Array(ASTNode)
       rets = [] of ASTNode
 
       case
@@ -2825,7 +2827,8 @@ class OnyxParser < OnyxLexer
          # *TODO* *VERIFY* instance const??
 
          if on_self
-            name = ensure_atat_prefix name
+            raise "Const on Self - fixme!"
+            # name = ensure_atat_prefix name
             constvar = ClassVar.new(name).at(@token.location)
          else
             # constvar = InstanceVar.new(name).at(@token.location)
@@ -2847,62 +2850,15 @@ class OnyxParser < OnyxLexer
             rets << constvar
          end
 
-      when tok?(:CLASS_VAR) || tok?(:INSTANCE_VAR) || tok?(:IDFR)
-         dbg "(maybe) found instance var"
+      when tok?(:CLASS_VAR, :INSTANCE_VAR)
          name = @token.value.to_s
-         name_loc = token_end_location
 
-         if tok?(:IDFR)
-            if (name == "def" || name == "fn" || name == "own" || name == "fun")   # *TODO* old–school def's supported for now
-               next_token_skip_space
-               name = @token.value.to_s
-            end
-
-            # method def?
-            if (current_char == '(' ||
-               (
-                  current_char == '*' &&
-                  (peek_next_char == '(' || peek_next_char == '*')
-               ) ||
-               (
-                  current_char == '=' &&
-                  (peek_next_char == '(' || peek_next_char == '*')
-               )
-            )
-               dbg "Found def"
-
-               rets << (ret = parse_def)
-               if on_self
-                  ret.receiver = Var.new "self"
-               else
-                  if ret.name == "initialize"
-                     # if def_kind == :TRAIT_DEF
-                     #    raise "Can't have init in traits!"
-                     # else
-                  end
-               end
-
-               return rets
-            end
-         end
-
-         dbg "did so!"
-
-         if (foo = name[-1]) == '!' || foo == '?'
-            dbgtail_off!
-            raise "only functions and methods may end with '!' or '?'", name_loc
-         end
-
-         if tok?(:CLASS_VAR) || on_self
-            name = ensure_atat_prefix name
+         if tok?(:CLASS_VAR) # || on_self
+            # name = ensure_atat_prefix name
+            var = ClassVar.new(name).at(@token.location).at_end(token_end_location)
 
          else # if tok?(:INSTANCE_VAR)
-            name = ensure_at_prefix name
-         end
-
-         if tok?(:CLASS_VAR) || on_self
-            var = ClassVar.new(name).at(@token.location).at_end(token_end_location)
-         else
+            # name = ensure_at_prefix name
             var = InstanceVar.new(name).at(@token.location).at_end(token_end_location)
          end
 
@@ -2941,37 +2897,7 @@ class OnyxParser < OnyxLexer
 
          skip_space
 
-         dbg "parse_typedef_body_var_or_const() - check for pragmas"
-         if pragmas? # tok? :PRAGMA
-            pragmas = parse_pragma_grouping
-
-            if pragmas.size
-               dbg "found pragmas for .. whatever..: #{pragmas}"
-            end
-
-            naked_name = name[((name.rindex('@')||-1)+1)..-1]
-
-            pragmas.select! do |pragma|
-               raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
-
-               case pragma.name
-               when "get"
-                  rets << Def.new naked_name, [] of Arg, var.clone
-                  false
-               when "set"
-                  if var_type
-                     rets << Def.new "#{naked_name}=", [Arg.new(name, restriction: var_type.not_nil!.clone)] #, Nop.new
-                  else
-                     rets << Def.new "#{naked_name}=", [Arg.new(name)] #, Nop.new
-                  end
-                  false
-               else
-                  true
-               end
-            end
-
-         end
-
+         rets = parse_member_var_pragmas rets, name, var, var_type
          rets
 
       else
@@ -2980,9 +2906,17 @@ class OnyxParser < OnyxLexer
             rets << (ret = parse_def)
             if on_self
                ret.receiver = Var.new "self"
+            else
+               if typedef_kind == :TRAIT_DEF && ret.name == "initialize"
+                  raise "Can't have init in traits!"
+               end
             end
             return rets
+
          rescue e : WrongParsePathException
+
+            # *TODO* parse call (for macros!)
+
             dbgtail_off!
             dbg "What happened in `parse_typedef_body_var_or_const` when parsing def? #{e}"
             raise "What happened in `parse_typedef_body_var_or_const` when parsing def? #{e}"
@@ -2996,17 +2930,63 @@ class OnyxParser < OnyxLexer
    end
 
 
+   def parse_member_var_pragmas(rets, name, var, var_type)
+      dbg "parse_typedef_body_var_or_const() - check for pragmas"
+      return rets unless pragmas? # tok? :PRAGMA
 
+      pragmas = parse_pragma_grouping
+      dbg "found pragmas #{pragmas}"
 
+      if var.is_a? ClassVar
+         naked_name = name[2..-1]
+         maybe_self = Var.new("self") # Self.new ???
+      else
+         naked_name = name[1..-1]
+      end
+
+      pragmas.select! do |pragma|
+         raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
+
+         case pragma.name
+         when "get"
+            rets << Def.new(
+               naked_name,
+               [] of Arg,
+               var.clone,
+               receiver: maybe_self
+            )
+            false
+
+         when "set"
+            var_type = var_type.clone if var_type
+            body = Assign.new(var.clone, Var.new(naked_name))
+
+            rets << Def.new(
+               "#{naked_name}=",
+               [Arg.new(naked_name, restriction: var_type)],
+               body,
+               receiver: maybe_self
+            )
+            false
+         else
+            true
+         end
+      end
+
+      # *TODO* hande possible future pragmas!! "atomic", etc.
+      raise "unknown pragmas for member-vars: #{pragmas}" if pragmas.size > 0
+
+      rets
+   end
 
 
    def parse_type_vars
       type_vars = nil
-      if tok? :"<", :"["
+      if generics_delimiter?
          type_vars = [] of String
 
          next_token_skip_space_or_newline
-         while !tok? :">", :"]"
+         while !generics_end_delimiter?
             type_var_name = check_const
             unless OnyxParser.free_var_name?(type_var_name)
                dbgtail_off!
@@ -3346,11 +3326,11 @@ class OnyxParser < OnyxLexer
    def parse_fragment : Block
       dbg "parse_fragment ->"
 
-      block_auto_params = [] of Var
-      block_body = nil
+      fragment_auto_params = [] of Var
+      fragment_body = nil
       auto_parametrization = false
 
-      block_indent = @indent
+      fragment_indent = @indent
 
       if tok? :"~.", :"\\."
          return parse_oneletter_fragment
@@ -3373,11 +3353,11 @@ class OnyxParser < OnyxLexer
 
                else
                   dbgtail_off!
-                  raise "expecting block argument name, not #{@token.type}", @token
+                  raise "expecting fragment argument name, not #{@token.type}", @token
                end
 
                var = Var.new(arg_name).at(@token.location)
-               block_auto_params << var
+               fragment_auto_params << var
 
                next_token_skip_space_or_newline
                if tok? :",", :";" # these are PARAMS so semis allowed.
@@ -3385,7 +3365,7 @@ class OnyxParser < OnyxLexer
                end
             end
 
-            dbg "parse_fragment - done parsing block parameters"
+            dbg "parse_fragment - done parsing fragment parameters"
 
             next_token_skip_space
             raise "expected `~>` or `\\`" if !tok? :"~>", :"\\"
@@ -3398,7 +3378,7 @@ class OnyxParser < OnyxLexer
 
       else
          dbgtail_off!
-         raise "parse_fragment - Expected block start!"
+         raise "parse_fragment - Expected fragment start!"
       end
 
       #next_token_skip_statement_end
@@ -3406,26 +3386,50 @@ class OnyxParser < OnyxLexer
 
       push_scope
 
-      nest_kind, dedent_level = parse_nest_start(:block_start, block_indent)
-      add_nest :block, dedent_level, "", (nest_kind == :LINE_NEST), false
+      nest_kind, dedent_level = parse_nest_start(:fragment_start, fragment_indent)
+      add_nest :fragment, dedent_level, "", (nest_kind == :LINE_NEST), false
 
       if auto_parametrization
-         dbg "auto_parametrization - so we add to nesting_stack. block_auto_params == nil? : #{block_auto_params == nil}".red
-         @nesting_stack.last.block_auto_params = block_auto_params
+         dbg "auto_parametrization - so we add to nesting_stack. fragment_auto_params == nil? : #{fragment_auto_params == nil}".red
+         @nesting_stack.last.fragment_auto_params = fragment_auto_params
       else
-         add_vars block_auto_params
+         add_vars fragment_auto_params
       end
 
       if nest_kind == :NIL_NEST
          dbgtail_off!
-         raise "can't have an empty block!"   # *TODO* we probably should be able to!
+         raise "can't have an empty fragment!"   # *TODO* we probably should be able to!
       end
 
       dbg "parse_fragment - before parse_expressions"
 
       # auto–params are extracted in var_or_call parsing when above nesting_stack
-      # has block_auto_params and name ~= /_\d/
-      block_body = parse_expressions
+      # has fragment_auto_params and name ~= /_\d/
+      fragment_body = parse_expressions
+
+      if auto_parametrization
+         fragment_auto_params.sort! {|a, b| a.name <=> b.name}
+         final_params = [] of Var
+         numeral = '1'
+         fragment_auto_params.each do |var|
+            # skip duplicates
+            if (last = final_params.last?) && var.name == last.name
+               next
+            end
+
+            # fill in missing arg numerals in order
+            while numeral < var.name[1]
+               final_params << Var.new "_#{numeral}"
+               numeral = numeral.succ
+            end
+
+            final_params << var
+            numeral = numeral.succ
+         end
+
+         dbg "- parse_fragment - auto parametrization gave: #{fragment_auto_params} => #{final_params}"
+         fragment_auto_params = final_params
+      end
 
       dbg "parse_fragment - AFTER parse_expressions"
 
@@ -3433,7 +3437,7 @@ class OnyxParser < OnyxLexer
 
       end_location = token_end_location
 
-      Block.new(block_auto_params, block_body).at_end(end_location)
+      Block.new(fragment_auto_params, fragment_body).at_end(end_location)
    end
 
 
@@ -4172,7 +4176,7 @@ class OnyxParser < OnyxLexer
 
       next_token_skip_space_or_newline
 
-      if kwd?(:self)
+      if kwd?(:self, :Self, :Type, :Class)
          name = Self.new.at(@token.location)
          name.end_location = token_end_location
          next_token_skip_space
@@ -4197,53 +4201,44 @@ class OnyxParser < OnyxLexer
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
-      a_def.uses_block_arg = @uses_explicit_block_param
+      a_def.uses_block_arg = @uses_explicit_fragment_param
       a_def.assigns_special_var = @assigns_special_var
 
       result
    end
 
-   def try_parse_def(is_abstract = false, is_macro_def = false, doc = nil)
+   def try_parse_def(supplied_receiver = nil, is_macro_def = false, doc = nil) : ASTNode?
       dbg "try_parse_def ->".white
-
       backed = backup_full
-
-      certain_def_count = @certain_def_count
+      # certain_def_count = @certain_def_count
 
       begin
-         ret = parse_def(is_abstract, is_macro_def, doc)
+         ret = parse_def(supplied_receiver, is_macro_def, doc)
          return ret # as ASTNode
 
       rescue
       # rescue e : WrongParsePathException
-         if certain_def_count != @certain_def_count   # *TODO* should be removed in favour of specific exception...
-            dbgtail_off!
-            ::raise @error_stack.last
-         end
+         # if certain_def_count != @certain_def_count   # *TODO* should be removed in favour of specific exception...
+         #    dbgtail_off!
+         #    ::raise @error_stack.last
+         # end
 
          dbg "failed try_parse_def".white
-
-         # Rollback parsing a bit - once the language settles we'll implement all
-         # this in a neater way that's more performant. For now - low intrusion
-         # is better.
-
-         chars_end_pos = current_pos
          restore_full backed
-
-         return chars_end_pos
+         return nil
       end
 
    ensure
       dbgtail "/try_parse_def".white
    end
 
-   def parse_def(is_abstract = false, is_macro_def = false, doc = nil)
+   def parse_def(supplied_receiver = nil, is_macro_def = false, doc = nil)
       @def_parsing += 1
       doc ||= @token.doc
 
       # instance_vars = prepare_parse_def
       prepare_parse_def
-      a_def = parse_def_helper is_abstract: is_abstract, is_macro_def: is_macro_def
+      a_def = parse_def_helper supplied_receiver, is_macro_def: is_macro_def
 
       # Small memory optimization: don't keep the Set in the Def if it's empty
       # instance_vars = nil if instance_vars.empty?
@@ -4252,14 +4247,14 @@ class OnyxParser < OnyxLexer
       a_def.calls_super = @calls_super
       a_def.calls_initialize = @calls_initialize
       a_def.calls_previous_def = @calls_previous_def
-      a_def.uses_block_arg = @uses_explicit_block_param
+      a_def.uses_block_arg = @uses_explicit_fragment_param
       a_def.assigns_special_var = @assigns_special_var
       a_def.doc = doc
       # @instance_vars = nil
       @calls_super = false
       @calls_initialize = false
       @calls_previous_def = false
-      @uses_explicit_block_param = false
+      @uses_explicit_fragment_param = false
       @assigns_special_var = false
       @explicit_block_param_name = nil
 
@@ -4273,7 +4268,7 @@ class OnyxParser < OnyxLexer
       @calls_super = false
       @calls_initialize = false
       @calls_previous_def = false
-      @uses_explicit_block_param = false
+      @uses_explicit_fragment_param = false
       @explicit_block_param_name = nil
       @assigns_special_var = false
       # @instance_vars = Set(String).new
@@ -4285,7 +4280,7 @@ class OnyxParser < OnyxLexer
    MACRO_VAR_EXPRS_START_DELIMITER = :"{="
    MACRO_VAR_EXPRS_END_DELIMITER = :"=}"
 
-   def parse_macro
+   def parse_macro(supplied_receiver = nil)
       dbg "parse_macro ->".cyan
 
       doc = @token.doc
@@ -4295,7 +4290,7 @@ class OnyxParser < OnyxLexer
 
       # *TODO* turn this into it's own keyword completely!? "tpldef"
       if kwd?(:def)
-         a_def = parse_def_helper is_macro_def: true
+         a_def = parse_def_helper supplied_receiver, is_macro_def: true
          a_def.doc = doc
          return a_def
       end
@@ -4738,21 +4733,14 @@ class OnyxParser < OnyxLexer
    DefOrMacroCheck1 = [:IDFR, :CONST, :"<<", :"<", :"<=", :"==", :"is", :"!~~", :"!~", :"~~", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :"^", :"**", :"[]", :"[]=", :"<=>", :"[]?"]
    DefOrMacroCheck2 = [:"<<", :"<", :"<=", :"==", :"is", :"!~~", :"!~", :"~~", :"!=", :"isnt", :"=~", :">>", :">", :">=", :"+", :"-", :"*", :"/", :"!", :"not", :".~.", :"%", :".&.", :".|.", :".^.", :"**", :"[]", :"[]?", :"[]=", :"<=>"]
 
-   # *TODO* remove is_abstract - prefix version _when_ it seems like it's fine
-   # using only the "abstract-body–notation"
-   def parse_def_helper(is_abstract = false, is_macro_def = false)
+   def parse_def_helper(supplied_receiver, is_macro_def = false)
+      dbg "parse_def_helper ->"
       push_fresh_scope
       @doc_enabled = false
       @def_nest += 1
 
       def_indent = @indent
-
-      # *TODO* remove!!!
-      if (v = @token.value).is_a?(Symbol) && kwd?(:fn, :fu, :mf, :def, :fun, :own)
-         dbg "got explicit fun-keyword prefix: #{v}"
-         literal_prefix_style = v
-         next_token_skip_space
-      end
+      is_abstract = false
 
       maybe_mutate_gt_op_to_bigger_op
 
@@ -4774,7 +4762,7 @@ class OnyxParser < OnyxLexer
          check DefOrMacroCheck1
       end
 
-      receiver = nil
+      receiver = supplied_receiver
       @yields = nil
       name_line_number = @token.line_number
       name_column_number = @token.column_number
@@ -4799,10 +4787,13 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
       end
 
-      if foreign = BabelData.funcs[@token.value.to_s]?
+      if foreign = BabelData.funcs[name]?
          dbg "Got foreign name '#{foreign}' for function #{@token.value}".magenta
          name = foreign
       end
+
+      dbg "- parse_def_helper - name: '#{name}'"
+
 
       marked_visibility =  if tok? :"*"
                               next_token
@@ -4842,14 +4833,16 @@ class OnyxParser < OnyxLexer
             name_column_number = @token.column_number
             next_token_skip_space
          end
-      else
-         if receiver
+
+      elsif
+         if receiver && !supplied_receiver
             unexpected_token "somewhere in parsing def"
          else
-            raise "shouldn't reach this line" unless name
+            raise "shouldn't reach this line" if !name
          end
-         name = name.not_nil!
       end
+
+      name = name.not_nil!
 
       arg_list = [] of Arg
       extra_assigns = [] of ASTNode
@@ -4890,21 +4883,6 @@ class OnyxParser < OnyxLexer
          index += 1
       end
       next_token_skip_space
-      # when :";", :"NEWLINE"
-      #    # Skip
-      # when :":"
-      #    # Skip
-      # when :"&"
-      #    next_token_skip_space_or_newline
-      #    explicit_block_param = parse_explicitly_declared_block_param(extra_assigns)
-      #    compute_explicit_block_param_yields explicit_block_param
-      # else
-      #    if is_abstract && @token.type == :EOF   # for prefixed `abstract`, the suffix–vers is below
-      #       # OK
-      #    else
-      #       unexpected_token "while parsing def"
-      #    end
-      # end
 
       dbg "before is_macro_def"
 
@@ -4914,34 +4892,21 @@ class OnyxParser < OnyxLexer
          return_type = parse_single_type
          end_location = return_type.end_location
 
-         if is_abstract   # for prefixed `abstract`, the suffix–vers is below
+         if is_explicit_end_tok? # *TODO* all kinds of endings
             body = Nop.new
+            next_token_skip_space
          else
-            # if kwd?("end")   # *TODO*
-            if is_explicit_end_tok? # *TODO* all kinds of endings
-
-               body = Expressions.new
-               next_token_skip_space
-            else
-               body, end_location = parse_macro_body(name_line_number, name_column_number)
-            end
+            body, end_location = parse_macro_body(name_line_number, name_column_number)
          end
       else
          # The part below should be cleaned up
 
-
-         # *todo* depending on style!! token or arrow
-         #
-         # fn my–func(a, b Int) -> do–shit
-         # fn my–func(a, b Int) Foo -> do–shit
-         # fn my–func(a, b Int) \n
-         # fn my–func(a, b Int) Foo
-         # fn my–func(a, b Int)! -> do–shit
-         # fn my–func(a, b Int)! \n
          # my–func(a, b Int) -> do–shit
          # my–func(a, b Int) ->! do–shit
          # my–func(a, b Int) Foo -> do–shit
          # my–func(a, b Int) -> \n
+
+         # my–func(a, b Int) -> Foo: do–shit
 
 
          if @token.type != :"->"
@@ -5004,14 +4969,6 @@ class OnyxParser < OnyxLexer
                body = Nop.new
             end
 
-            handle_nest_end true
-
-         elsif is_abstract   # for prefixed `abstract`, the suffix–vers is below
-            # *TODO* remove! this is foul
-            dbg "is_abstract - sets nil block"
-            dbgtail_off!
-            raise "remove prefix abstract! deprecated"
-            body = Nop.new
             handle_nest_end true
 
          else
@@ -5216,7 +5173,7 @@ class OnyxParser < OnyxLexer
    def parse_explicitly_declared_block_param(extra_assigns)
       name_location = @token.location
       arg_name, uses_arg = parse_param_name(name_location, extra_assigns)
-      @uses_explicit_block_param = true if uses_arg
+      @uses_explicit_fragment_param = true if uses_arg
 
       next_token_skip_space_or_newline
 
@@ -5575,9 +5532,9 @@ class OnyxParser < OnyxLexer
 
       dbg "identifier `#{name}`, is_var == #{is_var}" # , literal_style = #{name_literal_style}"
 
-      # *TODO* add support for implicitly numbered magic params too!
+      # *TODO* add support for implicitly numbered magic params too!?
 
-      if name[0] == '_' && name.size == 2 && name[1] >= '0' && name[1] <= '9'    # magic param?
+      if (name[0] == '_' || name[0] == '%') && name.size == 2 && ('0' <= name[1] <= '9')    # magic param?
          is_var = true
          #name = "tmp_par" + name
          if in_auto_paramed?
@@ -5670,8 +5627,8 @@ class OnyxParser < OnyxLexer
                   add_var declared_var
                   declared_var
                elsif (!force_call && is_var)
-                  if @explicit_block_param_name && !@uses_explicit_block_param && name == @explicit_block_param_name
-                     @uses_explicit_block_param = true
+                  if @explicit_block_param_name && !@uses_explicit_fragment_param && name == @explicit_block_param_name
+                     @uses_explicit_fragment_param = true
                   end
                   Var.new name
                else
@@ -6227,7 +6184,7 @@ class OnyxParser < OnyxLexer
       dbg "add_magic_param #{name}"
       add_var name
       var = Var.new(name).at(@token.location)
-      if bp = @nesting_stack.last.block_auto_params
+      if bp = @nesting_stack.fragment_auto_params? # .last.fragment_auto_params
          bp << var
       else
          raise "Internal error: tried to add_magic_param() when par-stack == nil [4953]"
@@ -6235,7 +6192,7 @@ class OnyxParser < OnyxLexer
    end
 
    def in_auto_paramed?
-      #ret = @nesting_stack.last.block_auto_params != nil
+      #ret = @nesting_stack.last.fragment_auto_params != nil
       ret = @nesting_stack.in_auto_paramed?
       dbg "in_auto_paramed? = #{ret}"
       ret
@@ -6249,6 +6206,22 @@ class OnyxParser < OnyxLexer
    #                ##       ##    ##        ##             ##
    #                ##       ##    ##        ##       ##    ##
    #                ##       ##    ##        ########  ######
+
+   def generics_delimiter?(char : Char) : Bool
+      char == '<' || char == '‹' # *TODO* unicode–alternatives not definite!
+   end
+
+   def generics_end_delimiter?(char : Char) : Bool
+      char == '>' || char == '›' # *TODO* unicode–alternatives not definite!
+   end
+
+   def generics_delimiter? : Bool
+      tok? :"<", :"‹" # *TODO* unicode–alternatives not definite!
+   end
+
+   def generics_end_delimiter? : Bool
+      tok? :">", :"›" # *TODO* unicode–alternatives not definite!
+   end
 
    def next_is_type?(require_explicit = false) : Bool
       if require_explicit
@@ -6306,7 +6279,15 @@ class OnyxParser < OnyxLexer
       next_token_skip_space
 
       if next_is_type?(require_explicit: false)
-         parse_var_type_declaration var, true
+         decl = parse_var_type_declaration var, true
+
+         # *TODO* this should be done for non type–declared too preferably
+         # this can happen in the generic parsing for modules with
+         # type–scoped vars (used as globals) for instance
+         rets = [] of ASTNode
+         rets << decl
+         rets = parse_member_var_pragmas rets, var.name, var, decl.declared_type
+         Expressions.from rets
       else
          var
       end
@@ -6314,6 +6295,8 @@ class OnyxParser < OnyxLexer
 
    def parse_var_type_declaration(var, allow_assign)
       mutability, storage, var_type = parse_qualifer_and_type
+
+      skip_space
 
       if allow_assign && tok?(:"=")
          next_token_skip_space_or_newline
@@ -7311,7 +7294,7 @@ class OnyxParser < OnyxLexer
          return true
       when :IDFR
          case @token.value
-         when :else, :elsif, :elif, :when, :rescue, :ensure, :fulfil, :do, :then, :begins
+         when :else, :elsif, :elif, :when, :rescue, :ensure, :fulfil, :do, :then, :begins, :below, :throughout
             return true
          end
 
@@ -7331,6 +7314,17 @@ class OnyxParser < OnyxLexer
 
    def pragma_starter?()
       tok?(:"'") && !('A' <= current_char <= 'Z') # (:BACKSLASH, :"|", :"#", :"'")
+   end
+
+
+   def possible_func_def? : Bool
+      return false unless tok?(DefOrMacroCheck1)
+      return case curch
+         when '(' then true
+         when '*' then (pc = peek_next_char) == '(' || pc == '*'
+         when '=' then (pc = peek_next_char) == '(' || pc == '*'
+         else          false
+      end
    end
 
    def can_be_assigned?(node) : Bool
@@ -7508,7 +7502,7 @@ class OnyxParser < OnyxLexer
    def parse_nest_start(kind : Symbol, indent : Int32) : {Symbol, Int32} #   = :generic
       dbg "parse_nest_start ->".yellow
 
-      dedent_level = kwd?(:begins) ? -1 : indent
+      dedent_level = kwd?(:begins, :below, :throughout) ? -1 : indent
       #compare_dedent_level = dedent_level == -1 ? indent - 1 : indent
 
       # *TODO* om `~>` block starter is kept, then an additional start-token
@@ -7582,8 +7576,8 @@ class OnyxParser < OnyxLexer
          dbg "parse_nest_start - explicit_starter + :else|:elsif|:elif"
          {:NIL_NEST, dedent_level}
 
-      when explicit_starter, kind == :else, kind == :block_start
-         dbg "parse_nest_start - explicit_starter | KIND == :else | KIND == :block_start"
+      when explicit_starter, kind == :else, kind == :fragment_start
+         dbg "parse_nest_start - explicit_starter | KIND == :else | KIND == :fragment_start"
          @one_line_nest += 1
          @significant_newline = true
          {:LINE_NEST, dedent_level}
@@ -7593,7 +7587,7 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_explicit_nest_start_token
-      if (tok?(:"=>", :":") || kwd?(:do, :then, :begins))
+      if (tok?(:"=>", :":") || kwd?(:do, :then, :begins, :below, :throughout))
          dbg "parse_explicit_nest_start_token - found explicit_starter"
          next_token_skip_space
          true

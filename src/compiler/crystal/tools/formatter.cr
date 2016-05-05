@@ -425,7 +425,7 @@ module Crystal
       write @token.raw
       format_regex_modifiers if is_regex
 
-      if is_heredoc && indent_difference != 0
+      if is_heredoc && indent_difference > 0
         @heredoc_fixes << HeredocFix.new(heredoc_line, @line, indent_difference)
       end
 
@@ -507,7 +507,7 @@ module Crystal
       check :DELIMITER_END
       write @token.raw
 
-      if is_heredoc && indent_difference != 0
+      if is_heredoc && indent_difference > 0
         @heredoc_fixes << HeredocFix.new(heredoc_line, @line, indent_difference)
       end
 
@@ -1372,7 +1372,6 @@ module Crystal
     def visit(node : Macro)
       write_keyword :macro, " "
 
-      check :IDENT
       write node.name
       next_token_skip_space
 
@@ -2381,8 +2380,13 @@ module Crystal
             accept body
           end
         when Cast
-          clear_object(body)
-          accept body
+          if body.obj.is_a?(Var)
+            call = Call.new(nil, "as", args: [body.to] of ASTNode)
+            accept call
+          else
+            clear_object(body)
+            accept body
+          end
         else
           raise "Bug: expected Call, IsA or RespondsTo as &. argument, at #{node.location}, not #{body.class}"
         end
@@ -2954,8 +2958,27 @@ module Crystal
 
     def visit(node : Cast)
       accept node.obj
-      write_keyword " ", :as, " "
-      accept node.to
+      skip_space
+      if @token.type == :"."
+        write "."
+        next_token_skip_space_or_newline
+        write_keyword :as
+        skip_space
+        if @token.type == :"("
+          write_token :"("
+          skip_space_or_newline
+          accept node.to
+          skip_space_or_newline
+          write_token :")"
+        else
+          skip_space
+          write " "
+          accept node.to
+        end
+      else
+        write_keyword " ", :as, " "
+        accept node.to
+      end
       false
     end
 

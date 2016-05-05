@@ -601,7 +601,7 @@ module Crystal
         end
         return false unless macro_scope.is_a?(Type)
         _dbg 3
-        the_macro = macro_scope.metaclass.lookup_macro(node.name, node.args.size, node.named_args)
+        the_macro = macro_scope.metaclass.lookup_macro(node.name, node.args, node.named_args)
       when Nil
         _dbg 4
         return false if node.name == "super" || node.name == "previous_def"

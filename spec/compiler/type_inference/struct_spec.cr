@@ -28,17 +28,32 @@ describe "Type inference: struct" do
     end
   end
 
-  it "doesn't allow struct to participate in virtual" do
+  it "allows struct to participate in virtual" do
     assert_type("
-      struct Foo
+      abstract struct Foo
       end
 
       struct Bar < Foo
       end
 
-      Foo.new || Bar.new
-      ") do
-      union_of(types["Foo"], types["Bar"])
+      struct Baz < Foo
+      end
+
+      Bar.new || Baz.new
+      ") { types["Foo"].virtual_type! }
+  end
+
+  %w(Value Struct Int Float).each do |type|
+    it "doesn't make virtual for #{type}" do
+      assert_type("
+        struct Foo < #{type}
+        end
+
+        struct Bar < #{type}
+        end
+
+        Foo.new || Bar.new
+        ") { union_of(types["Foo"], types["Bar"]) }
     end
   end
 
@@ -136,16 +151,67 @@ describe "Type inference: struct" do
       "recursive struct Foo detected: `@bar : Bar?` -> `@foo : Foo?`"
   end
 
-  it "errors on recursive struct through inheritance (#2136)" do
+  it "can't extend struct from non-abstract struct" do
     assert_error %(
       struct A
-        struct B < A end
-
-        def initialize(@x : A::B?) end
       end
 
-      a = A.new A::B.new nil
+      struct B < A
+      end
       ),
-      "recursive struct A::B detected: `@x : A::B?`"
+      "can't extend non-abstract struct A"
+  end
+
+  it "unifies type to virtual type" do
+    assert_type(%(
+      abstract struct Foo
+      end
+
+      struct Bar < Foo
+      end
+
+      ptr = Pointer(Foo).malloc(1_u64)
+      ptr.value = Bar.new
+      ptr.value
+      )) { types["Foo"].virtual_type! }
+  end
+
+  it "doesn't error if method is not found in abstract type" do
+    assert_type(%(
+      abstract struct Foo
+      end
+
+      struct Bar < Foo
+        def foo
+          1
+        end
+      end
+
+      struct Baz < Foo
+        def foo
+          'a'
+        end
+      end
+
+      ptr = Pointer(Foo).malloc(1_u64)
+      ptr.value = Bar.new
+      ptr.value = Baz.new
+      ptr.value.foo
+      )) { union_of(int32, char) }
+  end
+
+  it "can cast to base abstract struct" do
+    assert_type(%(
+      abstract struct Foo
+      end
+
+      struct Bar < Foo
+        def foo
+          1
+        end
+      end
+
+      Bar.new as Foo
+      )) { types["Foo"].virtual_type! }
   end
 end

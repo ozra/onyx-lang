@@ -1,7 +1,24 @@
+## 0.105.6 - (2016-05-05) ##
+
+* Some minor re-factorings in some places
+* `Type[Typ]` has been eliminated because of clash with type-level `[]` macros, and const-indexing. Now available `Type<Typ>` and `Type‹Typ›` (unicode, not decided delimiters, just for test currently)
+* Modules `extend Self` "by default". "traits", mixed in to types, don't have this behaviour.
+* Improved func-parsing in some edge-cases
+* The alternative to use `def`-keyword before funcs has been removed.
+* Improved auto-parametrization for "fragments".
+* It's no longer allowed to declare instance-vars without `@` in the type-def. Just use `@name` from now on.
+* Fixed edge-cases for alternative fragment-syntax (the backslash variant)
+* Fix rendering edge-cases of identifiers in stylizer/to-s
+* Now indentation syntax is available for types too. Very clean way of building trees etc.
+
+
+## 0.105.5 - ? ##
+
 ## 0.105.4 - (2016-04-27) ##
 
 * Optimized codegen, now compile speed is up to 400% greater for devel (!) Can't believe the timings. More tests required.
 * Fixes to certain cases of babeling in cross-language macroing
+* implements? works properly.
 
 
 ## 0.105.3 - (2016-04-27) ##
@@ -15,6 +32,7 @@
 
 * Tiny touches regarding safety-belting compilation and lib-paths, better than nothing
 * StringPooling in Onyx-lexer added too.
+
 
 ## 0.105.1 - (2016-04-18) ##
 

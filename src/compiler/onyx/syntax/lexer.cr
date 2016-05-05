@@ -366,6 +366,12 @@ module Crystal
           @token.type = :"!"
         end
 
+      when '‹' # french citation
+        toktype_then_nextch :"‹"
+
+      when '›' # french citation
+        toktype_then_nextch :"›"
+
       when '<'
         case nextch
         when '='
@@ -970,12 +976,19 @@ module Crystal
         when 'y'
           return check_idfr_or_keyword(:by, start)
         when 'e'
-          if mnc?('g','i','n')
-            if peekch == 's'
-              next_char
-              return check_idfr_or_keyword(:begins, start)
-            else
-              return check_idfr_or_keyword(:begin, start)
+          case nextch
+          when 'l'
+            if mnc?('o','w')
+              return check_idfr_or_keyword(:below, start)
+            end
+          when 'g'
+            if mnc?('i','n')
+              if peekch == 's'
+                next_char
+                return check_idfr_or_keyword(:begins, start)
+              else
+                return check_idfr_or_keyword(:begin, start)
+              end
             end
           end
         when 'r'
@@ -1122,6 +1135,8 @@ module Crystal
                   if mnc?('r')
                     :end_for
                   end
+                when 'n'
+                  :end_fn
                 when 'u'
                   if mnc?('n')
                     :end_fun
@@ -1462,6 +1477,10 @@ module Crystal
           when 'i'
             if mnc?('s')
               return check_idfr_or_keyword(:this, start)
+            end
+          when 'r'
+            if mnc?('o','u','g','h','o','u','t')
+              return check_idfr_or_keyword(:throughout, start)
             end
           end
         when 'i'
@@ -1828,19 +1847,19 @@ module Crystal
           # p "consume_whitespace: got ' '|'\\t'"
           nextch
           # *TODO* verify - REALLY?? Leave it to top level parse??
-        when '\\'
-          dbg_ind  "consume_whitespace: got backslash '\\'"
-          if peekch == '\n'
-            dbg_ind "consume_whitespace: got '\\n'"
-            nextch
-            nextch
-            @line_number += 1
-            @column_number = 1
-            @token.passed_backslash_newline = true
-          else
-            break
-            #scan_pragma cur_pos - 1
-          end
+        # when '\\'
+        #   dbg_ind  "consume_whitespace: got backslash '\\'"
+        #   if peekch == '\n'
+        #     dbg_ind "consume_whitespace: got '\\n'"
+        #     nextch
+        #     nextch
+        #     @line_number += 1
+        #     @column_number = 1
+        #     @token.passed_backslash_newline = true
+        #   else
+        #     break
+        #     #scan_pragma cur_pos - 1
+        #   end
         else
         # p "consume_whitespace: done"
           break
@@ -2996,7 +3015,8 @@ module Crystal
     end
 
     def idfr_start?(char)
-      char.alpha? || char == '_' || char.ord > 0x9F
+      c = char
+      c.alpha? || c == '_' || (c.ord > 0x9F && c != '‹' && c != '›')
     end
 
     def idfr_part?(char)

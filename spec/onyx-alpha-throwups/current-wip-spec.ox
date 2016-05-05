@@ -1,24 +1,34 @@
 
 _debug_compiler_start_ = 1
 
+-- @@glob-val Int = 0 'get 'set
+
 FooMod: @@val Int = 0 'get 'set
+FooMod: set-v(v Int) -> @@val = v
+FooMod:
+   set-v2(@@val Int) ->
+   v=(@@val Int) ->
+   v = (val Int) -> say "lambda: {val}"
+   v 13
 
 My.Nested:
    type Foo
+      @@t-var Int = 11 'get 'set
       @str Str
       @foo = 47
       @bar 'get 'set
 
-      init(@str Str) ->
+      init(@str Str = "") ->
          @bar = 1
+
+      foo() -> My.Nested.Foo.t-var
+      -- foo() -> Self.t-var  -- *TODO*
 
       action(str) -> say str
 
    Module:
-      extend self -- *TODO* should not be needed!
       foo(obj) ->
          obj.action "hey"
-
 
 OtherModule:
    bar() ->
@@ -29,10 +39,24 @@ OtherModule:
       --    action(str) -> say "{@str}: {str}"
 
 OtherModule:
-   extend self
-
    bar
+
+pp My.Nested.Foo.t-var
+pp My.Nested.Foo().foo
 
 say FooMod.val
 FooMod.val = 47
 say FooMod.val
+FooMod.val=(42)
+say FooMod.val
+FooMod.set-v
+   3
+say FooMod.val
+FooMod.set-v2 7
+say FooMod.val
+FooMod.v = 23
+say FooMod.val
+
+-- pp glob-val
+-- glob-val = 43
+-- pp glob-val

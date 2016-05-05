@@ -319,4 +319,195 @@ describe "Code gen: struct" do
       foo.value
       )).to_i.should eq(123)
   end
+
+  it "codegens virtual struct" do
+    run(%(
+      abstract struct Foo
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      struct Baz < Foo
+        def initialize
+          @x = 2
+        end
+
+        def x
+          @x
+        end
+      end
+
+      foo = Bar.new || Baz.new
+      foo.x
+      )).to_i.should eq(1)
+  end
+
+  it "codegens virtual struct with pointer" do
+    run(%(
+      abstract struct Foo
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      struct Baz < Foo
+        def initialize
+          @x = 2
+        end
+
+        def x
+          @x
+        end
+      end
+
+      ptr = Pointer(Foo).malloc(1_u64)
+      ptr.value = Baz.new
+      ptr.value = Bar.new
+      ptr.value.x
+      )).to_i.should eq(1)
+  end
+
+  it "codegens virtual struct metaclass (#2551) (1)" do
+    run(%(
+      abstract struct Foo
+        def initialize
+          @x = 21
+        end
+
+        def x
+          a = @x
+          a
+        end
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 42
+        end
+      end
+
+      struct Baz < Foo
+      end
+
+      (Bar.new as Foo).x
+      # (Bar || Baz).new.x
+      )).to_i.should eq(42)
+  end
+
+  it "codegens virtual struct metaclass (#2551) (2)" do
+    run(%(
+      abstract struct Foo
+        def initialize
+          @x = 21
+        end
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 42
+        end
+      end
+
+      struct Baz < Foo
+      end
+
+      (Bar.new as Foo).@x
+      )).to_i.should eq(42)
+  end
+
+  it "codegens virtual struct metaclass (#2551) (3)" do
+    run(%(
+      abstract struct Foo
+        def initialize
+          @x = 21
+        end
+
+        def x
+          @x
+        end
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 42
+        end
+      end
+
+      struct Baz < Foo
+      end
+
+      (Bar.new as Foo).x
+      )).to_i.should eq(42)
+  end
+
+  it "codegens virtual struct metaclass (#2551) (4)" do
+    run(%(
+      abstract struct Foo
+        def initialize
+          @x = 21
+        end
+
+        def x
+          a = @x
+          a
+        end
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 42
+        end
+      end
+
+      struct Baz < Foo
+      end
+
+      (Bar || Baz).new.x
+      )).to_i.should eq(42)
+  end
+
+  it "mutates a  virtual struct" do
+    run(%(
+      abstract struct Foo
+        def initialize
+          @x = 21
+        end
+
+        def x=(@x)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      struct Bar < Foo
+        def initialize
+          @x = 42
+        end
+      end
+
+      struct Baz < Foo
+      end
+
+      foo = Bar.new as Foo
+      foo.x = 84
+      foo.x
+      )).to_i.should eq(84)
+  end
 end

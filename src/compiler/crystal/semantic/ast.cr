@@ -811,6 +811,16 @@ module Crystal
 
   class Call
     property before_vars : MetaVars?
+
+    def clone_without_location_individual
+      cloned = previous_def
+
+      # This is needed because this call might have resolved
+      # to a macro and has an expansion.
+      cloned.expanded = expanded.clone
+
+      cloned
+    end
   end
 
   class Block

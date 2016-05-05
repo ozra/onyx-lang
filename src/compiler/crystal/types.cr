@@ -353,7 +353,7 @@ module Crystal
       raise "Bug: #{self} doesn't implement add_macro"
     end
 
-    def lookup_macro(name, args_size, named_args)
+    def lookup_macro(name, args : Array, named_args)
       raise "Bug: #{self} doesn't implement lookup_macro"
     end
 
@@ -577,15 +577,15 @@ module Crystal
       [] of Def
     end
 
-    def lookup_macro(name, args_size, named_args)
+    def lookup_macro(name, args : Array, named_args)
       _dbg "MatchesLookup.lookup_macro #{name}".red
       if macros = self.macros.try &.[name]?
-        match = macros.find &.matches?(args_size, named_args)
+        match = macros.find &.matches?(args, named_args)
         return match if match
       end
 
       instance_type.parents.try &.each do |parent|
-        parent_macro = parent.metaclass.lookup_macro(name, args_size, named_args)
+        parent_macro = parent.metaclass.lookup_macro(name, args, named_args)
         return parent_macro if parent_macro
       end
 
@@ -1126,8 +1126,10 @@ module Crystal
     end
 
     def virtual_type
-      if leaf? && !self.abstract?
+      if leaf? && !abstract?
         self
+      elsif struct? && abstract? && !leaf?
+        virtual_type!
       elsif struct?
         self
       else
@@ -2512,6 +2514,11 @@ module Crystal
       each_concrete_type { |type| types << type }
       types
     end
+
+    def union_types
+      union_types = program.type_merge_union_of(concrete_types)
+      union_types || base_type
+    end
   end
 
   # Base class for union types.
@@ -2764,6 +2771,27 @@ module Crystal
     end
   end
 
+  # A virtual type represents a type or any of its subclasses. It's created
+  # automatically by the compiler when a type is used in a generic argument
+  # and it either has subtypes, or it's abstract. A virtual type never exists
+  # for a non-abstract type that doesn't have subtypes.
+  #
+  # A virtual type is denoted, internally, with a '+' sign following the type.
+  #
+  # ```
+  # class Foo
+  # end
+  #
+  # class Bar < Foo
+  # end
+  #
+  # # Here the compiler actually makes this be [] of Foo+, so the array
+  # # can actually hold a Foo or a Bar, transparently.
+  # ary = [] of Foo
+  #
+  # # Here the compiler leaves it as [] of Bar, because Bar has no subclasses.
+  # another = [] of Bar
+  # ```
   class VirtualType < Type
     include MultiType
     include DefInstanceContainer
@@ -2796,6 +2824,19 @@ module Crystal
     delegate implements?, base_type
     delegate covariant?, base_type
     delegate ancestors, base_type
+    delegate struct?, base_type
+
+    def passed_by_value?
+      struct?
+    end
+
+    def remove_indirection
+      if struct?
+        union_types
+      else
+        self
+      end
+    end
 
     def metaclass
       @metaclass ||= VirtualMetaclassType.new(program, self)
@@ -2870,7 +2911,7 @@ module Crystal
       type.metaclass
     end
 
-    def lookup_macro(name, args_size, named_args)
+    def lookup_macro(name, args : Array, named_args)
       nil
     end
 

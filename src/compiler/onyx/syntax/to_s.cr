@@ -539,15 +539,15 @@ class ToOnyxSVisitor < Visitor
             end
             if chr != '_' || is_last_char
                if delimiter_count > 0
-                  if encountered_alpha
-                     ret << "-"
+                  if is_last_char || !encountered_alpha
+                     ret << "_" * delimiter_count
                   else
-                     ret << "_" unless is_last_char # done below
+                     ret << "-" * delimiter_count
                   end
                   delimiter_count = 0
                end
 
-               ret << chr
+               ret << chr unless chr == '_'
                encountered_alpha = true
             end
          end
@@ -1106,6 +1106,10 @@ class ToOnyxSVisitor < Visitor
       @str << " "
       to_s_mutability node.mutability
       node.declared_type.accept self
+      if value = node.value
+        @str << " = "
+        value.accept self
+      end
       false
    end
 

@@ -15,7 +15,7 @@ class Scope
    end
 
    def dup
-      Scope.new @vars
+      Scope.new @vars.dup
    end
 
    def dbgstack
@@ -94,7 +94,7 @@ class Nesting
 
    property require_end_token : Bool
 
-   property block_auto_params : Array(Var)?
+   property fragment_auto_params : Array(Var)?
 
    # property int_type_mapping : String
    # property real_type_mapping : String
@@ -107,7 +107,7 @@ class Nesting
       program
       module trait
       type enum class struct
-      def fun block lambda
+      def fun fragment lambda
       template macro
       lib api
       cfun cstruct cunion cenum
@@ -126,14 +126,14 @@ class Nesting
       @@nesting_keywords
    end
 
-   def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params = nil) # , @int_type_mapping = @@std_int, @real_type_mapping = @@std_real)
+   def initialize(@nest_kind, @indent, @name, @location, @single_line, @require_end_token, @fragment_auto_params = nil) # , @int_type_mapping = @@std_int, @real_type_mapping = @@std_real)
       if !Nesting.nesting_keywords.includes? @nest_kind.to_s
          raise "Shit went down - don't know about nesting kind '#{@nest_kind.to_s}'"
       end
    end
 
    def dup
-      Nesting.new @nest_kind, @indent, @name, @location, @single_line, @require_end_token, @block_auto_params.dup #, @int_type_mapping, @real_type_mapping
+      Nesting.new @nest_kind, @indent, @name, @location, @single_line, @require_end_token, @fragment_auto_params # do not dup fragmen_auto...
    end
 
    def message_expected_end_tokens
@@ -188,13 +188,16 @@ class NestingStack
    end
 
    def in_auto_paramed?
-      @stack.reverse.each do |v|
-         if v.nest_kind == :block
-            return v.block_auto_params != nil
-         end
-         false
-      end
+      fragment_auto_params? != nil
+   end
 
+   def fragment_auto_params?
+      @stack.reverse_each do |v|
+         if v.nest_kind == :fragment
+            return v.fragment_auto_params
+         end
+      end
+      return nil
    end
 
    private def pop_and_status(indent : Int32, force : Bool) : Symbol

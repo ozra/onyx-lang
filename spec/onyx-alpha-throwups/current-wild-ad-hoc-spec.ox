@@ -95,7 +95,7 @@ say "remove me for crash"
 -- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
 -- suffix (number)d  = _f64
 
--- module Geometry.Suffixes[B = 1.0]
+-- module Geometry.Suffixes<B = 1.0>
 --    BaseUnitFromMeter = B
 
 --    suffix (number)mm    = _r * (1000r * BaseUnitFromMeter)
@@ -356,7 +356,7 @@ my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
    -- magic-port = opts["magic_port"] as I64? || 47
    -- p x, y, host, magic-port
 end
-my-foo 1, 2, Map[Str, Str|I64|Nil]{
+my-foo 1, 2, Map<Str, Str|I64|Nil>{
    "my_name_is": "Totally irrelevant"
    "host_name": "da_host.yo"
    --   "x": 1
@@ -366,14 +366,14 @@ my-foo 1, 2, Map[Str, Str|I64|Nil]{
 
 
 type Xoo
-   Type.my-instance-count = 0
+   @@my-instance-count = 0
 
-   Type.get-count() ->
-      Type.my-instance-count
+   Self.get-count() ->
+      @@my-instance-count
 
-   Type.my-new() ->
+   Self.my-new() ->
       say "My own new function"
-      Self.my-instance-count += 1
+      @@my-instance-count += 1
       return new()
    end
 end
@@ -491,55 +491,56 @@ pp $.MY_CONST
 -- pp ::MY_CONST
 -- pp Program.MY_CONST
 
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
--- *TODO* ' should not be needed before I32!
--- '!literal-int = I32
-$my-global = 47_i32
--- '!literal-int = I64
-
-$my-typed-global 'I32
--- '!literal-int=I32
-$my-typed-and-assigned-global 'I32 = 47i32
-$my-global = $my-typed-and-assigned-global
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-module Djur
-   module Boo begins
+-- -- *TODO* ' should not be needed before I32!
+-- -- '!literal-int = I32
+Glob: @@my-global = 47_i32 'get 'set
+-- -- '!literal-int = I64
+
+Glob: @@my-typed-global 'I32 'get 'set
+-- -- '!literal-int=I32
+Glob: @@my-typed-and-assigned-global 'I32 = 47i32 'get 'set
+Glob.my-global = Glob.my-typed-and-assigned-global
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+Djur:
+   module Boo below -- *TODO* should work without kwd. Move path->moddef check to *-suffix
 
    APA = 47
 
    type Apa < object Reference
       -- '!literal-int=I64
 
-      Self.foo’ = 1
-      Type.bar = 2
+      @@foo’ = 1
+      @@bar  = 2
 
       @foo     Int
-      bar      Int
+      @bar     Int
       @foo’    Int  = 47
-      bar’           = 47
+      @bar’         = 47
       @foo’’   Int
-      bar’’    Int
+      @bar’’   Int
 
-      foo3     'Int
-      bar3     ^Int
-      qwo3     ~Int
+      @foo3    'Int
+      @bar3    ^Int
+      @qwo3    ~Int
 
       init() ->
-         @foo = 47
-         @bar = 42
+         @foo   = 47
+         @bar   = 42
          @foo’’ = 0
          @bar’’ = 0
-         @foo3 = 47
-         @bar3 = 47
-         @qwo3 = 47
+         @foo3  = 47
+         @bar3  = 47
+         @qwo3  = 47
 
       -- xfoo! Int = 47  -- should fail, and does
       -- xbar? Int = 42  -- should fail, and does
 
-      Type.my-def() -> say "Hit the spot! { Type.foo’ }, { @@bar }"
+      Self.my-def() -> say "Hit the spot! { @@foo’ }, { @@bar }"
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
    end
 
@@ -558,8 +559,8 @@ module Djur
       -- else
       --    EIGHT
 
-      Type.is-six?(v) ->
-         v == SIX
+      Self.is-six?(v) ->
+         v is SIX
    end
 end
 
@@ -589,19 +590,23 @@ say "Djur.Boo.Legs.is-six?(EIGHT) = {Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 type Blk
-   init(x, &block) ->  -- (T) -> U - does not work for block...
+   init(x, &fragment) ->  -- (T) -> U - does not work for fragment...
       yield x + 1
       yield x - 2
    ;
 ;
 
 blk = Blk(4, (x)\
-   say "in blk init block: {x}"
+   say "in blk init fragment: {x}"
 )
 
 blk2 = Blk 7, (x)\
-   say "in blk2 init block: {x}"
+   say "in blk2 init fragment: {x}"
 
+blk3 = Blk
+   1
+   (x)\
+      say "in blk2 init fragment: {x}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -611,7 +616,7 @@ trait Functor
 type MyFunctor
    mixin Functor
 
-   foo = 47
+   @foo = 47
 
    call() -> "call()"
    call(a, b) -> "call {a}, {b}, {@foo}"
@@ -749,7 +754,7 @@ foo-named 3, foo: 11, bar: "yo"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-list = List[Str]()
+list = List<Str>()
 list << "foo"
 list << "yaa"
 
@@ -796,7 +801,7 @@ say w
 say pw
 
 
--- def say(s) -> puts s
+-- say(s) -> puts s
 
 
 -- '!literal-int=I32
@@ -820,17 +825,17 @@ DEBUG–SEPARATOR = 47
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 -- *TODO*
--- fn f(y ()->) nil - func general def (context determined / analyzed mode)
+-- f(y ()->) nil - func general def (context determined / analyzed mode)
 -- fu f(y ()->) nil - pure function (NO s-fx
 -- fx f(y ()->) nil - explicitly procedural func, any s-fx
 -- fi f(y ()->) nil - member function, instance mutating s-fx only
 -- mf f(y ()->) nil - member function, instance mutating s-fx only
 
-def f(y ()->) -> nil
-fn g(y ()->) -> nil
+f(y ()->) -> nil
+g(y ()->) -> nil
 g(y ()->) -> nil
 
---   -- (Seq[I32]()).flat_map ~>
+--   -- (Seq<I32>()).flat_map ~>
 f () ->
    ([] of Int).flat-map ~>
       [] of Int
@@ -890,8 +895,10 @@ say %(char: "{char}" ({ typeof(char) }))
 -- tpl-str = %t<requires heavier delimiting %{interpolation here}>
 -- say "tpl-str: {tpl-str} ({ typeof(tpl-str) })"
 
-the–str = "111kjhgkjh" \
-   "222dfghdfhgd"
+
+-- *TODO* "str" \n\INDENT\etc "str" shall become ONE string!
+the–str = "111kjhgkjh"
+--   "222dfghdfhgd"
 
 yet-a–str = "111kjhgkjh
    222dfghdfhgd
@@ -969,7 +976,7 @@ end–if
 --    Str.new(a + b) + c.to–s
 -- end
 
--- def ab=(v)
+-- ab=(v)
 --    @prog–v = v
 -- end
 
@@ -986,7 +993,7 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
-def zoo*(a; b; ...c 'Int) Str ->  'pure
+zoo*(a; b; ...c 'Int) Str ->  'pure
    if true:
       i = 1
 
@@ -1055,14 +1062,14 @@ say "m2 = " + m2.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-def qwo(a 'Int, b ~Int) ->
+qwo(a 'Int, b ~Int) ->
 end
 
-def qwo2(a ^Int, b 'Int) -> end
+qwo2(a ^Int, b 'Int) -> end
 
-def qwo3(a 'Int, b mut Int) Str -> -- Str
+qwo3(a 'Int, b mut Int) Str -> -- Str
 
-def qwo4(a Int; b Int) ->
+qwo4(a Int; b Int) ->
 end
 
 qwo2 1, 2
@@ -1174,7 +1181,6 @@ say "with to_s after: {json-hash:neat-literal?to-s}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- type TradeSide < Enum[I8]
 -- type TradeSide < Enum<I8>
 -- enum TradeSide I8
 type TradeSide < enum I8
@@ -1357,7 +1363,7 @@ if true: say ": true"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-def foo(a, b, c Str) ->
+foo(a, b, c Str) ->
    (a + b).to–s + c
 end
 
@@ -1382,18 +1388,14 @@ type Fn = Lambda
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
-def booze1(f1 Fn[I32,List<*>,List<List[Ptr<I32>]>], f2 Lambda[Str, Nil, List<Bool>]) ->
-def booze2(f1 (List<*>, List<List[Ptr<I32>]>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
+booze1(f1 Fn<I32,List<*>,List<List<Ptr<I32>>>>, f2 Lambda<Str, Nil, List<Bool>>) ->
+booze2(f1 (List<*>, List<List<Ptr<I32>>>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
 
--- New list type literal suggestion: cause problems in expressions!
--- booze3(f1 ([*], [[Ptr<I32>]]) -> I32, f2 (Nil, [Bool]) -> Str) ->
--- say "[[Ptr[I32]]] => " + '[[Ptr[I32]]].to–s
-
-say "List[List<Ptr[I32]>] => " + List[List<Ptr[I32]>].to–s
+say "List<List<Ptr<I32>>> => " + List<List<Ptr<I32>>>.to–s
 
 booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 
-def booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
+booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
 end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -1422,10 +1424,10 @@ list = ["foo", "yaa", "qwö"]
 
 say "the 2nd list ({list.class}): {list}"
 
--- single line block style #2
+-- single line fragment style #2
 y = list.each((v) ~> p v).map ~.* 2
 
--- multiline block style #2
+-- multiline fragment style #2
 y = (list.each (v) ~>
    p v
 ).map ~>
@@ -1442,7 +1444,9 @@ say "mega fettma y = {y}"
 
 list.each–with–index ~>
    p _1
-   break if _2 == 4
+   if _2 == 4
+      break
+   end
 
 (list.map ~> _1 + "X").each–with–index ~>
    p _1
@@ -1459,6 +1463,9 @@ list.each–with–index (v, i) ~>
 list.each–with–index ~>
    p _1
    break if _2 == 4
+
+list.each \
+   break if _2 == 1
 
 -- list.each–with–index \
 --    p %1
@@ -1501,24 +1508,36 @@ list.each–with–index ~>
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+list.each (val) ~>
+   say("implicit nest {val.to-s}")
+
+list.each (val)\
+   say("implicit nest {val.to-s}")
+
+list.each ~>
+   say("implicit nest {_1.to-s}")
+
+failing-fragment = true
+
+list.each \
+   say("implicit nest {_1.to-s}")
+
+list.each \ say("implicit nest {_1.to-s}")
+list.each \say("implicit nest {_1.to-s}")
+
 for val in list
    say val
-
-list.each (val) ~>
-  say("implicit nest {val.to_s}")
-end
 
 for val in list =>
    say val
 
 for crux in list do say "do nest" + crux.to_s
-
 for arrowv in list => say "=> nest" + arrowv.to_s
 for spccolonv in list : say "\\s: nest" + spccolonv.to_s
 for colonv in list: say ": nest" + colonv.to_s
 
 for ,ix in list
-   if true begins
+   if true throughout
    say "begins-block:"
    say "  {ix}"
 
@@ -1559,7 +1578,7 @@ trait TheTrait
 end–trait
 
 -- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
-trait AnotherTrait[S1]
+trait AnotherTrait<S1>
    -- *TODO* inited another-val below doesn't catch-all in sub-types!
    -- @another–val = 0  -- "can't use instance variables at the top level"
    @a-t-val S1
@@ -1575,27 +1594,28 @@ type Qwa < abstract
 end–type
 
 type Bar < Qwa
-   Self.my–foo I64 = 47i64
-   Self.some–other–foo 'Int = 42
-   Self.yet–a-foo = 42
+   @@my–foo I64 = 47i64
+   @@some–other–foo 'Int = 42
+   @@yet–a-foo = 42
 
    -- '!literal-int=I32
 
-   Type.RedFoo = 5
-   Type.GreenFoo = 7
+   -- *TODO* use-case for this?
+   -- Self.RedFoo = 5
+   -- Self.GreenFoo = 7
 
    RedBar = 6
    GreenBar = 8
 
-   foo–a Str = ""
-   foo–b Int = 0_i64
-   foo–c I64 = 0_i64
-   foo-ya I32 = 0i32
+   @foo–a Str = ""
+   @foo–b Int = 0_i64
+   @foo–c I64 = 0_i64
+   @foo-ya I32 = 0i32
 
    Self.set–foo(v) ->
-      Self.my–foo = v
+      @@my–foo = v
 
-   Type.get–foo() ->
+   Self.get–foo() ->
       @@my–foo
 
 Bar.set-foo 4
@@ -1604,28 +1624,28 @@ say "Bar.get-foo = {Bar.get-foo}"
 say "declare a Foo type"
 
 --| The "normal" Foo which is expressed with arrow function syntax
-type Foo[S1] < Bar
-   mixin AnotherTrait[S1]
-   -- < AnotherTrait[S1]
+type Foo<S1> < Bar
+   mixin AnotherTrait<S1>
+   -- < AnotherTrait<S1>
 
    -- "free" notation at member declaration
-   foo–x I64 = 47_i64  'get 'set
-   foo–y = 48
-   foo–z = "bongo"  'get
-   foo–u Int = 47  'get 'set
+   @foo–x I64 = 47_i64  'get 'set
+   @foo–y = 48
+   @foo–z = "bongo"  'get
+   @foo–u Int = 47  'get 'set
 
    -- *TODO* WTF!
-   foo-w = 474242       'set
-   foo–w = 474747       'set
+   @foo-w = 474242       'set
+   @foo–w = 474747       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
-    bar–x  I64  = 47_i64  'get 'set
+    @bar–x  I64  = 47_i64  'get 'set
    else
     @bar–x I32  = 47_i32  'get 'set
 
-   bar–y        = 48
-   bar–z        = "bongo"  'get
+   @bar–y        = 48
+   @bar–z        = "bongo"  'get
    @bar–u  Int = 47  'get 'set
    @bar–w       = 47  'get
 
@@ -1651,9 +1671,9 @@ type Foo[S1] < Bar
 
 
    'pure
-   fn–1aa(x) -> nil  -- \public   -- should this be legal? - looks very confusing!
+   fn–1aa(x) -> nil  -- 'public   -- should this be legal? - looks very confusing!
    'pure
-   fn–1ab(x) Nil -> nil  'pure -- public   -- should this be legal? - looks very confusing!
+   fn–1ab(x) Nil -> nil  'pure -- 'public   -- should this be legal? - looks very confusing!
 
    -- \ private inline
    'inline 'pure
@@ -1682,7 +1702,7 @@ type Foo[S1] < Bar
 
    fn–a(a, b) -> "a: {a}, {b}" 'pure
 
-   def fn–b(a S1, b Int) -> -- fdsa
+   fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
    fn–c*(a, b S1) S1 -> 'redef 'inline
@@ -1753,38 +1773,38 @@ type FooStyle2<S1> < Bar
 
    --| Initialize with primary variable type
    ifdef x86_64
-      -- fn init(a S1)
-      fn init(a S1) ->
+      -- init(a S1)
+      init(a S1) ->
          @foo–a = a
          @a-t-val = b
    else
-      -- fn init(b S1)
-      fn init(b S1) ->
+      -- init(b S1)
+      init(b S1) ->
          @foo–a = b
          @a-t-val = b
    end
 
-   -- fn init()
-   fn init() ->
+   -- init()
+   init() ->
        @a-t-val = ""
 
    -- say "Hey in Foo"  -- NOT LEGAL ANYMORE!
 
    --| Do some 1aa action!
    'pure
-   fn fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
-   fn fn–1ab(x) Nil -> 'pure;  nil   -- should this be legal? - looks very confusing!
+   fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
+   fn–1ab(x) Nil -> 'pure;  nil   -- should this be legal? - looks very confusing!
 
    -- (private ) ~>inline
    'inline 'pure
-   fn fn–1ba*(x) ->! nil
-   fn fn–1ca(x) ->!
-   fn fn–1da(x) -> nil 'pure
-   fn fn–1ea(x) ->! nil 'pure
+   fn–1ba*(x) ->! nil
+   fn–1ca(x) ->!
+   fn–1da(x) -> nil 'pure
+   fn–1ea(x) ->! nil 'pure
 
-   fn fn–1fa(x) ->!
+   fn–1fa(x) ->!
 
-   fn fn–1ga(x) ->!
+   fn–1ga(x) ->!
       ifdef x86_64
          say "Hey"
       else
@@ -1798,43 +1818,44 @@ type FooStyle2<S1> < Bar
    --    "fdsa"
 
    -- Should Error _iff_ instantiated, because of mismatching return type
-   -- fn fn–1i(x)!
-   fn fn–1i(x) ->!
+   -- fn–1i(x)!
+   fn–1i(x) ->!
       say "Yeay"
       return "Foo"
 
-   fn fn–a(a, b) -> "a: {a}, {b}"
+   fn–a(a, b) -> "a: {a}, {b}"
 
-   -- fn fn–b(a S1, b Int) -- fdsa
-   fn fn–b(a S1, b Int) -> -- fdsa
+   -- fn–b(a S1, b Int) -- fdsa
+   fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
-   fn fn–c*(a, b S1) S1 -> 'redef 'inline
+   fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
-   end–fn
+   end–def
+   -- end fn–c
 
-   fn fn–c**(a, b Int) -> 'redef
+   fn–c**(a, b Int) -> 'redef
       "c: {a}, {b}"
 
-   -- fn fn–d1(a, b)
-   fn fn–d1(a, b) ->
+   -- fn–d1(a, b)
+   fn–d1(a, b) ->
       @foo–a = a
       @foo–b = b
       fn–e
    end
 
-   -- fn fn–d2(a S1, b Int)
-   fn fn–d2(a S1, b Int) ->
+   -- fn–d2(a S1, b Int)
+   fn–d2(a S1, b Int) ->
       @foo–a = a
       @foo–b = b
       fn–e
 
-   fn fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
+   fn–e() -> fa = @foo–a ; "e: {fa}, {@foo_b}"
 
    'flatten
-   fn call() -> fn–e
+   call() -> fn–e
 
-   fn [](i) -> @foo–b + i
+   [](i) -> @foo–b + i
 
 end–type
 -- *TODO* Anonymous types!
@@ -1844,7 +1865,7 @@ end–type
 --    fn-x(x) -> "I am Anon"
 
 say "create a Foo instance"
-foo = Foo[Str]()
+foo = Foo<Str>()
 
 pp foo.implements? #foo-x
 pp foo.implements? #foo_x
@@ -1889,20 +1910,23 @@ say foo.fn–d1 "27 blargh", 47
 foo.fn–d2 "28 blargh", 47
 say foo.fn–e
 
-boo = Foo[Str]()
-boo = Foo[Str].new
-boo = Foo[Str].new()
+-- boo = Foo<Str>()
+-- boo = Foo‹Str›()
+-- boo = Foo⟨Str⟩()
+-- boo = Foo❬Str❭()
+-- boo = Foo⟦Str⟧()
+-- boo = Foo❰Str❱()
+-- boo = Foo⦇Str⦈()
+-- -- boo = Foo⦉Str⦊()
+-- -- boo = Foo〚Str〛()
 
-boo = Foo<Str>()
-boo = Foo<Str>.new
-boo = Foo<Str>.new()
+boo = Foo‹Str›()
+boo = Foo‹Str›.new
+boo = Foo‹Str›.new()
 
 bar = Foo<Str>("No Blargh")
 bar = Foo("No Blargh")
-bar = Foo "No Blargh"
-bar = Foo[Str] "No Blargh"
-bar = Foo.new "No Blargh"
-bar = Foo[Str].new "29 Blargh"
+bar = Foo "29 Blargh"
 
 say "done"
 say bar.fn–e
@@ -1980,33 +2004,35 @@ api MyLibGmp
 
       -- Just testing ifdef in all contexts
       ifdef x86_64
-         _mp_d     Ptr[ULong]
+         _mp_d     Ptr<ULong>
       else
          _mp_d     Ptr<ULong>
       end
    end
 
-   alias MpzP = Ptr[Mpz]
+   alias MpzP = Ptr<Mpz>
 
    fun init = __gmpz_init(x MpzP)
    fun init_set_si = __gmpz_init_set_si(rop MpzP, op Long)
-   fun init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr[U8], base Int)
+   fun init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int)
 
    fun get_si = __gmpz_get_si(op MpzP) Long
-   fun get_str = __gmpz_get_str(str Ptr[U8], base Int, op MpzP) Ptr[U8]
+   fun get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) Ptr<U8>
 
    fun add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP)
-   fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr[Void], realloc (Ptr[Void], SizeT, SizeT) -> Ptr[Void], free (Ptr[Void], SizeT) -> Void )
+   fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr<Void>, realloc (Ptr<Void>, SizeT, SizeT) -> Ptr<Void>, free (Ptr<Void>, SizeT) -> Void )
 
 end
 
+-- old school call style
 MyLibGmp.set-memory-functions(
    (size) ->
       GC.malloc(size)
    , (ptr, old_size, new_size) -> GC.realloc(ptr, new_size); end,
-   ((ptr, size) -> GC.free(ptr) )
+   ((ptr, size) -> GC.free(ptr))
 )
 
+-- indent call style
 MyLibGmp.set-memory-functions
    (size) -> GC.malloc(size)
    (ptr, old_size, new_size) -> GC.realloc(ptr, new_size)
