@@ -12,14 +12,14 @@ module Crystal
       def_macros << a_def
     end
 
-    def expand_macro(a_macro : Macro, call : Call, scope : Type)
+    def expand_macro(a_macro : Macro, call : Call, scope : Type, type_lookup : Type?)
       _dbg "Program.expand_macro Macro #{a_macro}, Call #{call} ->".red
-      macro_expander.expand a_macro, call, scope
+      macro_expander.expand a_macro, call, scope, type_lookup || scope
     end
 
-    def expand_macro(node : ASTNode, scope : Type, free_vars = nil)
+    def expand_macro(node : ASTNode, scope : Type, type_lookup : Type?, free_vars = nil)
       _dbg "Program.expand_macro ASTNode #{node} ->".red
-      macro_expander.expand node, scope, free_vars
+      macro_expander.expand node, scope, type_lookup || scope, free_vars
     end
 
     def expand_macro_defs
@@ -45,7 +45,7 @@ module Crystal
       end
 
       begin
-        expanded_macro = @program.expand_macro target_def.body, owner
+        expanded_macro = @program.expand_macro target_def.body, owner, owner
       rescue ex : Crystal::Exception
         target_def.raise "expanding macro", ex
       end
@@ -137,19 +137,17 @@ module Crystal
       @cache = {} of String => String
     end
 
-    def expand(a_macro : Macro, call : Call, scope : Type)
+    def expand(a_macro : Macro, call : Call, scope : Type, type_lookup : Type)
       _dbg "MacroExpander.expand Macro a_macro.is_onyx = #{a_macro.is_onyx}".red
-
-      visitor = MacroVisitor.new self, @mod, scope, a_macro, call
+      visitor = MacroVisitor.new self, @mod, scope, type_lookup, a_macro, call
       a_macro.body.accept visitor
       source = visitor.to_s
       ExpandedMacro.new source, visitor.yields
     end
 
-    def expand(node : ASTNode, scope : Type, free_vars = nil)
+    def expand(node : ASTNode, scope : Type, type_lookup : Type, free_vars = nil)
       _dbg "MacroExpander.expand ASTNode node.is_onyx = #{node.is_onyx}".red
-
-      visitor = MacroVisitor.new self, @mod, scope, node.location
+      visitor = MacroVisitor.new self, @mod, scope, type_lookup, node.location
       visitor.free_vars = free_vars
       node.accept visitor
       source = visitor.to_s
@@ -200,7 +198,7 @@ module Crystal
       getter yields : Hash(String, ASTNode)?
       property free_vars : Hash(String, Type)?
 
-      def self.new(expander, mod, scope, a_macro : Macro, call)
+      def self.new(expander, mod, scope : Type, type_lookup : Type, a_macro : Macro, call)
         _dbg "MacroVisitor..new".red
         _dbg " expander = #{expander}"
         _dbg " a_macro = #{a_macro}"
@@ -258,16 +256,17 @@ module Crystal
         end
         # *TODO* DEBUG CODE
 
-        new(expander, mod, scope, a_macro.location, vars, call.block, a_macro.is_onyx)
+        new(expander, mod, scope, type_lookup, a_macro.location, vars, call.block, a_macro.is_onyx)
       end
 
       record MacroVarKey, name : String, exps : Array(ASTNode)?
 
       def initialize(@expander : MacroExpander, @mod : Program,
-                     @scope : Type, @location : Location?,
+                     @scope : Type, @type_lookup : Type, @location : Location?,
                      @vars = {} of String => ASTNode, @block : Block? = nil,
                      @is_onyx : Bool = false)
         _dbg "MacroVisitor.initialize".red
+
         @str = MemoryIO.new(512)
         @last = Nop.new
       end
@@ -561,7 +560,7 @@ module Crystal
         if node.names.size == 1 && (match = @free_vars.try &.[node.names.first])
           matched_type = match
         else
-          matched_type = @scope.lookup_type(node)
+          matched_type = @type_lookup.lookup_type(node)
         end
 
         unless matched_type

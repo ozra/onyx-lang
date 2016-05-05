@@ -57,7 +57,6 @@ module Crystal
       @global_vars = {} of String => MetaTypeVar
       @requires = Set(String).new
       @temp_var_counter = 0
-      @crystal_path = CrystalPath.new
       @vars = MetaVars.new
       @def_macros = [] of Def
       @splat_expansions = {} of UInt64 => Type
@@ -220,6 +219,10 @@ module Crystal
 
 
       define_primitives
+    end
+
+    private def crystal_path
+      @crystal_path ||= CrystalPath.new(target_triple: target_machine.triple)
     end
 
     def add_def(node : Def)
