@@ -273,7 +273,7 @@ def main!
 		# begin
 			mkdir_p '.build'
 			#execute %{CRYSTAL_CONFIG_PATH=#{Dir.pwd}/src /opt/cr-ox/bin/cr-ox build --release --verbose --link-flags "-L/opt/cr-ox/embedded/lib" -o .build/onyx src/compiler/onyx.cr}
-			execute "make all"
+			execute "make all release=1"
 			execute "make install", sudo: true
 			puts "  Done"
 	}]

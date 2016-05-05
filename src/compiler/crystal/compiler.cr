@@ -297,14 +297,14 @@ module Crystal
         end
       end
 
-      puts "All units kicked off: #{Time.now - perf_tmp}"
+      # _dbg_always "All units kicked off: #{Time.now - perf_tmp}"
 
       while jobs_count > 0
         wait_channel.receive
         jobs_count -= 1
       end
 
-      puts "And all units DONE (acc): #{Time.now - perf_tmp}"
+      # _dbg_always "And all units DONE (acc): #{Time.now - perf_tmp}"
 
     end
 

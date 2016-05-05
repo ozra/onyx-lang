@@ -46,6 +46,10 @@ def _dbg_overview(*objs)
   end
 end
 
+def _dbg_always(*objs)
+  STDERR.puts objs.join ", "
+end
+
 struct Char
   def ord_gt?(v)
     ord > v
