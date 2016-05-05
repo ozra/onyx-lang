@@ -64,26 +64,43 @@ module Crystal
         else
           relative_filename = "#{relative_to}/#{filename}"
 
-          # Check if .cr file exists.
-          relative_filename_cr = relative_filename.ends_with?(".cr") ? relative_filename : "#{relative_filename}.cr"
-          if File.exists?(relative_filename_cr)
-            return make_relative_unless_absolute relative_filename_cr
-          end
+          ret = try_file_ending(relative_filename, ".ox") ||
+                try_file_ending(relative_filename, ".onyx") ||
+                try_file_ending(relative_filename, ".cr")
+          return ret if ret
 
           # If it's a directory, we check if a .cr file with a name the same as the
           # directory basename exists, and we require that one.
           if Dir.exists?(relative_filename)
             basename = File.basename(relative_filename)
-            absolute_filename = make_relative_unless_absolute("#{relative_filename}/#{basename}.cr")
-            if File.exists?(absolute_filename)
-              return absolute_filename
-            end
+            ret = try_in_dir_file_ending(relative_filename, basename, ".ox") ||
+                  try_in_dir_file_ending(relative_filename, basename, ".onyx") ||
+                  try_in_dir_file_ending(relative_filename, basename, ".cr")
+            return ret if ret
           end
         end
       end
 
       if check_crystal_path
         find_in_crystal_path filename, relative_to
+      else
+        nil
+      end
+    end
+
+    private def try_file_ending(relative_filename, ending)
+      relative_filename_tmp = relative_filename.ends_with?(ending) ? relative_filename : "#{relative_filename}#{ending}"
+      if File.exists?(relative_filename_tmp)
+        make_relative_unless_absolute relative_filename_tmp
+      else
+        nil
+      end
+    end
+
+    private def try_in_dir_file_ending(relative_filename, basename, ending)
+      absolute_filename = make_relative_unless_absolute("#{relative_filename}/#{basename}#{ending}")
+      if File.exists?(absolute_filename)
+        absolute_filename
       else
         nil
       end
@@ -101,7 +118,10 @@ module Crystal
             dirs << filename
           end
         else
-          if filename.ends_with?(".cr")
+          if (filename.ends_with?(".ox") ||
+              filename.ends_with?(".onyx") ||
+              filename.ends_with?(".cr")
+          )
             files << full_name
           end
         end

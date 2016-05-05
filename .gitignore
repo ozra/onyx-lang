@@ -17,3 +17,4 @@ all_spec
 /src/ext/gc-cc47
 /src/ext/*.o
 /src/ext/libcrystal.a
+onyx-bootstrap.log

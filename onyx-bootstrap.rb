@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# apt-get update; apt-get install git ruby; git clone https://github.com/ozra/onyx-lang.git; cd onyx-lang; chmod 777 . -R
+# sudo apt-get update; sudo apt-get install git ruby; git clone https://github.com/ozra/onyx-lang.git; cd onyx-lang
 
 # TODO: Support rpm and pacman
 
@@ -19,15 +19,55 @@ require 'tmpdir'
 optional_require 'pry'
 
 DPKG_AND_APT_GET = "dpkg and apt-get"
+$logfile = Pathname(Dir.pwd) + Pathname($0).sub_ext('.log')
+File.open($logfile, ?w) {}		# Clear the log
 
-def execute(cmd, error_echo = true)
-	puts "  > " + cmd #if $verbose
-	output = `#{cmd}`
+def does_command_exist?(command)
+	`which #{command}` !~ /(?:^$|not found)/
+end
+def does_sudo_exist?
+	$sudo_exists ||does_command_exist?('sudo')
+end
+def sudo?
+	Process.euid != 0 && does_sudo_exist?
+end
+def log(text)
+	File.open($logfile, "a") { |f| f << text; f.flush() } rescue nil
+end
+def logs(*lines)
+	log lines.flatten.map { |line| line + ?\n }.join
+end
+def puts(*lines)
+	STDOUT.puts *lines
+	logs *lines
+end
+def spout(*lines)
+	logs *lines
+	STDOUT.puts *lines if $verbose
+end
+def execute(cmd, flags = {})
+	cmd = "sudo " + cmd if flags[:sudo] && sudo?
+	# spout "  [current directory: #{Dir.pwd}]"
+	spout "  > " + cmd
+	output = `#{cmd} 2>&1`
 	unless $?.exitstatus == 0
-		puts "", output, "" if error_echo || $verbose
+		spout "", output, ""
 		raise "%s exited with code %s" % [cmd, $?.exitstatus]
 	end
 	output
+end
+def prompt(message)
+	loop do
+		print message
+		answer = gets.chomp
+		case answer.downcase
+			when ?y, 'yes', ''
+				return true
+			when ?n, 'no'
+				return false
+		end
+		puts "'%s' is not a valid response!" % answer
+	end
 end
 
 module Kernel
@@ -35,7 +75,7 @@ module Kernel
 		return if optional_require(gem)
 		if auto_install
 			puts "  Installing %s gem" % gem
-			result = execute %{gem install "%s"} % gem
+			result = execute %{gem install "%s"} % gem, sudo: true
 			Gem.clear_paths
 			require_gem(gem, false)
 		else
@@ -78,18 +118,15 @@ end
 define_exceptions :NoValuesException, :MultipleValuesException, :GracefulFailure
 
 def main!
-	fail 'Must run as root' unless Process.euid == 0
 	$verbose = ARGV.include? '--verbose'
 	Dir.chdir Pathname(__FILE__).dirname
 	tasks = []
-	# tasks << ["Checking for dependencies", ->{
-	# 	commands = %w{ git wget tar apt-cache }
-	# 	commands.each do |cmd|
-	# 		next if does_command_exist? cmd
-	# 		puts "We require the '%s' command. Install it using your package manager." % cmd; raise
-	# 	end
-	# 	puts "  Done"
-	# }]
+	tasks << ["Checking for root access", ->{
+		(puts "  We are root"; return) if Process.euid == 0
+		(puts "  Sudo not found"; raise GracefulFailure, "You must install and configure sudo, or run this installation as root.") unless does_sudo_exist?
+		execute 'true', sudo: true
+		puts "  Root access available via sudo"
+	}]
 	tasks << ["Determining system bittedness", ->{
 		raise "uname pattern match fail" unless execute("uname -a") =~ /\b(i686|x86_64)\b/
 		$bittedness = $1
@@ -99,11 +136,12 @@ def main!
 	tasks << ["Checking for sufficient memory", ->{
 		ram = get_total_ram.to_f / (1024 * 1024 * 1024)
 		swap = get_total_swap.to_f / (1024 * 1024 * 1024)
-		puts "  Found %.2fGB RAM and %.2fGB swap" % [ram, swap]
-		if ram + swap < 1.9		# When is a gig not a gig? When a graphics card is stealing some of it!
-			puts "  Failed"
-			raise GracefulFailure, "Requires at least 2GB memory or swap"
+		print "  Found %.2fGB RAM and %.2fGB swap." % [ram, swap]
+		if ram + swap < ($is64bit ? 2.9 : 1.9)		# When is a gig not a gig? When a graphics card is stealing some of it!
+			puts "", "  Failed"
+			raise GracefulFailure, "Requires at least #{$is64bit ? 2.5 : 2}GB memory or swap"
 		end
+		puts ram + swap < 3 ? " It'll do I suppose." : " That's plenty."
 	}]
 	tasks << ["Checking for compatible package manager", ->{
 		$package_manager = case
@@ -115,7 +153,7 @@ def main!
 		puts $package_manager ? "  Found #{$package_manager}" : "  Didn't find one"
 	}]
 	tasks << ["Checking for dependencies", ->{
-		commands = %w{ git wget tar pkg-config curl }
+		commands = %w{ git wget tar pkg-config curl realpath tee }
 		commands << "apt-cache" if $package_manager == DPKG_AND_APT_GET
 		missing_commands = commands.reject { |cmd| does_command_exist? cmd }
 		if missing_commands.some?
@@ -140,25 +178,28 @@ def main!
 		end
 		puts "  Done"
 	}]
-	tasks << ["Downloading latest Crystal binary", ->{
+	tasks << ["Checking for Nokogiri gem", ->{
 		require_gem 'nokogiri', true
-		puts "  Loading webpage" if $verbose
+		puts "  Done"
+	}]
+	tasks << ["Downloading latest Crystal binary", ->{
+		spout "  Loading webpage"
 		html = openurl "https://github.com/crystal-lang/crystal/releases"
-		puts "  Parsing html" if $verbose
+		spout "  Parsing html"
 		html = Nokogiri::HTML(html)
-		puts "  Scanning html" if $verbose
+		spout "  Scanning html"
 		href = "https://github.com" + (html/"ul[class='release-downloads']/li/a").select { |a| (a/"strong").inner_text =~ /crystal-(.*)-linux-#{$bittedness}.tar.gz/ }.first[:href]
 		raise "Could not find latest Crystal release on github" unless href
-		puts "  Found Crystal release: " + href if $verbose
-		puts "  Downloading archive" if $verbose
+		spout "  Found Crystal release: " + href, "  Downloading archive"
 		Dir.chdir $tempdir do
 			execute %{wget#{' -q' unless $verbose} "#{href}" -O - | tar zx}
 		end
+		puts "  Done"
 	}]
 	tasks << ["Checking if Crystal works", ->{
 		begin
 			crystal = (Pathname(Dir.glob($tempdir + 'crystal-*')[0]) + 'bin/crystal').to_s
-			execute "echo 'puts' | #{crystal} >/dev/null 2>/dev/null eval", false
+			execute "echo 'puts' | #{crystal} >/dev/null 2>/dev/null eval"
 			puts "  Yes it does. Will wonders never cease?"
 		rescue
 			puts "  Of course not. That would be too easy."
@@ -166,37 +207,51 @@ def main!
 				workingdir = Pathname(Dir.mktmpdir "crystal-env")
 				begin
 					Dir.chdir workingdir do
-						puts "  Created temporary directory: #{workingdir}" if $verbose
+						spout "  Created temporary directory: #{workingdir}"
 						# $logger << "Current directory is ⟨W%s⟩. Contents: %s" % [Dir.current, Dir.entries(Dir.current).wrap("⟨W", "⟩").join(", ")]
 						puts $verbose ? "  Downloading bdwgc" : "  Downloading and compiling bdwgc"
 						execute "git clone git://github.com/ivmai/bdwgc.git"
-						puts "  Compiling bdwgc" if $verbose
+						spout "  Compiling bdwgc"
 						Dir.chdir "bdwgc" do
 							execute "git clone git://github.com/ivmai/libatomic_ops.git"
 							execute "autoreconf -vif"
 							execute "automake --add-missing"
 							execute "./configure"
 							execute "make"
-							execute "make install"
+							execute "make install", sudo: true
 						end
 
-						puts "", $verbose ? "  Downloading pcl" : "  Downloading and compiling pcl"
+						puts $verbose ? "\n  Downloading pcl" : "  Downloading and compiling pcl"
 						execute "curl -O#{' -s' unless $verbose} http://www.xmailserver.org/pcl-1.12.tar.gz"
 						execute "tar -xzf pcl-1.12.tar.gz"
-						puts "  Compiling pcl" if $verbose
+						spout "  Compiling pcl"
 						Dir.chdir "pcl-1.12" do
 							execute "./configure"
 							execute "make"
-							execute "make install"
+							execute "make install", sudo: true
 						end
-						puts ""
-						puts "  Deleting old versions" if $verbose
-						rm_f "/usr/lib/libgc.so*"
+						puts "" if $verbose
+						spout "  Deleting old versions"
+						if Dir.glob("/usr/lib/libgc.so*").some?
+							if prompt "Going to delete /usr/lib/libgc.so*\nOkay to delete? (Y/n): "
+								rm_f "/usr/lib/libgc.so*"
+								puts "  Deleted /usr/lib/libgc.so*"
+							else
+								puts "  You have elected not to delete these files. Therefore this installation will probably fail.\n  If we didn't need it, we wouldn't have asked for it."
+							end
+						end
+						# begin
+						# 	puts "  Uninstalling libgc-dev"
+						# 	uninstall_package("libgc-dev")
+						# rescue
+						# 	puts "  Failed to uninstall package: libgc-dev\n  You must remove it yourself if it is installed."
+						# end if is_package_installed? "libgc-dev"
 						begin
-							uninstall_package("libpcl1-dev") if is_package_installed? "libpcl1-dev"
+							puts "  Uninstalling libpcl1-dev"
+							uninstall_package("libpcl1-dev")
 						rescue
 							puts "  Failed to uninstall package: libpcl1-dev\n  You must remove it yourself if it is installed."
-						end
+						end if is_package_installed? "libpcl1-dev"
 					end
 				ensure
 					rm_rf workingdir if Dir.exist? workingdir
@@ -206,20 +261,21 @@ def main!
 	}]
 	tasks << ["Installing Crystal dependency to /opt/cr-ox/", ->{
 		mkdir_p '/opt'
-		rm_rf '/opt/cr-ox'
+		rm_rf '/opt/cr-ox', sudo: true
 		Dir.chdir $tempdir do
-			mv Dir.glob("crystal-*").single, '/opt/cr-ox'
+			mv Dir.glob("crystal-*").single, '/opt/cr-ox', true
 		end
 		mv *%w{ /opt/cr-ox/bin/crystal /opt/cr-ox/bin/cr-ox }
-		ln_sf *%w{ /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox }
+		ln_sf *%w{ /opt/cr-ox/bin/cr-ox /usr/local/bin/cr-ox }, true
 		puts "  Done"
 	}]
-	tasks << ["Compiling Onyx in %d-bit release mode" % ($is64bit ? 64 : 32), ->{
-		mkdir_p '.build'
-		#execute %{CRYSTAL_CONFIG_PATH=#{Dir.pwd}/src /opt/cr-ox/bin/cr-ox build --release --verbose --link-flags "-L/opt/cr-ox/embedded/lib" -o .build/onyx src/compiler/onyx.cr}
-		execute "make all"
-		execute "make install"
-		puts "  Done"
+	tasks << [->{"Compiling Onyx in %d-bit release mode" % ($is64bit ? 64 : 32)}, ->{
+		# begin
+			mkdir_p '.build'
+			#execute %{CRYSTAL_CONFIG_PATH=#{Dir.pwd}/src /opt/cr-ox/bin/cr-ox build --release --verbose --link-flags "-L/opt/cr-ox/embedded/lib" -o .build/onyx src/compiler/onyx.cr}
+			execute "make all"
+			execute "make install", sudo: true
+			puts "  Done"
 	}]
 	# tasks << ["Installing Onyx", ->{
 	# 	rm_rf '/opt/onyx'
@@ -244,11 +300,11 @@ def main!
 	# }]
 	tasks << ["Checking if Onyx works", ->{
 		begin
-			execute "echo 'say' | onyx", false
+			execute "echo 'say' | onyx"
 			puts "  Yes it does. Hooray!"
 		rescue
 			puts "  Nope, still buggered.", "", "== PROCESS FAILED =="
-			puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include this output."
+			puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include the logfile at #{$logfile}."
  			raise GracefulFailure
 		end
 	}]
@@ -258,6 +314,7 @@ def main!
 		while tasks.some?
 			name, task = tasks.shift
 			begin
+				name = name.() if name.is_a? Proc
 	 			puts ">> %s..." % name
 				task.()
 			ensure
@@ -270,7 +327,7 @@ def main!
 		abort
 	rescue StandardError => e
 		puts "***EXCEPTION: " + e.summarise, e.backtrace.map { |line| "  " + line }, "", "== PROCESS FAILED =="
-		puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include this output."
+		puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include the logfile at #{$logfile}."
 		abort
 	ensure
 		rm_rf $tempdir if Dir.exist? $tempdir
@@ -323,16 +380,17 @@ def add_apt_lines(lines)
 	raise "Could not find file: %s" % file unless File.file? file
 	existing_lines = File.readlines(file).map(&:chomp)
 	return if lines.all? { |line| existing_lines.map(&:strip).include? line }
-	File.write file, (existing_lines + lines).join(?\n)
+	#File.write file, (existing_lines + lines).join(?\n)
+	lines.each { |line| execute %{echo "%s" | %stee -a "%s" >/dev/null} % [line, ("sudo " if sudo?), file] }
 end
 def install_package(package, force = false)
 	if package == "llvm-3.5-dev" && !is_package_known?("llvm-3.5-dev") && $package_manager == DPKG_AND_APT_GET && is_linux_distro?("Debian", 7)
-		puts "  Adding apt source lines for llvm-3.5-dev" if $verbose
+		spout "  Adding apt source lines for llvm-3.5-dev"
 		add_apt_lines %{
 			deb http://llvm.org/apt/wheezy/ llvm-toolchain-wheezy main
 			deb-src http://llvm.org/apt/wheezy/ llvm-toolchain-wheezy main
 		}.split(?\n).map &:strip
-		execute "apt-get update"
+		execute "apt-get update", sudo: true
 	end
 	raise "Package %s cannot be found" % package unless is_package_known? package
 	return if is_package_installed? package
@@ -341,19 +399,19 @@ def install_package(package, force = false)
 			cmd = %{apt-get install -y "#{package}"}
 			force = true if package == "llvm-3.5-dev"
 			cmd << " --force-yes" if force
-			execute cmd
+			execute cmd, sudo: true
 		else
 			raise "Cannot install '#{package}'. No supported package manager found."
 	end
 end
 def uninstall_package(package)
-	execute %{apt-get remove "#{package}"}
+	execute %{apt-get remove -y "#{package}"}, sudo: true
 end
 def openurl(domain, path = nil)
 	url = path ? CombineURL(domain, path) : domain
 	attempts = 0
 	begin
-		puts "  Opening " + url if $verbose
+		spout "  Opening " + url
 		url = URI.encode(url) if url.include? ' '
 		result = Kernel.open(url, ?r).read
 	rescue OpenURI::HTTPError, StandardError => e
@@ -366,36 +424,40 @@ def openurl(domain, path = nil)
 	end
 	result
 end
-def mkdir_p(dir)
-	puts "  Ensuring directory #{dir} exists" if $verbose
-	FileUtils.mkdir_p dir
+def mkdir_p(dir, sudo = false)
+	spout "  Ensuring directory #{dir} exists"
+	execute %{mkdir -p "%s"} % dir, sudo: sudo
+	#FileUtils.mkdir_p dir
 end
-def rm_rf(file)
-	puts "  Removing " + file if $verbose
-	FileUtils.rm_rf file
+def rm_rf(file, sudo = false)
+	spout "  Removing " + file.to_s
+	# FileUtils.rm_rf file
+	execute %{rm -rf "%s"} % file, sudo: sudo
 end
-def rm_f(file)
-	puts "  Removing " + file if $verbose
-	FileUtils.rm_f file
+def rm_f(file, sudo = false)
+	spout "  Removing " + file
+	# FileUtils.rm_f file
+	execute %{rm -f "%s"} % file, sudo: sudo
 end
-def mv(old, new)
-	puts "  Moving #{old} to #{new}" if $verbose
-	FileUtils.mv old, new
+def mv(old, new, sudo = false)
+	spout "  Moving #{old} to #{new}"
+	# FileUtils.mv old, new
+	execute %{mv "%s" "%s"} % [old, new], sudo: sudo
 end
-def cp_r(old, new)
-	puts "  Copying #{old} to #{new}" if $verbose
-	FileUtils.cp_r old, new, preserve: true
+def cp_r(old, new, sudo = false)
+	spout "  Copying #{old} to #{new}"
+	#FileUtils.cp_r old, new, preserve: true
+	execute %{cp -r "%s" "%s"} % [old, new], sudo: sudo
 end
-def ln_sf(old, new)
-	puts "  Creating softlink #{old} => #{new}" if $verbose
-	FileUtils.ln_sf old, new
+def ln_sf(old, new, sudo = false)
+	spout "  Creating softlink #{old} => #{new}"
+	# FileUtils.ln_sf old, new
+	execute %{ln -sf "%s" "%s"} % [old, new], sudo: sudo
 end
 def chmod(mode, file)
-	puts "  Changing permissions of #{file} to #{mode}" if $verbose
-	FileUtils.chmod mode, file
-end
-def does_command_exist?(command)
-	`which #{command}` !~ /(?:^$|not found)/
+	spout "  Changing permissions of #{file} to #{mode}"
+	# FileUtils.chmod mode, file
+	execute %{chmod %s "%s"} % [mode, file], sudo: true
 end
 
 main!
