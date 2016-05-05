@@ -2121,7 +2121,7 @@ p "CrystalModule2.root_def", CrystalModule2.root_def
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- This module begins here and continues to EOF
-module AllTheRest begins -- follows, below, throughout
+module AllTheRest below -- begins, below, (follows), throughout
 
 type RestFoo < value
    rest-foo() ->
