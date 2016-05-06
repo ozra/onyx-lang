@@ -36,6 +36,13 @@ end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+say "Lambda Type as atomic"
+
+lambda-type = '(Int, Bool) -> Int
+pp lambda-type
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 p for y in [1,2,3]: say y
 say for y in [1,2,3]: say y
 
@@ -144,6 +151,12 @@ say good-ole-set.class
 dpp 1 < 2 < 4
 
 do-tup(x Tup) -> x
+
+-- OTHER SYNTAX ALTERNATIVES
+
+-- a = <[1, 2, 3]>
+-- a = <[ 1, 2, a[0]>5 ]>  -- breaks!
+
 
 -- ANGULAR TUPLE SYNTAX
 
@@ -2126,7 +2139,6 @@ module AllTheRest below -- begins, below, (follows), throughout
 type RestFoo < value
    rest-foo() ->
       true
-
 
 xx = 47
 yy = 47.47

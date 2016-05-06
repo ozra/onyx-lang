@@ -1382,21 +1382,8 @@ class OnyxParser < OnyxLexer
    def parse_atomic_without_location
       dbg "parse_atomic_without_location"
 
-      # if @token.type == :CONST && ([:Self, :Type, :Class].includes? @token.value)
-      #    dbg "Found CONST with value Self, Type or Class"
-      #    @token.type = :IDFR
-      #    @token.value = :self
-
-      #    # # *TODO* it might also be a call damn it!
-      #    # if current_char == '.'
-      #    #    next_token_skip_space # to the dot
-      #    #    next_token_skip_space # to the idfr
-      #    #    # *TODO* use generic resolution, just add parse_def_or_call to path–ends
-      #    #    return Expressions.from parse_typedef_body_var_or_const true, :MODULE
-      #    # end
-
-      # end
-
+      # *TODO* pragmas are now simply a token, the alternatives has been removed
+      # clean up code on this basis! (simply use token matching)
       if pragmas?
          pragmas = parse_pragma_cluster
          dbg "Got pragma in parse_atomic_without_location - apply to next item! #{pragmas}"
@@ -1406,6 +1393,10 @@ class OnyxParser < OnyxLexer
       ret = case @token.type
       when :"("
          parse_parenthetical_unknown
+
+      when :"'"
+         next_token
+         parse_single_type
 
       when :"[]"
          parse_empty_array_literal
@@ -1531,12 +1522,14 @@ class OnyxParser < OnyxLexer
             parse_yield_with_scope
          when :abstract
             unexpected_token "abstract can only be used in place of of a func body, or as modifer on types."
-         when :def, :fun, :own, :fn, :fu, :mf
-            # *TODO* create "owningdefname__private_def__thisdefname"
-            # - do this for the whole hierarchy of defs ofc. (if more)
-            check_not_inside_def("can't define def inside def") do
-               parse_def
-            end
+
+         # when :def, :fun, :own, :fn, :fu, :mf
+         #    # *TODO* create "owningdefname__private_def__thisdefname"
+         #    # - do this for the whole hierarchy of defs ofc. (if more)
+         #    check_not_inside_def("can't define def inside def") do
+         #       parse_def
+         #    end
+
          when :macro, :template
             # *TODO* create "owningdefname__private_macro__thisdefname"
             # - do this for the whole hierarchy of defs ofc. (if more)
@@ -1866,7 +1859,7 @@ class OnyxParser < OnyxLexer
       dbg "parse_pragma_cluster_style1 ->"
       pragmas = [] of ASTNode
 
-      while pragma_starter?
+      while pragmas?
          pragmas.concat parse_pragma_grouping
          skip_space_or_newline
       end
@@ -1881,7 +1874,7 @@ class OnyxParser < OnyxLexer
       dbg "parse_pragma_grouping_style1 ->"
       pragmas = [] of ASTNode
 
-      while pragma_starter?
+      while pragmas?
          pragmas << parse_pragma
       end
 
@@ -3020,6 +3013,9 @@ class OnyxParser < OnyxLexer
    def parse_parenthetical_unknown
       dbg "parse_parenthetical_unknown"
 
+      # *TODO* Should check lambda–TYPE and union–TYPE also!
+
+
       # candidate = heuristic_scan_parenthetical_unknown
 
       backed = backup_full()
@@ -3042,27 +3038,30 @@ class OnyxParser < OnyxLexer
 
 
       # PSEUDO - HEURISTIC
+
       # return if not paren
 
-      # any–of = Set{:tuple, :grouping, :lambda, :fragment}
+      # *NOTE* - use flags instead of Set - currently...
+      # any–of = Set{:tuple, :grouping, :lambda, :fragment, :lambda_type, :sum_type}
       # possibles = any–of
 
       # next_token; skip_space
 
-      # possibles.=intersect (
-      #    if literal  => Set{:tuple, :grouping}
-      #    elif idfr   => any–of
-      #    elif ')'    => Set{:lambda, :fragment}
-      #    else        => any–of
+      # possibles.=intersect (case @token.type
+      #    when .literalish => Set{:tuple, :grouping}
+      #    when .typish     => Set{:tuple, :grouping, :lambda_type, :sum_type}
+      #    when :IDFR       => Set{:tuple, :grouping, :lambda, :fragment}
+      #    when :")"        => Set{:lambda, :fragment, :lambda_type}
+      #    else             => any–of
       # )
 
       # next_token; skip_space
 
-      # possibles.=intersect (
-      #    if ','      => Set{:tuple, :fragment}
-      #    elif Typish => Set{:grouping | :lambda}
-      #    elif ')'    =>
-      #    else        => any–of
+      # possibles.=intersect (case @token.type
+      #    when :","    => Set{:tuple, :fragment, :lambda_type}
+      #    when .typish => Set{:grouping | :lambda}
+      #    when :")"    =>
+      #    else         => any–of
       # )
 
       # next_token; skip_space
@@ -7308,14 +7307,9 @@ class OnyxParser < OnyxLexer
    end
 
    def pragmas?()
-      tok?(:"'") && !('A' <= current_char <= 'Z') # (:BACKSLASH, :"|", :"#", :"'")
+      tok?(:"'") && !('A' <= current_char <= 'Z') && current_char != '(' # (:BACKSLASH, :"|", :"#", :"'")
       # tok?(:BACKSLASH, :"|", :"#", :"'")
    end
-
-   def pragma_starter?()
-      tok?(:"'") && !('A' <= current_char <= 'Z') # (:BACKSLASH, :"|", :"#", :"'")
-   end
-
 
    def possible_func_def? : Bool
       return false unless tok?(DefOrMacroCheck1)
