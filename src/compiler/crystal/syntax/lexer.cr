@@ -1144,9 +1144,10 @@ module Crystal
           elsif chr == '–'
             str << '_'
 
-          elsif do_hump_magic && ('A' <= chr <= 'Z')
-            str << '_'
-            str << chr.downcase
+          # *TODO* _ONLY_ of onyxify and translate–humps set!!!
+          # elsif do_hump_magic && ('A' <= chr <= 'Z')
+          #   str << '_'
+          #   str << chr.downcase
 
           else
             str << chr

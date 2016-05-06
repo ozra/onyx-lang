@@ -1766,6 +1766,7 @@ class OnyxParser < OnyxLexer
          dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
          case
          when tok? :"(", :INDENT
+            # *TODO* look ahead for "continuation tokens" on the next active line!
             return parse_constish_type_new_call_sugar const, name_indent
 
          when tok? :SPACE

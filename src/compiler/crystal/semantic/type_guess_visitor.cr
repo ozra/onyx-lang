@@ -1347,15 +1347,15 @@ module Crystal
     end
 
     def visit(node : MacroExpression)
-      false
+      @outside_def ? super : false
     end
 
     def visit(node : MacroIf)
-      false
+      @outside_def ? super : false
     end
 
     def visit(node : MacroFor)
-      false
+      @outside_def ? super : false
     end
 
     def visit(node : Path)

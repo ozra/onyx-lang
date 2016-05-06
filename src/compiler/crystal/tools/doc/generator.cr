@@ -29,8 +29,11 @@ class Crystal::Doc::Generator
   end
 
   def generate_docs(program_type, types)
+    _dbg "generate_docs: copy files".white
     copy_files
+    _dbg "generate_docs: generate_types_docs".white
     generate_types_docs types, @dir, types
+    _dbg "generate_docs: generate_readme".white
     generate_readme program_type, types
   end
 

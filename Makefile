@@ -34,7 +34,7 @@ endif
 spec: all_spec
 	$(O)/all_spec
 doc:
-	$(BUILD_PATH) ./bin/cr-ox doc docs/main.cr
+	$(BUILD_PATH) ./bin/cr-ox doc src/docs_main.cr
 
 onyx: $(O)/onyx
 

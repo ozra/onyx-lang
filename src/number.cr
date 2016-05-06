@@ -2,6 +2,8 @@
 struct Number
   include Comparable(Number)
 
+  alias Primitive = Int::Primitive | Float::Primitive
+
   def self.zero : self
     new(0)
   end
@@ -21,12 +23,12 @@ struct Number
   # ints = Int64[1, 2, 3]
   # ints.class # => Array(Int64)
   # ```
-  def self.[](*nums) : Array(self)
-    Array(self).build(nums.size) do |buffer|
-      nums.each_with_index do |num, i|
-        buffer[i] = new(num)
-      end
-      nums.size
+  macro [](*nums)
+    Array({{@type}}).build({{nums.size}}) do |%buffer|
+      {% for num, i in nums %}
+        %buffer[{{i}}] = {{@type}}.new({{num}})
+      {% end %}
+      {{nums.size}}
     end
   end
 
