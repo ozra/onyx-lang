@@ -44,54 +44,6 @@ macro babel_func(given, foreign, block_it = true)
 end
 
 
-babel_type Any,    Object,      true
-babel_type Object, Class,       true
-babel_type Record, Struct,      true
-babel_type AnyInt, Int,         false
-
-
-babel_type Int,    StdInt,      false
-babel_type Real,   StdReal,     false
-
-babel_type Tag,    Symbol,      true
-babel_type Ptr,    Pointer,     true
-
-# babel_type Str,    String,      false  -- added as alias instead currently
-babel_type List,   Array,       true
-babel_type Tup,    Tuple,       false
-
-babel_type Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
-
-babel_type Lambda, Proc,        true
-
-# babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
-# babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
-
-babel_type I8,     Int8,        true
-babel_type I16,    Int16,       true
-babel_type I32,    Int32,       true
-babel_type I64,    Int64,       true
-
-babel_type U8,     UInt8,       true
-babel_type U16,    UInt16,      true
-babel_type U32,    UInt32,      true
-babel_type U64,    UInt64,      true
-
-babel_type F32,    Float32,     true
-babel_type F64,    Float64,     true
-
-
-babel_func init,        initialize,         true
-
-babel_func :"~~",       :"==="
-
-babel_func each,        each_with_index,  false
-babel_func each_,       each,             false
-
-
-
-
-
 # require "../../crystal/semantic/ast"
 include Crystal
 
@@ -344,4 +296,51 @@ def babelfish_mangling_raw(is_foreign : Bool, is_onyx : Bool, name : String, sco
     return {is_foreign, name}
   end
 end
+
+
+
+babel_type  Any,    Object,      true
+babel_type  Kind,   Class,       true
+babel_type  Record, Struct,      true
+babel_type  AnyInt, Int,         false
+
+
+babel_type  Int,    StdInt,      false
+babel_type  Real,   StdReal,     false
+
+babel_type  Tag,    Symbol,      true
+babel_type  Ptr,    Pointer,     true
+
+# babel_type Str,    String,      false  -- added as alias instead currently
+babel_type  List,   Array,       true
+babel_type  Tup,    Tuple,       false
+
+babel_type  Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
+
+babel_type  Lambda, Proc,        true
+
+# babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+# babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+
+babel_type  I8,     Int8,        true
+babel_type  I16,    Int16,       true
+babel_type  I32,    Int32,       true
+babel_type  I64,    Int64,       true
+
+babel_type  U8,     UInt8,       true
+babel_type  U16,    UInt16,      true
+babel_type  U32,    UInt32,      true
+babel_type  U64,    UInt64,      true
+
+babel_type  F32,    Float32,     true
+babel_type  F64,    Float64,     true
+
+
+babel_func  init,        initialize,         true
+
+babel_func  :"~~",       :"==="
+
+babel_func  each,        each_with_index,  false
+babel_func  each_,       each,             false
+
 

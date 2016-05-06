@@ -38,7 +38,7 @@ class Crystal::Doc::Type
     when Program
       "Top Level Namespace"
     when NamedType
-      babelfish_reverse type.name  # *TODO* checks that it is deffed in Program level!
+      babelfish_reverse(type.name) # + "__G"  # *TODO* checks that it is deffed in Program level!
     when NoReturnType
       "NoReturn"
     when VoidType
@@ -106,7 +106,7 @@ class Crystal::Doc::Type
     end
 
     if superclass
-      @generator.type(superclass)
+      @generator.to_doc_type(superclass)
     else
       nil
     end
@@ -121,7 +121,7 @@ class Crystal::Doc::Type
       when IncludedGenericModule
         ancestor = ancestor.module
       end
-      ancestors << @generator.type(ancestor)
+      ancestors << @generator.to_doc_type(ancestor)
       break if ancestor == @generator.program.object
     end
     ancestors
@@ -140,7 +140,7 @@ class Crystal::Doc::Type
   end
 
   def program
-    @generator.type(@type.program)
+    @generator.to_doc_type(@type.program)
   end
 
   def enum?
@@ -292,7 +292,7 @@ class Crystal::Doc::Type
       included_modules = [] of Type
       parents.each do |parent|
         if parent.module? || parent.is_a?(IncludedGenericModule)
-          included_modules << @generator.type(parent)
+          included_modules << @generator.to_doc_type(parent)
         end
       end
       included_modules.sort_by! &.full_name.downcase
@@ -307,7 +307,7 @@ class Crystal::Doc::Type
       extended_modules = [] of Type
       parents.each do |parent|
         if parent.module? || parent.is_a?(IncludedGenericModule)
-          extended_modules << @generator.type(parent)
+          extended_modules << @generator.to_doc_type(parent)
         end
       end
       extended_modules.sort_by! &.full_name.downcase
@@ -331,7 +331,7 @@ class Crystal::Doc::Type
 
           next unless @generator.must_include?(subclass)
 
-          subclasses << @generator.type(subclass)
+          subclasses << @generator.to_doc_type(subclass)
         end
         subclasses.sort_by! &.full_name.downcase
       else
@@ -359,7 +359,7 @@ class Crystal::Doc::Type
     including_types = [] of Type
     type.raw_including_types.try &.each do |subtype|
       if @generator.must_include? subtype
-        including_types << @generator.type(subtype)
+        including_types << @generator.to_doc_type(subtype)
       end
     end
     including_types.uniq!.sort_by! &.full_name.downcase
@@ -372,12 +372,12 @@ class Crystal::Doc::Type
       if container.is_a?(Program)
         nil
       else
-        @generator.type(container)
+        @generator.to_doc_type(container)
       end
     when IncludedGenericModule
-      @generator.type(type.module).container
+      @generator.to_doc_type(type.module).container
     when InheritedGenericClass
-      @generator.type(type.extended_class).container
+      @generator.to_doc_type(type.extended_class).container
     else
       nil
     end
@@ -401,7 +401,7 @@ class Crystal::Doc::Type
       container.full_name_without_type_vars(io)
       io << "."
     end
-    io << babelfish_reverse name # *TODO* name reverse babel mangling
+    io << name # babelfish_reverse(name) + "__N"
   end
 
   def path
@@ -463,7 +463,7 @@ class Crystal::Doc::Type
     match = @type.lookup_type(path_or_names)
     return unless match.is_a?(Crystal::Type)
 
-    @generator.type(match)
+    @generator.to_doc_type(match)
   end
 
   def lookup_method(name)
@@ -609,7 +609,7 @@ class Crystal::Doc::Type
     type.arg_types.join(", ", io) do |arg_type|
       type_to_html arg_type, io, links: links
     end
-    io << " -> "
+    io << " -&gt; "
     return_type = type.return_type
     type_to_html return_type, io, links: links unless return_type.void?
   end
@@ -623,7 +623,7 @@ class Crystal::Doc::Type
   end
 
   def type_to_html(type : Crystal::GenericClassInstanceType, io, text = nil, links = true)
-    generic_class = @generator.type(type.generic_class)
+    generic_class = @generator.to_doc_type(type.generic_class)
     if generic_class.must_be_included?
       if links
         io << %(<a href=")
@@ -662,7 +662,7 @@ class Crystal::Doc::Type
   end
 
   def type_to_html(type : Crystal::Type, io, text = nil, links = true)
-    type_to_html @generator.type(type), io, text, links: links
+    type_to_html @generator.to_doc_type(type), io, text, links: links
   end
 
   def type_to_html(type : Type, io, text = nil, links = true)
@@ -684,7 +684,7 @@ class Crystal::Doc::Type
       end
     else
       if text
-        io << babelfish_reverse text
+        io << text # babelfish_reverse text
         # io << "__Y"
       else
         type.full_name(io)

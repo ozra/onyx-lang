@@ -16,7 +16,7 @@ class Crystal::Doc::Generator
 
     types = collect_subtypes(@program)
 
-    program_type = type(@program)
+    program_type = to_doc_type(@program)
     if program_type.class_methods.any? { |method| must_include? method }
       types.insert 0, program_type
     end
@@ -25,7 +25,7 @@ class Crystal::Doc::Generator
   end
 
   def program_type
-    type(@program)
+    to_doc_type(@program)
   end
 
   def generate_docs(program_type, types)
@@ -163,7 +163,7 @@ class Crystal::Doc::Generator
     nodoc? obj.doc.try &.strip
   end
 
-  def type(type)
+  def to_doc_type(type)
     @types[type] ||= Type.new(self, type)
   end
 
@@ -185,7 +185,7 @@ class Crystal::Doc::Generator
       end
 
       # _dbg "collect_subtypes : #{type}"
-      types << type(type) if must_include? type
+      types << to_doc_type(type) if must_include? type
     end
 
     types.uniq.sort_by! &.name.downcase  # Added uniq
