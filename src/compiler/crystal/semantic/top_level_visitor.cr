@@ -122,7 +122,79 @@ module Crystal
       false
     end
 
-    def visit(node : ClassDef)
+
+
+    def visit(node : ExtendTypeDef)
+      _dbg "visit(node : ExtendTypeDef) : #{node.name}"
+
+      scope, name = process_type_name(node.name)
+
+      # *TODO* the chicken or the egg dilemma again - we must check both foreigned and not up the chain!
+      babelfish_mangling node, scope # *TODO* for the type_vars - if any
+      # *TODO* will be double mangled cause of specific visit below:
+      type = scope.types[name]?
+
+      if !type
+        node.raise "`extend` couldn't find the type \"#{name}\". Have you require'd the necessary files?"
+        # *TODO* find _similar_ type if misspelled!
+      end
+
+      # if type.is_a?(AliasType)
+      # *TODO* should we follow aliases and redef target, or error!?
+      type = type.remove_alias
+
+
+
+      # *TODO* copy over location, doc, attributes, etc.
+
+      case
+      when type.is_a? ClassType
+        node.expanded = ClassDef.new(node.name.clone, node.body, struct: type.struct?) #, name_column_number: node.name_column_number) *TODO*
+
+      when type.is_a? EnumType
+        body = (node.body.as Expressions).expressions.as Array(ASTNode)
+        node.expanded = EnumDef.new(node.name.clone, body)
+
+      # *TODO* Maybe these won't be redefined!?
+      # Think about it!
+
+      # when CStructType
+      #   node.expanded = StructDef.new(node.name.clone, node.body)
+
+      # when CUnionType
+      #   node.expanded = UnionDef.new(node.name.clone, node.body)
+
+
+      # *TODO* should we follow aliases and redef target, or error!?
+      # when AliasType
+      #   raise "can't extend type alias"
+      else
+        node.raise "don't know how to extend type \"#{name}\" of \"#{type.class}\""
+
+      end
+
+      exp = node.expanded.not_nil!
+      exp.is_onyx = node.is_onyx
+      exp.location = node.location
+      exp.end_location = node.end_location
+
+      # node.name = nil
+      node.body = nil
+
+      # Solely because type–inference makes it ASTNode+ and visit n, b is only deffed for these
+      case exp
+      when ClassDef
+        visit exp, true
+      when EnumDef
+        visit exp, true
+      else
+        raise "can't happen"
+      end
+    end
+
+
+
+    def visit(node : ClassDef, is_type_extend = false)
       check_outside_block_or_exp node, "declare class"
 
       node_superclass = node.superclass
@@ -145,6 +217,7 @@ module Crystal
 
       scope, name = process_type_name(node.name)
 
+      # *TODO* the chicken or the egg dilemma again - we must check both foreigned and not up the chain!
       babelfish_mangling node, scope # *TODO* for the type_vars - if any
 
       _dbg_on # if node.name == "Gimp"
@@ -244,6 +317,11 @@ module Crystal
       if created_new_type
         raise "Bug" unless type.is_a?(InheritableClass)
         type.force_add_subclass
+
+      else
+        if node.is_onyx && is_type_extend == false
+          node.raise "#{name} defined more than once. Did you mean to `extend`?"
+        end
       end
 
       node.type = @mod.nil
@@ -556,7 +634,7 @@ module Crystal
       end
     end
 
-    def visit(node : EnumDef)
+    def visit(node : EnumDef, is_type_extend = false)
       return false if @lib_def_pass == 2
 
       check_outside_block_or_exp node, "declare enum"
@@ -568,6 +646,9 @@ module Crystal
 
       enum_type = scope.types[name]?
       if enum_type
+        if node.is_onyx && is_type_extend == false
+          node.raise "#{name} defined more than once. Did you mean to `extend`?"
+        end
         unless enum_type.is_a?(EnumType)
           node.raise "#{name} is not a enum, it's a #{enum_type.type_desc}"
         end

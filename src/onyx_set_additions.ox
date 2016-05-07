@@ -1,7 +1,7 @@
 require "object"
 require "set"
 
-type Set < value
+ext Set
    <(other Self) ->  self.proper-subset? other
    <(obj) ->         false
 
@@ -14,7 +14,7 @@ type Set < value
    >(other Self) ->  self.proper-superset? other
    >(obj) ->         self.size > 1 && self.includes? obj
 
-type Object
+ext Any
    <(set Set) ->     set > self
    <=(set Set) ->    set >= self
    >(set Set) ->     false

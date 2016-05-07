@@ -181,6 +181,19 @@ module Crystal
       false
     end
 
+    def visit(node : ExtendTypeDef)
+      if node.expanded
+         node.expanded.try &.accept self
+      else
+         @str << keyword("extend")
+         @str << " "
+         @str << node.name.accept self
+         if body = node.body
+            accept_with_indent body
+         end
+      end
+    end
+
     def visit(node : ClassDef)
       if node.abstract?
         @str << keyword("abstract")
@@ -482,6 +495,13 @@ module Crystal
         value.accept self
       end
       false
+    end
+
+    # If a for–node is passed to a macro expansion, is it normalized first?
+    # Double check. Otherwise it would go straight for crystal generation.
+    # (Crystal macros _must_ have nodes genned as crystal–code!)
+    def visit(node : For)
+      raise "Shouldn't possibly happen for Crystal code!"
     end
 
     def visit(node : While)

@@ -1551,17 +1551,22 @@ class OnyxParser < OnyxLexer
             parse_ifdef
          when :unless
             parse_unless
-         when :include, :mixin
-            check_not_inside_def("can't include inside def") do
-               parse_include
-            end
-         when :extend
-            check_not_inside_def("can't extend inside def") do
-               parse_extend
-            end
+
          when :type
             check_not_inside_def("can't define type inside def") do
                parse_type_def
+            end
+         when :struct
+            check_not_inside_def("can't define struct type inside def") do
+               parse_struct_def
+            end
+         when :enum
+            check_not_inside_def("can't define struct type inside def") do
+               parse_enum_def
+            end
+         when :flags
+            check_not_inside_def("can't define struct type inside def") do
+               parse_flags_def
             end
          when :module
             check_not_inside_def("can't define module inside def") do
@@ -1572,6 +1577,15 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define trait inside def") do
                parse_trait_def
             end
+         when :ext, :extend
+            check_not_inside_def("can't extend types inside def") do
+               parse_type_extend
+            end
+         when :include, :mixin
+            check_not_inside_def("can't include inside def") do
+               parse_include_or_include_on
+            end
+
          when :for
             parse_for
          when :while
@@ -2296,165 +2310,167 @@ class OnyxParser < OnyxLexer
 
 
 
-   # def parse_babel_def() : ASTNode
-   #    check :babel
-   #    next_token_skip_space
+   def lenient_concat(a : Array(T1), b : Array(T2)) # : Array(T1|T2)
+      a.concat b
+   end
+   def lenient_concat(a : Array(T1), b : Nil) : Array # Array(T1)
+      a
+   end
+   def lenient_concat(a : Nil, b : Array(T2)) : Array # Array(T2)
+      b
+   end
+   def lenient_concat(a : Nil, b : Nil) : Nil
+      nil
+   end
 
-   #    given_name_type = @token.type
-   #    if ! tok? :IDFR, :CONST
-   #       raise "expected an identifier like `ident` or `Ident`"
-   #    end
+   def includes_pragma?(pragmas : Array(ASTNode)?, name)
+      return false if !pragmas
+      pragmas.each do |pragma|
+         next unless pragma.is_a? Attribute
+         return true if pragma.name == name
+      end
+      return false
+   end
 
-   #    given = @token.value.to_s
 
-   #    check :"<=="
-   #    next_token_skip_space
+   record GenericTypeDef,
+      name : Path,
+      body : Array(ASTNode)?,
+      base : ASTNode?,
+      tvars : Array(String)?,
+      pragmas : Array(ASTNode)?,
+      doc : String?,
+      name_col : Int32
 
-   #    if ! tok? given_name_type
-   #       raise "foreign name must be of same type as given name. Slipped on the shift-key?"
-   #    end
+   def parse_struct_def : ASTNode
+      ret = parse_type_def
+      raise "use `type`, not `struct`, for alias definitions" if ret.is_a? Alias
+      raise "unexpected result from `struct`-def" unless ret.is_a? ClassDef
+      ret.struct = true
+      ret
+   end
 
-   #    foreign = @token.value.to_s
-   #    end_location = @token.end_location
-   #    next_token_skip_space
+   def parse_type_def : ASTNode
+      loc = @token.location
+      ret = parse_general_type_def :TYPE_DEF
+      if ret.is_a? Alias # *TODO* location, doc etc!
+         ret.location = loc
+         ret.end_location = @token.location
+         return ret
+      end
 
-   #    # *TODO* for better errors : test that the construct is finished! (new–line, dedent, ; or end)
+      type_def = ClassDef.new(
+         ret.name,
+         Expressions.from(ret.body.not_nil!), # (body || NilLiteral.new),
+         ret.base,
+         ret.tvars,
+         includes_pragma?(ret.pragmas, "abstract"),
+         struct: false,
+         name_column_number: ret.name_col
+      )
+      type_def.doc = ret.doc
+      type_def.location = loc
+      type_def.end_location = @token.location
+      type_def
+   end
 
-   #    BabelDef.new(given, foreign).at_end(end_location)
+   def parse_flags_def : ASTNode
+      ret = parse_enum_def
+      ret.attributes = [Attribute.new "Flags", [] of ASTNode, nil]
+      ret
+   end
 
-   # end
+   def parse_enum_def : ASTNode
+      loc = @token.location
+      ret = parse_general_type_def :ENUM_DEF
+      raise "shouldn't happen!" if ret.is_a? Alias
+      type_def = EnumDef.new(
+         ret.name,
+         ret.body.not_nil!,
+         ret.base
+      )
+      type_def.doc = ret.doc
+      type_def.location = loc
+      type_def.end_location = @token.location
+      type_def
+   end
 
-   def parse_type_def() : ASTNode
-      dbg "parse_type_def ->"
+   def parse_type_extend : ASTNode
+      loc = @token.location
+      ret = parse_general_type_def :TYPE_DEF
+      raise "shouldn't happen!" if ret.is_a? Alias
+      raise "`extend` takes no pragmas" if ret.pragmas
+      raise "`extend` takes no base-type" if ret.base
+      raise "`extend` takes no type-vars, only type-name" if ret.tvars
+      # raise "`extend` takes no doc" if ret.doc
+      type_def = ExtendTypeDef.new ret.name, ret.body.not_nil!
+      type_def.location = loc
+      type_def.end_location = @token.location
+      type_def
+   end
+
+   def parse_general_type_def(type_kind)
+      dbg "parse_general_type_def ->"
       @type_nest += 1
+      is_alias = false
 
-
-      # *TODO* former params
-      is_abstract = false
-      is_struct = false
-      # *TODO* former params
-
-      base_type = nil
-
-
+      # Might not be used for extend (?)
       doc = @token.doc
-
       indent_level = @indent
-
       next_token_skip_space_or_newline
       name_column_number = @token.column_number
-
       name = parse_constish allow_type_vars: false
 
-      # *TODO* below was in "parse_alias" - COMPARE!!!
-      # name = check_const
+      raise "type name can't be \"#{name}\"" unless name.is_a? Path
 
-
-      # *TODO* add scope???
-
-      dbg "- parse_type_def - parse_type_vars"
-
+      # Will not be allowed by enum/flags/alias
       type_vars = parse_type_vars
       skip_space
 
-
-      unless tok? :"=", :"<"
-         base_type = nil #Path-or-something "Reference" # class
-         builder = :object
-
-      else
-         if tok? :"="
-            relation = :"="
-         elsif tok? :"<="
-            next_token
-            if tok? :"="
-               relation = :"<=="
-            else
-               raise "Expected `<==` for type renaming"
-            end
-         else
-            relation = :"<"
-         end
-
-         next_token_skip_space
-
-         if kwd? :abstract
-            # builder_modifier = :abstract
-            is_abstract = true
-            next_token_skip_space
-         end
-
-         if tok? :IDFR
-            case @token.value
-            when :reference
-               explicit_builder = :object
-            when :object, :value, :enum, :flags, :sum, :alias
-               explicit_builder = @token.value
-
-            when :typeof, :typedecl
-               # do nothing
-
-            else
-               dbgtail_off!
-               raise "unexpected token - expected type-builder-name or base_type"
-            end
-
-            next_token_skip_space
-         end
-
-         if tok? :typeof, :typedecl
-            base_type = parse_typedecl
-
-         elsif tok? :CONST, :"'", :"(" # most likely a type!  *TODO* next_is_type?
-            base_type = parse_type false # parse_type_union-or-single-type-(fun-type-also-then)
-            # *NOTE* - BEFORE 'supertype' was parsed with `parse_constish`
-
-         else
-            base_type = nil
-         end
-
-         if base_type == nil
-            raise "sum types and aliases needs right hand side types " if (explicit_builder == :sum || explicit_builder == :alias)
-            builder = explicit_builder || :object
-
-         elsif base_type.is_a? Union
-            raise "A sum type is assigned to name from type builder, not inherited " if relation != :"="
-            raise "Can't declare sum type for an explictly non sum type!" if (explicit_builder != nil && explicit_builder != :sum)
-            builder = :sum
-
-         else # if base_type == SomeSimpleType
-            if relation == :"="
-               raise "only works for a type alias" if (explicit_builder != nil && explicit_builder != :alias)
-               builder = :alias
-
-            else
-               raise "can't mark inheritance for sum or alias types - they're associated with '=' " if (explicit_builder == :sum || explicit_builder == :alias)
-               builder = explicit_builder || :object
-            end
-         end
-
-      end
-
-      if type_vars
-         raise "alias name can't have typevars" if builder == :alias
-         raise "sum type name can't have typevars" if builder == :sum
-      end
-
+      # First allowed pragma position
+      type_pragmas = parse_pragma_grouping if pragmas?
       skip_space
 
-      dbg "- parse_type_def - check for type suffix-pragmas"
-      if pragmas?
-         pragmas = parse_pragma_grouping
+      case @token.type
+      when :"="
+         dbg "- parse_general_type_def - found '='"
+         next_token_skip_space_or_newline
+         # Second allowed pragma position
+         dbg "- parse_general_type_def - check for pragmas"
+         type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+         dbg "- parse_general_type_def - parse aliased type"
+         base_type = parse_type false
+         is_alias = true
+
+      when :"<"
+         dbg "- parse_general_type_def - found '<'"
+         next_token_skip_space_or_newline
+         # Second allowed pragma position
+         dbg "- parse_general_type_def - check for pragmas"
+         type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+         dbg "- parse_general_type_def - parse base_type"
+         base_type = parse_type false
+
       else
-         pragmas = [] of Attribute
+         dbg "- parse_general_type_def - found no inherit relation"
+         base_type = nil
+
       end
 
-      case builder
-      when :alias, :sum
+      dbg "- parse_general_type_def - after parse base type"
+
+      # Third allowed pragma position
+      type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+
+      # If it's an alias, we're done - return it
+      if is_alias
+         @type_nest -= 1
+         raise "type alias name can't have typevars" if type_vars
          alias_node = Alias.new(name.to_s, base_type.not_nil!)
          alias_node.doc = doc
          return alias_node
       end
+
 
       dbg "- parse_type_def - before body"
       # skip_statement_end
@@ -2462,24 +2478,16 @@ class OnyxParser < OnyxLexer
       add_nest :type, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
-         raise "can't have empty enum! '#{name}'" if builder == :enum
-         raise "can't have empty flags! '#{name}'" if builder == :flags
          body = nil
          handle_nest_end true
 
       else
-         case builder
-         when :enum, :flags
-            body = parse_type_def_body :ENUM_DEF
+         body = parse_type_def_body type_kind
 
-         else
-            body = parse_type_def_body :TYPE_DEF
-         end
-
-         body = case
-         when body.is_a? Expressions
+         body = case body
+         when Expressions
             body.expressions
-         when body.is_a? Array(ASTNode)
+         when Array(ASTNode)
             body
          else
             [body]
@@ -2489,46 +2497,14 @@ class OnyxParser < OnyxLexer
 
       dbg "- parse_type_def - after body"
 
-      end_location = @token.location # body.end_location # token_end_location
-      # check_idfr "end"
-      # next_token_skip_space
-
-      raise "Bug: ClassDef name can only be a Path" unless name.is_a?(Path)
-
+      # end_location = @token.location
       @type_nest -= 1
-
-      case builder
-      when :enum
-         raise "Bug: `enum` name can only be a Path" unless name.is_a?(Path)
-         type_def = EnumDef.new name, body.not_nil!, base_type
-
-      when :flags
-         raise "Bug: `flags` name can only be a Path" unless name.is_a?(Path)
-         type_def = EnumDef.new name, body.not_nil!, base_type
-         type_def.attributes = [Attribute.new "Flags", [] of ASTNode, nil]
-
-      when :value
-         is_struct = true
-         type_def = ClassDef.new name, body || NilLiteral.new, base_type, type_vars, is_abstract, is_struct, name_column_number
-
-      when :object
-         type_def = ClassDef.new name, body || NilLiteral.new, base_type, type_vars, is_abstract, is_struct, name_column_number
-
-      else
-         dbgtail_off!
-         raise "internal error - type builder == '#{builder}'"
-      end
-
-      type_def.doc = doc
-      type_def.end_location = end_location
-      type_def
-   ensure
-      dbgtail "/parse_type_def"
+      GenericTypeDef.new name, body, base_type, type_vars, type_pragmas, doc, name_column_number
    end
 
 
    # *TODO* used only by C–Lib now
-   def parse_enum_def
+   def parse_cenum_def
       doc = @token.doc
 
       enum_indent = @indent
@@ -2554,10 +2530,10 @@ class OnyxParser < OnyxLexer
 
       raise "Bug: EnumDef name can only be a Path" unless name.is_a?(Path)
 
-      the_members = case
-      when members.is_a? Expressions
+      the_members = case members
+      when Expressions
          members.expressions
-      when members.is_a? Array(ASTNode)
+      when Array(ASTNode)
          members
       else
          [members]
@@ -2705,12 +2681,12 @@ class OnyxParser < OnyxLexer
             when :mixin
                dbg "in parse_type_def body loop: in IDFR :mixin branch"
                check_not_inside_def("can't mixin inside def") do
-                  members << parse_include
+                  members << parse_include_or_include_on
                end
-            when :extend
-               check_not_inside_def("can't extend inside def") do
-                  members << parse_extend
-               end
+            # when :extend
+            #    check_not_inside_def("can't extend inside def") do
+            #       members << parse_extend
+            #    end
             when :template
                # *TODO*
                check_not_inside_def("can't define macro inside def") do
@@ -4166,15 +4142,16 @@ class OnyxParser < OnyxLexer
       Case.new(cond, whens, a_else)
    end
 
-   def parse_include
-      parse_include_or_extend Include
-   end
+   # def parse_include
+   #    parse_include_or_extend Include
+   # end
 
-   def parse_extend
-      parse_include_or_extend Extend
-   end
+   # def parse_extend
+   #    parse_include_or_extend Extend
+   # end
 
-   def parse_include_or_extend(klass)
+   # def parse_include_or_extend(klass)
+   def parse_include_or_include_on
       location = @token.location
 
       next_token_skip_space_or_newline
@@ -4187,7 +4164,14 @@ class OnyxParser < OnyxLexer
          name = parse_constish
       end
 
-      klass.new name
+      if kwd? :on
+         next_token_skip_space
+         raise "expected `Self`" unless kwd? :Self
+         next_token_skip_space
+         Extend.new name
+      else
+         Include.new name
+      end
    end
 
    def parse_to_def(a_def)
@@ -5441,7 +5425,7 @@ class OnyxParser < OnyxLexer
       when :lib
          parse_lib_body
       when :struct_or_union
-         parse_struct_or_union_body
+         parse_cstruct_or_cunion_body
       when :TYPE_DEF, :ENUM_DEF, :TRAIT_DEF
          parse_type_def_body mode
       else
@@ -5858,9 +5842,9 @@ class OnyxParser < OnyxLexer
          dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '+/-' - current_char == '#{current_char}'"
          return true if check_plus_and_minus && current_char.whitespace?
 
-      when :"{"
-         dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '{'"
-         return true unless allow_curly # *TODO* *9* search allow_curly
+      # when :"{"
+      #    dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '{'"
+      #    return true unless allow_curly # *TODO* *9* search allow_curly
 
       # *TODO* free the operators again, check for type–ish after?
       # Though... they should never occur here without idfr before! *9*
@@ -6939,15 +6923,15 @@ class OnyxParser < OnyxLexer
 
          when :struct
             @inside_c_struct = true
-            node = parse_struct_or_union StructDef
+            node = parse_cstruct_or_cunion StructDef
             @inside_c_struct = false
             node
 
          when :union
-            parse_struct_or_union UnionDef
+            parse_cstruct_or_cunion UnionDef
 
          when :enum
-            parse_enum_def
+            parse_cenum_def
 
          when :ifdef
             parse_ifdef mode: :lib
@@ -7182,7 +7166,7 @@ class OnyxParser < OnyxLexer
 
 
 
-   def parse_struct_or_union(klass)
+   def parse_cstruct_or_cunion(klass)
       indent_level = @indent
       kind = (klass == StructDef ? :struct : :union)
 
@@ -7196,7 +7180,7 @@ class OnyxParser < OnyxLexer
          raise "An empty #{kind} doesn't make any sense!"
       else
          add_nest kind, dedent_level, "", (nest_kind == :LINE_NEST), false
-         body = parse_struct_or_union_body
+         body = parse_cstruct_or_cunion_body
       end
 
       # check :END
@@ -7205,8 +7189,8 @@ class OnyxParser < OnyxLexer
       klass.new name, Expressions.from(body)
    end
 
-   def parse_struct_or_union_body
-      dbg "parse_struct_or_union_body ->"
+   def parse_cstruct_or_cunion_body
+      dbg "parse_cstruct_or_cunion_body ->"
       exps = [] of ASTNode
 
       while !handle_nest_end
@@ -7220,23 +7204,23 @@ class OnyxParser < OnyxLexer
          when :include, :mixin
             if @inside_c_struct
                location = @token.location
-               exps << parse_include.at(location)
+               exps << parse_include_or_include_on.at(location)
             else
-               parse_struct_or_union_fields exps
+               parse_cstruct_or_cunion_fields exps
             end
 
          else
-            parse_struct_or_union_fields exps
+            parse_cstruct_or_cunion_fields exps
          end
       end
 
       exps
    ensure
-      dbgtail "/parse_struct_or_union_body"
+      dbgtail "/parse_cstruct_or_cunion_body"
    end
 
-   def parse_struct_or_union_fields(exps)
-      dbg "parse_struct_or_union_fields ->"
+   def parse_cstruct_or_cunion_fields(exps)
+      dbg "parse_cstruct_or_cunion_fields ->"
       args = [Arg.new(@token.value.to_s).at(@token.location)]
 
       next_token_skip_space_or_newline
@@ -7258,7 +7242,7 @@ class OnyxParser < OnyxLexer
       end
 
    ensure
-      dbgtail "/parse_struct_or_union_fields"
+      dbgtail "/parse_cstruct_or_cunion_fields"
    end
 
 

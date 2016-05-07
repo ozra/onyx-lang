@@ -60,6 +60,8 @@ say "suffix true" if true
 
 say "Nil-sugar"
 
+-- type Kwattro  - *TODO* improve error message!
+
 type Nilish
    @val = 0
 
@@ -443,7 +445,7 @@ say "- - Templates & Macros - -".yellow
 
 
 
-module Mac
+Mac:
    template horribly-formatted-pow2-round-up(v, r) =
     (
       {% if r != 2 && r != 4 && r != 8 && r != 16 && r != 32 && r != 64 &&
@@ -508,11 +510,13 @@ dpp 65536 == horribly-formatted-pow2-round-up 4097, 65536
 type MoreInt = I32 | I64 | I8
 say MoreInt
 
-type SomeFacts < flags U8
+flags SomeFacts < U8
    AppleLover
    PearLover
    CoolDude
 end
+
+-- facts = AppleLover .|. CoolDude
 
 facts = SomeFacts.flags AppleLover, CoolDude
 say "facts: {facts}"
@@ -564,7 +568,7 @@ Djur:
 
    APA = 47
 
-   type Apa < object Reference
+   type Apa
       -- '!literal-int=I64
 
       @@foo’ = 1
@@ -598,7 +602,7 @@ Djur:
    end
 
    --enum Legs
-   type Legs < enum
+   enum Legs
       NONE
       TWO
       FOUR
@@ -647,7 +651,16 @@ type Blk
       yield x + 1
       yield x - 2
    ;
+   deinit() ->
+      say "Blk.deinit"
+   ;
 ;
+
+-- ext Balk: baza() -> false  -- should error!
+
+ext Blk: foo() -> say "Blk.foo"
+Blk.bar() -> say "Blk.bar"
+
 
 blk = Blk(4, (x)\
    say "in blk init fragment: {x}"
@@ -660,6 +673,12 @@ blk3 = Blk
    1
    (x)\
       say "in blk2 init fragment: {x}"
+
+blk2 = nil
+blk3 = nil
+
+blk.foo
+Blk.bar
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -699,7 +718,8 @@ my-lambda.call("47")
 
 -- reopen String type and override '<<' operator to act as "concat" (like '+',
 -- but auto-coercing)
-type String: <<(obj) -> "{self}{obj}"
+
+ext String: <<(obj) -> "{self}{obj}"
 
 say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 
@@ -1236,7 +1256,7 @@ say "with to_s after: {json-hash:neat-literal?to-s}"
 
 -- type TradeSide < Enum<I8>
 -- enum TradeSide I8
-type TradeSide < enum I8
+enum TradeSide < I8
    Unknown
    Buy
    Sell
@@ -1649,7 +1669,7 @@ trait AnotherTrait<S1>
    valhalla3() -> abstract
 end
 
-type Qwa < abstract
+type Qwa 'abstract
    mixin TheTrait
 end–type
 
@@ -2183,9 +2203,17 @@ p "CrystalModule2.root_def", CrystalModule2.root_def
 -- This module begins here and continues to EOF
 module AllTheRest below -- begins, below, (follows), throughout
 
-type RestFoo < value
+struct RestFoo
    rest-foo() ->
       true
+
+extend RestFoo
+   other-foo() ->
+      false
+
+ext RestFoo
+   rest-foo() Bool -> 'redef
+      false
 
 xx = 47
 yy = 47.47

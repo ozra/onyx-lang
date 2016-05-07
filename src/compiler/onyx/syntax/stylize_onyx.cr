@@ -267,6 +267,19 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   def visit(node : ExtendTypeDef)
+      if node.expanded
+         node.expanded.try &.accept self
+      else
+         @str << keyword("extend")
+         @str << " "
+         @str << node.name.accept self
+         if body = node.body
+            accept_with_indent body
+         end
+      end
+   end
+
    def visit(node : ClassDef)
       @inside_typedef += 1
       # # *TODO* what to do??

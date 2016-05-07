@@ -1297,9 +1297,36 @@ module Crystal
     def_equals_and_hash @names, @global, @is_foreign
   end
 
-  # Class definition:
+
+  # Type extension - actual type not known until looked up:
   #
-  #     'class' name [ '<' superclass ]
+  #     'ext' name
+  #       body
+  #     'end'
+  #
+  class ExtendTypeDef < ASTNode
+    property name : Path
+    property body : ASTNode?
+    property expanded : ASTNode?
+
+    def initialize(@name, body = nil, @expanded = nil)
+      # ensure the body is an array of nodes at all times
+      if body == nil
+        body = [] of ASTNode
+      elsif body.is_a? ASTNode
+        body = [body] of ASTNode
+      end
+      @body = Expressions.new body.not_nil!
+    end
+
+    def clone_without_location_individual
+      ExtendTypeDef.new(@name.clone, @body.clone, @expanded.clone)
+    end
+  end
+
+  # Type definition:
+  #
+  #     'type' name [ '<' superclass ]
   #       body
   #     'end'
   #

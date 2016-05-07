@@ -209,6 +209,12 @@ module Crystal
       node
     end
 
+    def transform(node : ExtendTypeDef)
+      node.body = node.body.try &.transform(self)
+      node.expanded = node.expanded.try &.transform(self)
+      node
+    end
+
     def transform(node : ClassDef)
       node.body = node.body.transform(self)
 

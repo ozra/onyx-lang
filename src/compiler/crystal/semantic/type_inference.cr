@@ -71,6 +71,11 @@ module Crystal
         visit_top_level(node)
       end
 
+      _dbg_overview "\nCompiler stage: Semantic (handle extend types):\n\n".white
+      Crystal.timing("Semantic (handle extend types)", stats) do
+        lift_out_type_extensions(node)
+      end
+
       _dbg_overview "\nCompiler stage: Semantic (new):\n\n".white
       Crystal.timing("Semantic (new)", stats) do
         define_new_methods
@@ -107,4 +112,26 @@ module Crystal
       true
     end
   end
+
+
+
+  # *TODO* *MOVE* *POS*
+  def lift_out_type_extensions(node)
+    node.transform LiftOutExtendsTransformer.new
+  end
+
+  class LiftOutExtendsTransformer < Transformer
+    def initialize()
+    end
+
+    def transform(node : ExtendTypeDef) : ASTNode
+      if exp = node.expanded
+        exp
+      else
+        raise "SHOULD NOT HAPPEN! found extend type that hasn't been expanded!"
+      end
+    end
+  end
+
+
 end

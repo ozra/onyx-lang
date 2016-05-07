@@ -181,6 +181,20 @@ def babelfish_mangling(node : Fun, scope) : Fun
   node
 end
 
+def babelfish_mangling(node : ExtendTypeDef, scope) : ExtendTypeDef
+  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  node.name = babelfish_mangling node.name, scope
+  # *TODO* underlying type?
+  node
+end
+
+def babelfish_mangling(node : EnumDef, scope) : EnumDef
+  _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
+  node.name = babelfish_mangling node.name, scope
+  # *TODO* underlying type?
+  node
+end
+
 def babelfish_mangling(node : ClassDef, scope) : ClassDef
   _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
   node.name = babelfish_mangling node.name, scope
@@ -337,10 +351,13 @@ babel_type  F64,    Float64,     true
 
 
 babel_func  init,        initialize,         true
+babel_func  deinit,      finalize,           true
 
 babel_func  :"~~",       :"==="
 
 babel_func  each,        each_with_index,  false
 babel_func  each_,       each,             false
+
+babel_func  some!,       not_nil!,         false
 
 

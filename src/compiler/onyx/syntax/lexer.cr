@@ -1217,8 +1217,13 @@ module Crystal
         when 'x'
           case nextch
           when 't'
-            if mnc?('e','n','d')
-              return check_idfr_or_keyword(:extend, start)
+            if peekch == 'e'
+              nextch
+              if mnc?('n','d')
+                return check_idfr_or_keyword(:extend, start)
+              end
+            else
+              return check_idfr_or_keyword(:ext, start)
             end
           when 'p'
             if mnc?('o','r','t')
@@ -1382,6 +1387,8 @@ module Crystal
           else
             return check_idfr_or_keyword(:of, start)
           end
+        when 'n'
+          return check_idfr_or_token(:on, "", start)
         when 'r'
           return check_idfr_or_token(:or, "", start)
         when 'u'

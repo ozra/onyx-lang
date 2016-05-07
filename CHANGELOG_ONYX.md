@@ -1,3 +1,11 @@
+## 0.105.7 - (2016-05-07) ##
+
+* New variant of tuple delimiters syntax: `<[el, em, ents]>`
+* `%n` (where n = 1 - 9) can be used in addition to `_n` for auto-paramed fragments. The underscore variant will probably be dropped.
+* Type syntax rewritten to "style type D" (see issue #18)
+* Semantics changed for types so that re-opening without using `extend` errors. Also extend on non-defined type errors. Found a bug in code immediately after running with this!
+
+
 ## 0.105.6 - (2016-05-05) ##
 
 * Some minor re-factorings in some places

@@ -1,16 +1,16 @@
 require "object"
 
-type Any: !~~(other) -> !(self ~~ other)
-type Any: !~(other) -> !(self ~~ other)
+ext Any: !~~(other) -> !(self ~~ other)
+ext Any: !~(other) -> !(self ~~ other)
 
 
 -- Bool comparison additions
 
-type Any: ~~(other Bool) -> other is true
+ext Any: ~~(other Bool) -> other is true
 
 -- to Nil - move
-type Nil < value: ~~(other Bool) -> other is false
+ext Nil: ~~(other Bool) -> other is false
 
 -- to Bool itself - move
-type Bool < value: ~~(other Bool) -> other is self
+ext Bool: ~~(other Bool) -> other is self
 

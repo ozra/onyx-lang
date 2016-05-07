@@ -353,7 +353,7 @@ module Crystal
 
     def nesting_exp?(node)
       case node
-      when Expressions, LibDef, ClassDef, ModuleDef, FunDef, Def, Macro,
+      when Expressions, LibDef, ExtendTypeDef, ClassDef, ModuleDef, FunDef, Def, Macro,
            Alias, Include, Extend, EnumDef, VisibilityModifier, MacroFor, MacroIf, MacroExpression,
            FileNode, TypeDeclaration
         false
