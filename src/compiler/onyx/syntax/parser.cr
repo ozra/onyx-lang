@@ -360,7 +360,9 @@ class OnyxParser < OnyxLexer
 
          # :">" is when it is _not_ spaced, and thus Tuple–literal–ending
          # :":" is solely for "ternary-if"
-         when :">", :")", :",", :":", :";", MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER, :NEWLINE, :EOF, :DEDENT
+         when  :">", :")", :",", :":", :";",
+               MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER,
+               :NEWLINE, :EOF, :DEDENT
             # *TODO* skip explicit end token
             break
 
@@ -727,7 +729,7 @@ class OnyxParser < OnyxLexer
       dbg "- parse_possible_angular_tuple - ret if spaced ' < '".cyan
       return parse_equality if surrounded_by_space?
 
-      return parse_angular_tuple
+      return parse_tuple_alt :">"
       # try_parse parse_tuple, parse_equality
    end
 
@@ -774,7 +776,7 @@ class OnyxParser < OnyxLexer
       dbgtail "parse_tuple"
    end
 
-   def parse_angular_tuple
+   def parse_tuple_alt(end_delimiter : Symbol)
       dbg "parse_tuple".white
       location = @token.location
       next_token
@@ -786,7 +788,7 @@ class OnyxParser < OnyxLexer
       exps = [] of ASTNode
       end_location = nil
 
-      until tok?(:">") && !surrounded_by_space?
+      until tok?(end_delimiter) && !surrounded_by_space?
          dbg "- parse_tuple - parse an element as expr"
          exps << parse_expression # unless tok? :","
 
@@ -802,7 +804,7 @@ class OnyxParser < OnyxLexer
       TupleLiteral.new(exps).at_end(end_location)
 
    ensure
-      dbgtail "parse_angular_tuple"
+      dbgtail "parse_tuple_alt"
    end
 
 
@@ -887,25 +889,23 @@ class OnyxParser < OnyxLexer
       atomic = parse_atomic
 
       if @was_just_nest_end == false
-         dbg "parse_atomic_with_method -> parse_atomic_method_suffix"
-         parse_atomic_method_suffix atomic, location
+         dbg "parse_atomic_with_method -> parse_atomic_suffix"
+         parse_atomic_suffix atomic, location
       else
          dbg "parse_atomic_with_method -> NO suffix - was nest_end before"
          atomic
       end
    end
 
-   def parse_atomic_method_suffix(atomic, location)
-      dbg "parse_atomic_method_suffix"
+   def parse_atomic_suffix(atomic, location)
+      dbg "parse_atomic_suffix"
 
       # Must not be spaced:
       if tok?(:"#", :":", :TAG) # does both "#" and TAG occur? Should be one of them from the lexer! *TODO* clean up
-         return parse_atomic_method_suffix_terse_literal_subscript atomic, location
-      end
+         return parse_atomic_suffix_terse_literal_subscript atomic, location
 
-      # Must not be spaced:
-      if tok? :"?"
-         return parse_nil_sugar atomic, location
+      elsif tok? :"?"
+         return parse_atomic_suffix_nil_sugar atomic, location
       end
 
       while true
@@ -943,13 +943,13 @@ class OnyxParser < OnyxLexer
 
             if parser_peek_non_ws_char == '.'
                next_token_skip_space
-               atomic = parse_atomic_method_suffix_dot atomic, location
+               atomic = parse_atomic_suffix_dot atomic, location
             else
                break
             end
 
          when :"."
-            atomic = parse_atomic_method_suffix_dot atomic, location
+            atomic = parse_atomic_suffix_dot atomic, location
 
          when :"[]"
             check_void_value atomic, location
@@ -1006,7 +1006,7 @@ class OnyxParser < OnyxLexer
       atomic
    end
 
-   def parse_atomic_method_suffix_terse_literal_subscript(atomic, location)
+   def parse_atomic_suffix_terse_literal_subscript(atomic, location)
       if tok? :TAG
          klass = TagLiteral
       else
@@ -1023,7 +1023,7 @@ class OnyxParser < OnyxLexer
          end
       end
 
-      dbg "parse_atomic_method_suffix_terse_literal_subscript"
+      dbg "parse_atomic_suffix_terse_literal_subscript"
 
       # check_void_value atomic, location
       column_number = @token.column_number
@@ -1049,7 +1049,7 @@ class OnyxParser < OnyxLexer
       # *TODO* handle nil–sugar on top of this sugar
 
       if @token.type == :"?"
-         dbg "parse_atomic_method_suffix_terse_literal_subscript got '?'"
+         dbg "parse_atomic_suffix_terse_literal_subscript got '?'"
          is_nilly = true
          next_token
       end
@@ -1062,15 +1062,15 @@ class OnyxParser < OnyxLexer
       atomic.name_size = 0
 
       if is_nilly && tok? :IDFR
-         return parse_nil_sugar atomic, location, dont_skip_initial_token: true
+         return parse_atomic_suffix_nil_sugar atomic, location, dont_skip_initial_token: true
       else
          skip_space
          return atomic
       end
    end
 
-   def parse_nil_sugar(atomic, location, dont_skip_initial_token = false)
-      dbg "parse_nil_sugar ->"
+   def parse_atomic_suffix_nil_sugar(atomic, location, dont_skip_initial_token = false)
+      dbg "parse_atomic_suffix_nil_sugar ->"
 
       column_number = @token.column_number
       try_slant = parse_oneletter_fragment flag_as_nilish_first: true, dont_skip_initial_token: dont_skip_initial_token
@@ -1081,8 +1081,8 @@ class OnyxParser < OnyxLexer
       return atomic
    end
 
-   def parse_atomic_method_suffix_dot(atomic : ASTNode, location : Location?)
-      dbg "parse_atomic_method_suffix_dot".green
+   def parse_atomic_suffix_dot(atomic : ASTNode, location : Location?)
+      dbg "parse_atomic_suffix_dot".green
       check_void_value atomic, location
 
       @wants_regex = false
@@ -1097,7 +1097,7 @@ class OnyxParser < OnyxLexer
 
          # *TODO* should we allow this in Onyx?
          if @token.type == :INSTANCE_VAR
-            dbg "parse_atomic_method_suffix_dot instance var"
+            dbg "parse_atomic_suffix_dot instance var"
             ivar_name = @token.value.to_s
             end_location = token_end_location
             next_token_skip_space
@@ -1108,7 +1108,7 @@ class OnyxParser < OnyxLexer
          end
       end
 
-      dbg "parse_atomic_method_suffix_dot check AtomicWithMethodCheck"
+      dbg "parse_atomic_suffix_dot check AtomicWithMethodCheck"
       check AtomicWithMethodCheck
       name_column_number = @token.column_number
 
@@ -1181,14 +1181,14 @@ class OnyxParser < OnyxLexer
                            ).at(location)
 
          if is_nilly && tok? :IDFR
-            return parse_nil_sugar atomic, location, dont_skip_initial_token: true
+            return parse_atomic_suffix_nil_sugar atomic, location, dont_skip_initial_token: true
          else
             skip_space
             return atomic
          end
 
       else
-         dbg "parse_atomic_method_suffix_dot else "
+         dbg "parse_atomic_suffix_dot else "
 
          name = @token.type == :IDFR ? @token.value.to_s : @token.type.to_s
 
@@ -1397,6 +1397,9 @@ class OnyxParser < OnyxLexer
       when :"'"
          next_token
          parse_single_type
+
+      when :"<["
+         parse_tuple_alt :"]>"
 
       when :"[]"
          parse_empty_array_literal
@@ -5667,9 +5670,9 @@ class OnyxParser < OnyxLexer
 
       case @token.type
 
-      # *TODO* *verify*! remove ka? ( `foo{...` )
-      when :"{"
-         {false, nil}
+      # `foo{...}`
+      # when :"{"
+      #    {false, nil}
 
       when :"("
          dbg "- parse_call_args -> '('"
@@ -5832,13 +5835,17 @@ class OnyxParser < OnyxLexer
 
       dbg "- parse_call_args_spaced_any_non_call_hints? - check token.type"
 
+      # *TODO* This can probably be cleaned up nowadays
+
       case @token.type
       when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START,
             :TAG_ARRAY_START, :NUMBER, :IDFR, :TAG, :INSTANCE_VAR,
-            :CLASS_VAR, :CONST, :GLOBAL, :"$", :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX,
-            :REGEX, :"(", :"!", :not, :"[", :"[]", :".~.", :"&", :"->",
+            :CLASS_VAR, :CONST, :GLOBAL, :"$", :"$~", :"$?",
+            :GLOBAL_MATCH_DATA_INDEX,
             MACRO_VAR_EXPRS_START_DELIMITER, :__LINE__, :__FILE__,
-            :__DIR__, :UNDERSCORE,   :"~>", :"~.", :"\\", :"\\."
+            :__DIR__, :UNDERSCORE,   :"~>", :"~.", :"\\", :"\\.",
+            :REGEX, :"!", :not, :"(", :"[", :"{", :"<[", :"[]",
+            :".~.", :"&", :"->"
             # *TODO* these conflicts with when below (which normally has precedance - both routes can never take:   :"+", :"-",
          dbg "- parse_call_args_spaced_any_non_call_hints? - one of the WANTED token.types "
          # Nothing - because these are the ones we WANT to handle
@@ -6123,7 +6130,7 @@ class OnyxParser < OnyxLexer
       elsif @token.value == :implements?
          call = parse_implements(obj).at(location)
       elsif @token.type == :"["
-         call = parse_atomic_method_suffix obj, location
+         call = parse_atomic_suffix obj, location
 
          if @token.type == :"=" && call.is_a?(Call)
             next_token_skip_space
@@ -6159,14 +6166,14 @@ class OnyxParser < OnyxLexer
                next_token_skip_space
                call.name = "#{call.name}="
                call.args = [exp] of ASTNode
-               call = parse_atomic_method_suffix call, location
+               call = parse_atomic_suffix call, location
             else
                exp = parse_op_assign
                call.name = "#{call.name}="
                call.args = [exp] of ASTNode
             end
          else
-            call = parse_atomic_method_suffix call, location
+            call = parse_atomic_suffix call, location
 
             if @token.type == :"=" && call.is_a?(Call) && call.name == "[]"
                next_token_skip_space
@@ -7290,21 +7297,25 @@ class OnyxParser < OnyxLexer
 
    def end_token? : Bool
       case @token.type
-      when :"}", :"]", MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER, :EOF, :DEDENT # , :NEWLINE, :INDENT #,   :"=>"
-         return true
+      when :"}", :"]", :"]>", :EOF, :DEDENT, #,:NEWLINE,:INDENT #,:"=>"
+           MACRO_CTRL_END_DELIMITER, MACRO_VAR_EXPRS_END_DELIMITER
+         true
+
       when :IDFR
          case @token.value
-         when :else, :elsif, :elif, :when, :rescue, :ensure, :fulfil, :do, :then, :begins, :below, :throughout
-            return true
+         when :else, :elsif, :elif, :when, :rescue, :ensure, :fulfil,
+              :do, :then, :begins, :below, :throughout
+            true
+         else
+            false
          end
 
       when :END
-         # if is_explicit_end_tok?
-         return true
-         # end
-      end
+         true
 
-      false
+      else
+         false
+      end
    end
 
    def pragmas?()

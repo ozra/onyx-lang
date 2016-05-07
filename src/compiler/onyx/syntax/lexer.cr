@@ -390,6 +390,8 @@ module Crystal
           else
             @token.type = :"<<"
           end
+        when '['
+          toktype_then_nextch :"<["
         else
           @token.type = :"<"
         end
@@ -637,7 +639,13 @@ module Crystal
         else
           @token.type = :"["
         end
-      when ']' then toktype_then_nextch :"]"
+      when ']'
+        case nextch
+        when '>'
+          toktype_then_nextch :"]>"
+        else
+          @token.type = :"]"
+        end
       when ',' then toktype_then_nextch :","
       when '?' then toktype_then_nextch :"?"
       when ';'

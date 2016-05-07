@@ -154,11 +154,51 @@ do-tup(x Tup) -> x
 
 -- OTHER SYNTAX ALTERNATIVES
 
--- a = <[1, 2, 3]>
--- a = <[ 1, 2, a[0]>5 ]>  -- breaks!
+-- a = ⦉1, 2, 3⦊
+-- a = ⦉1, 2, a[0] > 5⦊
 
 
--- ANGULAR TUPLE SYNTAX
+say "<[...]> TUPLE SYNTAX"
+
+tup1 = <[47, 13, "yo"]>
+tup2 = <[#exacto, that]>
+tup3 = <[that]>
+tup4 = <[]>
+
+tup5 = <[
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+]>
+
+tup6 = do-tup <[
+   "ml"
+   "tup", "are"
+   "also", "ok", 5,
+   that
+   "as"
+   7, "sual"
+]>
+
+tup7 = <[a < b, b > c]>
+tup8 = <[true, a < b > c, false]>
+
+
+do-tup <[1, 2]>
+do-tup(<[1, 2]>)
+
+if do-tup <[1]> => say "tup tup yeay {do-tup <[1]>}"
+
+bzz = do-tup <[that]> if true
+fdf = 5 < 7 < 23 && vx > + vy
+
+x = a < b > c
+
+
+say "ANGULAR TUPLE SYNTAX"
 
 tup1 = <47, 13, "yo">
 tup2 = <#exacto, that>
@@ -201,7 +241,7 @@ say "x0"
 
 -- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
 
--- PAREN TUPLE SYNTAX
+say "PAREN TUPLE SYNTAX"
 
 say "x1"
 
