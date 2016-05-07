@@ -513,6 +513,13 @@ module Crystal
           dbg_lex "heredoc idfr found: '#{here}'"
           delimited_pair :heredoc, here, here, start
 
+        when '0', '1', '2', '3', '4', '5', '6', '7'
+          @token.type = :IDFR
+          @token.value = "%#{current_char}"
+          if nextch.alphanumeric?
+            raise "expected an autoparam `%n`, where `n` is 1 - 9"
+          end
+
         when '"'
           line = @line_number
           column = @column_number

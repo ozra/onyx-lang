@@ -1480,25 +1480,32 @@ list.each–with–index ~>
 list.each \
    break if _2 == 1
 
--- list.each–with–index \
---    p %1
---    break if %2 == 4
 
--- (list.map \%1 + "X").each–with–index \
---    p %1
---    break if %2 == 4
+say "auto params using `%n`"
 
--- list.each–with–index \v, i
---    p v
---    break if i == 4
+list.each–with–index \
+   p %1
+   break if %2 == 4
 
--- (list.map \x\ x + "X").each–with–index \x, y\
---    p x
---    break if y == 4
+(list.map \%1.+ "X").each–with–index \
+   p %1
+   break if %2 == 4
 
--- list.each–with–index \
---    p %1
---    break if %2 == 4
+(list.map \.+ "X").each–with–index \
+   p %1
+   break if %2 == 4
+
+list.each–with–index (v, i)\
+   p v
+   break if i == 4
+
+(list.map (x)\ x + "X").each–with–index (x, y)\
+   p x
+   break if y == 4
+
+list.each–with–index \
+   p %1
+   break if %2 == 4
 
 
 
