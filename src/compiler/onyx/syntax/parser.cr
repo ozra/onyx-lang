@@ -2359,9 +2359,11 @@ class OnyxParser < OnyxLexer
          return ret
       end
 
+      body = (ret.body && Expressions.from(ret.body)) || Nop.new
+
       type_def = ClassDef.new(
          ret.name,
-         Expressions.from(ret.body.not_nil!), # (body || NilLiteral.new),
+         body,
          ret.base,
          ret.tvars,
          includes_pragma?(ret.pragmas, "abstract"),
@@ -2386,7 +2388,7 @@ class OnyxParser < OnyxLexer
       raise "shouldn't happen!" if ret.is_a? Alias
       type_def = EnumDef.new(
          ret.name,
-         ret.body.not_nil!,
+         (ret.body || ([] of ASTNode)),
          ret.base
       )
       type_def.doc = ret.doc
@@ -2403,7 +2405,7 @@ class OnyxParser < OnyxLexer
       raise "`extend` takes no base-type" if ret.base
       raise "`extend` takes no type-vars, only type-name" if ret.tvars
       # raise "`extend` takes no doc" if ret.doc
-      type_def = ExtendTypeDef.new ret.name, ret.body.not_nil!
+      type_def = ExtendTypeDef.new ret.name, (ret.body || Nop.new)
       # type_def.location = loc
       type_def.end_location = @token.location
       type_def

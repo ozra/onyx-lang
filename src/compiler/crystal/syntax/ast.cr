@@ -2048,7 +2048,7 @@ module Crystal
       @to.accept visitor
     end
 
-    def clone_without_location
+    def clone_without_location_individual
       NilableCast.new(@obj.clone, @to.clone)
     end
 

@@ -246,7 +246,7 @@ module Crystal
 
           @last.to_s(@str, as_kind: @is_onyx ? :onyx : :crystal)
 
-          _dbg "- MacroVisitor.visit MacroExpression - after to_s: '#{@str}'".white
+          # _dbg "- MacroVisitor.visit MacroExpression - after to_s: '#{@str}'".white
 
         else
           _dbg "- MacroVisitor.visit MacroExpression - NO OUTPUT"

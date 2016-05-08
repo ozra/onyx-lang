@@ -144,9 +144,6 @@ module Crystal
       type = type.remove_alias
 
 
-
-      # *TODO* copy over location, doc, attributes, etc.
-
       case
       when type.is_a? ClassType
         node.expanded = ClassDef.new(node.name.clone, node.body, struct: type.struct?) #, name_column_number: node.name_column_number) *TODO*
@@ -177,9 +174,11 @@ module Crystal
       exp.is_onyx = node.is_onyx
       exp.location = node.location
       exp.end_location = node.end_location
+      exp.attributes = node.attributes
 
       # node.name = nil
       node.body = nil
+      node.attributes = nil
 
       # Solely because type–inference makes it ASTNode+ and visit n, b is only deffed for these
       case exp
@@ -641,6 +640,7 @@ module Crystal
 
       check_valid_attributes node, ValidEnumDefAttributes, "enum"
       attributes_doc = attributes_doc()
+      is_flags = node.has_attribute?("Flags")
 
       scope, name = process_type_name(node.name)
 
@@ -660,13 +660,13 @@ module Crystal
         end
         enum_base_type = base_type.type.instance_type
         unless enum_base_type.is_a?(IntegerType)
-          base_type.raise "enum base type must be an integer type"
+          str_kwd = is_flags ? "flags" : "enum"
+          base_type.raise "#{str_kwd} base type must be an integer type"
         end
       else
         enum_base_type = @mod.int32
       end
 
-      is_flags = node.has_attribute?("Flags")
       all_value = interpret_enum_value(NumberLiteral.new(0), enum_base_type)
       existed = !!enum_type
       enum_type ||= EnumType.new(@mod, scope, name, enum_base_type, is_flags)
@@ -693,7 +693,8 @@ module Crystal
             const_value = NumberLiteral.new(counter, enum_base_type.kind)
             member.default_value = const_value
             if enum_type.types.has_key?(member.name)
-              member.raise "enum '#{enum_type}' already contains a member named '#{member.name}'"
+              str_kwd = is_flags ? "flags" : "enum"
+              member.raise "#{str_kwd} '#{enum_type}' already contains a member named '#{member.name}'"
             end
 
             define_enum_question_method(enum_type, member, is_flags)

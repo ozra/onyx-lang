@@ -38,11 +38,19 @@ OtherModule:
       --    init(@str Str) ->
       --    action(str) -> say "{@str}: {str}"
 
+My:
+   Nested:
+      ext Foo
+         @xoo = 46
+         xoo() -> @xoo + 1
+
 OtherModule:
    bar
 
 pp My.Nested.Foo.t-var
 pp My.Nested.Foo().foo
+fuu = My.Nested.Foo "Foul"
+pp fuu.xoo
 
 say FooMod.val
 FooMod.val = 47

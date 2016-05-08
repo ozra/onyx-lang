@@ -1567,6 +1567,15 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   def visit(node : NilableCast)
+      accept_with_maybe_begin_end node.obj
+      @str << " "
+      @str << keyword("as?")
+      @str << " "
+      node.to.accept self
+      false
+   end
+
    def visit(node : RespondsTo)
       node.obj.accept self
       @str << ".responds_to?(" << node.name << ")"
