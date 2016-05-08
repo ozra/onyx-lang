@@ -45,6 +45,7 @@ My:
          xoo() -> @xoo + 1
 
 OtherModule:
+   -- include Self on Self
    bar
 
 pp My.Nested.Foo.t-var

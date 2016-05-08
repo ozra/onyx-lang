@@ -1388,7 +1388,7 @@ module Crystal
             return check_idfr_or_keyword(:of, start)
           end
         when 'n'
-          return check_idfr_or_token(:on, "", start)
+          return check_idfr_or_keyword(:on, start)
         when 'r'
           return check_idfr_or_token(:or, "", start)
         when 'u'

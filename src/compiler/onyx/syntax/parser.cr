@@ -1703,7 +1703,7 @@ class OnyxParser < OnyxLexer
 
       case @token.type
 
-      when :"$", :"Program" # , :"App" # *TODO* App not implemented yet
+      when :"$", :"Program"
          if current_char == '.'
             next_token_skip_space
             is_global = true
@@ -2711,7 +2711,7 @@ class OnyxParser < OnyxLexer
 
          elsif tok? :CONST # #when :CONST
             dbg "is const - check for Self, Class or Type"
-            if const? :Self, :Class, :Type
+            if const? :Self
                variant = @token.value
                dbg "is #{variant}"
                next_token_skip_space
@@ -4154,24 +4154,31 @@ class OnyxParser < OnyxLexer
 
    # def parse_include_or_extend(klass)
    def parse_include_or_include_on
+      dbg "parse_include_or_include_on ->"
       location = @token.location
-
       next_token_skip_space_or_newline
 
-      if kwd?(:self, :Self, :Type, :Class)
+      if const? :Self
+         dbg "- parse_include_or_include_on - is Self"
          name = Self.new.at(@token.location)
          name.end_location = token_end_location
          next_token_skip_space
       else
+         dbg "- parse_include_or_include_on - general constish"
          name = parse_constish
       end
 
+      dbg "- parse_include_or_include_on - check for `:on`"
+      skip_space
+
       if kwd? :on
+         dbg "- parse_include_or_include_on - got 'on'"
          next_token_skip_space
-         raise "expected `Self`" unless kwd? :Self
+         raise "expected `Self`" unless const? :Self
          next_token_skip_space
          Extend.new name
       else
+         dbg "- parse_include_or_include_on - non 'on' - it's an include"
          Include.new name
       end
    end
