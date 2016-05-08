@@ -33,7 +33,7 @@ describe "Type inference: macro" do
 
   it "errors if macro def type doesn't match found" do
     assert_error "macro def foo : Int32; 'a'; end; foo",
-      "expected 'foo' to return Int32, not Char"
+      "type must be Int32, not Char"
   end
 
   it "allows subclasses of return type for macro def" do
@@ -111,7 +111,7 @@ describe "Type inference: macro" do
       end
 
       bar
-    }, "Error in line 7: expected 'bar' to return Foo(String), not Foo(Int32)",
+    }, "type must be Foo(String), not Foo(Int32)",
       inject_primitives: false
   end
 
@@ -132,7 +132,9 @@ describe "Type inference: macro" do
       end
 
       macro def foo : Int32
-        bar_{{ "baz".id }}
+        {% begin %}
+          bar_{{ "baz".id }}
+        {% end %}
       end
 
       foo
@@ -147,7 +149,9 @@ describe "Type inference: macro" do
         end
 
         macro def foo : Int32
-          bar_{{ "baz".id }}
+          {% begin %}
+            bar_{{ "baz".id }}
+          {% end %}
         end
       end
 
@@ -159,7 +163,9 @@ describe "Type inference: macro" do
     assert_type(%(
       class Foo
         macro def foo : Int32
-          bar_{{ "baz".id }}
+          {% begin %}
+            bar_{{ "baz".id }}
+          {% end %}
         end
       end
 

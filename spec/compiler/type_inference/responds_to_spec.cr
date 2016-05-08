@@ -6,15 +6,17 @@ describe "Type inference: responds_to?" do
   end
 
   it "restricts type inside if scope 1" do
-    nodes = parse "
+    nodes = parse %(
+      require "primitives"
+
       a = 1 || 'a'
       if a.responds_to?(:\"+\")
         a
       end
-      "
+      )
     result = infer_type nodes
-    mod, nodes = result.program, result.node as Expressions
-    (nodes.last as If).then.type.should eq(mod.int32)
+    mod, nodes = result.program, result.node.as(Expressions)
+    nodes.last.as(If).then.type.should eq(mod.int32)
   end
 
   it "restricts other types inside if else" do

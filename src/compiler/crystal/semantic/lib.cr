@@ -4,14 +4,14 @@ class Crystal::Call
 
     old_target_defs = @target_defs
 
-    external = obj_type.lookup_first_def(name, false) as External?
+    external = obj_type.lookup_first_def(name, false).as(External?)
 
     # # # # # # # # # # #
     # Onyx Babelfishing
     if ! external
       if name == "initialize"
         name = "init"
-        external = obj_type.lookup_first_def(name, false) as External?
+        external = obj_type.lookup_first_def(name, false).as(External?)
       end
     end
     # # # # # # # # # # #
@@ -23,7 +23,12 @@ class Crystal::Call
 
     check_fun_args_size_match obj_type, external
     check_fun_out_args external
-    return unless obj_and_args_types_set?
+    unless obj_and_args_types_set?
+      # we can actually compute a type for this call even
+      # if we don't know the arguments types yet
+      self.type = external.type
+      return
+    end
 
     check_fun_args_types_match obj_type, external
 

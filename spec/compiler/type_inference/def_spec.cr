@@ -20,7 +20,7 @@ describe "Type inference: def" do
   it "types a call with an argument" do
     input = parse "def foo(x); x; end; foo 1; foo 2.3"
     result = infer_type input
-    mod, input = result.program, result.node as Expressions
+    mod, input = result.program, result.node.as(Expressions)
 
     input[1].type.should eq(mod.int32)
     input[2].type.should eq(mod.float64)
@@ -33,8 +33,8 @@ describe "Type inference: def" do
   it "assigns def owner" do
     input = parse "struct Int; def foo; 2.5; end; end; 1.foo"
     result = infer_type input
-    mod, input = result.program, result.node as Expressions
-    (input.last as Call).target_def.owner.should eq(mod.int32)
+    mod, input = result.program, result.node.as(Expressions)
+    input.last.as(Call).target_def.owner.should eq(mod.int32)
   end
 
   it "types putchar with Char" do
@@ -90,11 +90,21 @@ describe "Type inference: def" do
   end
 
   it "do not use body for the def type" do
-    input = parse "def foo; if 1 == 2; return 0; end; end; foo"
-    result = infer_type input
-    mod, input = result.program, result.node as Expressions
+    input = parse %(
+      require "primitives"
 
-    call = input.last as Call
+      def foo
+        if 1 == 2
+          return 0
+        end
+      end
+
+      foo
+      )
+    result = infer_type input
+    mod, input = result.program, result.node.as(Expressions)
+
+    call = input.last.as(Call)
     call.type.should eq(mod.union_of(mod.int32, mod.nil))
     call.target_def.body.type.should eq(mod.nil)
   end

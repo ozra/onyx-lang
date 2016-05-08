@@ -1,119 +1,5 @@
 require "../../spec_helper"
 
-struct Number
-  def int32
-    NumberLiteral.new to_s, :i32
-  end
-
-  def int64
-    NumberLiteral.new to_s, :i64
-  end
-
-  def float32
-    NumberLiteral.new to_f32.to_s, :f32
-  end
-
-  def float64
-    NumberLiteral.new to_f64.to_s, :f64
-  end
-end
-
-struct Bool
-  def bool
-    BoolLiteral.new self
-  end
-end
-
-class Array
-  def array
-    ArrayLiteral.new self
-  end
-
-  def array_of(type)
-    ArrayLiteral.new self, type
-  end
-
-  def path
-    Path.new self
-  end
-end
-
-class String
-  def var
-    Var.new self
-  end
-
-  def arg
-    Arg.new self
-  end
-
-  def call
-    Call.new nil, self
-  end
-
-  def call(args : Array)
-    Call.new nil, self, args
-  end
-
-  def call(arg : ASTNode)
-    Call.new nil, self, [arg] of ASTNode
-  end
-
-  def call(arg1 : ASTNode, arg2 : ASTNode)
-    Call.new nil, self, [arg1, arg2] of ASTNode
-  end
-
-  def path(global = false)
-    Path.new self, global
-  end
-
-  def instance_var
-    InstanceVar.new self
-  end
-
-  def class_var
-    ClassVar.new self
-  end
-
-  def string
-    StringLiteral.new self
-  end
-
-  def float32
-    NumberLiteral.new self, :f32
-  end
-
-  def float64
-    NumberLiteral.new self, :f64
-  end
-
-  def symbol
-    SymbolLiteral.new self
-  end
-
-  def static_array_of(size : Int)
-    static_array_of NumberLiteral.new(size)
-  end
-
-  def static_array_of(size : ASTNode)
-    Generic.new(Path.global("StaticArray"), [path, size] of ASTNode)
-  end
-
-  def macro_literal
-    MacroLiteral.new(self)
-  end
-end
-
-class Crystal::ASTNode
-  def pointer_of
-    Generic.new(Path.global("Pointer"), [self] of ASTNode)
-  end
-
-  def splat
-    Splat.new(self)
-  end
-end
-
 private def regex(string, options = Regex::Options::None)
   RegexLiteral.new(StringLiteral.new(string), options)
 end
@@ -130,7 +16,7 @@ end
 private def assert_end_location(source, line_number = 1, column_number = source.size, file = __FILE__, line = __LINE__)
   it "gets corrects end location for #{source.inspect}", file, line do
     parser = Parser.new("#{source}; 1")
-    node = (parser.parse as Expressions).expressions[0]
+    node = parser.parse.as(Expressions).expressions[0]
     end_loc = node.end_location.not_nil!
     end_loc.line_number.should eq(line_number)
     end_loc.column_number.should eq(column_number)
@@ -366,9 +252,18 @@ describe "Parser" do
   it_parses "foo &.[0] = 1", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Call.new(Var.new("__arg0"), "[]=", 0.int32, 1.int32)))
   it_parses "foo(&.is_a?(T))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], IsA.new(Var.new("__arg0"), "T".path)))
   it_parses "foo(&.responds_to?(:foo))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], RespondsTo.new(Var.new("__arg0"), "foo")))
-  it_parses "foo(&.as(T))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Cast.new(Var.new("__arg0"), "T".path)))
   it_parses "foo &.each {\n}", Call.new(nil, "foo", block: Block.new(["__arg0".var], Call.new("__arg0".var, "each", block: Block.new)))
   it_parses "foo &.each do\nend", Call.new(nil, "foo", block: Block.new(["__arg0".var], Call.new("__arg0".var, "each", block: Block.new)))
+
+  it_parses "foo(&.as(T))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Cast.new(Var.new("__arg0"), "T".path)))
+  it_parses "foo(&.as(T).bar)", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Call.new(Cast.new(Var.new("__arg0"), "T".path), "bar")))
+  it_parses "foo &.as(T)", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Cast.new(Var.new("__arg0"), "T".path)))
+  it_parses "foo &.as(T).bar", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Call.new(Cast.new(Var.new("__arg0"), "T".path), "bar")))
+
+  it_parses "foo(&.as?(T))", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], NilableCast.new(Var.new("__arg0"), "T".path)))
+  it_parses "foo(&.as?(T).bar)", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Call.new(NilableCast.new(Var.new("__arg0"), "T".path), "bar")))
+  it_parses "foo &.as?(T)", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], NilableCast.new(Var.new("__arg0"), "T".path)))
+  it_parses "foo &.as?(T).bar", Call.new(nil, "foo", block: Block.new([Var.new("__arg0")], Call.new(NilableCast.new(Var.new("__arg0"), "T".path), "bar")))
 
   it_parses "foo.[0]", Call.new("foo".call, "[]", 0.int32)
   it_parses "foo.[0] = 1", Call.new("foo".call, "[]=", [0.int32, 1.int32] of ASTNode)
@@ -407,7 +302,7 @@ describe "Parser" do
     it_parses "f.x #{op}= 2", Call.new("f".call, "x=", Call.new(Call.new("f".call, "x"), op, 2.int32))
   end
 
-  ["/", "<", "<=", "==", "!=", "=~", "!~", ">", ">=", "+", "-", "*", "/", "!", "~", "%", "&", "|", "^", "**", "==="].each do |op|
+  ["/", "<", "<=", "==", "!=", "=~", "!~", ">", ">=", "+", "-", "*", "/", "~", "%", "&", "|", "^", "**", "==="].each do |op|
     it_parses "def #{op}; end;", Def.new(op)
   end
 
@@ -737,8 +632,9 @@ describe "Parser" do
   it_parses "macro foo;bar{% for x in y %}\\  \n   body{% end %}\\   baz;end", Macro.new("foo", [] of Arg, Expressions.from(["bar".macro_literal, MacroFor.new(["x".var], "y".var, "body".macro_literal), "baz;".macro_literal] of ASTNode))
   it_parses "macro foo; 1 + 2 {{foo}}\\ 3 + 4; end", Macro.new("foo", [] of Arg, Expressions.from([" 1 + 2 ".macro_literal, MacroExpression.new("foo".var), "3 + 4; ".macro_literal] of ASTNode))
 
-  it_parses "macro def foo : String; 1; end", Def.new("foo", body: [MacroLiteral.new(" 1; ")] of ASTNode, return_type: "String".path, macro_def: true)
-  it_parses "macro def foo(x) : String; 1; end", Def.new("foo", ["x".arg], [MacroLiteral.new(" 1; ")] of ASTNode, return_type: "String".path, macro_def: true)
+  it_parses "macro def foo : String; 1; end", Def.new("foo", body: 1.int32, return_type: "String".path, macro_def: true)
+  it_parses "macro def foo(x) : String; 1; end", Def.new("foo", ["x".arg], 1.int32, return_type: "String".path, macro_def: true)
+  it_parses "macro def foo; 1; end", Def.new("foo", body: 1.int32, macro_def: true)
 
   it_parses "macro foo;bar{% begin %}body{% end %}baz;end", Macro.new("foo", [] of Arg, Expressions.from(["bar".macro_literal, MacroIf.new(true.bool, "body".macro_literal), "baz;".macro_literal] of ASTNode))
 
@@ -974,6 +870,12 @@ describe "Parser" do
   it_parses "foo.bar.as(Bar)", Cast.new(Call.new("foo".call, "bar"), "Bar".path)
   it_parses "call(foo.as Bar, Baz)", Call.new(nil, "call", args: [Cast.new("foo".call, "Bar".path), "Baz".path])
 
+  it_parses "as(Bar)", Cast.new(Var.new("self"), "Bar".path)
+
+  it_parses "1.as? Bar", NilableCast.new(1.int32, "Bar".path)
+  it_parses "1.as?(Bar)", NilableCast.new(1.int32, "Bar".path)
+  it_parses "as?(Bar)", NilableCast.new(Var.new("self"), "Bar".path)
+
   it_parses "typeof(1)", TypeOf.new([1.int32] of ASTNode)
 
   it_parses "puts ~1", Call.new(nil, "puts", Call.new(1.int32, "~"))
@@ -1141,7 +1043,7 @@ describe "Parser" do
   it_parses "return 1.bar do\nend", Return.new(Call.new(1.int32, "bar", block: Block.new))
 
   %w(begin nil true false yield with abstract def macro require case if ifdef unless include extend class struct module enum while
-    until return next break lib fun alias pointerof sizeof instance_sizeof typeof private protected asm end do else elsif when rescue ensure as).each do |keyword|
+    until return next break lib fun alias pointerof sizeof instance_sizeof typeof private protected asm end do else elsif when rescue ensure).each do |keyword|
     it_parses "#{keyword} : Int32", TypeDeclaration.new(keyword.var, "Int32".path)
     it_parses "property #{keyword} : Int32", Call.new(nil, "property", TypeDeclaration.new(keyword.var, "Int32".path))
   end
@@ -1183,8 +1085,6 @@ describe "Parser" do
   assert_syntax_error "foo {1, 2}", "unexpected token: }"
   assert_syntax_error "pointerof(self)", "can't take pointerof(self)"
   assert_syntax_error "def foo 1; end"
-
-  assert_syntax_error "macro def foo(x); 1; end"
 
   assert_syntax_error "{x: [] of Int32,\n}\n1.foo(", "unterminated call", 3, 6
 
@@ -1313,6 +1213,12 @@ describe "Parser" do
     assert_syntax_error "foo &.#{name}()"
   end
 
+  %w(! is_a? as as? responds_to? nil?).each do |name|
+    assert_syntax_error "def #{name}; end", "'#{name}' is a pseudo-method and can't be redefined"
+    assert_syntax_error "def self.#{name}; end", "'#{name}' is a pseudo-method and can't be redefined"
+    assert_syntax_error "macro #{name}; end", "'#{name}' is a pseudo-method and can't be redefined"
+  end
+
   describe "end locations" do
     assert_end_location "nil"
     assert_end_location "false"
@@ -1381,7 +1287,7 @@ describe "Parser" do
 
     it "gets corrects end location for var" do
       parser = Parser.new("foo = 1\nfoo; 1")
-      node = (parser.parse as Expressions).expressions[1]
+      node = parser.parse.as(Expressions).expressions[1]
       end_loc = node.end_location.not_nil!
       end_loc.line_number.should eq(2)
       end_loc.column_number.should eq(3)
@@ -1389,7 +1295,7 @@ describe "Parser" do
 
     it "gets corrects end location for block with { ... }" do
       parser = Parser.new("foo { 1 + 2 }; 1")
-      node = (parser.parse as Expressions).expressions[0] as Call
+      node = parser.parse.as(Expressions).expressions[0].as(Call)
       block = node.block.not_nil!
       end_loc = block.end_location.not_nil!
       end_loc.line_number.should eq(1)
@@ -1399,7 +1305,7 @@ describe "Parser" do
 
     it "gets corrects end location for block with do ... end" do
       parser = Parser.new("foo do\n  1 + 2\nend; 1")
-      node = (parser.parse as Expressions).expressions[0] as Call
+      node = parser.parse.as(Expressions).expressions[0].as(Call)
       block = node.block.not_nil!
       end_loc = block.end_location.not_nil!
       end_loc.line_number.should eq(3)
@@ -1415,13 +1321,13 @@ describe "Parser" do
 
         1 + 'a'
         ))
-      node = (parser.parse as Expressions).expressions[1]
+      node = parser.parse.as(Expressions).expressions[1]
       loc = node.location.not_nil!
       loc.line_number.should eq(6)
     end
 
     it "gets correct location with \r\n (#1558)" do
-      nodes = Parser.parse("class Foo\r\nend\r\n\r\n1") as Expressions
+      nodes = Parser.parse("class Foo\r\nend\r\n\r\n1").as(Expressions)
       loc = nodes.last.location.not_nil!
       loc.line_number.should eq(4)
       loc.column_number.should eq(1)
@@ -1429,7 +1335,7 @@ describe "Parser" do
 
     it "sets location of enum method" do
       parser = Parser.new("enum Foo; A; def bar; end; end")
-      node = (parser.parse as EnumDef).members[1] as Def
+      node = parser.parse.as(EnumDef).members[1].as(Def)
       loc = node.location.not_nil!
       loc.line_number.should eq(1)
       loc.column_number.should eq(14)

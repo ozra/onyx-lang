@@ -680,6 +680,17 @@ blk3 = nil
 blk.foo
 Blk.bar
 
+foo-list = [] of Blk
+for i in 1..50000
+   foo-list << Blk 47, \
+
+sleep 1
+
+for i in 1..50000
+   foo-list << Blk 47, \
+pp foo-list.size
+foo-list = nil
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 trait Functor

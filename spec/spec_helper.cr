@@ -6,6 +6,120 @@ require "../src/compiler/crystal/**"
 
 include Crystal
 
+struct Number
+  def int32
+    NumberLiteral.new to_s, :i32
+  end
+
+  def int64
+    NumberLiteral.new to_s, :i64
+  end
+
+  def float32
+    NumberLiteral.new to_f32.to_s, :f32
+  end
+
+  def float64
+    NumberLiteral.new to_f64.to_s, :f64
+  end
+end
+
+struct Bool
+  def bool
+    BoolLiteral.new self
+  end
+end
+
+class Array
+  def array
+    ArrayLiteral.new self
+  end
+
+  def array_of(type)
+    ArrayLiteral.new self, type
+  end
+
+  def path
+    Path.new self
+  end
+end
+
+class String
+  def var
+    Var.new self
+  end
+
+  def arg(default_value = nil, restriction = nil)
+    Arg.new self, default_value: default_value, restriction: restriction
+  end
+
+  def call
+    Call.new nil, self
+  end
+
+  def call(args : Array)
+    Call.new nil, self, args
+  end
+
+  def call(arg : ASTNode)
+    Call.new nil, self, [arg] of ASTNode
+  end
+
+  def call(arg1 : ASTNode, arg2 : ASTNode)
+    Call.new nil, self, [arg1, arg2] of ASTNode
+  end
+
+  def path(global = false)
+    Path.new self, global
+  end
+
+  def instance_var
+    InstanceVar.new self
+  end
+
+  def class_var
+    ClassVar.new self
+  end
+
+  def string
+    StringLiteral.new self
+  end
+
+  def float32
+    NumberLiteral.new self, :f32
+  end
+
+  def float64
+    NumberLiteral.new self, :f64
+  end
+
+  def symbol
+    SymbolLiteral.new self
+  end
+
+  def static_array_of(size : Int)
+    static_array_of NumberLiteral.new(size)
+  end
+
+  def static_array_of(size : ASTNode)
+    Generic.new(Path.global("StaticArray"), [path, size] of ASTNode)
+  end
+
+  def macro_literal
+    MacroLiteral.new(self)
+  end
+end
+
+class Crystal::ASTNode
+  def pointer_of
+    Generic.new(Path.global("Pointer"), [self] of ASTNode)
+  end
+
+  def splat
+    Splat.new(self)
+  end
+end
+
 class Crystal::Program
   def union_of(type1, type2, type3)
     union_of([type1, type2, type3] of Type).not_nil!
@@ -17,6 +131,10 @@ class Crystal::Program
 
   def fun_of(type1 : Type, type2 : Type)
     fun_of([type1, type2] of Type)
+  end
+
+  def generic_class(name, *type_vars)
+    types[name].as(GenericClassType).instantiate(type_vars.to_a.map &.as(TypeVar))
   end
 end
 
@@ -76,12 +194,12 @@ def assert_expand(from_nodes : ASTNode, to)
 end
 
 def assert_expand_second(from : String, to)
-  node = (Parser.parse(from) as Expressions)[1]
+  node = (Parser.parse(from).as(Expressions))[1]
   assert_expand node, to
 end
 
 def assert_expand_third(from : String, to)
-  node = (Parser.parse(from) as Expressions)[2]
+  node = (Parser.parse(from).as(Expressions))[2]
   assert_expand node, to
 end
 
@@ -125,7 +243,7 @@ end
 
 def assert_macro_internal(program, sub_node, macro_args, macro_body, expected)
   macro_def = "macro foo(#{macro_args});#{macro_body};end"
-  a_macro = Parser.parse(macro_def) as Macro
+  a_macro = Parser.parse(macro_def).as(Macro)
 
   call = Call.new(nil, "", sub_node)
   result = program.expand_macro a_macro, call, program, program
@@ -177,7 +295,7 @@ def run(code, filename = nil, inject_primitives = true)
   # the program and run it, printing the last
   # expression and using that to compare the result.
   if code.includes?(%(require "prelude"))
-    ast = Parser.parse(code) as Expressions
+    ast = Parser.parse(code).as(Expressions)
     last = ast.expressions.last
     assign = Assign.new(Var.new("__tempvar"), last)
     call = Call.new(nil, "print", Var.new("__tempvar"))

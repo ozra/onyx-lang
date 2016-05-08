@@ -107,8 +107,8 @@ describe "Type inference: virtual" do
       x.foo
       ")
     result = infer_type nodes
-    mod, nodes = result.program, result.node as Expressions
-    (nodes.last as Call).target_defs.not_nil!.size.should eq(1)
+    mod, nodes = result.program, result.node.as(Expressions)
+    nodes.last.as(Call).target_defs.not_nil!.size.should eq(1)
   end
 
   it "dispatches virtual method with overload" do
@@ -130,8 +130,8 @@ describe "Type inference: virtual" do
       x.foo
       ")
     result = infer_type nodes
-    mod, nodes = result.program, result.node as Expressions
-    (nodes.last as Call).target_defs.not_nil!.size.should eq(2)
+    mod, nodes = result.program, result.node.as(Expressions)
+    nodes.last.as(Call).target_defs.not_nil!.size.should eq(2)
   end
 
   it "works with restriction alpha" do
@@ -201,10 +201,10 @@ describe "Type inference: virtual" do
     result = infer_type nodes
     mod = result.program
 
-    var = mod.types["Var"] as InstanceVarContainer
+    var = mod.types["Var"].as(InstanceVarContainer)
     var.instance_vars.size.should eq(0)
 
-    base = mod.types["Base"] as InstanceVarContainer
+    base = mod.types["Base"].as(InstanceVarContainer)
     base.instance_vars["@x"].type.should eq(mod.union_of(mod.nil, mod.int32))
   end
 
@@ -616,11 +616,7 @@ describe "Type inference: virtual" do
       end
 
       Bar(Foo).new
-      ") {
-      foo = types["Foo"]
-      bar = types["Bar"] as GenericClassType
-      bar.instantiate([foo.virtual_type] of TypeVar)
-    }
+      ") { generic_class "Bar", types["Foo"].virtual_type }
   end
 
   it "uses virtual type as generic type if class is abstract even in union" do
@@ -635,11 +631,7 @@ describe "Type inference: virtual" do
       end
 
       Bar(Foo | Int32).new
-      ") {
-      foo = types["Foo"]
-      bar = types["Bar"] as GenericClassType
-      bar.instantiate([union_of(foo.virtual_type, int32)] of TypeVar)
-    }
+      ") { generic_class "Bar", union_of(types["Foo"].virtual_type, int32) }
   end
 
   it "automatically does virtual for generic type if there are subclasses" do

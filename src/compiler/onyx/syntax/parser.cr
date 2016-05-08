@@ -2351,10 +2351,10 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_type_def : ASTNode
-      loc = @token.location
+      # loc = @token.location
       ret = parse_general_type_def :TYPE_DEF
       if ret.is_a? Alias # *TODO* location, doc etc!
-         ret.location = loc
+         # ret.location = loc
          ret.end_location = @token.location
          return ret
       end
@@ -2369,7 +2369,7 @@ class OnyxParser < OnyxLexer
          name_column_number: ret.name_col
       )
       type_def.doc = ret.doc
-      type_def.location = loc
+      # type_def.location = loc
       type_def.end_location = @token.location
       type_def
    end
@@ -2396,7 +2396,7 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_type_extend : ASTNode
-      loc = @token.location
+      # loc = @token.location
       ret = parse_general_type_def :TYPE_DEF
       raise "shouldn't happen!" if ret.is_a? Alias
       raise "`extend` takes no pragmas" if ret.pragmas
@@ -2404,7 +2404,7 @@ class OnyxParser < OnyxLexer
       raise "`extend` takes no type-vars, only type-name" if ret.tvars
       # raise "`extend` takes no doc" if ret.doc
       type_def = ExtendTypeDef.new ret.name, ret.body.not_nil!
-      type_def.location = loc
+      # type_def.location = loc
       type_def.end_location = @token.location
       type_def
    end
@@ -3376,38 +3376,38 @@ class OnyxParser < OnyxLexer
       end
 
       if nest_kind == :NIL_NEST
-         dbgtail_off!
-         raise "can't have an empty fragment!"   # *TODO* we probably should be able to!
-      end
+         fragment_body = Nop.new
+         handle_nest_end true
+      else
+         dbg "parse_fragment - before parse_expressions"
 
-      dbg "parse_fragment - before parse_expressions"
+         # auto–params are extracted in var_or_call parsing when above nesting_stack
+         # has fragment_auto_params and name ~= /_\d/
+         fragment_body = parse_expressions
 
-      # auto–params are extracted in var_or_call parsing when above nesting_stack
-      # has fragment_auto_params and name ~= /_\d/
-      fragment_body = parse_expressions
+         if auto_parametrization
+            fragment_auto_params.sort! {|a, b| a.name <=> b.name}
+            final_params = [] of Var
+            numeral = '1'
+            fragment_auto_params.each do |var|
+               # skip duplicates
+               if (last = final_params.last?) && var.name == last.name
+                  next
+               end
 
-      if auto_parametrization
-         fragment_auto_params.sort! {|a, b| a.name <=> b.name}
-         final_params = [] of Var
-         numeral = '1'
-         fragment_auto_params.each do |var|
-            # skip duplicates
-            if (last = final_params.last?) && var.name == last.name
-               next
-            end
+               # fill in missing arg numerals in order
+               while numeral < var.name[1]
+                  final_params << Var.new "_#{numeral}"
+                  numeral = numeral.succ
+               end
 
-            # fill in missing arg numerals in order
-            while numeral < var.name[1]
-               final_params << Var.new "_#{numeral}"
+               final_params << var
                numeral = numeral.succ
             end
 
-            final_params << var
-            numeral = numeral.succ
+            dbg "- parse_fragment - auto parametrization gave: #{fragment_auto_params} => #{final_params}"
+            fragment_auto_params = final_params
          end
-
-         dbg "- parse_fragment - auto parametrization gave: #{fragment_auto_params} => #{final_params}"
-         fragment_auto_params = final_params
       end
 
       dbg "parse_fragment - AFTER parse_expressions"

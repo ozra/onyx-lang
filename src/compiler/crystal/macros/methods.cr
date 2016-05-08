@@ -181,7 +181,7 @@ module Crystal
       end
 
       NumberLiteral.new(bin_op(op, args) { |me, other|
-        other_kind = (args.first as NumberLiteral).kind
+        other_kind = args.first.as(NumberLiteral).kind
         if other_kind == :f32 || other_kind == :f64
           raise "argument to NumberLiteral##{op} can't be float literal: #{self}"
         end
@@ -508,6 +508,13 @@ module Crystal
         else
           wrong_number_of_arguments "ArrayLiteral##{method}", args.size, 1
         end
+      when "+"
+        interpret_one_arg_method(method, args) do |arg|
+          unless arg.is_a?(ArrayLiteral)
+            arg.raise "argument to `ArrayLiteral#+` must be an array, not #{arg.class_desc}:\n\n#{arg}"
+          end
+          ArrayLiteral.new(elements + arg.elements)
+        end
       else
         super
       end
@@ -771,7 +778,7 @@ module Crystal
       when "union_types"
         interpret_argless_method(method, args) { TypeNode.union_types(type) }
       when "name"
-        interpret_argless_method(method, args) { MacroId.new(type.to_s) }
+        interpret_argless_method(method, args) { MacroId.new(type.devirtualize.to_s) }
       when "type_vars"
         interpret_argless_method(method, args) { TypeNode.type_vars(type) }
       when "instance_vars"
@@ -842,7 +849,7 @@ module Crystal
           end
         end
       elsif type.is_a?(GenericType)
-        ArrayLiteral.map((type as GenericType).type_vars) do |type_var|
+        ArrayLiteral.map(type.as(GenericType).type_vars) do |type_var|
           MacroId.new(type_var)
         end
       else
@@ -895,7 +902,7 @@ module Crystal
     end
 
     def self.constants(type)
-      names = type.types.map { |name, member_type| MacroId.new(name) as ASTNode }
+      names = type.types.map { |name, member_type| MacroId.new(name).as(ASTNode) }
       ArrayLiteral.new names
     end
 

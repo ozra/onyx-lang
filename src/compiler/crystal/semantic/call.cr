@@ -1,7 +1,6 @@
 require "levenshtein"
 require "../syntax/ast"
 require "../types"
-require "../primitives"
 require "./type_lookup"
 
 class Crystal::Call
@@ -444,42 +443,36 @@ class Crystal::Call
         typed_def, typed_def_args = prepare_typed_def_with_args(match.def, match_owner, lookup_self_type, match.arg_types, block_arg_type)
         def_instance_owner.add_def_instance(def_instance_key, typed_def) if use_cache
 
-        if typed_def.macro_def?
-          return_type = typed_def.return_type.not_nil!
-          typed_def.type = TypeLookup.lookup(match.def.macro_owner.not_nil!, return_type, match_owner.instance_type)
-          mod.push_def_macro typed_def
-        else
-          if typed_def_return_type = typed_def.return_type
-            check_return_type(typed_def, typed_def_return_type, match, match_owner)
-          end
+        if typed_def_return_type = typed_def.return_type
+          check_return_type(typed_def, typed_def_return_type, match, match_owner)
+        end
 
-          check_recursive_splat_call match.def, typed_def_args do
-            # _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
-            bubbling_exception do
-              visitor = MainVisitor.new(mod, typed_def_args, typed_def)
-              visitor.yield_vars = yield_vars
-              visitor.free_vars = match.context.free_vars
-              visitor.untyped_def = match.def
-              visitor.call = self
-              visitor.scope = lookup_self_type
-              visitor.type_lookup = match.context.type_lookup
+        check_recursive_splat_call match.def, typed_def_args do
+          # _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
+          bubbling_exception do
+            visitor = MainVisitor.new(mod, typed_def_args, typed_def)
+            visitor.yield_vars = yield_vars
+            visitor.free_vars = match.context.free_vars
+            visitor.untyped_def = match.def
+            visitor.call = self
+            visitor.scope = lookup_self_type
+            visitor.type_lookup = match.context.type_lookup
 
-              yields_to_block = block && !match.def.uses_block_arg
+            yields_to_block = block && !match.def.uses_block_arg
 
-              if yields_to_block
-                raise_if_block_too_nested(match.def.block_nest)
-                match.def.block_nest += 1
-              end
+            if yields_to_block
+              raise_if_block_too_nested(match.def.block_nest)
+              match.def.block_nest += 1
+            end
 
-              typed_def.body.accept visitor
+            typed_def.body.accept visitor
 
-              if yields_to_block
-                match.def.block_nest -= 1
-              end
+            if yields_to_block
+              match.def.block_nest -= 1
+            end
 
-              if visitor.is_initialize
-                visitor.bind_initialize_instance_vars(owner)
-              end
+            if visitor.is_initialize
+              visitor.bind_initialize_instance_vars(owner)
             end
           end
         end
@@ -508,10 +501,15 @@ class Crystal::Call
   end
 
   def check_return_type(typed_def, typed_def_return_type, match, match_owner)
-    self_type = match_owner.instance_type
-    root_type = self_type.ancestors.find(&.instance_of?(match.def.owner.instance_type)) || self_type
+    if match.def.owner == mod.class_type
+      root_type = mod.class_type
+    else
+      self_type = match_owner.instance_type
+      root_type = self_type.ancestors.find(&.instance_of?(match.def.owner.instance_type)) || self_type
+    end
     return_type = TypeLookup.lookup(root_type, typed_def_return_type, match_owner.instance_type).virtual_type
     typed_def.freeze_type = return_type
+    typed_def.type = return_type if return_type.no_return?
   end
 
   def check_tuple_indexer(owner, def_name, args, arg_types)
@@ -803,7 +801,7 @@ class Crystal::Call
       fun_literal_type = fun_literal.type?
       if fun_literal_type
         block_arg_type = fun_literal_type
-        block_type = (fun_literal_type as FunInstanceType).return_type
+        block_type = fun_literal_type.as(FunInstanceType).return_type
         if output
           matched = MatchesLookup.match_arg(block_type, output, match.context)
           if !matched && !void_return_type?(match.context, output)
@@ -891,7 +889,7 @@ class Crystal::Call
   end
 
   private def check_call_block_arg_matches_def_block_arg(call_block_arg, yield_vars)
-    call_block_arg_types = (call_block_arg.type as FunInstanceType).arg_types
+    call_block_arg_types = call_block_arg.type.as(FunInstanceType).arg_types
     if yield_vars
       if yield_vars.size != call_block_arg_types.size
         wrong_number_of "block argument's arguments", call_block_arg_types.size, yield_vars.size
@@ -1053,7 +1051,7 @@ class Crystal::Call
     named_args_size = named_args.try(&.size) || 0
     (arg_types.size + named_args_size).upto(typed_def.args.size - 1) do |index|
       arg = typed_def.args[index]
-      default_value = arg.default_value as MagicConstant
+      default_value = arg.default_value.as(MagicConstant)
       case default_value.name
       when :__LINE__
         type = mod.int32

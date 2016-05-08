@@ -65,11 +65,6 @@ struct Pointer(T)
     address == 0
   end
 
-  # Returns true if this is a null pointer, false otherwise.
-  def !
-    null?
-  end
-
   # Returns a new pointer whose address is this pointer's address incremented by `other * sizeof(T)`.
   #
   # ```
@@ -152,7 +147,7 @@ struct Pointer(T)
   # ```
   def copy_from(source : Pointer(T), count : Int)
     if self.class == source.class
-      Intrinsics.memcpy(self as Void*, source as Void*, (count * sizeof(T)).to_u32, 0_u32, false)
+      Intrinsics.memcpy(self.as(Void*), source.as(Void*), (count * sizeof(T)).to_u32, 0_u32, false)
     else
       while (count -= 1) >= 0
         self[count] = source[count]
@@ -209,7 +204,7 @@ struct Pointer(T)
   # ```
   def move_from(source : Pointer(T), count : Int)
     if self.class == source.class
-      Intrinsics.memmove(self as Void*, source as Void*, (count * sizeof(T)).to_u32, 0_u32, false)
+      Intrinsics.memmove(self.as(Void*), source.as(Void*), (count * sizeof(T)).to_u32, 0_u32, false)
     else
       if source.address < address
         copy_from source, count
@@ -264,7 +259,7 @@ struct Pointer(T)
   # ptr1.memcmp(ptr1, 4) # => 0
   # ```
   def memcmp(other : Pointer(T), count : Int)
-    LibC.memcmp(self as Void*, (other as Void*), (count * sizeof(T)))
+    LibC.memcmp(self.as(Void*), (other.as(Void*)), (count * sizeof(T)))
   end
 
   # Swaps the contents pointed at the offsets `i` and `j`.
@@ -470,7 +465,7 @@ struct Pointer(T)
   # ptr #   [0, 0, 0, 13, 14, 15]
   # ```
   def clear(count = 1)
-    ptr = self as Pointer(Void)
-    Intrinsics.memset(self as Void*, 0_u8, (count * sizeof(T)).to_u32, 0_u32, false)
+    ptr = self.as(Pointer(Void))
+    Intrinsics.memset(self.as(Void*), 0_u8, (count * sizeof(T)).to_u32, 0_u32, false)
   end
 end

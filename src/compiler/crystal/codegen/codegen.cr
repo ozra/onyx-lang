@@ -386,7 +386,7 @@ module Crystal
 
     def visit(node : TupleLiteral)
       request_value do
-        type = node.type as TupleInstanceType
+        type = node.type.as(TupleInstanceType)
         @last = allocate_tuple(type) do |tuple_type, i|
           exp = node.elements[i]
           exp.accept self
@@ -401,7 +401,7 @@ module Crystal
               when Var
                 context.vars[node_exp.name].pointer
               when InstanceVar
-                instance_var_ptr (context.type.remove_typedef as InstanceVarContainer), node_exp.name, llvm_self_ptr
+                instance_var_ptr (context.type.remove_typedef.as(InstanceVarContainer)), node_exp.name, llvm_self_ptr
               when ClassVar
                 get_global class_var_global_name(node_exp.var), node_exp.type, node_exp.var
               when Global
@@ -452,7 +452,7 @@ module Crystal
       location = node.location.try &.original_location
       if location && (type = node.type?)
         proc_name = true
-        filename = location.filename as String
+        filename = location.filename.as(String)
         fun_literal_name = Crystal.safe_mangling(@mod, "~proc#{type}@#{Crystal.relative_filename(filename)}:#{location.line_number}")
       else
         proc_name = false
@@ -521,7 +521,7 @@ module Crystal
     def codegen_return_node(node, node_type)
       old_last = @last
 
-      execute_ensures_until(node.target as Def)
+      execute_ensures_until(node.target.as(Def))
 
       @last = old_last
 
@@ -718,12 +718,12 @@ module Crystal
 
       if break_phi = context.break_phi
         old_last = @last
-        execute_ensures_until(node.target as Call)
+        execute_ensures_until(node.target.as(Call))
         @last = old_last
 
         break_phi.add @last, node_type
       elsif while_exit_block = context.while_exit_block
-        execute_ensures_until(node.target as While)
+        execute_ensures_until(node.target.as(While))
         br while_exit_block
       else
         node.raise "Bug: unknown exit for break"
@@ -740,7 +740,7 @@ module Crystal
       when Block
         if next_phi = context.next_phi
           old_last = @last
-          execute_ensures_until(target as Block)
+          execute_ensures_until(target.as(Block))
           @last = old_last
 
           next_phi.add @last, node_type
@@ -748,7 +748,7 @@ module Crystal
         end
       when While
         if while_block = context.while_block
-          execute_ensures_until(target as While)
+          execute_ensures_until(target.as(While))
           br while_block
           return false
         end
@@ -829,7 +829,7 @@ module Crystal
       set_current_debug_location node if @debug
       ptr = case target
             when InstanceVar
-              instance_var_ptr (context.type as InstanceVarContainer), target.name, llvm_self_ptr
+              instance_var_ptr (context.type.as(InstanceVarContainer)), target.name, llvm_self_ptr
             when Global
               get_global target.name, target_type, target.var
             when ClassVar
@@ -1063,6 +1063,46 @@ module Crystal
           position_at_end matches_block
           @last = downcast last_value, resulting_type, obj_type, true
         end
+      end
+
+      false
+    end
+
+    def visit(node : NilableCast)
+      request_value do
+        accept node.obj
+      end
+
+      last_value = @last
+
+      obj_type = node.obj.type
+      to_type = node.to.type
+
+      resulting_type = node.type
+      non_nilable_type = node.non_nilable_type
+
+      if node.upcast?
+        @last = upcast last_value, non_nilable_type, obj_type
+        @last = upcast @last, resulting_type, non_nilable_type
+      elsif obj_type != non_nilable_type
+        type_id = type_id last_value, obj_type
+        cmp = match_type_id obj_type, non_nilable_type, type_id
+
+        Phi.open(self, node, @needs_value) do |phi|
+          matches_block, doesnt_match_block = new_blocks "matches", "doesnt_match"
+          cond cmp, matches_block, doesnt_match_block
+
+          position_at_end doesnt_match_block
+          @last = upcast llvm_nil, resulting_type, @mod.nil
+          phi.add @last, resulting_type
+
+          position_at_end matches_block
+          @last = downcast last_value, non_nilable_type, obj_type, true
+          @last = upcast @last, resulting_type, non_nilable_type
+          phi.add @last, resulting_type, last: true
+        end
+      else
+        @last = upcast last_value, resulting_type, obj_type
       end
 
       false
@@ -1912,6 +1952,28 @@ module Crystal
       end
     else
       name
+    end
+  end
+
+  class Program
+    def sprintf(llvm_mod)
+      llvm_mod.functions["sprintf"]? || llvm_mod.functions.add("sprintf", [LLVM::VoidPointer], LLVM::Int32, true)
+    end
+
+    def printf(llvm_mod)
+      llvm_mod.functions["printf"]? || llvm_mod.functions.add("printf", [LLVM::VoidPointer], LLVM::Int32, true)
+    end
+
+    def realloc(llvm_mod)
+      llvm_mod.functions["realloc"]? || llvm_mod.functions.add("realloc", ([LLVM::VoidPointer, LLVM::Int64]), LLVM::VoidPointer)
+    end
+
+    def memset(llvm_mod)
+      llvm_mod.functions["llvm.memset.p0i8.i32"]? || llvm_mod.functions.add("llvm.memset.p0i8.i32", [LLVM::VoidPointer, LLVM::Int8, LLVM::Int32, LLVM::Int32, LLVM::Int1], LLVM::Void)
+    end
+
+    def memcpy(llvm_mod)
+      llvm_mod.functions["llvm.memcpy.p0i8.p0i8.i32"]? || llvm_mod.functions.add("llvm.memcpy.p0i8.p0i8.i32", [LLVM::VoidPointer, LLVM::VoidPointer, LLVM::Int32, LLVM::Int32, LLVM::Int1], LLVM::Void)
     end
   end
 end
