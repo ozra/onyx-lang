@@ -25,14 +25,14 @@ module Crystal
     def infer_type(node, stats = false)
       infer_type_top_level(node, stats: stats)
 
-      _dbg_overview "\nCompiler stage: Semantic (ivars initializers):\n\n".white
-      Crystal.timing("Semantic (ivars initializers)", stats) do
-        visit_instance_vars_initializers(node)
-      end
-
       _dbg_overview "\nCompiler stage: Semantic (cvars initializers):\n\n".white
       Crystal.timing("Semantic (cvars initializers)", stats) do
         visit_class_vars_initializers(node)
+      end
+
+      _dbg_overview "\nCompiler stage: Semantic (ivars initializers):\n\n".white
+      Crystal.timing("Semantic (ivars initializers)", stats) do
+        visit_instance_vars_initializers(node)
       end
 
       _dbg_overview "\nCompiler stage: Semantic (main):\n\n".white
