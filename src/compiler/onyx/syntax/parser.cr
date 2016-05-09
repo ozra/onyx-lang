@@ -867,7 +867,11 @@ class OnyxParser < OnyxLexer
          next_token_skip_space_or_newline
          check_void_expression_keyword
          arg = parse_prefix
-         Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
+         if token_type == :"!"
+            Not.new(arg).at(location).at_end(arg)
+         else
+            Call.new(arg, token_type.to_s, name_column_number: column_number).at(location).at_end(arg)
+         end
       else
          parse_pow
       end
@@ -920,14 +924,10 @@ class OnyxParser < OnyxLexer
          #    raise "Specific literal - not implemented yet"
 
          when :IDFR
-            if kwd?(:as)
-               check_void_value atomic, location
-
-               next_token_skip_space
-               to = parse_single_type
-               atomic = Cast.new(atomic, to).at(location)
-            else
-               break
+            case
+            when kwd?(:as)    then atomic = parse_as(atomic).at(location)
+            when kwd?(:as?)   then atomic = parse_as?(atomic).at(location)
+            else                   break
             end
 
          when :NEWLINE
@@ -1118,6 +1118,8 @@ class OnyxParser < OnyxLexer
       elsif @token.value == :implements?
          return parse_implements(atomic).at(location)
 
+      elsif @token.value == :none?
+         return parse_none?(atomic).at(location)
 
       # `x.=y 47`  => `x= x.y 47`
       # *TODO* - await decision on syntax: `x.=y` | `x=.y`
@@ -1300,6 +1302,15 @@ class OnyxParser < OnyxLexer
       # return atomic
    end
 
+   def parse_atomic_suffix_special(call, location)
+      case @token.type
+      when :".", :"[", :"[]"
+         parse_atomic_suffix(call, location)
+      else
+         call
+      end
+   end
+
    def parse_single_arg
       if @token.type == :"..."
          next_token_skip_space
@@ -1308,6 +1319,26 @@ class OnyxParser < OnyxLexer
       else
          parse_op_assign_no_control
       end
+   end
+
+   def parse_as(atomic, klass = Cast)
+      next_token_skip_space
+
+      if @token.type == :"("
+         next_token_skip_space_or_newline
+         type = parse_single_type
+         skip_space
+         check :")"
+         next_token_skip_space
+      else
+         type = parse_single_type
+      end
+
+      klass.new(atomic, type)
+   end
+
+   def parse_as?(atomic)
+      parse_as atomic, klass: NilableCast
    end
 
    def parse_of_t(atomic)
@@ -1369,6 +1400,28 @@ class OnyxParser < OnyxLexer
       end
    end
 
+   def parse_none?(atomic)
+      next_token
+
+      if @token.type == :"("
+         next_token_skip_space_or_newline
+         check :")"
+         next_token_skip_space
+      end
+
+      IsA.new(atomic, Path.global("Nil"), nil_check: true)
+   end
+
+
+
+   #                ###    ########  #######  ##     ## ####  ######
+   #               ## ##      ##    ##     ## ###   ###  ##  ##    ##
+   #              ##   ##     ##    ##     ## #### ####  ##  ##
+   #             ##     ##    ##    ##     ## ## ### ##  ##  ##
+   #             #########    ##    ##     ## ##     ##  ##  ##
+   #             ##     ##    ##    ##     ## ##     ##  ##  ##    ##
+   #             ##     ##    ##     #######  ##     ## ####  ######
+
    def parse_atomic
       dbg "parse_atomic"
       location = @token.location
@@ -1391,25 +1444,12 @@ class OnyxParser < OnyxLexer
       end
 
       ret = case @token.type
-      when :"("
-         parse_parenthetical_unknown
-
-      when :"'"
-         next_token
-         parse_single_type
-
-      when :"<["
-         parse_tuple_alt :"]>"
-
-      when :"[]"
-         parse_empty_array_literal
-
-      when :"["
-         parse_array_literal_or_multi_assign
-
-      when :"{"
-         # parse_hash_or_set_literal
-         parse_hash_or_set_literal
+      when :"(" then parse_parenthetical_unknown
+      when :"'" then next_token; parse_single_type
+      when :"<[" then parse_tuple_alt :"]>"
+      when :"[]" then parse_empty_array_literal
+      when :"[" then parse_array_literal_or_multi_assign
+      when :"{" then parse_hash_or_set_literal
 
       when MACRO_VAR_EXPRS_START_DELIMITER # *TODO* ONLY IN MACRO CONTEXT!
          macro_exp = parse_macro_expression
@@ -1427,10 +1467,6 @@ class OnyxParser < OnyxLexer
             unexpected_token_in_atomic
          end
 
-      when :"$"
-         dbg "got '$' branch".red
-         parse_constish_or_global_call
-
       # when :"->"
       #   parse_fun_literal
 
@@ -1439,20 +1475,11 @@ class OnyxParser < OnyxLexer
          @wants_regex = false
          node_and_next_token new_numeric_literal(@token)
 
-      when :CHAR
-         node_and_next_token CharLiteral.new(@token.value as Char)
-
-      when :STRING, :DELIMITER_START
-         parse_delimiter
-
-      when :STRING_ARRAY_START
-         parse_string_array
-
-      when :TAG_ARRAY_START
-         parse_symbol_array
-
-      when :TAG
-         node_and_next_token TagLiteral.new(@token.value.to_s)
+      when :CHAR then node_and_next_token CharLiteral.new(@token.value as Char)
+      when :STRING, :DELIMITER_START then parse_delimiter
+      when :STRING_ARRAY_START then parse_string_array
+      when :TAG_ARRAY_START then parse_symbol_array
+      when :TAG then node_and_next_token TagLiteral.new(@token.value.to_s)
 
       # We're removing globals
       # when :GLOBAL
@@ -1460,6 +1487,10 @@ class OnyxParser < OnyxLexer
       #    new_node_check_type_annotation Global, true
       #    # @wants_regex = false
       #    # node_and_next_token Global.new(@token.value.to_s)
+
+      when :"$"
+         dbg "got '$' branch".red
+         parse_constish_or_global_call
 
       # Magic vars for last regexp match and process return status respectively
       when :"$~", :"$?"
@@ -1505,33 +1536,22 @@ class OnyxParser < OnyxLexer
          node_and_next_token MagicConstant.expand_dir_node(@token.location)
 
       when :IDFR
-
          dbg "took IDFR branch"
-         # when :"|" # *TODO* *TEST*
-         #    parse_var_or_call
 
          case @token.value
-         when :try, :do # :begin
-            parse_try
-         when :nil
-            node_and_next_token NilLiteral.new
-         when :true
-            node_and_next_token BoolLiteral.new(true)
-         when :false
-            node_and_next_token BoolLiteral.new(false)
-         when :yield
-            parse_yield
-         when :with
-            parse_yield_with_scope
+         # when "self" then raise "`self` is a reserved word. Did you perhaps mean `Self` or `this`?"
+         when :try, :do then parse_try
+         when :nil then node_and_next_token NilLiteral.new
+         when :true then node_and_next_token BoolLiteral.new(true)
+         when :false then node_and_next_token BoolLiteral.new(false)
+         when :yield then parse_yield
+         when :with then parse_yield_with_scope
+
+         when :this then node_and_next_token Var.new("self")
+         when :self then raise "`self` is a reserved word. Did you perhaps mean `Self` or `this`?", @token
+
          when :abstract
             unexpected_token "abstract can only be used in place of of a func body, or as modifer on types."
-
-         # when :def, :fun, :own, :fn, :fu, :mf
-         #    # *TODO* create "owningdefname__private_def__thisdefname"
-         #    # - do this for the whole hierarchy of defs ofc. (if more)
-         #    check_not_inside_def("can't define def inside def") do
-         #       parse_def
-         #    end
 
          when :macro, :template
             # *TODO* create "owningdefname__private_macro__thisdefname"
@@ -1539,18 +1559,11 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define macro inside def") do
                parse_macro
             end
-         when :require
-            parse_require
-         when :case, :match, :branch, :cond, :switch
-            parse_case
-         when :if
-            ret = parse_if
-            dbg "after parse_if in parse_atomic_without_location"
-            ret
-         when :ifdef
-            parse_ifdef
-         when :unless
-            parse_unless
+         when :require then parse_require
+         when :case, :match, :branch, :cond, :switch then parse_case
+         when :if then parse_if
+         when :ifdef then parse_ifdef
+         when :unless then parse_unless
 
          when :type
             check_not_inside_def("can't define type inside def") do
@@ -1586,18 +1599,12 @@ class OnyxParser < OnyxLexer
                parse_include_or_include_on
             end
 
-         when :for
-            parse_for
-         when :while
-            parse_while
-         when :until
-            parse_until
-         when :return
-            parse_return
-         when :next
-            parse_next
-         when :break
-            parse_break
+         when :for then parse_for
+         when :while then parse_while
+         when :until then parse_until
+         when :return then parse_return
+         when :next then parse_next
+         when :break then parse_break
          when :lib, :api
             check_not_inside_def("can't define lib inside def") do
                parse_lib
@@ -1606,20 +1613,12 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define fun inside def") do
                parse_fun_def require_body: true
             end
-         when :pointerof
-            parse_pointerof
-         when :sizeof
-            parse_sizeof
-         when :instance_sizeof
-            parse_instance_sizeof
-         when :typeof, :typedecl
-            parse_typedecl
-         when :asm
-            parse_asm
-
-         else
-            # set_visibility parse_var_or_call   # *TODO* this _can_ be a def
-            parse_var_or_call   # *TODO* this _can_ be a def
+         when :pointerof then parse_pointerof
+         when :sizeof then parse_sizeof
+         when :instance_sizeof then parse_instance_sizeof
+         when :typeof, :typedecl then parse_typedecl
+         when :asm then parse_asm
+         else          parse_var_or_call   # *TODO* this _can_ be a def
          end
 
       when :CONST
@@ -2398,15 +2397,17 @@ class OnyxParser < OnyxLexer
    end
 
    def parse_type_extend : ASTNode
-      # loc = @token.location
+      loc = @token.location
       ret = parse_general_type_def :TYPE_DEF
+      # *TODO* x.raise vs raise - type elimination...
+      # ret.raise "shouldn't happen!" if ret.is_a? Alias
       raise "shouldn't happen!" if ret.is_a? Alias
-      raise "`extend` takes no pragmas" if ret.pragmas
-      raise "`extend` takes no base-type" if ret.base
-      raise "`extend` takes no type-vars, only type-name" if ret.tvars
+      raise "`extend` takes no pragmas", loc if ret.pragmas
+      raise "`extend` takes no base-type", loc if ret.base
+      raise "`extend` takes no type-vars, only type-name", loc if ret.tvars
       # raise "`extend` takes no doc" if ret.doc
       type_def = ExtendTypeDef.new ret.name, (ret.body || Nop.new)
-      # type_def.location = loc
+      type_def.location = loc
       type_def.end_location = @token.location
       type_def
    end
@@ -2710,7 +2711,7 @@ class OnyxParser < OnyxLexer
 
 
          elsif tok? :CONST # #when :CONST
-            dbg "is const - check for Self, Class or Type"
+            dbg "is const - check for Self"
             if const? :Self
                variant = @token.value
                dbg "is #{variant}"
@@ -4769,6 +4770,7 @@ class OnyxParser < OnyxLexer
          receiver = parse_constish
 
       elsif @token.type == :IDFR
+         check_valid_def_name
          name = @token.value.to_s
          # name_literal_style = @token.literal_style
          next_token
@@ -4779,6 +4781,7 @@ class OnyxParser < OnyxLexer
             skip_space
          end
       else
+         check_valid_def_op_name
          name = @token.type.to_s
          next_token_skip_space
       end
@@ -4791,15 +4794,16 @@ class OnyxParser < OnyxLexer
       dbg "- parse_def_helper - name: '#{name}'"
 
 
-      marked_visibility =  if tok? :"*"
-                              next_token
-                              Visibility::Protected
-                           elsif tok? :"**"
-                              next_token
-                              Visibility::Private
-                           else
-                              Visibility::Public
-                           end
+      marked_visibility = case @token.type
+         when :"*"
+            next_token
+            Visibility::Protected
+         when :"**"
+            next_token
+            Visibility::Private
+         else
+            Visibility::Public
+      end
 
       if tok?(:".")
          unless receiver
@@ -4813,6 +4817,7 @@ class OnyxParser < OnyxLexer
          next_token_skip_space
 
          if @token.type == :IDFR
+            check_valid_def_name
             name = @token.value.to_s
             name_column_number = @token.column_number
             next_token
@@ -4825,6 +4830,7 @@ class OnyxParser < OnyxLexer
          else
             maybe_mutate_gt_op_to_bigger_op
             check DefOrMacroCheck2
+            check_valid_def_op_name
             name = @token.type.to_s
             name_column_number = @token.column_number
             next_token_skip_space
@@ -5059,6 +5065,18 @@ class OnyxParser < OnyxLexer
 
       dbg "parse_def_helper done"
       node
+   end
+
+   def check_valid_def_name
+      if {:of?, :as, :as?, :implements?, :none?}.includes?(@token.value)
+         raise "'#{@token.value}' is a pseudo-method, it can't be redefined", @token
+      end
+   end
+
+   def check_valid_def_op_name
+      if @token.type == :"!"
+         raise "'!' is a pseudo-method, it can't be redefined", @token
+      end
    end
 
    def compute_explicit_block_param_yields(explicit_block_param)
@@ -5507,13 +5525,18 @@ class OnyxParser < OnyxLexer
          token.value = foreign
       end
 
-      if token.value == :of?
+      case @token.value
+      when :of?
          obj = Var.new("self").at(location)
          return parse_of_t(obj)
 
-      elsif @token.value == :implements?
+      when :implements?
          obj = Var.new("self").at(location)
          return parse_implements(obj)
+
+      when :none?
+         obj = Var.new("self").at(location)
+         return parse_none?(obj)
       end
 
       name = @token.value.to_s
@@ -5562,7 +5585,7 @@ class OnyxParser < OnyxLexer
 
       when "initialize"
          dbgtail_off!
-         raise "initialize is a reserved internal method name. Use 'init' for 'constructor'-code."
+         raise "initialize is a reserved internal method name. Use 'init' for 'constructor'-code.", location
 
       when "previous_def"
         @calls_previous_def = true
@@ -6120,8 +6143,16 @@ class OnyxParser < OnyxLexer
 
       if @token.value == :of?
          call = parse_of_t(obj).at(location)
+         call = parse_atomic_suffix_special(call, location)
+
       elsif @token.value == :implements?
          call = parse_implements(obj).at(location)
+         call = parse_atomic_suffix_special(call, location)
+
+      elsif @token.value == :none?
+         call = parse_none?(obj).at(location)
+         call = parse_atomic_suffix_special(call, location)
+
       elsif @token.type == :"["
          call = parse_atomic_suffix obj, location
 
@@ -6509,8 +6540,13 @@ class OnyxParser < OnyxLexer
 
    def parse_typeunit_with_suffix(allow_primitives) : ASTNode
       dbg "parse_typeunit_with_suffix"
-      # *TODO* *TYPE*
-      if const? :Self
+
+      if const? :Self?
+         dbg "was 'Self?'"
+        type = Union.new([Self.new, Path.global("Nil")] of ASTNode)
+        next_token_skip_space
+
+      elsif const? :Self
          dbg "was 'Self'"
          type = Self.new
          next_token_skip_space
@@ -7119,7 +7155,7 @@ class OnyxParser < OnyxLexer
       check :"("
       next_token_skip_space_or_newline
 
-      if kwd?(:self)
+      if kwd?(:this)
          raise "can't take pointerof(self)", @token.line_number, @token.column_number
       end
 

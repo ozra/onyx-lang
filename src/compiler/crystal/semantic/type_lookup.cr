@@ -194,13 +194,18 @@ module Crystal
       if node.is_onyx && node.names.size == 1 && node.is_foreign == false
         _dbg " - Type.lookup_type - onyx, one-type"
         bak_name = node.names.first
-        babelfish_mangling node, program
-        if !(ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container))
-          _dbg " - Type.lookup_type - regretted hard-forced foreign lookup"
-          node.is_foreign = false
-          node.names[0] = bak_name
-          babelfish_mangling node, scope
-          ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
+
+        if bak_name == "Self"
+          ret = self
+        else
+          babelfish_mangling node, program
+          if !(ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container))
+            _dbg " - Type.lookup_type - regretted hard-forced foreign lookup"
+            node.is_foreign = false
+            node.names[0] = bak_name
+            babelfish_mangling node, scope
+            ret = scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
+          end
         end
         ret
 

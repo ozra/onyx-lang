@@ -11,20 +11,25 @@ FooMod:
    v = (val Int) -> say "lambda: {val}"
    v 13
 
+FooMod: type SubFoo: foo() -> true
+
 My.Nested:
-   type Foo
+   type Foo -- <T>
       @@t-var Int = 11 'get 'set
       @str Str
       @foo = 47
       @bar 'get 'set
+      -- @zing T
 
       init(@str Str = "") ->
          @bar = 1
+         -- @zing = @str
 
       foo() -> My.Nested.Foo.t-var
-      -- foo() -> Self.t-var  -- *TODO*
+      foo2() -> Self.t-var  -- *TODO*
+      foo3()-> this.foo
 
-      action(str) -> say str
+      action(str = @str) -> say str
 
    Module:
       foo(obj) ->
@@ -44,14 +49,25 @@ My:
          @xoo = 46
          xoo() -> @xoo + 1
 
+         dup?() Self? -> Self(@str + "_copy") || nil
+         dup() Self -> Self(@str + "_copy")
+
 OtherModule:
-   -- include Self on Self
+   include Self on Self  -- entirely pointless excercise - done automatically
    bar
 
 pp My.Nested.Foo.t-var
 pp My.Nested.Foo().foo
 fuu = My.Nested.Foo "Foul"
 pp fuu.xoo
+pp fuu.foo
+pp fuu.foo2
+pp fuu.foo3
+pp fuu.action
+pp faa = fuu.dup?
+x = faa?action
+fii = faa.some!.dup
+pp fii.action
 
 say FooMod.val
 FooMod.val = 47

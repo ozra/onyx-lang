@@ -70,8 +70,8 @@ type Nilish
    internal() ->
       say (foo?bar?qwo || 0) + 200
 
-   foo() ->    @val = 1; if @nil-at >= 1 ? self : nil
-   bar?() ->   @val = 2; if @nil-at >= 2 ? self : nil
+   foo() ->    @val = 1; if @nil-at >= 1 ? this : nil
+   bar?() ->   @val = 2; if @nil-at >= 2 ? this : nil
    bar() ->    raise "don't call me!"
    qwo() ->    @val = 3; if @nil-at >= 3 ? 46 : nil
 
@@ -730,7 +730,7 @@ my-lambda.call("47")
 -- reopen String type and override '<<' operator to act as "concat" (like '+',
 -- but auto-coercing)
 
-ext String: <<(obj) -> "{self}{obj}"
+ext String: <<(obj) -> "{this}{obj}"
 
 say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 
