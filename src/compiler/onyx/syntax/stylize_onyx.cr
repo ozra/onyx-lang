@@ -208,6 +208,18 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
+   def visit(node : NamedTupleLiteral)
+      @str << "("
+      node.entries.each_with_index do |entry, i|
+         @str << ", " if i > 0
+         @str << entry.key
+         @str << ": "
+         entry.value.accept self
+      end
+      @str << ")"
+      false
+   end
+
    def visit(node : NilLiteral)
       @str << decorate_singleton(node, "nil")
    end

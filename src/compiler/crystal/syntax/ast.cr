@@ -351,7 +351,7 @@ module Crystal
       end
     end
 
-    def clone_without_location
+    def clone_specific_impl
       NamedTupleLiteral.new(@entries.clone)
     end
 
