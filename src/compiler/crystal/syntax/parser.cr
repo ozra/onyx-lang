@@ -9,14 +9,27 @@ module Crystal
         new_numeric_literal token.value.to_s, token.number_kind, token.number_suffix
      end
 
-     def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil)
+     def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil) : ASTNode
         _dbg "crystal-parse: new_numeric_literal -> #{value} '#{suffix}'"
 
+        # *TODO* maybe add for unspeced too!?
+
         if kind == :user_suffix
-           new_kind = (/[.eE]/ =~ value) ? :unspec_real : :unspec_int
-           Call.new(
+           if /[.eE]/ =~ value
+              new_kind = :unspec_real
+              suffix_prefix_type = "real"
+           else
+              new_kind = :unspec_int
+              suffix_prefix_type = "int"
+           end
+
+           # ifdef !release
+           #   @debug_specific_flag_ = true
+           # end
+
+           return Call.new(
               nil,
-              "suffix_number_#{suffix}",
+              @string_pool.get("_suffix_#{suffix_prefix_type}__#{suffix}"),
               [ NumberLiteral.new(value, new_kind) ] of ASTNode,
               nil,
               nil,
@@ -27,8 +40,9 @@ module Crystal
               implicit_construction: true,
               is_nil_sugared: false
            )
+
         else
-           NumberLiteral.new(value, kind)
+           return NumberLiteral.new(value, kind)
         end
 
      ensure
@@ -70,6 +84,11 @@ module Crystal
       @wants_doc = false
       @doc_enabled = false
       @no_type_declaration = 0
+
+      ifdef !release
+        @debug_specific_flag_ = false
+      end
+
     end
 
     def wants_doc=(wants_doc)
@@ -83,6 +102,14 @@ module Crystal
       expressions = parse_expressions.tap { check :EOF }
 
       check :EOF
+
+      ifdef !release
+         if @debug_specific_flag_
+            _dbg_on
+            _dbg "crystal specific parse debug:".white
+            _dbg expressions
+         end
+      end
 
       expressions
     end

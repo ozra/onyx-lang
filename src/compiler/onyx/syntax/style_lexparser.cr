@@ -2,25 +2,25 @@ require "../../crystal/syntax/to_s"
 
 module Crystal
 
-abstract class ASTNode
-   property literal_style
-   @literal_style = :original
-end
+# abstract class ASTNode
+#    property literal_style
+#    @literal_style = :original
+# end
 
-class StringLiteral < ASTNode
-   property string_style
-   @string_style = :quoted
-end
+# class StringLiteral < ASTNode
+#    property string_style
+#    @string_style = :quoted
+# end
 
-class Def < ASTNode
-   property def_base_style
-   @def_base_style = :arrow
+# class Def < ASTNode
+#    property def_base_style
+#    @def_base_style = :arrow
 
-   def literal_prefix_keyword=(flag : Symbol)
-      # *TODO*
-      @detail_flags |= 0
-   end
-end
+#    def literal_prefix_keyword=(flag : Symbol)
+#       # *TODO*
+#       @detail_flags |= 0
+#    end
+# end
 
 class StyleParseVisitor < Visitor
    @src : Array(Array(Char))

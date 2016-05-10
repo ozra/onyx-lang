@@ -9,12 +9,12 @@
 module Crystal
   class Program
     def expand_macro(a_macro : Macro, call : Call, scope : Type, type_lookup : Type?)
-      _dbg "Program.expand_macro Macro #{a_macro}, Call #{call} ->".red
+      _dbg "Program.expand_macro Macro #{a_macro}, is_onyx=#{a_macro.is_onyx}, Call #{call} ->".red
       macro_expander.expand a_macro, call, scope, type_lookup || scope
     end
 
     def expand_macro(node : ASTNode, scope : Type, type_lookup : Type?, free_vars = nil)
-      _dbg "Program.expand_macro ASTNode #{node} ->".red
+      _dbg "Program.expand_macro ASTNode , is_onyx=#{node.is_onyx}, node => #{node} ->".red
       macro_expander.expand node, scope, type_lookup || scope, free_vars
     end
 
@@ -24,7 +24,7 @@ module Crystal
 
     def parse_macro_source(expanded_macro, the_macro, node, vars, inside_def = false, inside_type = false, inside_exp = false)
       _dbg "parse_macro_source the_macro.is_onyx = #{the_macro.is_onyx}, node.is_onyx = #{node.is_onyx}".red
-
+      _dbg "expand_macro source = \"#{expanded_macro.source}\""
       generated_source = expanded_macro.source
       begin
         if the_macro.is_onyx
@@ -140,8 +140,9 @@ module Crystal
       def self.new(expander, mod, scope : Type, type_lookup : Type, a_macro : Macro, call)
         _dbg "MacroVisitor..new".red
         _dbg " expander = #{expander}"
-        _dbg " a_macro = #{a_macro}"
-        _dbg " call = #{call}"
+        _dbg " a_macro = #{a_macro}, a_macro.is_onyx = #{a_macro.is_onyx}"
+        _dbg "  splat_index = #{a_macro.splat_index}"
+        _dbg " call = #{call}, call.is_onyx = #{call.is_onyx}"
         _dbg "\n"
 
         vars = {} of String => ASTNode
@@ -189,9 +190,11 @@ module Crystal
         end
 
         # *TODO* DEBUG CODE
-        _dbg "- MacroVisitor..new - vars at end"
-        vars.each do |key, var|
-          _dbg "- MacroVisitor..new - '#{key}': var.class = #{var.class} : #{var.inspect}".white
+        ifdef !release
+          _dbg "- MacroVisitor..new - vars at end - is_onyx = #{a_macro.is_onyx}"
+          vars.each do |key, var|
+            _dbg "- MacroVisitor..new - '#{key}': var.class = #{var.class} : #{var.inspect}".white
+          end
         end
         # *TODO* DEBUG CODE
 
@@ -243,6 +246,10 @@ module Crystal
             @last = Var.new(var_name)
           end
           _dbg "- MacroVisitor.visit MacroExpression - to_s with @is_onyx = #{@is_onyx} where @last = #{@last}"
+
+          if @last.is_a? NumberLiteral
+            _dbg "visit MacroExpression, got a NumberLiteral: '#{ @last.to_s(nil, as_kind: @is_onyx ? :onyx : :crystal) }' where is_onyx=#{@is_onyx}, and again with plain to_s: '#{ @last.to_s }'"
+          end
 
           @last.to_s(@str, as_kind: @is_onyx ? :onyx : :crystal)
 

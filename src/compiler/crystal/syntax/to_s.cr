@@ -24,6 +24,10 @@ module Crystal
       @inside_struct_or_union = false
     end
 
+    def re_init(str = MemoryIO.new)
+      initialize str
+    end
+
     def visit(node : Nop)
     end
 

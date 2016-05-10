@@ -1490,12 +1490,16 @@ module Crystal
           end
         when 'u'
           case nextch
+          when 'f'
+            if mnc?('f','i','x')
+              return keyword_else_idfr(:suffix, start)
+            end
           when 'p'
-            if  mnc?('e','r')
+            if mnc?('e','r')
               return keyword_else_idfr(:super, start)
             end
-          when 'm'
-            return keyword_else_idfr(:sum, start)
+          # when 'm'
+          #   return keyword_else_idfr(:sum, start)
           end
         when 'w'
           if  mnc?('i','t','c','h')

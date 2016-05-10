@@ -71,6 +71,7 @@ module Crystal
         visit_top_level(node)
       end
 
+      # *TODO* might be completely pointess really, simply dive each time...
       _dbg_overview "\nCompiler stage: Semantic (handle extend types):\n\n".white
       Crystal.timing("Semantic (handle extend types)", stats) do
         lift_out_type_extensions(node)

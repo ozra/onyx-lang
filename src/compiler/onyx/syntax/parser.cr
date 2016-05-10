@@ -8,6 +8,7 @@ require "../../debug_utils/ast_dump"
 require "./parser_scopes_and_nesting"
 require "./ast_onyx_tagger"
 
+#  module Onyx
 module Crystal
 
 class WrongParsePathException < SyntaxException
@@ -67,7 +68,7 @@ class OnyxParser < OnyxLexer
       @certain_def_count = 0
       @def_parsing = 0
 
-      @control_construct_parsing = 0 # *TODO* this could probably be just a flag, huh!
+      @control_construct_parsing = 0 # *TODO* this could probably be just a flag, huh! *VERIFY*
 
       @type_nest = 0
 
@@ -87,6 +88,11 @@ class OnyxParser < OnyxLexer
 
       @unclosed_stack = [] of Unclosed
       @nesting_stack = NestingStack.new
+
+
+      ifdef !release
+         @debug_specific_flag_ = false
+      end
 
    end
 
@@ -182,6 +188,13 @@ class OnyxParser < OnyxLexer
          raise "Expected end of file (EOF) but got `#{@token}`"
       end
 
+      ifdef !release
+         if @debug_specific_flag_
+            _dbg_on
+            _dbg "onyx specific parse debug:".white
+            _dbg expressions
+         end
+      end
       # ifdef !release
       #    # *TODO* - debugga hela programstrukturen - gör med parse --ast nu
       #    STDERR.puts "\n\n\nAST:\n\n\n"
@@ -1559,6 +1572,12 @@ class OnyxParser < OnyxLexer
             check_not_inside_def("can't define macro inside def") do
                parse_macro
             end
+
+         when :suffix
+            check_not_inside_def("can't define suffix inside def") do
+               parse_suffix
+            end
+
          when :require then parse_require
          when :case, :match, :branch, :cond, :switch then parse_case
          when :if then parse_if
@@ -4277,6 +4296,70 @@ class OnyxParser < OnyxLexer
    MACRO_VAR_EXPRS_START_DELIMITER = :"{="
    MACRO_VAR_EXPRS_END_DELIMITER = :"=}"
 
+
+   def parse_suffix()
+      dbg "parse_suffix ->".cyan
+
+      doc = @token.doc
+      indent_level = @indent
+      push_fresh_scope
+      next_token_skip_space_or_newline
+      args = [] of Arg
+
+      check :"("
+      next_token_skip_space_or_newline
+
+      args << Arg.new check_idfr
+      next_token_skip_space_or_newline
+
+      if tok? :CONST
+         case @token.value
+         when "NumberLiteral" then name_prefix = nil
+         when "IntLiteral"    then name_prefix = "_suffix_int__"
+         when "RealLiteral"   then name_prefix = "_suffix_real__"
+         else
+            raise "suffix can be typed `NumberLiteral`, `IntLiteral` or `RealLiteral`. Don't know `#{@token.value}`", @token
+         end
+         next_token_skip_space
+      else
+         name_prefix = nil
+      end
+
+      check :")"
+      next_token_skip_space
+
+      name_line_number = @token.line_number
+      name_column_number = @token.column_number
+
+      if tok? :IDFR
+         name = @token.value.to_s
+         # *TODO* - verify name is a "compatible one"
+         next_token_skip_space
+      else
+         name = "plain"
+      end
+
+      node = parse_macro_main indent_level, name, args, nil, nil,
+                              name_line_number, name_column_number, doc
+
+      if name_prefix
+         node.name = "#{name_prefix}#{name}"
+
+         dbg "defines suffix '#{node.name}'"
+
+         node
+
+      else
+         node2 = node.clone
+         node.name = "_suffix_int__#{name}"
+         node2.name = "_suffix_real__#{name}"
+
+         dbg "defines suffix '#{node.name}' and '#{node2.name}'"
+
+         Expressions.from([node, node2] of ASTNode)
+      end
+   end
+
    def parse_macro(supplied_receiver = nil)
       dbg "parse_macro ->".cyan
 
@@ -4285,12 +4368,12 @@ class OnyxParser < OnyxLexer
 
       next_token_skip_space_or_newline
 
-      # *TODO* turn this into it's own keyword completely!? "tpldef"
-      if kwd?(:def)
-         a_def = parse_def_helper supplied_receiver, is_macro_def: true
-         a_def.doc = doc
-         return a_def
-      end
+      # # *TODO* turn this into it's own keyword completely!? "tpldef"
+      # if kwd?(:def)
+      #    a_def = parse_def_helper supplied_receiver, is_macro_def: true
+      #    a_def.doc = doc
+      #    return a_def
+      # end
 
       push_fresh_scope
 
@@ -4310,8 +4393,6 @@ class OnyxParser < OnyxLexer
       splat_index = nil
       index = 0
 
-      # case @token.type
-      # when :"("
       check :"("
       next_token_skip_space_or_newline
 
@@ -4339,36 +4420,18 @@ class OnyxParser < OnyxLexer
       end
 
       next_token
-      # when :IDFR, :"..." # *TODO* verify - was "*"
-      #    while @token.type != :NEWLINE && @token.type != :";"
-      #       extras = parse_param(args, nil, false, found_default_value, found_splat, allow_restrictions: false)
-      #       if !found_default_value && extras.default_value
-      #          found_default_value = true
-      #       end
-      #       if !splat_index && extras.splat
-      #          splat_index = index
-      #          found_splat = true
-      #       end
-      #       if explicit_block_param = extras.explicit_block_param
-      #          break
-      #       elsif @token.type == :","
-      #          next_token_skip_space_or_newline
-      #       else
-      #          skip_space
-      #          if @token.type != :NEWLINE && @token.type != :";"
-      #             unexpected_token "expected ';' or newline"
-      #          end
-      #       end
-      #       index += 1
-      #    end
-      # end
 
+      parse_macro_main indent_level, name, args, explicit_block_param, splat_index,
+                       name_line_number, name_column_number, doc
+   end
+
+   def parse_macro_main(indent_level, name, args, explicit_block_param, splat_index,
+                        name_line_number, name_column_number, doc
+                       )
       end_location = nil
 
       skip_tokens :SPACE
 
-      # nest_kind, callable_kind, returns_nothing, suffix_pragmas = parse_def_nest_start
-      # *TODO* possibly :template instead below
       add_nest :macro, indent_level, name.to_s, false, false
 
       @macro_base_indent_level = indent_level

@@ -17,10 +17,10 @@ suffix (val RealLiteral) =
    {=val=}_real
 
 suffix (val)g1 =
-   {=val=}_real
+   {= val =}_real
 
 suffix (val NumberLiteral)g2 =
-   {=val=}_real
+   {= val =}_real
 
 suffix (val IntLiteral)g3 =
    {=val=}_real
@@ -30,22 +30,32 @@ suffix (val RealLiteral)g4 =
 
 
 
+suffix (val)g =
+    -- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
+    -- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
+   {=val=}_real
+
+suffix (val)kg =
+   {=val=}g * 1000_real
+
+suffix (val)Ω =
+   Ohm {=val=}_real
 
 
 -- is (foo = Foo.new).@value legal crystal code!!??
 
 
 
-template suffix-number-g(val) =
-    -- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
-    -- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
-   {=val=}_real
+-- template _suffix-number--g(val) =
+--     -- *TODO* val.id fucks up because `to_macro_id` doesn't have target-language as
+--     -- param and thus acts on either specific-node.to_s or abstract-node.to_s(:auto)
+--    {=val=}_real
 
-template suffix-number-kg(val) =
-   {=val=}g * 1000_real
+-- template _suffix-number--kg(val) =
+--    {=val=}g * 1000_real
 
-template suffix-number-Ω(val) =
-   Ohm {=val=}_real
+-- template _suffix-number--Ω(val) =
+--    Ohm {=val=}_real
 
 
 
@@ -55,7 +65,14 @@ say "create code via inline macro expr"
    say "macroed {=x.id=} + " + {=x=}
 {% end %}
 
-say "Try each suffix"
+say "Try each suffix, no crystal macro surrounds"
+9g
+0.47g
+0.47kg
+0.47Ω
+
+say "Try each suffix, crystal macro wrapped"
+pp 11g
 pp 0.47g
 pp 0.47kg
 pp 0.47Ω
@@ -159,6 +176,15 @@ pp p1 = 0e-1
 pp p2 = 0e-1f32
 
 
+say "Non user-suffix test:"
+
+template fooo() =
+    %f = {% if true %}
+        47
+    {% end %}
+    %s = "a string with a %s in { %f } it"
+
+say fooo
 
 say "Should fail for various reasons:"
 -- f-a = 0b012
@@ -172,11 +198,3 @@ say "Should fail for various reasons:"
 -- f-c = 0xffi8
 -- f-d = 0xff_i8
 
-
-template fooo() =
-    %f = {% if true %}
-        47
-    {% end %}
-    %s = "a string with a %s in { %f } it"
-
-say fooo

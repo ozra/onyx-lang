@@ -213,8 +213,8 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Expressions)
-      just_grouping = node.parenthesized? && node.expressions.try &.size == 1
-      if node.parenthesized?
+      just_grouping = node.parenthesized && node.expressions.try &.size == 1
+      if node.parenthesized
          append_indent unless just_grouping
          @str << "("
          newline unless just_grouping
@@ -231,7 +231,7 @@ class StylizeOnyxVisitor < Visitor
          end
       end
 
-      if node.parenthesized?
+      if node.parenthesized
          append_indent unless just_grouping
          @str << ")"
       end
@@ -359,7 +359,7 @@ class StylizeOnyxVisitor < Visitor
          return false
       end
 
-      @str << "(" if node.parenthesized?
+      @str << "(" if node.parenthesized
 
 
       node_obj = ignore_obj ? nil : node.obj
@@ -396,7 +396,7 @@ class StylizeOnyxVisitor < Visitor
          end
       end
 
-      need_parens = !node_obj || (node_obj && node_obj.parenthesized?)
+      need_parens = !node_obj || (node_obj && node_obj.parenthesized)
       call_args_need_parens = false
 
       @str << "$." if node.global
@@ -533,7 +533,7 @@ class StylizeOnyxVisitor < Visitor
                   @str << "~."
                   visit_call block_body, ignore_obj: true
                   @str << ")" if call_args_need_parens
-                  @str << ")" if node.parenthesized?
+                  @str << ")" if node.parenthesized
                   return false
                end
             end
@@ -544,7 +544,7 @@ class StylizeOnyxVisitor < Visitor
       end
 
       @str << ")" if call_args_need_parens
-      @str << ")" if node.parenthesized?
+      @str << ")" if node.parenthesized
 
       false
    end
@@ -1353,7 +1353,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def to_s_binary(node, op)
-      @str << "(" if node.parenthesized?
+      @str << "(" if node.parenthesized
 
       left_needs_parens = node.left.is_a?(Assign) || node.left.is_a?(Expressions)
       in_parenthesis(left_needs_parens, node.left)
@@ -1377,7 +1377,7 @@ class StylizeOnyxVisitor < Visitor
                            node.right.is_a?(Call) && (node.right as Call).name == "[]="
       in_parenthesis(right_needs_parens, node.right)
 
-      @str << ")" if node.parenthesized?
+      @str << ")" if node.parenthesized
 
       false
    end
@@ -1507,7 +1507,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : RangeLiteral)
-      @str << "(" if node.parenthesized?
+      @str << "(" if node.parenthesized
 
       node.from.accept self
 
@@ -1521,7 +1521,7 @@ class StylizeOnyxVisitor < Visitor
       end
       node.to.accept self
 
-      @str << ")" if node.parenthesized?
+      @str << ")" if node.parenthesized
 
       false
    end

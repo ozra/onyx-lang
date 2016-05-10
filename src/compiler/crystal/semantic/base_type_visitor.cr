@@ -671,7 +671,14 @@ module Crystal
     end
 
     def expand_macro_arguments(node, expansion_scope)
-      _dbg "BaseTypeVisitor.expand_macro_arguments".red
+      _dbg "BaseTypeVisitor.expand_macro_arguments, node.is_onyx = #{node.is_onyx}".red
+      ifdef !release
+        _dbg "\nargs BEFORE expand_macro_arguments".white
+        node.args.each_with_index do |arg, i|
+          _dbg "##{i}: #{arg.class}"
+          arg.dump_std
+        end
+      end
       # If any argument is a MacroExpression, solve it first and
       # replace Path with Const/TypeNode if it denotes such thing
       args = node.args
@@ -697,6 +704,15 @@ module Crystal
         end
         @exp_nest += 1
       end
+
+      ifdef !release
+        _dbg "\nargs AFTER expand_macro_arguments".white
+        args.each_with_index do |arg, i|
+          _dbg "##{i} #{arg.class}:"
+          arg.dump_std
+        end
+      end
+
       args
     end
 
