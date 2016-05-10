@@ -2,46 +2,77 @@ require "../../crystal/syntax/to_s"
 
 module Crystal
 
-# class ToOnyxSVisitorsPool
-#    # @@onyx_tos_visitors = [] of ToOnyxSVisitor
-#    @@onyx_tos_visitors : Array(ToOnyxSVisitor)
-#    @@onyx_tos_visitors = [] of ToOnyxSVisitor
+class ToOnyxSVisitorsPool
+   @@pool = [] of ToOnyxSVisitor
 
-#    def self.borrow_onyx_tos_visitor(io) : ToOnyxSVisitor
-#       if @@onyx_tos_visitors.size > 0
-#          visitor = @@onyx_tos_visitors.pop.not_nil!
-#          visitor.re_init io
-#          visitor.not_nil!
-#       else
-#          ToOnyxSVisitor.new(io)
-#       end
-#    end
+   def self.borrow_tos_visitor(io) : ToOnyxSVisitor
+      if @@pool.size > 0
+         visitor = @@pool.pop.not_nil!
+         visitor.re_init io
+         visitor.not_nil!
+      else
+         ToOnyxSVisitor.new(io)
+      end
+   end
 
-      # def self.with_borrowed_tos_visitor(io, &block)
-      #    visitor = borrow_tos_visitor io
-      #    ret = yield visitor
-      #    leave_tos_visitor visitor
-      #    ret
-      # end
+   def self.with_borrowed_tos_visitor(io, &block)
+      visitor = borrow_tos_visitor io
+      ret = yield visitor
+      leave_tos_visitor visitor
+      ret
+   end
 
-#    def self.leave_onyx_tos_visitor(visitor : ToOnyxSVisitor) : Nil
-#       @@onyx_tos_visitors << visitor
-#       nil
-#    end
-# end
+   def self.leave_tos_visitor(visitor : ToOnyxSVisitor) : Nil
+      @@pool << visitor
+      nil
+   end
+end
+
+class ToSVisitorsPool
+   @@pool = [] of ToSVisitor
+
+   def self.borrow_tos_visitor(io) : ToSVisitor
+      if @@pool.size > 0
+         visitor = @@pool.pop.not_nil!
+         visitor.re_init io
+         visitor.not_nil!
+      else
+         ToSVisitor.new(io)
+      end
+   end
+
+   def self.with_borrowed_tos_visitor(io, &block)
+      visitor = borrow_tos_visitor io
+      ret = yield visitor
+      leave_tos_visitor visitor
+      ret
+   end
+
+   def self.leave_tos_visitor(visitor : ToSVisitor) : Nil
+      @@pool << visitor
+      nil
+   end
+end
 
 class ASTNode
+   def to_s(io : Nil, as_kind = :auto)
+      str = MemoryIO.new
+      to_s str, as_kind
+      str.to_s
+   end
+
    def to_s(io, as_kind = :auto)
       # _dbg "ASTNode.to_s -> as_kind = #{as_kind}, self.class = #{self.class}"
       if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-         # visitor = ToOnyxSVisitorsPool.borrow_onyx_tos_visitor(io) # ToOnyxSVisitor.new(io)
-         visitor = ToOnyxSVisitor.new(io)
-         ret = self.accept visitor
-         # ToOnyxSVisitorsPool.leave_onyx_tos_visitor visitor
-         ret
+         # visitor = ToOnyxSVisitor.new(io)
+         ToOnyxSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+            self.accept visitor
+         end
       else
-         visitor = ToSVisitor.new(io)
-         self.accept visitor
+         # visitor = ToSVisitor.new(io)
+         ToSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+            self.accept visitor
+         end
       end
    end
 end
