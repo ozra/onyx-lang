@@ -573,6 +573,23 @@ module Crystal
       end
     end
 
+    def guess_type(node : NamedTupleLiteral)
+      names_and_types = nil
+      node.entries.each do |entry|
+        element_type = guess_type(entry.value)
+        return nil unless element_type
+
+        names_and_types ||= [] of {String, Type}
+        names_and_types << {entry.key, element_type}
+      end
+
+      if names_and_types
+        mod.named_tuple_of(names_and_types)
+      else
+        nil
+      end
+    end
+
     def guess_type(node : Call)
       guess_type_call_lib_out(node)
 
@@ -756,7 +773,13 @@ module Crystal
     end
 
     def guess_type(node : Var)
-      check_var_is_self(node)
+      if node.name == "self"
+        if current_type.is_a?(NonGenericClassType)
+          return current_type.virtual_type
+        else
+          return nil
+        end
+      end
 
       if args = @args
         # Find an argument with the same name as this variable
@@ -1155,6 +1178,8 @@ module Crystal
     end
 
     def check_has_self(node)
+      return false if node.is_a?(Var)
+
       @has_self_visitor.reset
       @has_self_visitor.accept(node)
       @found_self = true if @has_self_visitor.has_self
