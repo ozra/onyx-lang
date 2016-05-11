@@ -233,7 +233,8 @@ struct Char
     end
 
     private def invalid_byte_sequence
-      raise InvalidByteSequenceError.new
+      # *TODO*
+      raise InvalidByteSequenceError.new  "invalid byte sequence in char reader"
     end
 
     private def decode_current_char

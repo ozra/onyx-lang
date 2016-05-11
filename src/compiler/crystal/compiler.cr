@@ -31,6 +31,7 @@ module Crystal
     property? color : Bool
     property? no_codegen : Bool
     property n_threads : Int32
+    property n_concurrent : Int32
     property prelude : String
     property? release : Bool
     property? single_module : Bool
@@ -41,10 +42,6 @@ module Crystal
     property emit : Array(String)?
     property original_output_filename : String?
 
-
-    property test_opt_mode : Int32
-    @test_opt_mode = 2
-
     @target_machine : LLVM::TargetMachine?
     @pass_manager_builder : LLVM::PassManagerBuilder?
     @module_pass_manager : LLVM::ModulePassManager?
@@ -54,7 +51,8 @@ module Crystal
       @dump_ll = false
       @color = true
       @no_codegen = false
-      @n_threads = 32.to_i32  # try 8 again
+      @n_threads = 8.to_i32  # try 8 again
+      @n_concurrent = 1000_i32
       @prelude = "onyx_prelude"
       @release = false
       @single_module = false
@@ -273,22 +271,20 @@ module Crystal
     end
 
     private def codegen_many_units(program, units, target_triple, multithreaded)
+      case OptTests.test_opt_mode_a
+      when 1 then codegen_many_units_fork program, units, target_triple, multithreaded
+      else        codegen_many_units_spawn program, units, target_triple, multithreaded
+      end
+    end
+
+    private def codegen_many_units_fork(program, units, target_triple, multithreaded)
       jobs_count = 0
       wait_channel = Channel(Nil).new(@n_threads)
 
       perf_tmp = Time.now
 
-      # *TEMP*
-      if @test_opt_mode > 1
-        @n_threads = 9999
-      end
-
       while unit = units.pop?
-        if @test_opt_mode == 1
-          fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
-        else
-          spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
-        end
+        fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
         jobs_count += 1
 
         if jobs_count >= @n_threads
@@ -297,14 +293,10 @@ module Crystal
         end
       end
 
-      # _dbg_always "All units kicked off: #{Time.now - perf_tmp}"
-
       while jobs_count > 0
         wait_channel.receive
         jobs_count -= 1
       end
-
-      # _dbg_always "And all units DONE (acc): #{Time.now - perf_tmp}"
 
     end
 
@@ -316,6 +308,29 @@ module Crystal
         codegen_process.wait
         wait_channel.send nil
       end
+    end
+
+    private def codegen_many_units_spawn(program, units, target_triple, multithreaded)
+      jobs_count = 0
+      wait_channel = Channel(Nil).new(@n_concurrent)
+
+      perf_tmp = Time.now
+
+      while unit = units.pop?
+        spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+        jobs_count += 1
+
+        if jobs_count >= @n_concurrent
+          wait_channel.receive
+          jobs_count -= 1
+        end
+      end
+
+      while jobs_count > 0
+        wait_channel.receive
+        jobs_count -= 1
+      end
+
     end
 
     private def spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
@@ -333,9 +348,7 @@ module Crystal
         unit.llvm_mod.data_layout = DataLayout32
       end
 
-      # unit.write_bitcode if multithreaded
       unit.compile
-
     end
 
     def target_machine
@@ -475,50 +488,42 @@ module Crystal
         File.rename(filename_tmp, filename)
       end
 
+      # def compile_c
+      #   # *TODO* another model for release...
+      #   if compiler.release?
+      #     Crystal.timing("LLVM Optimizer", @compiler.stats?) do
+      #       compiler.optimize llvm_mod
+      #     end
+      #   end
+
+      #   obj_buf = uninitialized LibLLVM::MemoryBufferRef
+      #   # *TODO* buf as out buf, but initialize value to 0 (the void ptr) to
+      #   # to ensure stable null value on error
+
+      #   _dbg "emit_obj_to_mem"
+      #   compiler.target_machine.emit_obj_to_mem llvm_mod, pointerof(obj_buf)
+
+      #   obj_buf_ptr = LibLLVM.get_buffer_start(obj_buf)
+      #   obj_buf_size = LibLLVM.get_buffer_size(obj_buf)
+
+      #   # We read in existing obj–file and compare. Why? Because it gets it in
+      #   # to file–cache which is good for the linking stage. And opposite: if
+      #   # we write to it although the same, we destroy the file–caching. Slow!
+      #   compare_ok = compare_mem_to_file obj_buf_ptr, obj_buf_size, object_name
+
+      #   if !compare_ok
+      #     # Render to tmp name to never leave partial obj–files in real name
+      #     write_mem_to_file_via_tmp obj_buf_ptr, obj_buf_size, object_name
+      #   end
+
+      #   _dbg "dispose_memory_buffer obj_buf"
+      #   LibLLVM.dispose_memory_buffer obj_buf
+
+      #   llvm_mod.print_to_file ll_name if compiler.dump_ll?
+      #   nil
+      # end
+
       def compile
-        if @compiler.test_opt_mode == 3
-          compile_c
-        else
-          compile_a_b
-        end
-      end
-
-      def compile_c
-        # *TODO* another model for release...
-        if compiler.release?
-          Crystal.timing("LLVM Optimizer", @compiler.stats?) do
-            compiler.optimize llvm_mod
-          end
-        end
-
-        obj_buf = uninitialized LibLLVM::MemoryBufferRef
-        # *TODO* buf as out buf, but initialize value to 0 (the void ptr) to
-        # to ensure stable null value on error
-
-        _dbg "emit_obj_to_mem"
-        compiler.target_machine.emit_obj_to_mem llvm_mod, pointerof(obj_buf)
-
-        obj_buf_ptr = LibLLVM.get_buffer_start(obj_buf)
-        obj_buf_size = LibLLVM.get_buffer_size(obj_buf)
-
-        # We read in existing obj–file and compare. Why? Because it gets it in
-        # to file–cache which is good for the linking stage. And opposite: if
-        # we write to it although the same, we destroy the file–caching. Slow!
-        compare_ok = compare_mem_to_file obj_buf_ptr, obj_buf_size, object_name
-
-        if !compare_ok
-          # Render to tmp name to never leave partial obj–files in real name
-          write_mem_to_file_via_tmp obj_buf_ptr, obj_buf_size, object_name
-        end
-
-        _dbg "dispose_memory_buffer obj_buf"
-        LibLLVM.dispose_memory_buffer obj_buf
-
-        llvm_mod.print_to_file ll_name if compiler.dump_ll?
-        nil
-      end
-
-      def compile_a_b
         must_compile = true
         # Do this before mem–allocation to keep mem total down (many concurrent)
         noop_checks_ok = File.exists?(bc_name) && File.exists?(object_name)

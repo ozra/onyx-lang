@@ -5,6 +5,38 @@ module Crystal
     Dir.mkdir_p Config.cache_dir
     File.join(Config.cache_dir, "onyx-run-#{basename}.tmp")
   end
+
+
+  module OptTests
+    @@test_opt_mode_a : Int32 = 2
+    @@test_opt_mode_b : Int32 = 2
+    @@test_opt_mode_c : Int32 = 2
+
+    def self.test_opt_mode_a
+      @@test_opt_mode_a
+    end
+
+    def self.test_opt_mode_a=(v)
+      @@test_opt_mode_a = v
+    end
+
+    def self.test_opt_mode_b
+      @@test_opt_mode_b
+    end
+
+    def self.test_opt_mode_b=(v)
+      @@test_opt_mode_b = v
+    end
+
+    def self.test_opt_mode_c
+      @@test_opt_mode_c
+    end
+
+    def self.test_opt_mode_c=(v)
+      @@test_opt_mode_c = v
+    end
+  end
+
 end
 
 class Crystal::OnyxCommand
@@ -325,6 +357,10 @@ USAGE
   end
 
 
+
+
+  # *TODO* add ParserPool code here!
+
   private def parse_command
     config = setup_compiler "parse", no_codegen: true
 
@@ -566,14 +602,25 @@ USAGE
         end
 
 
-        opts.on("--internal-test-a", "Internal: Test codegen opt 1") do
-          compiler.test_opt_mode = 1
+        opts.on("--test-a1", "Internal: Test forking codegen opt 1") do
+          OptTests.test_opt_mode_a = 1
         end
-        opts.on("--internal-test-b", "Internal: Test codegen opt 2") do
-          compiler.test_opt_mode = 2
+        opts.on("--test-a2", "Internal: Test spawning in-mem codegen opt 2") do
+          OptTests.test_opt_mode_a = 2
         end
-        opts.on("--internal-test-c", "Internal: Test codegen opt 3") do
-          compiler.test_opt_mode = 3
+
+        opts.on("--test-b1", "Internal: Test tos-non-caching opt 1") do
+          OptTests.test_opt_mode_b = 1
+        end
+        opts.on("--test-b2", "Internal: Test tos-caching opt 2") do
+          OptTests.test_opt_mode_b = 2
+        end
+
+        opts.on("--test-c1", "Internal: Test str-pool-std opt 1") do
+          OptTests.test_opt_mode_c = 1
+        end
+        opts.on("--test-c2", "Internal: Test str-pool-opt opt 2") do
+          OptTests.test_opt_mode_c = 2
         end
 
         # if debug_release_flags > 1  # both debug and release (!?)

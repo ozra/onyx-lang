@@ -315,9 +315,13 @@ module Crystal
         filenames.each do |filename|
           if @program.add_to_requires(filename)
             if filename.ends_with? ".ox"
-              parser = OnyxParser.new File.read(filename), @program.string_pool
+            #   parser = OnyxParser.new File.read(filename), @program.string_pool
+            # else
+            #   parser = Parser.new File.read(filename), @program.string_pool
+            # end
+              parser = OnyxParserPool.borrow(File.read(filename), @program.string_pool, nil)
             else
-              parser = Parser.new File.read(filename), @program.string_pool
+              parser = ParserPool.borrow(File.read(filename), @program.string_pool, nil)
             end
 
             _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
@@ -326,6 +330,12 @@ module Crystal
             parser.filename = filename
             parser.wants_doc = @program.wants_doc?
             nodes << FileNode.new(parser.parse.transform(self), filename)
+
+            if parser.is_a? OnyxParser
+              OnyxParserPool.leave parser
+            else
+              ParserPool.leave parser
+            end
 
           else
             _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"

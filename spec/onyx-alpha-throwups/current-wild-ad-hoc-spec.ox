@@ -647,12 +647,15 @@ say "Djur.Boo.Legs.is-six?(EIGHT) = {Djur.Boo.Legs.is-six?(Djur.Boo.Legs.EIGHT)}
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 type Blk
+   @foo = 1
+   @bar = "qwö"
+
    init(x, &fragment) ->  -- (T) -> U - does not work for fragment...
-      yield x + 1
+      yield x + @foo
       yield x - 2
    ;
    deinit() ->
-      say "Blk.deinit"
+      say "Blk.deinit {@bar}"
    ;
 ;
 
@@ -666,8 +669,8 @@ blk = Blk(4, (x)\
    say "in blk init fragment: {x}"
 )
 
-blk2 = Blk 7, (x)\
-   say "in blk2 init fragment: {x}"
+blk2 = Blk 7, \
+   say "in blk2 init fragment: { %1 }"
 
 blk3 = Blk
    1
@@ -684,7 +687,7 @@ foo-list = [] of Blk
 for i in 1..50000
    foo-list << Blk 47, \
 
-sleep 1
+-- sleep 1
 
 for i in 1..50000
    foo-list << Blk 47, \
@@ -2029,12 +2032,12 @@ say "varying word-delimiters"
 say bar.fn–e
 say bar.fn-e
 say bar.fn_e
-say bar.fnE
+-- say bar.fnE
 
 say "shit-sandwich"
-shit-sandwich =  bar.fnE
-shitSandwich = "arghh"
-say shitSandwich
+shit-sandwich =  bar.fn-e -- fnE
+-- shitSandwich = "arghh"
+-- say shitSandwich
 
 say bar.call()
 say bar()

@@ -30,6 +30,20 @@ module Crystal
       @slash_is_regex = true
       @wants_raw = false
       @string_pool = string_pool || StringPool.new
+      @tmp_buf = MemoryIO.new 1024
+    end
+
+    def re_init(string)
+      @reader = Char::Reader.new(string)
+      @line_number = 1
+      @column_number = 1
+      @filename = ""
+      @wants_regex = true
+      @doc_enabled = false
+      @comments_enabled = false
+      @count_whitespace = false
+      @slash_is_regex = true
+      @wants_raw = false
     end
 
     def filename=(filename)
@@ -574,7 +588,7 @@ module Crystal
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
             tmp = string_range_from_pool(start)
-            @token.value = @string_pool.get canonicalize_identifier tmp
+            @token.value = get_str canonicalize_identifier tmp
             @token.raw = tmp
           else
             unknown_token
@@ -610,7 +624,7 @@ module Crystal
             end
             @token.type = :GLOBAL
             tmp = string_range_from_pool(start)
-            @token.value = @string_pool.get canonicalize_identifier tmp
+            @token.value = get_str canonicalize_identifier tmp
             @token.raw = tmp
           else
             unknown_token
@@ -1136,21 +1150,22 @@ module Crystal
       end
       @token.type = :IDENT
       str = string_range_from_pool(start)
-      @token.value = @string_pool.get canonicalize_identifier str
+      @token.value = get_str canonicalize_identifier str
       @token.raw = str
       @token
     end
 
     def canonicalize_identifier(idfr_str)
-      do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
+      # do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
 
-      ret = String.build idfr_str.size * 3, do |str|
+      ret = (begin
+        @tmp_buf.clear
         idfr_str.each_char_with_index do |chr, i|
           if chr == '-'
-            str << '_'
+            @tmp_buf << '_'
 
           elsif chr == '–'
-            str << '_'
+            @tmp_buf << '_'
 
           # *TODO* _ONLY_ of onyxify and translate–humps set!!!
           # elsif do_hump_magic && ('A' <= chr <= 'Z')
@@ -1158,10 +1173,11 @@ module Crystal
           #   str << chr.downcase
 
           else
-            str << chr
+            @tmp_buf << chr
           end
         end
-      end
+        @tmp_buf.to_slice
+      end)
       ret
     end
 
@@ -2513,7 +2529,15 @@ module Crystal
     end
 
     def string_range_from_pool(start_pos, end_pos)
-      @string_pool.get slice_range(start_pos, end_pos)
+      get_str slice_range(start_pos, end_pos)
+    end
+
+    def get_str(str : String)
+      @string_pool.get str
+    end
+
+    def get_str(*str)
+      @string_pool.get *str
     end
 
     def slice_range(start_pos)

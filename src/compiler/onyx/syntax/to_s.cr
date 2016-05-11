@@ -54,6 +54,7 @@ class ToSVisitorsPool
    end
 end
 
+
 class ASTNode
    def to_s(io : Nil, as_kind = :auto)
       str = MemoryIO.new
@@ -62,16 +63,25 @@ class ASTNode
    end
 
    def to_s(io, as_kind = :auto)
-      # _dbg "ASTNode.to_s -> as_kind = #{as_kind}, self.class = #{self.class}"
-      if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-         # visitor = ToOnyxSVisitor.new(io)
-         ToOnyxSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+      if OptTests.test_opt_mode_b == 1
+         if (as_kind == :auto && @is_onyx) || as_kind == :onyx
+            visitor = ToOnyxSVisitor.new(io)
+            self.accept visitor
+         else
+            visitor = ToSVisitor.new(io)
             self.accept visitor
          end
+
       else
-         # visitor = ToSVisitor.new(io)
-         ToSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
-            self.accept visitor
+         # _dbg "ASTNode.to_s -> as_kind = #{as_kind}, self.class = #{self.class}"
+         if (as_kind == :auto && @is_onyx) || as_kind == :onyx
+            ToOnyxSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+               self.accept visitor
+            end
+         else
+            ToSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+               self.accept visitor
+            end
          end
       end
    end

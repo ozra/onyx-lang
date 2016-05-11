@@ -2,6 +2,45 @@ require "c/stdlib"
 require "c/stdio"
 require "c/string"
 
+# Assumes data is aligned to 32 bit!!!
+@[AlwaysInline]
+def my_memeq_aligned(a : Pointer, b : Pointer, len : Int) : Bool
+  # if a[0] != b[0]
+  #   *TODO* while >= 4b left compare 32bit ints
+
+  # a.memcmp(b, len) == 0
+
+  # int_len = len & ~3
+  # stop_a = a + int_len
+
+  # end_len = len - int_len
+
+  # # _dbg "my_memeq_aligned: a.class:#{a.class}, b.class:#{b.class}"
+  # # _dbg "my_memeq_aligned: full len:#{len}, int32-len:#{int_len}, end_len=#{end_len}"
+
+  # # compare first 0-n int32's
+  # while a != stop_a #int_len != 0
+  #   return false if (a as Pointer(Int32)).value != (b as Pointer(Int32)).value
+  #   a += 4; b += 4
+  # end
+
+  # # _dbg "my_memeq_aligned - passed int32 match"
+
+  # # compare last 0-3 bytes
+  # stop_a = a + end_len
+  stop_a = a + len
+
+  while a != stop_a #int_len != 0
+    return false if a.value != b.value
+    a += 1; b += 1
+  end
+
+  # _dbg "my_memeq_aligned - passed int8 end match"
+
+  return true
+end
+
+
 # A String represents an immutable sequence of UTF-8 characters.
 #
 # A String is typically created with a string literal, enclosing UTF-8 characters
@@ -1737,7 +1776,11 @@ class String
   def ==(other : self)
     return true if same?(other)
     return false unless bytesize == other.bytesize
-    to_unsafe.memcmp(other.to_unsafe, bytesize) == 0
+
+    # to_unsafe.memcmp(other.to_unsafe, bytesize) == 0
+
+    my_memeq_aligned to_unsafe, other.to_unsafe, bytesize
+
   end
 
   # Compares this string with *other*, returning -1, 0 or +1 depending on whether

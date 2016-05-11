@@ -17,8 +17,10 @@ module Crystal
 
   class Program
     def run(code, filename = nil)
+
       # *TODO* branching ox|cr !
       parser = Parser.new(code)
+
       parser.filename = filename
       node = parser.parse
       node = normalize node
@@ -958,7 +960,7 @@ module Crystal
     end
 
     def class_var_global_name(node)
-      "#{node.owner}#{node.name.gsub('@', ':')}"
+      @mod.string_pool.get node.owner.to_s, node.name.gsub('@', ':')
     end
 
     def visit(node : TypeDeclaration)
@@ -1912,9 +1914,12 @@ module Crystal
     end
 
     def build_string_constant(str, name = "str")
-      name = "#{name[0..18]}..." if name.bytesize > 18
+      if name.bytesize > 18
+        name = "'#{name[0..18]}...'"
+      else
+        name = "'#{name}'"
+      end
       name = name.gsub '@', '.'
-      name = "'#{name}'"
       key = StringKey.new(@llvm_mod, str)
       @strings[key] ||= begin
         global = @llvm_mod.globals.add(@llvm_typer.llvm_string_type(str.bytesize), name)

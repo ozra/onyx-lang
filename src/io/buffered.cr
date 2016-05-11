@@ -145,7 +145,8 @@ module IO::Buffered
       return ((first & 0x07) << 18 | (second << 12) | (third << 6) | fourth).chr, 4
     end
 
-    raise InvalidByteSequenceError.new
+    # *TODO*
+    raise InvalidByteSequenceError.new  "invalid byte sequence in io buffered read_char_with_bytesize"
   end
 
   # Buffered implementation of `IO#read(slice)`.

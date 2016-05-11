@@ -20,34 +20,34 @@ ifdef !release
   end
 end
 
-def _dbg_on()
+macro _dbg_on()
   ifdef !release
     DebuggingData.dbg_on
   end
 end
 
-def _dbg_off()
+macro _dbg_off()
   ifdef !release
     DebuggingData.dbg_off
   end
 end
 
-def _dbg(*objs)
+macro _dbg(*objs)
   ifdef !release
     if DebuggingData.dbg_output_on?
-      STDERR.puts objs.join ", "
+      STDERR.puts {{objs}}.join ", "
     end
   end
 end
 
-def _dbg_overview(*objs)
+macro _dbg_overview(*objs)
   ifdef !release
-    STDERR.puts objs.join ", "
+    STDERR.puts {{objs}}.join ", "
   end
 end
 
-def _dbg_always(*objs)
-  STDERR.puts objs.join ", "
+macro _dbg_always(*objs)
+  STDERR.puts {{objs}}.join ", "
 end
 
 struct Char
@@ -55,3 +55,34 @@ struct Char
     ord > v
   end
 end
+
+
+
+macro reinit_pool(typ, *params)
+   class {{typ}}Pool
+      @@pool = [] of {{typ}}
+
+      def self.borrow({{*params}}) : {{typ}}
+         if @@pool.size > 0
+            obj = @@pool.pop.not_nil!
+            obj.re_init {{*params}}
+            obj.not_nil!
+         else
+            {{typ}}.new {{*params}}
+         end
+      end
+
+      def self.with({{*params}}, &block)
+         obj = borrow {{*params}}
+         ret = yield obj
+         leave obj
+         ret
+      end
+
+      def self.leave(obj : {{typ}}) : Nil
+         @@pool << obj
+         nil
+      end
+   end
+end
+

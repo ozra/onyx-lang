@@ -2,7 +2,12 @@ require "set"
 require "./ast"
 require "./lexer"
 
+require "../../debug_utils/global_pollution"
+
 module Crystal
+
+  reinit_pool Parser, a, b, c
+
   # *TODO* Move!
   module CommonParserMethods
      def new_numeric_literal(token : Token)
@@ -13,14 +18,15 @@ module Crystal
         _dbg "crystal-parse: new_numeric_literal -> #{value} '#{suffix}'"
 
         # *TODO* maybe add for unspeced too!?
+        suffix ||= "default"
 
         if kind == :user_suffix
            if /[.eE]/ =~ value
               new_kind = :unspec_real
-              suffix_prefix_type = "real"
+              suffix_prefix_type = "real__"
            else
               new_kind = :unspec_int
-              suffix_prefix_type = "int"
+              suffix_prefix_type = "int__"
            end
 
            # ifdef !release
@@ -29,7 +35,7 @@ module Crystal
 
            return Call.new(
               nil,
-              @string_pool.get("_suffix_#{suffix_prefix_type}__#{suffix}"),
+              get_str("_suffix_", suffix_prefix_type, suffix),
               [ NumberLiteral.new(value, new_kind) ] of ASTNode,
               nil,
               nil,
@@ -60,13 +66,21 @@ module Crystal
     property type_nest : Int32
     getter? wants_doc : Bool
     @block_arg_name : String?
+    @def_vars : Array(Set(String))
 
     def self.parse(str, string_pool : StringPool? = nil, def_vars = [Set(String).new]) : ASTNode
       new(str, string_pool, def_vars).parse
     end
 
-    def initialize(str, string_pool : StringPool? = nil, @def_vars = [Set(String).new])
+    def initialize(str, string_pool : StringPool? = nil, deffed_var_list = nil)
       super(str, string_pool)
+
+      if deffed_var_list
+        @def_vars = deffed_var_list
+      else
+        @def_vars = [Set(String).new]
+      end
+
       @last_call_has_parenthesis = true
       @temp_token = Token.new
       @unclosed_stack = [] of Unclosed
@@ -89,6 +103,37 @@ module Crystal
         @debug_specific_flag_ = false
       end
 
+    end
+
+    def re_init(str, string_pool : StringPool? = nil, deffed_var_list = nil)
+      super(str)
+
+      if deffed_var_list
+        @def_vars = deffed_var_list
+      else
+        @def_vars = [Set(String).new]
+      end
+
+      @last_call_has_parenthesis = true
+      @unclosed_stack.clear
+      @calls_super = false
+      @calls_initialize = false
+      @calls_previous_def = false
+      @uses_block_arg = false
+      @assigns_special_var = false
+      @def_nest = 0
+      @type_nest = 0
+      @block_arg_count = 0
+      @in_macro_expression = false
+      @stop_on_yield = 0
+      @inside_c_struct = false
+      @wants_doc = false
+      @doc_enabled = false
+      @no_type_declaration = 0
+
+      ifdef !release
+        @debug_specific_flag_ = false
+      end
     end
 
     def wants_doc=(wants_doc)
@@ -720,14 +765,14 @@ module Crystal
                 arg = parse_single_arg
               end
 
-              atomic = Call.new(atomic, "#{name}=", [arg] of ASTNode, name_column_number: name_column_number).at(location)
+              atomic = Call.new(atomic, get_str(name,"="), [arg] of ASTNode, name_column_number: name_column_number).at(location)
               next
             when :"+=", :"-=", :"*=", :"/=", :"%=", :"|=", :"&=", :"^=", :"**=", :"<<=", :">>="
               # Rewrite 'f.x += value' as 'f.x=(f.x + value)'
               method = @token.type.to_s.byte_slice(0, @token.type.to_s.size - 1)
               next_token_skip_space_or_newline
               value = parse_op_assign
-              atomic = Call.new(atomic, "#{name}=", [Call.new(Call.new(atomic.clone, name, name_column_number: name_column_number), method, [value] of ASTNode, name_column_number: name_column_number)] of ASTNode, name_column_number: name_column_number).at(location)
+              atomic = Call.new(atomic, get_str(name,"="), [Call.new(Call.new(atomic.clone, name, name_column_number: name_column_number), method, [value] of ASTNode, name_column_number: name_column_number)] of ASTNode, name_column_number: name_column_number).at(location)
               next
             when :"||="
               # Rewrite 'f.x ||= value' as 'f.x || f.x=(value)'
@@ -736,7 +781,7 @@ module Crystal
 
               atomic = Or.new(
                 Call.new(atomic, name).at(location),
-                Call.new(atomic.clone, "#{name}=", value).at(location)
+                Call.new(atomic.clone, get_str(name,"="), value).at(location)
               ).at(location)
               next
             when :"&&="
@@ -746,7 +791,7 @@ module Crystal
 
               atomic = And.new(
                 Call.new(atomic, name).at(location),
-                Call.new(atomic.clone, "#{name}=", value).at(location)
+                Call.new(atomic.clone, get_str(name,"="), value).at(location)
               ).at(location)
               next
             else
@@ -1453,7 +1498,7 @@ module Crystal
       next_token_skip_space
 
       if @token.type == :"."
-        block_arg_name = "__arg#{@block_arg_count}"
+        block_arg_name = get_str("__arg",@block_arg_count.to_s)
         @block_arg_count += 1
 
         obj = Var.new(block_arg_name)
@@ -1485,7 +1530,7 @@ module Crystal
           if @token.type == :"=" && call.is_a?(Call)
             next_token_skip_space
             exp = parse_op_assign
-            call.name = "#{call.name}="
+            call.name = get_str(call.name,"=")
             call.args << exp
           end
         else
@@ -1510,12 +1555,12 @@ module Crystal
               exp = parse_op_assign
               check :")"
               next_token_skip_space
-              call.name = "#{call.name}="
+              call.name = get_str(call.name,"=")
               call.args = [exp] of ASTNode
               call = parse_atomic_method_suffix call, location
             else
               exp = parse_op_assign
-              call.name = "#{call.name}="
+              call.name = get_str(call.name,"=")
               call.args = [exp] of ASTNode
             end
           else
@@ -1524,7 +1569,7 @@ module Crystal
             if @token.type == :"=" && call.is_a?(Call) && call.name == "[]"
               next_token_skip_space
               exp = parse_op_assign
-              call.name = "#{call.name}="
+              call.name = get_str(call.name,"=")
               call.args << exp
             end
           end
@@ -2919,7 +2964,7 @@ module Crystal
 
         next_token
         if @token.type == :"="
-          name = "#{name}="
+          name = get_str(name,"=")
           next_token_skip_space
         else
           skip_space
@@ -2951,7 +2996,7 @@ module Crystal
           name_column_number = @token.column_number
           next_token
           if @token.type == :"="
-            name = "#{name}="
+            name = get_str(name,"=")
             next_token_skip_space
           else
             skip_space

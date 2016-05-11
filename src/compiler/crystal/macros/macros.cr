@@ -28,19 +28,47 @@ module Crystal
       generated_source = expanded_macro.source
       begin
         if the_macro.is_onyx
-          parser = OnyxParser.new(generated_source, @program.string_pool, [vars.dup])
+          parser = OnyxParserPool.borrow(generated_source, @program.string_pool, [vars.dup])
+          # parser = OnyxParser.new(generated_source, @program.string_pool, [vars.dup])
           parser.begin_macro_parse_mode
+          parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
+
+          parser.visibility = node.visibility
+          parser.def_nest = 1 if inside_def
+          parser.type_nest = 1 if inside_type
+          parser.wants_doc = @program.wants_doc?
+
+          generated_node = yield parser
+          OnyxParserPool.leave parser
+
         else
-          parser = Parser.new(generated_source, @program.string_pool, [vars.dup])
+          parser = ParserPool.borrow(generated_source, @program.string_pool, [vars.dup])
+          # parser = Parser.new(generated_source, @program.string_pool, [vars.dup])
+          parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
+
+          parser.visibility = node.visibility
+          parser.def_nest = 1 if inside_def
+          parser.type_nest = 1 if inside_type
+          parser.wants_doc = @program.wants_doc?
+
+          generated_node = yield parser
+          ParserPool.leave parser
+
         end
-        parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
+        # parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
 
-        parser.visibility = node.visibility
-        parser.def_nest = 1 if inside_def
-        parser.type_nest = 1 if inside_type
-        parser.wants_doc = @program.wants_doc?
+        # parser.visibility = node.visibility
+        # parser.def_nest = 1 if inside_def
+        # parser.type_nest = 1 if inside_type
+        # parser.wants_doc = @program.wants_doc?
 
-        generated_node = yield parser
+        # generated_node = yield parser
+
+        # if parser.is_a? OnyxParser
+        #   OnyxParserPool.leave parser
+        # else
+        #   ParserPool.leave parser
+        # end
 
         if yields = expanded_macro.yields
           generated_node = generated_node.transform(YieldsTransformer.new(yields))

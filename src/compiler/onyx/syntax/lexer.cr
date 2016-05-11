@@ -22,7 +22,6 @@ module Crystal
     getter reader : Char::Reader
     getter token : Token
     getter line_number : Int32
-
     @filename : String | VirtualFile | Nil
     @token_end_location : Location?
     @string_pool : StringPool
@@ -44,6 +43,7 @@ module Crystal
       @slash_is_regex = true
       @wants_raw = false
       @string_pool = string_pool || StringPool.new
+      @tmp_buf = MemoryIO.new 1024
 
       @dbg–switch = false
       @dbg–tail–switch = false
@@ -58,6 +58,33 @@ module Crystal
 
       skip_shebang
 
+    end
+
+    def re_init(string)
+      @reader = Char::Reader.new(string)
+      @token.type = :ACTUAL_BOF
+      @prev_token_type = :ACTUAL_BOF
+      @line_number = 1
+      @column_number = 1
+      @filename = ""
+      @wants_regex = true
+      @doc_enabled = false
+      @comments_enabled = false
+      @count_whitespace = false
+      @slash_is_regex = true
+      @wants_raw = false
+
+      @dbg–switch = false
+      @dbg–tail–switch = false
+      @dbgindent__ = 0
+
+      @indent = 0
+      @macro_base_indent_level = -1
+
+      @error_stack.clear
+      @next_token_continuation_state = :AUTO
+
+      skip_shebang
     end
 
     # DEBUG UTILS #
@@ -789,7 +816,7 @@ module Crystal
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
-            @token.value = @string_pool.get string_range(start).tr("-–", "__")
+            @token.value = get_str string_range(start).tr("-–", "__")
           else
             unknown_token
           end
@@ -2005,28 +2032,36 @@ module Crystal
       @token.type = :IDFR
 
       idfr_str = string_range_from_pool start
-
-      @token.value = @string_pool.get String.build idfr_str.size * 2, do |str|
-        idfr_str.each_char_with_index do |chr, i|
-          if chr == '-'
-            str << '_'
-
-          elsif chr == '–'
-            str << '_'
-
-          elsif do_magic &&
-                  'A' <= chr <= 'Z' &&
-                  (i != 0 && !(['\\', '!'].includes?(idfr_str[i - 1])))
-            str << '_'
-            str << chr.downcase
-          else
-            str << chr
-          end
-        end
-      end
+      @token.value = get_str canonicalize_identifier idfr_str
 
       dbg_lex "scanned idfr: '#{@token.value}', curch = #{curch}"
       nil
+    end
+
+    def canonicalize_identifier(idfr_str)
+      # do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
+
+      ret = (begin
+        @tmp_buf.clear
+        idfr_str.each_char_with_index do |chr, i|
+          if chr == '-'
+            @tmp_buf << '_'
+
+          elsif chr == '–'
+            @tmp_buf << '_'
+
+          # *TODO* _ONLY_ of onyxify and translate–humps set!!!
+          # elsif do_hump_magic && ('A' <= chr <= 'Z')
+          #   str << '_'
+          #   str << chr.downcase
+
+          else
+            @tmp_buf << chr
+          end
+        end
+        @tmp_buf.to_slice
+      end)
+      ret
     end
 
     # def scan_pragma(start)
@@ -2106,7 +2141,7 @@ module Crystal
         suffix = nil
         kind = :unspec
       else
-        suffix = @string_pool.get string_range(start, cur_pos).gsub(/[-–]/, '_')
+        suffix = get_str string_range(start, cur_pos).gsub(/[-–]/, '_')
         kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
       end
 
@@ -3049,7 +3084,15 @@ module Crystal
     end
 
     def string_range_from_pool(start_pos, end_pos)
-      @string_pool.get slice_range(start_pos, end_pos)
+      get_str slice_range(start_pos, end_pos)
+    end
+
+    def get_str(str : String)
+      @string_pool.get str
+    end
+
+    def get_str(*str)
+      @string_pool.get *str
     end
 
     def slice_range(start_pos)

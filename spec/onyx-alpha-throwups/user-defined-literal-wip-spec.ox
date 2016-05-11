@@ -3,7 +3,7 @@ _debug_compiler_start_ = 1
 
 type Ohm
    init(@value Real) ->
-
+   to-s() -> "{@value}Ω"
 
 
 -- *TODO* suffix specific syntax - doesn't get prettier :-/ the important thing

@@ -27,6 +27,35 @@ alias TagLiteral = SymbolLiteral
 MACRO_INDENT_FLAG = -99
 
 
+reinit_pool OnyxParser, a, b, c
+
+# class OnyxParserPool
+#    @@pool = [] of OnyxParser
+
+#    def self.borrow(a, b, c) : ToOnyxSVisitor
+#       if @@pool.size > 0
+#          obj = @@pool.pop.not_nil!
+#          obj.re_init a, b, c
+#          obj.not_nil!
+#       else
+#          ToOnyxSVisitor.new a, b, c
+#       end
+#    end
+
+#    def self.with(a, b, c, &block)
+#       obj = borrow a, b, c
+#       ret = yield obj
+#       leave obj
+#       ret
+#    end
+
+#    def self.leave(obj : OnyxParser) : Nil
+#       @@pool << obj
+#       nil
+#    end
+# end
+
+
          ########     ###    ########   ######  ######## ########
          ##     ##   ## ##   ##     ## ##    ## ##       ##     ##
          ##     ##  ##   ##  ##     ## ##       ##       ##     ##
@@ -45,16 +74,24 @@ class OnyxParser < OnyxLexer
    property type_nest : Int32
    getter? wants_doc : Bool
    @explicit_block_param_name : String?
+   @scope_stack : ScopeStack
 
 
    def self.parse(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
-      new(str, string_pool, deffed_vars_list).parse
+      OnyxParserPool.with(str, string, deffed_vars_list) do |parser|
+         parser.parse
+      end
+      # new(str, string_pool, deffed_vars_list).parse
    end
 
-   def initialize(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
+   def initialize(str, string_pool : StringPool? = nil, deffed_vars_list = nil)
       super(str, string_pool)
 
-      @scope_stack = ScopeStack.new deffed_vars_list
+      if deffed_vars_list
+         @scope_stack = ScopeStack.new deffed_vars_list
+      else
+         @scope_stack = ScopeStack.new [Set(String).new]
+      end
 
       @temp_token = Token.new
       @calls_super = false
@@ -95,6 +132,55 @@ class OnyxParser < OnyxLexer
       end
 
    end
+
+   def re_init(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
+      super(str)
+
+      # *TODO* post issue in crystal about inference not handling this
+      if deffed_vars_list
+         @scope_stack = ScopeStack.new deffed_vars_list
+      else
+         @scope_stack = ScopeStack.new [Set(String).new]
+         # @scope_stack.clear
+      end
+      @calls_super = false
+      @calls_initialize = false
+      @calls_previous_def = false
+      @uses_explicit_fragment_param = false
+      @assigns_special_var = false
+
+      # *TODO* clean these three up - similar chores
+      @def_nest = 0
+      @certain_def_count = 0
+      @def_parsing = 0
+
+      @control_construct_parsing = 0 # *TODO* this could probably be just a flag, huh! *VERIFY*
+
+      @type_nest = 0
+
+      @anon_param_counter = 1
+
+      @explicit_block_param_count = 0
+      @in_macro_expression = false
+      @stop_on_yield = 0
+      @inside_c_struct = false
+      @wants_doc = false
+
+      @one_line_nest = 0
+      @was_just_nest_end = false
+      @significant_newline = false
+
+      @macro_parse_mode_count = 0
+
+      @unclosed_stack.clear
+      @nesting_stack = NestingStack.new
+      # @nesting_stack.clear
+
+      ifdef !release
+         @debug_specific_flag_ = false
+      end
+   end
+
 
    def begin_macro_parse_mode
       @macro_parse_mode_count += 1
@@ -193,6 +279,7 @@ class OnyxParser < OnyxLexer
             _dbg_on
             _dbg "onyx specific parse debug:".white
             _dbg expressions
+            # STDERR.flush
          end
       end
       # ifdef !release
@@ -204,8 +291,6 @@ class OnyxParser < OnyxLexer
       #    STDERR.puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
 
       # end
-
-      STDERR.flush
 
       expressions
    end
@@ -4343,7 +4428,7 @@ class OnyxParser < OnyxLexer
                               name_line_number, name_column_number, doc
 
       if name_prefix
-         node.name = "#{name_prefix}#{name}"
+         node.name = get_str name_prefix, name
 
          dbg "defines suffix '#{node.name}'"
 
@@ -4351,8 +4436,8 @@ class OnyxParser < OnyxLexer
 
       else
          node2 = node.clone
-         node.name = "_suffix_int__#{name}"
-         node2.name = "_suffix_real__#{name}"
+         node.name = get_str "_suffix_int__", name
+         node2.name = get_str "_suffix_real__", name
 
          dbg "defines suffix '#{node.name}' and '#{node2.name}'"
 

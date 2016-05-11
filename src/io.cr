@@ -403,7 +403,8 @@ module IO
     fourth = read_utf8_masked_byte
     return ((first & 0x07) << 18 | (second << 12) | (third << 6) | fourth).chr, 4 if first < 0xf8
 
-    raise InvalidByteSequenceError.new
+    # *TODO*
+    raise InvalidByteSequenceError.new  "invalid byte sequence in io read_char_with_bytesize"
   end
 
   private def read_utf8_masked_byte

@@ -362,6 +362,21 @@ class Array(T)
     @buffer[index] = value
   end
 
+  # Sets the given value at the given index without checking bounds or handling
+  # negative indexing. This is a "raw power" method.
+  #
+  # ```
+  # ary = [1, 2, 3]
+  # ary.set_unsafe(0, 5)
+  # p ary # => [5,2,3]
+  #
+  # ary.set_unsafe(3, 5) # => Most likely CRASH!
+  # ```
+  @[AlwaysInline]
+  def set_unsafe(index : Int, value : T)
+    @buffer[index] = value
+  end
+
   # Replaces a subrange with a single value. All elements in the range
   # `index...index+count` are removed and replaced by a single element
   # *value*.
@@ -564,6 +579,19 @@ class Array(T)
     else
       yield
     end
+  end
+
+  # Returns the element at the given index, without checking bounds!
+  # Does not handle negative indexing, this is a "raw power" method.
+  #
+  # ```
+  # a = [:foo, :bar]
+  # a.at_unsafe(0)  # => :foo
+  # a.at_unsafe(2)  # Most likely CRASH!
+  # ```
+  @[AlwaysInline]
+  def at_unsafe(index : Int)
+    @buffer[index]
   end
 
   # Returns a tuple populated with the elements at the given indexes.
