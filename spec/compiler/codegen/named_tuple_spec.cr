@@ -15,6 +15,27 @@ describe "Code gen: named tuple" do
       )).to_i.should eq(42)
   end
 
+  it "codegens tuple nilable index (1)" do
+    run(%(
+      t = {x: 42, y: 'a'}
+      t[:x]? || 84
+      )).to_i.should eq(42)
+  end
+
+  it "codegens tuple nilable index (2)" do
+    run(%(
+      t = {x: 'a', y: 42}
+      t[:y]? || 84
+      )).to_i.should eq(42)
+  end
+
+  it "codegens tuple nilable index (3)" do
+    run(%(
+      t = {x: 'a', y: 42}
+      t[:z]? || 84
+      )).to_i.should eq(84)
+  end
+
   it "passes named tuple to def" do
     run("
       def foo(t)
@@ -178,5 +199,68 @@ describe "Code gen: named tuple" do
 
       foo[:x]
       )).to_i.should eq(42)
+  end
+
+  it "allows named tuple covariance" do
+    run(%(
+       class Obj
+         def initialize
+           @tuple = {foo: Foo.new}
+         end
+
+         def tuple=(@tuple)
+         end
+
+         def tuple
+           @tuple
+         end
+       end
+
+       class Foo
+         def bar
+           21
+         end
+       end
+
+       class Bar < Foo
+         def bar
+           42
+         end
+       end
+
+       obj = Obj.new
+       obj.tuple = {foo: Bar.new}
+       obj.tuple[:foo].bar
+       )).to_i.should eq(42)
+  end
+
+  it "merges two named tuple types with same keys but different types (1)" do
+    run(%(
+       def foo
+         if 1 == 2
+           {x: "foo", y: 10}
+         else
+           {y: nil, x: "foo"}
+         end
+       end
+
+       val = foo[:y]
+       val || 20
+       )).to_i.should eq(20)
+  end
+
+  it "merges two named tuple types with same keys but different types (2)" do
+    run(%(
+       def foo
+         if 1 == 1
+           {x: "foo", y: 10}
+         else
+           {y: nil, x: "foo"}
+         end
+       end
+
+       val = foo[:y]
+       val || 20
+       )).to_i.should eq(10)
   end
 end

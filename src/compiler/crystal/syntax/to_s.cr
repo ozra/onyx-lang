@@ -118,13 +118,21 @@ module Crystal
         @str << " "
       end
 
+      space = false
       @str << "{"
+
       node.entries.each_with_index do |entry, i|
         @str << ", " if i > 0
+
+        space = i == 0 && entry.key.is_a?(TupleLiteral) || entry.key.is_a?(NamedTupleLiteral) || entry.key.is_a?(HashLiteral)
+        @str << " " if space
+
         entry.key.accept self
         @str << " => "
         entry.value.accept self
       end
+
+      @str << " " if space
       @str << "}"
       if of = node.of
         @str << " "
@@ -335,8 +343,7 @@ module Crystal
           printed_arg = false
           node.args.each_with_index do |arg, i|
             @str << ", " if printed_arg
-            arg_needs_parens = arg.is_a?(Cast)
-            in_parenthesis(arg_needs_parens) { arg.accept self }
+            arg.accept self
             printed_arg = true
           end
           if named_args = node.named_args
@@ -935,10 +942,15 @@ module Crystal
 
     def visit(node : TupleLiteral)
       @str << "{"
+
+      first = node.elements.first?
+      space = first.is_a?(TupleLiteral) || first.is_a?(NamedTupleLiteral) || first.is_a?(HashLiteral)
+      @str << " " if space
       node.elements.each_with_index do |exp, i|
         @str << ", " if i > 0
         exp.accept self
       end
+      @str << " " if space
       @str << "}"
       false
     end
@@ -1195,20 +1207,23 @@ module Crystal
     end
 
     def visit(node : Cast)
-      accept_with_maybe_begin_end node.obj
-      @str << " "
-      @str << keyword("as")
-      @str << " "
-      node.to.accept self
-      false
+      visit_cast node, "as"
     end
 
     def visit(node : NilableCast)
+      visit_cast node, "as?"
+    end
+
+    def visit_cast(node, keyword)
+      need_parens = need_parens(node.obj)
+      @str << "(" if need_parens
       accept_with_maybe_begin_end node.obj
-      @str << " "
-      @str << keyword("as?")
-      @str << " "
+      @str << ")" if need_parens
+      @str << "."
+      @str << keyword(keyword)
+      @str << "("
       node.to.accept self
+      @str << ")"
       false
     end
 
