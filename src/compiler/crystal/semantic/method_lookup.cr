@@ -141,10 +141,12 @@ module Crystal
       named_args = signature.named_args
       splat_index = a_def.splat_index
 
-      # If there's a splat in the method and named args in the call,
-      # there's no match (it's confusing to determine what should happen)
-      if named_args && splat_index
-        return nil
+      # If there are arguments past the splat index and no named args, there's no match,
+      # unless all args past it have default values
+      if splat_index && a_def.args.size > splat_index + 1 && !named_args
+        unless (splat_index + 1...a_def.args.size).all? { |i| a_def.args[i].default_value }
+          return nil
+        end
       end
 
       # If there are named args we must check that all mandatory args
@@ -199,10 +201,13 @@ module Crystal
               end
             end
 
-            unless match_arg(named_arg.value.type, a_def.args[found_index], context)
+            unless match_arg(named_arg.type, a_def.args[found_index], context)
               return nil
             end
           else
+            # If there's a double splat it's ok, the named arg will be put there
+            next if a_def.double_splat
+
             return nil
           end
         end

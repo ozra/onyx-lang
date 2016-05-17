@@ -146,20 +146,6 @@ module Crystal
       exit 1
     end
 
-    # private def check_bc_flags_changed(output_dir)
-    #   bc_flags_changed = true
-    #   current_bc_flags = "#{@target_triple}|#{@mcpu}|#{@release}|#{@link_flags}"
-    #   bc_flags_filename = "#{output_dir}/bc_flags"
-    #   if File.file?(bc_flags_filename)
-    #     previous_bc_flags = File.read(bc_flags_filename).strip
-    #     bc_flags_changed = previous_bc_flags != current_bc_flags
-    #   end
-    #   File.open(bc_flags_filename, "w") do |file|
-    #     file.puts current_bc_flags
-    #   end
-    #   bc_flags_changed
-    # end
-
     private def codegen(program : Program, node, sources, output_filename)
 
       _dbg_overview "\nCompiler stage: Compiler.codegen (node) \"#{output_filename}\"\n\n".white
@@ -182,8 +168,6 @@ module Crystal
       end
 
       cache_dir.cleanup
-
-      # bc_flags_changed = check_bc_flags_changed output_dir
 
       units = llvm_modules.map do |type_name, llvm_mod|
         CompilationUnit.new(self, type_name, llvm_mod, output_dir, bc_flags_md5)
@@ -230,29 +214,19 @@ module Crystal
       _dbg_overview "\nCompiler stage: Compiler.codegen (units) \"#{output_filename}\"\n\n".white
 
       object_names = units.map &.object_filename
-      multithreaded = LLVM.start_multithreaded
-
-      # First write bitcodes: it breaks if we paralellize it
-      unless multithreaded
-        timing("Codegen (onyx)") do
-          units.each &.write_bitcode
-        end
-      end
-
-      msg = multithreaded ? "Codegen (bc+obj)" : "Codegen (obj)"
       target_triple = target_machine.triple
 
-      timing(msg) do
+      timing("Codegen (bc+obj)") do
         if units.size == 1
           first_unit = units.first
 
-          codegen_single_unit(program, first_unit, target_triple, multithreaded)
+          codegen_single_unit(program, first_unit, target_triple)
 
           if emit = @emit
             first_unit.emit(emit, original_output_filename || output_filename)
           end
         else
-          codegen_many_units(program, units, target_triple, multithreaded)
+          codegen_many_units(program, units, target_triple)
         end
       end
 
@@ -270,54 +244,14 @@ module Crystal
       end
     end
 
-    private def codegen_many_units(program, units, target_triple, multithreaded)
-      case OptTests.test_opt_mode_a
-      when 1 then codegen_many_units_fork program, units, target_triple, multithreaded
-      else        codegen_many_units_spawn program, units, target_triple, multithreaded
-      end
-    end
-
-    private def codegen_many_units_fork(program, units, target_triple, multithreaded)
-      jobs_count = 0
-      wait_channel = Channel(Nil).new(@n_threads)
-
-      perf_tmp = Time.now
-
-      while unit = units.pop?
-        fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
-        jobs_count += 1
-
-        if jobs_count >= @n_threads
-          wait_channel.receive
-          jobs_count -= 1
-        end
-      end
-
-      while jobs_count > 0
-        wait_channel.receive
-        jobs_count -= 1
-      end
-
-    end
-
-    private def fork_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
-      spawn do
-        codegen_process = fork {
-          codegen_single_unit(program, unit, target_triple, multithreaded)
-        }
-        codegen_process.wait
-        wait_channel.send nil
-      end
-    end
-
-    private def codegen_many_units_spawn(program, units, target_triple, multithreaded)
+    private def codegen_many_units(program, units, target_triple)
       jobs_count = 0
       wait_channel = Channel(Nil).new(@n_concurrent)
 
       perf_tmp = Time.now
 
       while unit = units.pop?
-        spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+        spawn_and_codegen_single_unit(program, unit, target_triple, wait_channel)
         jobs_count += 1
 
         if jobs_count >= @n_concurrent
@@ -333,14 +267,14 @@ module Crystal
 
     end
 
-    private def spawn_and_codegen_single_unit(program, unit, target_triple, multithreaded, wait_channel)
+    private def spawn_and_codegen_single_unit(program, unit, target_triple, wait_channel)
       spawn do
-        codegen_single_unit(program, unit, target_triple, multithreaded)
+        codegen_single_unit(program, unit, target_triple)
         wait_channel.send nil
       end
     end
 
-    private def codegen_single_unit(program, unit, target_triple, multithreaded)
+    private def codegen_single_unit(program, unit, target_triple)
       unit.llvm_mod.target = target_triple
       if program.has_flag?("x86_64")
         unit.llvm_mod.data_layout = DataLayout64
@@ -420,8 +354,6 @@ module Crystal
 
       @name : String
       @output_dir : String
-      # @bc_flags_changed : Bool
-      @bc_name_new : String?
 
       def initialize(@compiler, type_name, @llvm_mod, @output_dir, bc_flags_md5)
         type_name = "_main" if type_name == ""
@@ -441,123 +373,80 @@ module Crystal
         end
       end
 
-      def write_bitcode
-        write_bitcode(bc_name_new)
+      def buffer_to_slice(buf : LibLLVM::MemoryBufferRef)
+        ptr = LibLLVM.get_buffer_start(buf)
+        size = LibLLVM.get_buffer_size(buf)
+        ret = Slice.new ptr, size
+        ret
       end
 
-      def write_bitcode(output_name)
-        llvm_mod.write_bitcode output_name
-      end
+      def compare_slice_to_file(buffer, filename)
+        return false if File.size(filename) != buffer.size
 
-      def say_stats(msg : String)
-        return unless @compiler.stats?
-        puts msg
-      end
-
-      def compare_mem_to_file(buf_ptr, buf_size, filename)
-        return false if !File.exists?(filename)
-        return false if File.size(filename) != buf_size
-        walk_ptr = buf_ptr
         File.open(filename, "rb") do |file|
           read_buf = uninitialized UInt8[8192]
+          read_buf_ptr = read_buf.to_unsafe
+          walk_ptr = buffer.to_unsafe
+          stop_ptr = buffer.to_unsafe + buffer.size
+
           while true
-            gotten = file.read read_buf.to_slice
-            _dbg "gotten bytes from disk == #{gotten}"
-            return true if gotten == 0
-            if read_buf.to_unsafe.memcmp(walk_ptr, gotten) != 0
-              _dbg "memcmp NOT ok!".red
-              return false
-            end
-            walk_ptr += gotten
-            _dbg "another memcmp ok"
+            return true if walk_ptr == stop_ptr
+            gotten_bytes = file.read read_buf.to_slice
+            return false if read_buf_ptr.memcmp(walk_ptr, gotten_bytes) != 0
+            walk_ptr += gotten_bytes
           end
         end
+
         return false
       end
 
       def tempify_name(filename)
-        filename + "___writing___.tmp" # Reasonable insurance it won't clash with a real filename
+        # Just some reasonable insurance it won't clash with a real filename
+        filename + "__TMP__.tmp"
       end
 
-      def write_mem_to_file_via_tmp(buf_ptr, buf_size, filename)
-        # *TODO* error handling
-        filename_tmp = tempify_name filename
-        File.open(filename_tmp, "w") do |file|
-          file.write(buf_ptr.to_slice(buf_size))
+      def via_temp_file(filename, &block)
+        tmp_name = tempify_name filename
+        yield tmp_name
+        File.rename tmp_name, filename
+      end
+
+      def write_buf_to_file(buffer, filename)
+        via_temp_file(filename) do |tmp_name|
+          # Do _not_ use File.write - uses to_s => wrecks comparison
+          File.open(tmp_name, "w") { |file| file.write buffer }
         end
-        File.rename(filename_tmp, filename)
       end
-
-      # def compile_c
-      #   # *TODO* another model for release...
-      #   if compiler.release?
-      #     Crystal.timing("LLVM Optimizer", @compiler.stats?) do
-      #       compiler.optimize llvm_mod
-      #     end
-      #   end
-
-      #   obj_buf = uninitialized LibLLVM::MemoryBufferRef
-      #   # *TODO* buf as out buf, but initialize value to 0 (the void ptr) to
-      #   # to ensure stable null value on error
-
-      #   _dbg "emit_obj_to_mem"
-      #   compiler.target_machine.emit_obj_to_mem llvm_mod, pointerof(obj_buf)
-
-      #   obj_buf_ptr = LibLLVM.get_buffer_start(obj_buf)
-      #   obj_buf_size = LibLLVM.get_buffer_size(obj_buf)
-
-      #   # We read in existing obj–file and compare. Why? Because it gets it in
-      #   # to file–cache which is good for the linking stage. And opposite: if
-      #   # we write to it although the same, we destroy the file–caching. Slow!
-      #   compare_ok = compare_mem_to_file obj_buf_ptr, obj_buf_size, object_name
-
-      #   if !compare_ok
-      #     # Render to tmp name to never leave partial obj–files in real name
-      #     write_mem_to_file_via_tmp obj_buf_ptr, obj_buf_size, object_name
-      #   end
-
-      #   _dbg "dispose_memory_buffer obj_buf"
-      #   LibLLVM.dispose_memory_buffer obj_buf
-
-      #   llvm_mod.print_to_file ll_name if compiler.dump_ll?
-      #   nil
-      # end
 
       def compile
-        must_compile = true
-        # Do this before mem–allocation to keep mem total down (many concurrent)
-        noop_checks_ok = File.exists?(bc_name) && File.exists?(object_name)
+        can_skip_compile = compiler.emit ? false : true
+        # Do this before mem–allocation to keep mem total down (many concurrent,
+        # and file–ops are rescheduling)
+        can_skip_compile &&= File.exists?(object_name)
+        can_skip_compile &&= File.exists?(bc_name)
 
-        bc_buf = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
-        bc_buf_ptr = LibLLVM.get_buffer_start(bc_buf)
-        bc_buf_size = LibLLVM.get_buffer_size(bc_buf)
+        bc_buf_ref = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
+        bc_buf = buffer_to_slice bc_buf_ref
+        can_skip_compile &&= compare_slice_to_file bc_buf, bc_name
 
-        if !compiler.emit && noop_checks_ok
-          _dbg "File.size(bc_name) == #{File.size(bc_name)}, LibLLVM.get_buffer_size(bc_buf) == #{LibLLVM.get_buffer_size(bc_buf)}"
-          must_compile = !compare_mem_to_file bc_buf_ptr, bc_buf_size, bc_name
-          _dbg "we don't need #{bc_name_new}".yellow if !must_compile
-        end
-
-        if must_compile
-          _dbg "needs to compile '#{bc_name}'"
-          write_mem_to_file_via_tmp bc_buf_ptr, bc_buf_size, bc_name
-          # dispose memory as early as possible - many concurrent ops!
-          LibLLVM.dispose_memory_buffer bc_buf if bc_buf
-
-          if compiler.release?
-            Crystal.timing("LLVM Optimizer", @compiler.stats?) do
-              compiler.optimize llvm_mod
-            end
-          end
-          tmp_object_name = tempify_name object_name
-          compiler.target_machine.emit_obj_to_file llvm_mod, tmp_object_name
-          File.rename tmp_object_name, object_name
-
+        if can_skip_compile
+          LibLLVM.dispose_memory_buffer bc_buf_ref
         else
-          LibLLVM.dispose_memory_buffer bc_buf if bc_buf
+          write_buf_to_file bc_buf, bc_name
+          LibLLVM.dispose_memory_buffer bc_buf_ref
+
+          compiler.optimize llvm_mod if compiler.release?
+
+          via_temp_file(object_name) do |tmp_name|
+            compiler.target_machine.emit_obj_to_file llvm_mod, tmp_name
+          end
         end
 
-        llvm_mod.print_to_file ll_name if compiler.dump_ll?
+        if compiler.dump_ll?
+          via_temp_file(ll_name) do |tmp_name|
+            llvm_mod.print_to_file tmp_name
+          end
+        end
         nil
       end
 
@@ -584,21 +473,12 @@ module Crystal
         Crystal.relative_filename("#{@output_dir}/#{object_filename}")
       end
 
-      def object_name_tmp
-        Crystal.relative_filename("#{@output_dir}/#{object_filename}____.tmp") # *TODO* safen up name
-      end
-
       def object_filename
         "#{@name}.o"
       end
 
       def bc_name
         "#{@output_dir}/#{@name}.bc"
-      end
-
-      def bc_name_new
-        # @bc_name_new ||= "/tmp/#{@name}_#{Time.now.epoch_ms}.new.bc"
-        @bc_name_new ||= "#{@output_dir}/#{@name}.new.bc" # *TODO* safen up name
       end
 
       def ll_name

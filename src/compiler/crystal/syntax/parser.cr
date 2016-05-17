@@ -160,8 +160,8 @@ module Crystal
     end
 
     def parse_expressions
-      value, _ = preserve_last_call_has_parenthesis do
-        @last_call_has_parenthesis = true
+      value, _ = preserve_last_call_has_parentheses do
+        @last_call_has_parentheses = true
         parse_expressions_internal
       end
       value
@@ -795,7 +795,7 @@ module Crystal
               ).at(location)
               next
             else
-              call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { space_consumed ? parse_call_args_space_consumed : parse_call_args }
+              call_args, last_call_has_parentheses = preserve_last_call_has_parentheses { space_consumed ? parse_call_args_space_consumed : parse_call_args }
               if call_args
                 args = call_args.args
                 block = call_args.block
@@ -806,7 +806,7 @@ module Crystal
               end
             end
 
-            block = parse_block(block, stop_on_do: space_consumed && !@last_call_has_parenthesis)
+            block = parse_block(block, stop_on_do: space_consumed && !@last_call_has_parentheses)
             if block || block_arg
               atomic = Call.new atomic, name, (args || [] of ASTNode), block, block_arg, named_args, name_column_number: name_column_number
             else
@@ -1536,8 +1536,8 @@ module Crystal
         else
           # At this point we want to attach the "do" to the next call,
           # so we set this var to true to make the parser think the call
-          # has parenthesis and so a "do" must be attached to it
-          @last_call_has_parenthesis = true
+          # has parentheses and so a "do" must be attached to it
+          @last_call_has_parentheses = true
           call = parse_var_or_call(force_call: true).at(location)
 
           if call.is_a?(Call)
@@ -1766,7 +1766,7 @@ module Crystal
       elsif @token.type == :"{"
         next_token_skip_statement_end
         check_not_pipe_before_proc_literal_body
-        @last_call_has_parenthesis = true
+        @last_call_has_parentheses = true
         body = parse_expressions
         end_location = token_end_location
         check :"}"
@@ -2614,21 +2614,33 @@ module Crystal
 
       found_default_value = false
       found_splat = false
+      found_double_splat = nil
 
       splat_index = nil
+      double_splat = nil
       index = 0
 
       case @token.type
       when :"("
         next_token_skip_space_or_newline
         while @token.type != :")"
-          extras = parse_arg(args, nil, true, found_default_value, found_splat, allow_restrictions: false)
+          extras = parse_arg(args,
+            extra_assigns: nil,
+            parentheses: true,
+            found_default_value: found_default_value,
+            found_splat: found_splat,
+            found_double_splat: found_double_splat,
+            allow_restrictions: false)
           if !found_default_value && extras.default_value
             found_default_value = true
           end
           if !splat_index && extras.splat
             splat_index = index
             found_splat = true
+          end
+          if extras_double_splat = extras.double_splat
+            double_splat = extras_double_splat
+            found_double_splat = double_splat
           end
           if block_arg = extras.block_arg
             check :")"
@@ -2643,6 +2655,11 @@ module Crystal
           end
           index += 1
         end
+
+        if splat_index == args.size - 1 && args.last.name.empty?
+          raise "named arguments must follow bare *", args.last.location.not_nil!
+        end
+
         next_token
       when :IDENT, :"*"
         if @token.keyword?(:end)
@@ -2664,7 +2681,7 @@ module Crystal
 
       pop_def
 
-      node = Macro.new name, args, body, block_arg, splat_index
+      node = Macro.new name, args, body, block_arg, splat_index, double_splat: double_splat
       node.name_column_number = name_column_number
       node.doc = doc
       node.end_location = end_location
@@ -2927,7 +2944,7 @@ module Crystal
 
       # At this point we want to attach the "do" to calls inside the def,
       # not to calls that might have this def as a macro argument.
-      @last_call_has_parenthesis = true
+      @last_call_has_parentheses = true
 
       next_token
 
@@ -3020,21 +3037,34 @@ module Crystal
 
       found_default_value = false
       found_splat = false
+      found_double_splat = nil
 
       index = 0
       splat_index = nil
+      double_splat = nil
 
       case @token.type
       when :"("
         next_token_skip_space_or_newline
         while @token.type != :")"
-          extras = parse_arg(args, extra_assigns, true, found_default_value, found_splat)
+          extras = parse_arg(args,
+            extra_assigns: extra_assigns,
+            parentheses: true,
+            found_default_value: found_default_value,
+            found_splat: found_splat,
+            found_double_splat: found_double_splat,
+            allow_restrictions: true,
+          )
           if !found_default_value && extras.default_value
             found_default_value = true
           end
           if !splat_index && extras.splat
             splat_index = index
             found_splat = true
+          end
+          if extras_double_splat = extras.double_splat
+            double_splat = extras_double_splat
+            found_double_splat = extras_double_splat
           end
           if block_arg = extras.block_arg
             compute_block_arg_yields block_arg
@@ -3050,11 +3080,16 @@ module Crystal
           end
           index += 1
         end
+
+        if splat_index == args.size - 1 && args.last.name.empty?
+          raise "named arguments must follow bare *", args.last.location.not_nil!
+        end
+
         next_token_skip_space
         if @token.type == :SYMBOL
           raise "a space is mandatory between ':' and return type", @token
         end
-      when :IDENT, :INSTANCE_VAR, :CLASS_VAR, :"*"
+      when :IDENT, :INSTANCE_VAR, :CLASS_VAR, :"*", :"**"
         if @token.keyword?(:end)
           unexpected_token @token.to_s, "expected ';' or newline"
         else
@@ -3113,7 +3148,7 @@ module Crystal
       @doc_enabled = !!@wants_doc
       pop_def
 
-      node = Def.new name, args, body, receiver, block_arg, return_type, is_macro_def, @yields, is_abstract, splat_index
+      node = Def.new name, args, body, receiver, block_arg, return_type, is_macro_def, @yields, is_abstract, splat_index, double_splat: double_splat
       node.name_column_number = name_column_number
       set_visibility node
       node.end_location = end_location
@@ -3144,49 +3179,71 @@ module Crystal
     record ArgExtras,
       block_arg : Arg?,
       default_value : Bool,
-      splat : Bool
+      splat : Bool,
+      double_splat : String?
 
-    def parse_arg(args, extra_assigns, parenthesis, found_default_value, found_splat, allow_restrictions = true)
+    def parse_arg(args, extra_assigns, parentheses, found_default_value, found_splat, found_double_splat, allow_restrictions)
       if @token.type == :"&"
         next_token_skip_space_or_newline
         block_arg = parse_block_arg(extra_assigns)
-        return ArgExtras.new(block_arg, false, false)
+        if args.any?(&.name.==(block_arg.name)) || found_double_splat == block_arg.name
+          raise "duplicated argument name: #{block_arg.name}", block_arg.location.not_nil!
+        end
+        return ArgExtras.new(block_arg, false, false, nil)
       end
 
       splat = false
-      if @token.type == :"*"
+      double_splat = false
+      arg_location = @token.location
+
+      case @token.type
+      when :"*"
         if found_splat
           unexpected_token
         end
 
         splat = true
         next_token_skip_space
+      when :"**"
+        if found_double_splat
+          unexpected_token
+        end
+
+        double_splat = true
+        allow_restrictions = false
+        next_token_skip_space
       end
 
-      arg_location = @token.location
-      arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
+      found_space = false
 
-      if args.any? { |arg| arg.name == arg_name }
-        raise "duplicated argument name: #{arg_name}", @token
+      if splat && (@token.type == :"," || @token.type == :")")
+        arg_name = ""
+        uses_arg = false
+        allow_restrictions = false
+      else
+        arg_location = @token.location
+        arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
+        if args.any? { |arg| arg.name == arg_name }
+          raise "duplicated argument name: #{arg_name}", @token
+        end
+
+        if parentheses
+          next_token
+          found_space = @token.type == :SPACE || @token.type == :NEWLINE
+          skip_space_or_newline
+        else
+          next_token
+          found_space = @token.type == :SPACE
+          skip_space
+        end
+
+        if @token.type == :SYMBOL
+          raise "space required after colon in type restriction", @token
+        end
       end
 
       default_value = nil
       restriction = nil
-      found_space = false
-
-      if parenthesis
-        next_token
-        found_space = @token.type == :SPACE || @token.type == :NEWLINE
-        skip_space_or_newline
-      else
-        next_token
-        found_space = @token.type == :SPACE
-        skip_space
-      end
-
-      if @token.type == :SYMBOL
-        raise "space required after colon in type restriction", @token
-      end
 
       found_colon = false
 
@@ -3202,29 +3259,23 @@ module Crystal
         found_colon = true
       end
 
-      unless splat
-        if @token.type == :"="
-          if found_splat || splat
-            unexpected_token
-          end
+      if @token.type == :"="
+        next_token_skip_space_or_newline
 
-          next_token_skip_space_or_newline
-
-          case @token.type
-          when :__LINE__, :__FILE__, :__DIR__
-            default_value = MagicConstant.new(@token.type).at(@token.location)
-            next_token
-          else
-            @no_type_declaration += 1
-            default_value = parse_op_assign
-            @no_type_declaration -= 1
-          end
-
-          skip_space
+        case @token.type
+        when :__LINE__, :__FILE__, :__DIR__
+          default_value = MagicConstant.new(@token.type).at(@token.location)
+          next_token
         else
-          if found_default_value && !splat
-            raise "argument must have a default value", arg_location
-          end
+          @no_type_declaration += 1
+          default_value = parse_op_assign
+          @no_type_declaration -= 1
+        end
+
+        skip_space
+      else
+        if found_default_value && !found_splat && !splat && !double_splat
+          raise "argument must have a default value", arg_location
         end
       end
 
@@ -3240,11 +3291,17 @@ module Crystal
 
       raise "Bug: arg_name is nil" unless arg_name
 
-      arg = Arg.new(arg_name, default_value, restriction).at(arg_location)
-      args << arg
-      push_var arg
+      if double_splat
+        double_splat = arg_name
+        push_var_name double_splat
+      else
+        arg = Arg.new(arg_name, default_value, restriction).at(arg_location)
+        args << arg
+        push_var arg
+        double_splat = nil
+      end
 
-      ArgExtras.new(nil, !!default_value, splat)
+      ArgExtras.new(nil, !!default_value, splat, double_splat)
     end
 
     def parse_block_arg(extra_assigns)
@@ -3495,8 +3552,8 @@ module Crystal
         @calls_previous_def = true
       end
 
-      call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis do
-        parse_call_args stop_on_do_after_space: (is_var || !@last_call_has_parenthesis)
+      call_args, last_call_has_parentheses = preserve_last_call_has_parentheses do
+        parse_call_args stop_on_do_after_space: (is_var || !@last_call_has_parentheses)
       end
       if call_args
         args = call_args.args
@@ -3513,7 +3570,7 @@ module Crystal
         #     end
         #
         # In this case, since x is a variable and the previous call (foo)
-        # doesn't have parenthesis, we don't parse "x do end" as an invocation
+        # doesn't have parentheses, we don't parse "x do end" as an invocation
         # to a method x with a block. Instead, we just stop on x and we don't
         # consume the block, leaving the block for 'foo' to consume.
       else
@@ -3522,7 +3579,7 @@ module Crystal
 
       node =
         if block || block_arg || global
-          Call.new nil, name, (args || [] of ASTNode), block, block_arg, named_args, global, name_column_number, last_call_has_parenthesis
+          Call.new nil, name, (args || [] of ASTNode), block, block_arg, named_args, global, name_column_number, last_call_has_parentheses
         else
           if args
 
@@ -3533,7 +3590,7 @@ module Crystal
               num.value = num.value.byte_slice(1)
               Call.new(Var.new(name), sign, args)
             else
-              Call.new(nil, name, args, nil, block_arg, named_args, global, name_column_number, last_call_has_parenthesis)
+              Call.new(nil, name, args, nil, block_arg, named_args, global, name_column_number, last_call_has_parentheses)
             end
           else
             if @no_type_declaration == 0 && @token.type == :":"
@@ -3546,7 +3603,7 @@ module Crystal
               end
               Var.new name
             else
-              Call.new nil, name, [] of ASTNode, nil, block_arg, named_args, global, name_column_number, last_call_has_parenthesis
+              Call.new nil, name, [] of ASTNode, nil, block_arg, named_args, global, name_column_number, last_call_has_parentheses
             end
           end
         end
@@ -3555,12 +3612,12 @@ module Crystal
       node
     end
 
-    def preserve_last_call_has_parenthesis
-      old_last_call_has_parenthesis = @last_call_has_parenthesis
+    def preserve_last_call_has_parentheses
+      old_last_call_has_parentheses = @last_call_has_parentheses
       value = yield
-      last_call_has_parenthesis = @last_call_has_parenthesis
-      @last_call_has_parenthesis = old_last_call_has_parenthesis
-      {value, last_call_has_parenthesis}
+      last_call_has_parentheses = @last_call_has_parentheses
+      @last_call_has_parentheses = old_last_call_has_parentheses
+      {value, last_call_has_parentheses}
     end
 
     def parse_block(block, stop_on_do = false)
@@ -3634,7 +3691,7 @@ module Crystal
     def parse_call_args(stop_on_do_after_space = false, allow_curly = false, control = false)
       case @token.type
       when :"{"
-        @last_call_has_parenthesis = false
+        @last_call_has_parentheses = false
         nil
       when :"("
         slash_is_regex!
@@ -3676,7 +3733,7 @@ module Crystal
           end
           end_location = token_end_location
           next_token_skip_space
-          @last_call_has_parenthesis = true
+          @last_call_has_parentheses = true
         end
 
         CallArgs.new args, nil, nil, nil, false, end_location
@@ -3684,7 +3741,7 @@ module Crystal
         slash_is_not_regex!
         end_location = token_end_location
         next_token
-        @last_call_has_parenthesis = false unless control
+        @last_call_has_parentheses = false unless control
 
         if stop_on_do_after_space && @token.keyword?(:do)
           return CallArgs.new nil, nil, nil, nil, true, end_location
@@ -3696,7 +3753,7 @@ module Crystal
 
         parse_call_args_space_consumed check_plus_and_minus: true, allow_curly: allow_curly
       else
-        @last_call_has_parenthesis = false
+        @last_call_has_parentheses = false
         nil
       end
     end
@@ -3717,7 +3774,7 @@ module Crystal
         return nil unless allow_curly
       when :CHAR, :STRING, :DELIMITER_START, :STRING_ARRAY_START, :SYMBOL_ARRAY_START, :NUMBER, :IDENT, :SYMBOL, :INSTANCE_VAR, :CLASS_VAR, :CONST, :GLOBAL, :"$~", :"$?", :GLOBAL_MATCH_DATA_INDEX, :REGEX, :"(", :"!", :"[", :"[]", :"+", :"-", :"~", :"&", :"->", :"{{", :__LINE__, :__FILE__, :__DIR__, :UNDERSCORE
         # Nothing
-      when :"*"
+      when :"*", :"**"
         if current_char.whitespace?
           return nil
         end
@@ -3814,15 +3871,29 @@ module Crystal
       if @token.keyword?(:out)
         parse_out
       else
-        splat = false
-        if @token.type == :"*"
+        splat = nil
+        case @token.type
+        when :"*"
           unless current_char.whitespace?
-            splat = true
+            splat = :single
+            next_token
+          end
+        when :"**"
+          unless current_char.whitespace?
+            splat = :double
             next_token
           end
         end
+
         arg = parse_op_assign_no_control
-        arg = Splat.new(arg).at(arg.location) if splat
+
+        case splat
+        when :single
+          arg = Splat.new(arg).at(arg.location)
+        when :double
+          arg = DoubleSplat.new(arg).at(arg.location)
+        end
+
         arg
       end
     end
@@ -3993,7 +4064,7 @@ module Crystal
       type = parse_type(allow_primitives, allow_commas: allow_commas)
       case type
       when Array
-        raise "unexpected ',' in type (use parenthesis to disambiguate)", location
+        raise "unexpected ',' in type (use parentheses to disambiguate)", location
       when ASTNode
         type
       else
@@ -4423,7 +4494,7 @@ module Crystal
       end_location = token_end_location
       next_token
 
-      call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis { parse_call_args }
+      call_args, last_call_has_parentheses = preserve_last_call_has_parentheses { parse_call_args }
 
       if call_args
         args = call_args.args
@@ -4454,8 +4525,8 @@ module Crystal
       end_location = token_end_location
       next_token
 
-      call_args, last_call_has_parenthesis = preserve_last_call_has_parenthesis do
-        @last_call_has_parenthesis = true
+      call_args, last_call_has_parentheses = preserve_last_call_has_parentheses do
+        @last_call_has_parentheses = true
         parse_call_args allow_curly: true, control: true
       end
       args = call_args.args if call_args

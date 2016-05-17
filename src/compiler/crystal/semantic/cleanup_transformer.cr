@@ -416,6 +416,8 @@ module Crystal
         end
       end
 
+      node.replace_splats
+
       # Convert named arguments to regular arguments, because intermediate
       # defs with the needed number of arguments are already defined.
       if named_args = node.named_args
@@ -424,8 +426,6 @@ module Crystal
         end
         node.named_args = nil
       end
-
-      node.replace_splats
 
       # check_comparison_of_unsigned_integer_with_zero_or_negative_literal(node)
 

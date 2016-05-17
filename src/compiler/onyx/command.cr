@@ -491,9 +491,9 @@ USAGE
     output_format = nil
 
     option_parser = OptionParser.parse(options) do |opts|
-      opts.banner = "Usage: crystal #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
+      opts.banner = "Usage: onyx #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
 
-      opts.on("--ast", "Dump AST to .onyx-cache directory") do
+      opts.on("--ast", "Dump AST to .onyx cache directory") do
         no_codegen = true
         output_format = "ast"
       end
@@ -589,8 +589,11 @@ USAGE
         opts.on("--single-module", "Generate a single LLVM module") do
           compiler.single_module = true
         end
-        opts.on("--threads ", "Maximum number of threads to use") do |n_threads|
+        opts.on("--threads ", "Maximum number of threads to use (affects CPU)") do |n_threads|
           compiler.n_threads = n_threads.to_i
+        end
+        opts.on("--concurrent ", "Maximum number of concurrent to use (affects RAM)") do |n_concurrent|
+          compiler.n_concurrent = n_concurrent.to_i
         end
         unless run
           opts.on("--target TRIPLE", "Target triple") do |triple|

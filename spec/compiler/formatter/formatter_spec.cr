@@ -201,6 +201,7 @@ describe Crystal::Formatter do
   assert_format "foo  x:  1,  y:  2", "foo x: 1, y: 2"
   assert_format "foo a , b ,  x:  1", "foo a, b, x: 1"
   assert_format "foo a , *b", "foo a, *b"
+  assert_format "foo a , **b", "foo a, **b"
   assert_format "foo   &bar", "foo &bar"
   assert_format "foo 1 ,  &bar", "foo 1, &bar"
   assert_format "foo(&.bar)"
@@ -885,4 +886,14 @@ describe Crystal::Formatter do
   assert_format "foo.as?(T).bar"
   assert_format "foo &.as?(T)"
   assert_format "foo &.bar.as?(T)"
+
+  assert_format "def foo(x, *, z)\nend"
+  assert_format "macro foo(x, *, z)\nend"
+
+  assert_format "def foo(x, *, y, **z)\nend"
+  assert_format "def foo(**z)\nend"
+  assert_format "def foo(*y, **z)\nend"
+  assert_format "def foo(**z, &block)\nend"
+  assert_format "def foo(x, **z)\nend"
+  assert_format "def foo(x, **z, &block)\nend"
 end

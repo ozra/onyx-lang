@@ -1062,6 +1062,12 @@ class ToOnyxSVisitor < Visitor
       false
    end
 
+   def visit(node : DoubleSplat)
+      @str << "**"
+      node.exp.accept self
+      false
+   end
+
    def visit(node : Union)
       node.types.each_with_index do |ident, i|
          @str << " | " if i > 0

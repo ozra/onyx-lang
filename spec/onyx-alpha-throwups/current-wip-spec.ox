@@ -1,7 +1,6 @@
 
 _debug_compiler_start_ = 1
 
--- @@glob-val Int = 0 'get 'set
 
 FooMod: @@val Int = 0 'get 'set
 FooMod: set-v(v Int) -> @@val = v
@@ -14,20 +13,19 @@ FooMod:
 FooMod: type SubFoo: foo() -> true
 
 My.Nested:
-   type Foo -- <T>
-      @@t-var Int = 11 'get 'set
+   type Foo
+      @@t-var Int = 11  'get 'set
+
       @str Str
       @foo = 47
       @bar 'get 'set
-      -- @zing T
 
       init(@str Str = "") ->
          @bar = 1
-         -- @zing = @str
 
-      foo() -> My.Nested.Foo.t-var
-      foo2() -> Self.t-var  -- *TODO*
-      foo3()-> this.foo
+      foo() ->    My.Nested.Foo.t-var
+      foo2() ->   Self.t-var
+      foo3() ->   this.foo
 
       action(str = @str) -> say str
 
@@ -39,7 +37,7 @@ OtherModule:
    bar() ->
       My.Nested.Module.foo My.Nested.Foo("Named")
 
-      -- foo new ("Anon")
+      -- foo Visitor("Anon") <:
       --    init(@str Str) ->
       --    action(str) -> say "{@str}: {str}"
 
@@ -47,10 +45,11 @@ My:
    Nested:
       ext Foo
          @xoo = 46
-         xoo() -> @xoo + 1
 
-         dup?() Self? -> Self(@str + "_copy") || nil
-         dup() Self -> Self(@str + "_copy")
+         xoo() ->          @xoo + 1
+
+         dup?() Self? ->   Self(@str + "_copy") || nil
+         dup() Self ->     Self(@str + "_copy")
 
 OtherModule:
    include Self on Self  -- entirely pointless excercise - done automatically
@@ -82,6 +81,3 @@ say FooMod.val
 FooMod.v = 23
 say FooMod.val
 
--- pp glob-val
--- glob-val = 43
--- pp glob-val

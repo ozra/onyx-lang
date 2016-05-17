@@ -57,7 +57,7 @@ struct Char
 end
 
 
-
+# *TODO* make this a more generic macro as part of `Any`(AnyRef/Reference rather) or such
 macro reinit_pool(typ, *params)
    class {{typ}}Pool
       @@pool = [] of {{typ}}

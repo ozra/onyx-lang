@@ -76,7 +76,6 @@ class OnyxParser < OnyxLexer
    @explicit_block_param_name : String?
    @scope_stack : ScopeStack
 
-
    def self.parse(str, string_pool : StringPool? = nil, deffed_vars_list = [Set(String).new])
       OnyxParserPool.with(str, string, deffed_vars_list) do |parser|
          parser.parse

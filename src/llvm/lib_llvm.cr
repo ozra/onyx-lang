@@ -17,7 +17,6 @@ lib LibLLVM
   type PassManagerBuilderRef = Void*
   type PassManagerRef = Void*
   type PassRegistryRef = Void*
-
   type MemoryBufferRef = Void*
 
   struct JITCompilerOptions
@@ -208,6 +207,7 @@ lib LibLLVM
   fun type_of = LLVMTypeOf(val : ValueRef) : TypeRef
   fun void_type = LLVMVoidType : TypeRef
   fun write_bitcode_to_file = LLVMWriteBitcodeToFile(module : ModuleRef, path : UInt8*) : Int32
+  fun write_bitcode_to_memory_buffer = LLVMWriteBitcodeToMemoryBuffer(mod : ModuleRef) : MemoryBufferRef
   fun verify_module = LLVMVerifyModule(module : ModuleRef, action : LLVM::VerifierFailureAction, outmessage : UInt8**) : Int32
   fun link_in_jit = LLVMLinkInJIT
   fun link_in_mc_jit = LLVMLinkInMCJIT
@@ -260,10 +260,7 @@ lib LibLLVM
   fun dispose_pass_manager = LLVMDisposePassManager(PassManagerRef)
   fun dispose_target_data = LLVMDisposeTargetData(TargetDataRef)
   fun dispose_pass_manager_builder = LLVMPassManagerBuilderDispose(PassManagerBuilderRef)
-
-  fun write_bitcode_to_memory_buffer = LLVMWriteBitcodeToMemoryBuffer(mod : ModuleRef) : MemoryBufferRef
   fun dispose_memory_buffer = LLVMDisposeMemoryBuffer(buf : MemoryBufferRef) : Void
   fun get_buffer_start = LLVMGetBufferStart(buf : MemoryBufferRef) : UInt8*
   fun get_buffer_size = LLVMGetBufferSize(buf : MemoryBufferRef) : LibC::SizeT
-
 end

@@ -519,6 +519,7 @@ module Crystal
     def transform(node : TypeDeclaration)
       node.var = node.var.transform(self)
       node.declared_type = node.declared_type.transform(self)
+      node.value = node.value.try &.transform(self)
       node
     end
 
@@ -534,6 +535,11 @@ module Crystal
     end
 
     def transform(node : Splat)
+      node.exp = node.exp.transform(self)
+      node
+    end
+
+    def transform(node : DoubleSplat)
       node.exp = node.exp.transform(self)
       node
     end

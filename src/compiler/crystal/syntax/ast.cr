@@ -404,6 +404,10 @@ module Crystal
     def initialize(@elements)
     end
 
+    def self.map(values)
+      new(values.map { |value| (yield value).as(ASTNode) })
+    end
+
     def accept_children(visitor)
       elements.each &.accept visitor
     end
@@ -919,6 +923,7 @@ module Crystal
     property receiver : ASTNode?
     property name : String
     property args : Array(Arg)
+    property double_splat : String?
     property body : ASTNode
     property block_arg : Arg?
     property? macro_def : Bool
@@ -936,7 +941,7 @@ module Crystal
     property doc : String?
     property visibility : Visibility
 
-    def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil)
+    def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil, @double_splat = nil)
       @body = Expressions.from body
       @calls_super = false
       @calls_initialize = false
@@ -964,9 +969,14 @@ module Crystal
       max_size = args.size
       default_value_index = args.index(&.default_value)
       min_size = default_value_index || max_size
+      splat_index = self.splat_index
       if splat_index
-        min_size -= 1 unless default_value_index
-        max_size = Int32::MAX
+        if args[splat_index].name.empty?
+          min_size = max_size = splat_index
+        else
+          min_size -= 1 unless default_value_index
+          max_size = Int32::MAX
+        end
       end
       {min_size, max_size}
     end
@@ -976,7 +986,7 @@ module Crystal
     end
 
     def clone_specific_impl
-      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index)
+      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat)
       a_def.calls_super = calls_super
       a_def.calls_initialize = calls_initialize
       a_def.calls_previous_def = calls_previous_def
@@ -986,20 +996,21 @@ module Crystal
       a_def
     end
 
-    def_equals_and_hash @name, @args, @body, @receiver, @block_arg, @return_type, @macro_def, @yields, @abstract, @splat_index
+    def_equals_and_hash @name, @args, @body, @receiver, @block_arg, @return_type, @macro_def, @yields, @abstract, @splat_index, @double_splat
   end
 
   class Macro < ASTNode
     property name : String
     property args : Array(Arg)
     property body : ASTNode
+    property double_splat : String?
     property block_arg : Arg?
     property name_column_number : Int32
     property splat_index : Int32?
     property doc : String?
     property visibility : Visibility
 
-    def initialize(@name, @args = [] of Arg, @body = Nop.new, @block_arg = nil, @splat_index = nil)
+    def initialize(@name, @args = [] of Arg, @body = Nop.new, @block_arg = nil, @splat_index = nil, @double_splat = nil)
       @name_column_number = 0
       @visibility = Visibility::Public
     end
@@ -1020,15 +1031,22 @@ module Crystal
       min_args_size = args.index(&.default_value) || my_args_size
       max_args_size = my_args_size
       splat_index = self.splat_index
+
       if splat_index
-        min_args_size -= 1
-        max_args_size = Int32::MAX
+        if args[splat_index].name.empty?
+          min_args_size = max_args_size = splat_index
+        else
+          min_args_size -= 1
+          max_args_size = Int32::MAX
+        end
       end
 
-      # If there's a splat in the macros and named args in the call,
-      # there's no match (it's confusing to determine what should happen)
-      if named_args && splat_index
-        return nil
+      # If there are arguments past the splat index and no named args, there's no match,
+      # unless all args past it have default values
+      if splat_index && my_args_size > splat_index + 1 && !named_args
+        unless (splat_index + 1...args.size).all? { |i| args[i].default_value }
+          return false
+        end
       end
 
       # If there are more positional arguments than those required, there's no match
@@ -1056,7 +1074,7 @@ module Crystal
         if found_index
           # A named arg can't target the splat index
           if found_index == splat_index
-            return nil
+            return false
           end
 
           # Check whether the named arg refers to an argument that was already specified
@@ -1072,6 +1090,9 @@ module Crystal
             end
           end
         else
+          # A double splat matches all named args
+          next if double_splat
+
           return false
         end
       end
@@ -1081,7 +1102,7 @@ module Crystal
       if mandatory_args
         self.args.each_with_index do |arg, index|
           if index != splat_index && !arg.default_value && !mandatory_args[index]
-            return nil
+            return false
           end
         end
       end
@@ -1090,10 +1111,10 @@ module Crystal
     end
 
     def clone_specific_impl
-      Macro.new(@name, @args.clone, @body.clone, @block_arg.clone, @splat_index)
+      Macro.new(@name, @args.clone, @body.clone, @block_arg.clone, @splat_index, @double_splat)
     end
 
-    def_equals_and_hash @name, @args, @body, @block_arg, @splat_index
+    def_equals_and_hash @name, @args, @body, @block_arg, @splat_index, @double_splat
   end
 
   abstract class UnaryExpression < ASTNode
@@ -2248,6 +2269,12 @@ module Crystal
   class Splat < UnaryExpression
     def clone_specific_impl
       Splat.new(@exp.clone)
+    end
+  end
+
+  class DoubleSplat < UnaryExpression
+    def clone_specific_impl
+      DoubleSplat.new(@exp.clone)
     end
   end
 

@@ -1,7 +1,13 @@
+## X - (2016-05-xx) ##
+
+* Optimized compilation further. About 600% vs "initial". 20% lower RAM use.
+* 
+
 ## 0.106.0 - (2016-05-09) ##
 
 * `Self` now returns to the "current type", `this` refers to "this instance". `self` is a reserved word to catch mistakes by coders used to langs with reversed connotations.
 * `none?` and `!`/`not` are now language-constructs / pseudo-methods instead of methods, helping nil-inference.
+
 
 ## 0.105.7 - (2016-05-07) ##
 
