@@ -858,16 +858,17 @@ module Crystal
   class Arg < ASTNode
     include SpecialVar
 
+    # The internal name
     property name : String
+    property external_name : String
     property default_value : ASTNode?
     property restriction : ASTNode?
     property doc : String?
 
-    property :mutability
-    @mutability : Symbol
-    @mutability = :auto
+    property mutability : Symbol = :auto
 
-    def initialize(@name, @default_value : ASTNode? = nil, @restriction : ASTNode? = nil, @mutability = :auto)
+    def initialize(@name : String, @default_value : ASTNode? = nil, @restriction : ASTNode? = nil, external_name : String? = nil, @mutability = :auto)
+      @external_name = external_name || @name
     end
 
     def accept_children(visitor)
@@ -880,10 +881,10 @@ module Crystal
     end
 
     def clone_specific_impl
-      Arg.new @name, @default_value.clone, @restriction.clone, @mutability.clone
+      Arg.new @name, @default_value.clone, @restriction.clone, @external_name.clone, @mutability.clone
     end
 
-    def_equals_and_hash name, default_value, restriction, mutability
+    def_equals_and_hash name, default_value, restriction, external_name, mutability
   end
 
   class Fun < ASTNode
@@ -1033,7 +1034,7 @@ module Crystal
       splat_index = self.splat_index
 
       if splat_index
-        if args[splat_index].name.empty?
+        if args[splat_index].external_name.empty?
           min_args_size = max_args_size = splat_index
         else
           min_args_size -= 1
@@ -1070,7 +1071,7 @@ module Crystal
 
       # Check named args
       named_args.try &.each do |named_arg|
-        found_index = args.index { |arg| arg.name == named_arg.name }
+        found_index = args.index { |arg| arg.external_name == named_arg.name }
         if found_index
           # A named arg can't target the splat index
           if found_index == splat_index

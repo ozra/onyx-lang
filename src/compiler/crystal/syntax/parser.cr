@@ -1413,6 +1413,7 @@ module Crystal
     end
 
     SemicolonOrNewLine = [:";", :NEWLINE]
+    ConstOrDoubleColon = [:CONST, :"::"]
 
     def parse_rescue
       next_token_skip_space
@@ -1425,10 +1426,10 @@ module Crystal
 
         if @token.type == :":"
           next_token_skip_space_or_newline
-          check :CONST
+          check ConstOrDoubleColon
           types = parse_rescue_types
         end
-      when :CONST
+      when :CONST, :"::"
         types = parse_rescue_types
       end
 
@@ -3195,6 +3196,7 @@ module Crystal
       splat = false
       double_splat = false
       arg_location = @token.location
+      allow_external_name = true
 
       case @token.type
       when :"*"
@@ -3203,6 +3205,7 @@ module Crystal
         end
 
         splat = true
+        allow_external_name = false
         next_token_skip_space
       when :"**"
         if found_double_splat
@@ -3211,6 +3214,7 @@ module Crystal
 
         double_splat = true
         allow_restrictions = false
+        allow_external_name = false
         next_token_skip_space
       end
 
@@ -3222,19 +3226,16 @@ module Crystal
         allow_restrictions = false
       else
         arg_location = @token.location
-        arg_name, uses_arg = parse_arg_name(arg_location, extra_assigns)
-        if args.any? { |arg| arg.name == arg_name }
-          raise "duplicated argument name: #{arg_name}", @token
-        end
+        arg_name, external_name, found_space, uses_arg = parse_arg_name(arg_location, extra_assigns, allow_external_name: allow_external_name)
 
-        if parentheses
-          next_token
-          found_space = @token.type == :SPACE || @token.type == :NEWLINE
-          skip_space_or_newline
-        else
-          next_token
-          found_space = @token.type == :SPACE
-          skip_space
+        args.each do |arg|
+          if arg.name == arg_name
+            raise "duplicated argument name: #{arg_name}", arg_location
+          end
+
+          if arg.external_name == external_name
+            raise "duplicated argument external name: #{external_name}", arg_location
+          end
         end
 
         if @token.type == :SYMBOL
@@ -3295,7 +3296,7 @@ module Crystal
         double_splat = arg_name
         push_var_name double_splat
       else
-        arg = Arg.new(arg_name, default_value, restriction).at(arg_location)
+        arg = Arg.new(arg_name, default_value, restriction, external_name: external_name).at(arg_location)
         args << arg
         push_var arg
         double_splat = nil
@@ -3306,10 +3307,8 @@ module Crystal
 
     def parse_block_arg(extra_assigns)
       name_location = @token.location
-      arg_name, uses_arg = parse_arg_name(name_location, extra_assigns)
+      arg_name, external_name, found_space, uses_arg = parse_arg_name(name_location, extra_assigns, allow_external_name: false)
       @uses_block_arg = true if uses_arg
-
-      next_token_skip_space_or_newline
 
       inputs = nil
       output = nil
@@ -3331,13 +3330,32 @@ module Crystal
       block_arg
     end
 
-    def parse_arg_name(location, extra_assigns)
+    def parse_arg_name(location, extra_assigns, allow_external_name)
+      do_next_token = true
+
+      if allow_external_name && @token.type == :IDENT
+        external_name = @token.type == :IDENT ? @token.value.to_s : ""
+        next_token
+        found_space = @token.type == :SPACE || @token.type == :NEWLINE
+        skip_space
+        do_next_token = false
+      end
+
       case @token.type
       when :IDENT
         arg_name = @token.value.to_s
+        if arg_name == external_name
+          raise "when specified, external name must be different than internal name", @token
+        end
+
         uses_arg = false
+        do_next_token = true
       when :INSTANCE_VAR
         arg_name = @token.value.to_s[1..-1]
+        if arg_name == external_name
+          raise "when specified, external name must be different than internal name", @token
+        end
+
         ivar = InstanceVar.new(@token.value.to_s).at(location)
         var = Var.new(arg_name).at(location)
         assign = Assign.new(ivar, var).at(location)
@@ -3347,8 +3365,13 @@ module Crystal
           raise "can't use @instance_variable here"
         end
         uses_arg = true
+        do_next_token = true
       when :CLASS_VAR
         arg_name = @token.value.to_s[2..-1]
+        if arg_name == external_name
+          raise "when specified, external name must be different than internal name", @token
+        end
+
         cvar = ClassVar.new(@token.value.to_s).at(location)
         var = Var.new(arg_name).at(location)
         assign = Assign.new(cvar, var).at(location)
@@ -3358,11 +3381,23 @@ module Crystal
           raise "can't use @@class_var here"
         end
         uses_arg = true
+        do_next_token = true
       else
-        raise "unexpected token: #{@token}"
+        if external_name
+          arg_name = external_name
+        else
+          raise "unexpected token: #{@token}"
+        end
       end
 
-      {arg_name, uses_arg}
+      if do_next_token
+        next_token
+        found_space = @token.type == :SPACE || @token.type == :NEWLINE
+      end
+
+      skip_space_or_newline
+
+      {arg_name, external_name, found_space, uses_arg}
     end
 
     def parse_if(check_end = true)

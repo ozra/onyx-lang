@@ -35,19 +35,19 @@ end
 macro _dbg(*objs)
   ifdef !release
     if DebuggingData.dbg_output_on?
-      STDERR.puts {{objs}}.join ", "
+      STDERR.puts({{*objs}})
     end
   end
 end
 
 macro _dbg_overview(*objs)
   ifdef !release
-    STDERR.puts {{objs}}.join ", "
+    STDERR.puts({{*objs}})
   end
 end
 
 macro _dbg_always(*objs)
-  STDERR.puts {{objs}}.join ", "
+  STDERR.puts({{*objs}})
 end
 
 struct Char
@@ -85,4 +85,3 @@ macro reinit_pool(typ, *params)
       end
    end
 end
-
