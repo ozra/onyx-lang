@@ -49,6 +49,9 @@ module Crystal
     # a recursive dependency.
     getter! class_var_and_const_being_typed
 
+    getter! argc : Const
+    getter! argv : Const
+
     def initialize
       super(self, self, "main")
 
@@ -193,8 +196,8 @@ module Crystal
       argv_primitive = Primitive.new(:argv)
       argv_primitive.type = pointer_of(pointer_of(uint8))
 
-      types["ARGC_UNSAFE"] = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", argc_primitive
-      types["ARGV_UNSAFE"] = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", argv_primitive
+      types["ARGC_UNSAFE"] = @argc = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", argc_primitive
+      types["ARGV_UNSAFE"] = @argv = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", argv_primitive
 
       # Make sure to initialize ARGC and ARGV as soon as the program starts
       class_var_and_const_initializers << argc_unsafe
@@ -301,12 +304,12 @@ module Crystal
     end
 
     def named_tuple_of(hash : Hash(String, Type))
-      names_and_types = hash.map { |k, v| {k, v.as(Type)} }
-      named_tuple_of(names_and_types)
+      entries = hash.map { |k, v| NamedArgumentType.new(k, v.as(Type)) }
+      named_tuple_of(entries)
     end
 
-    def named_tuple_of(names_and_types : Array)
-      named_tuple.instantiate_named_args(names_and_types)
+    def named_tuple_of(entries : Array(NamedArgumentType))
+      named_tuple.instantiate_named_args(entries)
     end
 
     def nilable(type)

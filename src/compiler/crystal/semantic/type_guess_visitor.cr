@@ -57,6 +57,17 @@ module Crystal
     end
 
     def visit(node : Var)
+      # Check for an argument that mathces this var, and see
+      # if it has a default value. If so, we do a `self` check
+      # to make sure `self` isn't used
+      if args = @args
+        # Find an argument with the same name as this variable
+        arg = args.find { |arg| arg.name == node.name }
+        if arg && (default_value = arg.default_value)
+          check_has_self(default_value)
+        end
+      end
+
       check_var_is_self(node)
     end
 
@@ -574,17 +585,17 @@ module Crystal
     end
 
     def guess_type(node : NamedTupleLiteral)
-      names_and_types = nil
+      entries = nil
       node.entries.each do |entry|
         element_type = guess_type(entry.value)
         return nil unless element_type
 
-        names_and_types ||= [] of {String, Type}
-        names_and_types << {entry.key, element_type}
+        entries ||= [] of NamedArgumentType
+        entries << NamedArgumentType.new(entry.key, element_type)
       end
 
-      if names_and_types
-        mod.named_tuple_of(names_and_types)
+      if entries
+        mod.named_tuple_of(entries)
       else
         nil
       end
@@ -816,6 +827,9 @@ module Crystal
         if restriction
           type = lookup_type?(restriction)
           return type if type
+        else
+          # If there's no restriction it means it's a `-> Void` proc
+          return @mod.fun_of([@mod.void] of Type)
         end
       end
 

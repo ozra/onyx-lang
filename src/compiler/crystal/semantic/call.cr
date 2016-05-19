@@ -136,8 +136,8 @@ class Crystal::Call
       when DoubleSplat
         case arg_type = arg.type
         when NamedTupleInstanceType
-          arg_type.names_and_types.each do |name_and_type|
-            name, type = name_and_type
+          arg_type.entries.each do |entry|
+            name, type = entry.name, entry.type
 
             named_args_types ||= [] of NamedArgumentType
             raise "duplicate key: #{name}" if named_args_types.any? &.name.==(name)
@@ -626,8 +626,8 @@ class Crystal::Call
           arg.raise "Bug: double splat expects a named tuple, not #{arg_type}"
         end
 
-        arg_type.names_and_types.each do |name_and_type|
-          sym = SymbolLiteral.new(name_and_type[0])
+        arg_type.entries.each do |entry|
+          sym = SymbolLiteral.new(entry.name)
           sym.type = mod.symbol
           mod.symbols.add sym.value
           tuple_indexer = Call.new(arg.exp, "[]", sym)
@@ -1085,7 +1085,16 @@ class Crystal::Call
     # named arguments, we create another def that sets ups everything for the real call.
     if arg_types.size != untyped_def.args.size || untyped_def.splat_index || named_args_types || untyped_def.double_splat
       named_args_names = named_args_types.try &.map &.name
-      untyped_def = untyped_def.expand_default_arguments(mod, arg_types.size, named_args_names)
+
+      # We expand new in a different way, because default arguments need to be solved at the instance level,
+      # not at the class level. So we simply create a `new` that simply forwards all arguments to the `initialize`
+      # call (first allocating an object, and later hooking it to the GC finalizer if needed): the `initialize`
+      # method will set up default values and repack splats if needed.
+      if untyped_def.new?
+        untyped_def = untyped_def.expand_new_default_arguments(self_type.instance_type, arg_types.size, named_args_names)
+      else
+        untyped_def = untyped_def.expand_default_arguments(mod, arg_types.size, named_args_names)
+      end
     end
 
     args_start_index = 0
