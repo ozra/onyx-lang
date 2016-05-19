@@ -9,7 +9,7 @@ _Enjoy writing apps that runs with trustworthy solid stability at speeds nearing
     - OOP-_structured_ (studies point to pros)
     - Imperative (because it still is the only way for fast programs, and small processors get more and more use)
     - Easy to code functional where possible (because it _is_ safer, studies also say so)
-    - Concurrency, currently via channels and fibers - this area will get alot of attention once the language settles. Because Moores Law is dead.
+    - Concurrency, currently via channels and fibers - this area will get a lot of attention once the language settles. Because Moores Law is dead.
 - Utilize scientific studies where available for the language design
     - Human<->Code centric studies - _not_ theoretical lambda-calculus
 - Innovate freely to simply make a better language - think outside the box!
@@ -17,8 +17,8 @@ _Enjoy writing apps that runs with trustworthy solid stability at speeds nearing
 - Compiles to high performance native machine code
 - Compile fast in dev-mode for swift compile-test cycle
 - Type system:
-    - Strongly typed - (Nil is a type) no more Java/C++/Go-null-esceptions bullshit!
-    - And still: _almost global_ type inference (_the fully global has been ditched for performance reasons_) - you can get away with _almost_ never writing a type-name (basically only types has to be typed ;-) ).
+    - Strongly typed - (Nil is a type) no more Java/C++/Go-null-exceptions bullshit!
+    - And still: _almost global_ type inference (_the fully global has been ditched for compilation speed reasons_) - you can get away with _almost_ never writing a type-name (basically only types has to be typed ;-) ).
     - Inheritance (_single! - no deadly diamond of death dilemma_)
     - Traits (mixins)
     - All types re-openable (aka monkey patchable)
@@ -41,12 +41,13 @@ _Enjoy writing apps that runs with trustworthy solid stability at speeds nearing
 - _Helpful_ error messages (_will be improved more when the language spec has stabilized_)
     - The "Did you mean this:..." we've come to love in clang (compare gcc) - and even deeper analysis of likely errors
 - I won't stop optimizing until hell freezes over. - The compiler should make things fast - you should focus on keeping your code maintainable.
+- Modules, pretty much like name spaces
 - Closures, of course
 
-## What do You Mean With Scientific Approach? ##
+## What Do You Mean With Scientific Approach? ##
 
 Well, there aren't that many studies concerning coding directly. So admittedly the statement could be seen as kind of vague.
-_The focus is on the actual process of a human being reading, writing and reasoning on code to accomplish a task._
+_The focus is on the actual process of a human being reading, writing and reasoning on code to accomplish a task_, including prototyping, refining, re-factoring, etc.
 
 What is _not_ meant is "highly abstract functional lambda theory proofs from outer space when the cat is and isn't in the cradle and/or you give a shit".
 
@@ -224,4 +225,3 @@ Read the general [Contributing guide](https://github.com/ozra/onyx-lang/blob/mas
 
 Read the general [Contributing guide](https://github.com/ozra/onyx-lang/blob/master/Contributing.md),
 (it's very terse, you will get through it!):
-

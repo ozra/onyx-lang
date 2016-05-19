@@ -36,9 +36,10 @@ end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-say "Lambda Type as atomic"
+say "Lambda Type as value"
 
-lambda-type = '(Int, Bool) -> Int
+-- lambda-type = '(Int, Bool) -> Int
+lambda-type = (Int, Bool) -> Int
 pp lambda-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -69,11 +70,12 @@ type Nilish
 
    internal() ->
       say (foo?bar?qwo || 0) + 200
+      -- say (foo~bar?~qwo || 0) + 200
 
-   foo() ->    @val = 1; if @nil-at >= 1 ? this : nil
+   foo()  ->   @val = 1; if @nil-at >= 1 ? this : nil
    bar?() ->   @val = 2; if @nil-at >= 2 ? this : nil
-   bar() ->    raise "don't call me!"
-   qwo() ->    @val = 3; if @nil-at >= 3 ? 46 : nil
+   bar()  ->   raise "don't call me!"
+   qwo()  ->   @val = 3; if @nil-at >= 3 ? 46 : nil
 
 nfoo = nil
 say (nfoo?foo?bar?qwo || 0) + 50
@@ -83,8 +85,6 @@ nfoo = Nilish 1
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
 
-say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
-
 nfoo = Nilish 2
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
@@ -93,12 +93,17 @@ nfoo = Nilish 3
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
 
+nfoo = Nilish 2
+say (nfoo~foo~bar?~qwo || 0) + 100
+say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
+nfoo.internal
+
 -- '!literal-int = I64
 say "remove me for crash"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- suffix (int)      = Int _
+-- suffix (v IntegerLiteral) = Int _
 -- suffix (real)     = Real _
 -- suffix (number)r  = Real _
 -- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
@@ -107,18 +112,17 @@ say "remove me for crash"
 -- module Geometry.Suffixes<B = 1.0>
 --    BaseUnitFromMeter = B
 
---    suffix (number)mm    = _r * (1000r * BaseUnitFromMeter)
---    suffix (number)cm    = _r * (100r * BaseUnitFromMeter)
---    suffix (number)dm    = _r * (10r * BaseUnitFromMeter)
---    suffix (number)m     = _r
---    suffix (number)km    = _r * (0.001r * BaseUnitFromMeter)
---    suffix (number)svmil = _r * (0.0001r * BaseUnitFromMeter)
+--    suffix (number)mm    = {=number=}_r * (1000r * BaseUnitFromMeter)
+--    suffix (number)cm    = {=number=}_r * (100r * BaseUnitFromMeter)
+--    suffix (number)dm    = {=number=}_r * (10r * BaseUnitFromMeter)
+--    suffix (number)m     = {=number=}_r
+--    suffix (number)km    = {=number=}_r * (0.001r * BaseUnitFromMeter)
+--    suffix (number)svmil = {=number=}r * (0.0001r * BaseUnitFromMeter)
 
--- module Geometry.All
---    mixin Suffixes
---    mixin Functions
+-- Geometry.All:
+--    mixin Suffixes, Functions
 
--- using Geometry.All
+-- Geometry.All:
 --    dist = 47km + 300m
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -143,6 +147,7 @@ b = 3
 c = 2
 that = "That"
 
+do-tup(x Tup) -> x
 
 good-ole-set = {47, "Hey", 3}
 
@@ -150,9 +155,6 @@ say typeof(good-ole-set)
 say good-ole-set.class
 
 
-dpp 1 < 2 < 4
-
-do-tup(x Tup) -> x
 
 -- OTHER SYNTAX ALTERNATIVES
 
@@ -195,63 +197,14 @@ do-tup(<[1, 2]>)
 if do-tup <[1]> => say "tup tup yeay {do-tup <[1]>}"
 
 bzz = do-tup <[that]> if true
-fdf = 5 < 7 < 23 && vx > + vy
-
-x = a < b > c
 
 
-say "ANGULAR TUPLE SYNTAX"
-
-tup1 = <47, 13, "yo">
-tup2 = <#exacto, that>
-tup3 = <that>
-tup4 = <>
-
-tup5 = <
-   "ml"
-   "tup", "are"
-   "also", "ok", 5,
-   that
-   "as"
-   7, "sual"
->
-
-tup6 = do-tup <
-   "ml"
-   "tup", "are"
-   "also", "ok", 5,
-   that
-   "as"
-   7, "sual"
->
-
-tup7 = <a < b, b > c>
-tup8 = <true, a < b > c, false>
-
-
-do-tup <1, 2>
-do-tup(<1, 2>)
-
-if do-tup <1> => say "tup tup yeay"
-
-bzz = do-tup <that> if true
-fdf = 5 < 7 < 23 && vx > + vy
-
-x = a < b > c
-
-say "x0"
-
--- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
 
 say "PAREN TUPLE SYNTAX"
-
-say "x1"
 
 tup1 = ( 47, 13, "yo" )
 tup2 = (#exacto, that)
 tup3 = (that,)
-
-say "x2"
 
 tup4 = (,)
 
@@ -283,11 +236,6 @@ do-tup((1, 2))
 if do-tup (1,) => say "tup tup yeay"
 
 bzz = do-tup (that,) if true
-fdf = 5 < 7 < 23 && vx > + vy
-
-x = a < b > c
-
-say "x3"
 
 -- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
 
@@ -404,11 +352,11 @@ if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
 my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
-   say "csx { opts["magic_port"]?.class }"
-   say "csx { opts["x"]?.class }"
-   say "csx { typeof(opts["x"]?) }"
-   -- host = opts["host_name"] as Str? || "default_host"
-   -- magic-port = opts["magic_port"] as I64? || 47
+   say "csx { opts:magic_port?.class }"
+   say "csx { opts:x?.class }"
+   say "csx { typeof(opts:x?) }"
+   -- host = opts:host_name as Str? || "default_host"
+   -- magic-port = opts:magic_port as I64? || 47
    -- p x, y, host, magic-port
 end
 my-foo 1, 2, Map<Str, Str|I64|Nil>{
@@ -1080,7 +1028,7 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
-zoo*(a; b; ...c 'Int) Str ->  'pure
+zoo*(a; b; ...c 'Int) -> Str  'pure
    if true:
       i = 1
 
@@ -1154,7 +1102,7 @@ end
 
 qwo2(a ^Int, b 'Int) -> end
 
-qwo3(a 'Int, b mut Int) Str -> -- Str
+qwo3(a 'Int, b mut Int) -> Str -- Str
 
 qwo4(a Int; b Int) ->
 end
@@ -1278,8 +1226,8 @@ enum TradeSide < I8
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- crystal style 1 `case ref`
-case n
+-- crystal style 1 `switch ref`
+switch n
 when 1, 2
    say "NOP: is 1|2"
 when 2
@@ -1289,7 +1237,7 @@ else
 end
 
 -- crystal style 1 `case`
-case
+branch
 when n == 1
    say "NOP 1"
 when n == 47, n == 593
@@ -1298,17 +1246,17 @@ else
    say "NOP " + n.to–s
 end
 
--- crystal style 1B `case ref`
-case n
-when 1, 2
+-- crystal style 1B `switch ref`
+switch n
+case 1, 2
    say "NOP: is 1|2"
-when 2
+case 2
    say "NOP: is 3"
 else
    say "17.1:  " + n.to–s
 
 -- crystal style 1B `case`
-case
+branch
 when n == 1
    say "NOP 1"
 when n == 47, n == 593
@@ -1316,8 +1264,8 @@ when n == 47, n == 593
 else
    say "NOP " + n.to–s
 
--- crystal style 2 `case ref`
-case n
+-- crystal style 2 `switch ref`
+switch n
    when 1, 2
       say "NOP: is 1|2"
    when 2
@@ -1327,7 +1275,7 @@ case n
 end
 
 -- crystal style 2 `case`
-case
+branch
    when n == 1
       say "NOP 1"
    when n == 47, n == 593
@@ -1336,7 +1284,7 @@ case
       say "NOP " + n.to–s
 end
 
--- onyx style 1 `case ref`
+-- onyx style 1 `switch ref`
 match n
    593
       say "18"
@@ -1347,7 +1295,7 @@ match n
 end
 
 -- onyx style 1 `case`
-cond
+branch
    n == 1 =>
       say "NO is 1"
    n == 593 =>
@@ -1356,9 +1304,9 @@ cond
          say "19"
    * =>
       say "NO " + n.to–s
-end–case
+end–branch
 
--- onyx style 2 `case ref`
+-- onyx style 2 `switch ref`
 branch n
    593
       say "19.1"
@@ -1368,7 +1316,7 @@ branch n
       say "NO " + n.to–s
 
 -- onyx style 2 `case`
-case
+branch
    n == 1
       say "NO is 1"
    n == 593 =>
@@ -1378,12 +1326,12 @@ case
    *
       say "NO " + n.to–s
 
--- onyx style 3 `case ref`
+-- onyx style 3 `switch ref`
 match n
    1 => say "is 1"
    2 => say "is 2"
    * => if false => say "NO" else say "20: " + n.to–s
-end–case
+end–branch
 
 -- onyx style 3 `case`
 branch
@@ -1391,8 +1339,8 @@ branch
    n == 2     => say "is 2"
    *          => say n.to–s
 
--- onyx style 4 `case ref`
-case n
+-- onyx style 4 `switch ref`
+switch n
    1 do say "is 1"
    2 then say "is 2"
    * do if false then say "NO" else say "22: " + n.to–s
@@ -1403,8 +1351,8 @@ branch
    n == 2     do say "is 2"
    *          then say n.to–s
 
--- onyx style 5 `case ref`
-match n
+-- onyx style 5 `switch ref`
+switch n
 | 593
    say "23.1"
 | 2 =>
@@ -1414,30 +1362,30 @@ match n
 
 -- onyx style 5 `case`
 branch
-| n == 1
-   say "NO is 1"
-| n == 593 =>
-   if false
-   else
-      say "23.2"
-| *
-   say "NO " + n.to–s
+   | n == 1
+      say "NO is 1"
+   | n == 593 =>
+      if false
+      else
+         say "23.2"
+   | *
+      say "NO " + n.to–s
 
--- onyx style 6 `case ref`
+-- onyx style 6 `switch ref`
 match n
    1: say "is 1"
    2: say "is 2"
    *: if false => say "NO" else say "20: " + n.to–s
-end–case
+end–match
 
 -- onyx style 6 `case`
 branch
-   n == 593   : say ": 23.3a"
-   n == 2     : say "is 2"
+   n is 593   : say ": 23.3a"
+   n is 2     : say "is 2"
    *          : say n.to–s
 
 -- onyx style 6b `case`
-cond
+branch
    n == 593:   say ": 23.3b"
    n == 2:     say "is 2"
    *:          say n.to–s
@@ -1499,7 +1447,7 @@ end
 -- my == -""-
 
 -- for: to_s for onyx and crystal must spit out the for–loop
--- for: while–loops for the 'stepping' case must be generated
+-- for: while–loops for the 'stepping' switch must be generated
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -1694,7 +1642,7 @@ type Bar < Qwa
 
    -- '!literal-int=I32
 
-   -- *TODO* use-case for this?
+   -- *TODO* use-switch for this?
    -- Self.RedFoo = 5
    -- Self.GreenFoo = 7
 
@@ -1767,7 +1715,7 @@ type Foo<S1> < Bar
    'pure
    fn–1aa(x) -> nil  -- 'public   -- should this be legal? - looks very confusing!
    'pure
-   fn–1ab(x) Nil -> nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
 
    -- \ private inline
    'inline 'pure
@@ -1784,7 +1732,7 @@ type Foo<S1> < Bar
          say "you!"
    ;
    -- This should fail on parse because of ret-type + nil-ret flag
-   -- fn–1h(x) String ->!
+   -- fn–1h(x) -> String!
    --    say "Hey"
    --    say "you!"
    --    "fdsa"
@@ -1799,7 +1747,7 @@ type Foo<S1> < Bar
    fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
-   fn–c*(a, b S1) S1 -> 'redef 'inline
+   fn–c*(a, b S1) -> S1 'redef 'inline
       "c: {a}, {b}"
 
    end–def
@@ -1886,8 +1834,8 @@ type FooStyle2<S1> < Bar
 
    --| Do some 1aa action!
    'pure
-   fn–1aa(x) ->  'pure;  nil   -- should this be legal? - looks very confusing!
-   fn–1ab(x) Nil -> 'pure;  nil   -- should this be legal? - looks very confusing!
+   fn–1aa(x) -> 'pure:  nil   -- should this be legal? - looks very confusing!
+   fn–1ab(x) -> Nil 'pure:  nil   -- should this be legal? - looks very confusing!
 
    -- (private ) ~>inline
    'inline 'pure
@@ -1906,7 +1854,7 @@ type FooStyle2<S1> < Bar
    ;
 
    -- This should fail on parse because of ret-type + nil-ret flag
-   -- fn–1h(x) String ->!
+   -- fn–1h(x) -> String!
    --    say "Hey"
    --    say "you!"
    --    "fdsa"
@@ -1923,7 +1871,7 @@ type FooStyle2<S1> < Bar
    fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
-   fn–c*(a, b S1) S1 -> 'redef 'inline
+   fn–c*(a, b S1) -> S1 'redef 'inline
       "c: {a}, {b}"
    end–def
    -- end fn–c
@@ -2106,17 +2054,23 @@ api MyLibGmp
 
    alias MpzP = Ptr<Mpz>
 
-   fun init = __gmpz_init(x MpzP)
-   fun init_set_si = __gmpz_init_set_si(rop MpzP, op Long)
-   fun init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int)
+   init = __gmpz_init(x MpzP) -> Void
+   init_set_si = __gmpz_init_set_si(rop MpzP, op Long) -> Void
+   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) -> Void
 
-   fun get_si = __gmpz_get_si(op MpzP) Long
-   fun get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) Ptr<U8>
+   get_si = __gmpz_get_si(op MpzP) -> Long
+   get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) -> Ptr<U8>
 
-   fun add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP)
-   fun set-memory-functions = __gmp_set_memory_functions(malloc (SizeT) -> Ptr<Void>, realloc (Ptr<Void>, SizeT, SizeT) -> Ptr<Void>, free (Ptr<Void>, SizeT) -> Void )
+   add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
+   set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
 
 end
+
+-- indent call style
+MyLibGmp.set-memory-functions
+   (size) -> GC.malloc(size)
+   (ptr, old_size, new_size) -> GC.realloc(ptr, new_size)
+   (ptr, size) -> GC.free(ptr)
 
 -- old school call style
 MyLibGmp.set-memory-functions(
@@ -2125,12 +2079,6 @@ MyLibGmp.set-memory-functions(
    , (ptr, old_size, new_size) -> GC.realloc(ptr, new_size); end,
    ((ptr, size) -> GC.free(ptr))
 )
-
--- indent call style
-MyLibGmp.set-memory-functions
-   (size) -> GC.malloc(size)
-   (ptr, old_size, new_size) -> GC.realloc(ptr, new_size)
-   (ptr, size) -> GC.free(ptr)
 
 x = 7
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -2226,7 +2174,7 @@ extend RestFoo
       false
 
 ext RestFoo
-   rest-foo() Bool -> 'redef
+   rest-foo() -> Bool 'redef
       false
 
 xx = 47
