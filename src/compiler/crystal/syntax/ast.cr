@@ -924,7 +924,7 @@ module Crystal
     property receiver : ASTNode?
     property name : String
     property args : Array(Arg)
-    property double_splat : String?
+    property double_splat : Arg?
     property body : ASTNode
     property block_arg : Arg?
     property? macro_def : Bool
@@ -957,6 +957,7 @@ module Crystal
     def accept_children(visitor)
       @receiver.try &.accept visitor
       @args.each &.accept visitor
+      @double_splat.try &.accept visitor
       @block_arg.try &.accept visitor
       @return_type.try &.accept visitor
       @body.accept visitor
@@ -987,7 +988,7 @@ module Crystal
     end
 
     def clone_specific_impl
-      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat)
+      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat.clone)
       a_def.calls_super = calls_super
       a_def.calls_initialize = calls_initialize
       a_def.calls_previous_def = calls_previous_def
@@ -1004,7 +1005,7 @@ module Crystal
     property name : String
     property args : Array(Arg)
     property body : ASTNode
-    property double_splat : String?
+    property double_splat : Arg?
     property block_arg : Arg?
     property name_column_number : Int32
     property splat_index : Int32?
@@ -1019,6 +1020,7 @@ module Crystal
     def accept_children(visitor)
       @args.each &.accept visitor
       @body.accept visitor
+      @double_splat.try &.accept visitor
       @block_arg.try &.accept visitor
     end
 
@@ -1112,7 +1114,7 @@ module Crystal
     end
 
     def clone_specific_impl
-      Macro.new(@name, @args.clone, @body.clone, @block_arg.clone, @splat_index, @double_splat)
+      Macro.new(@name, @args.clone, @body.clone, @block_arg.clone, @splat_index, @double_splat.clone)
     end
 
     def_equals_and_hash @name, @args, @body, @block_arg, @splat_index, @double_splat

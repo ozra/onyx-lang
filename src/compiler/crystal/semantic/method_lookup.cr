@@ -140,6 +140,9 @@ module Crystal
       arg_types = signature.arg_types
       named_args = signature.named_args
       splat_index = a_def.splat_index
+      splat_restriction = a_def.args[splat_index].restriction if splat_index
+      double_splat = a_def.double_splat
+      double_splat_restriction = double_splat.try &.restriction
 
       # If there are arguments past the splat index and no named args, there's no match,
       # unless all args past it have default values
@@ -167,7 +170,16 @@ module Crystal
         return nil
       end
 
+      splat_arg_types = nil
+
       a_def.match(arg_types) do |arg, arg_index, arg_type, arg_type_index|
+        # Don't match argument against splat restriction
+        if arg_index == splat_index && splat_restriction.is_a?(Splat)
+          splat_arg_types ||= [] of Type
+          splat_arg_types << arg_type
+          next
+        end
+
         match_arg_type = match_arg(arg_type, arg, context)
         if match_arg_type
           matched_arg_types ||= [] of Type
@@ -177,6 +189,18 @@ module Crystal
           return nil
         end
       end
+
+      # Match splat arguments against splat restriction
+      if splat_arg_types && splat_restriction.is_a?(Splat)
+        tuple_type = context.owner.program.tuple_of(splat_arg_types)
+        value = match_arg(tuple_type, splat_restriction.exp, context)
+        unless value
+          return nil
+        end
+      end
+
+      found_unmatched_named_arg = false
+      double_splat_entries = nil
 
       # Check named args
       if named_args
@@ -206,10 +230,34 @@ module Crystal
             end
           else
             # If there's a double splat it's ok, the named arg will be put there
-            next if a_def.double_splat
+            if a_def.double_splat
+              # If there's a restrction on the double splat, check that it matches
+              if double_splat_restriction
+                if double_splat_restriction.is_a?(DoubleSplat)
+                  double_splat_entries ||= [] of NamedArgumentType
+                  double_splat_entries << named_arg
+                else
+                  unless match_arg(named_arg.type, double_splat_restriction, context)
+                    return nil
+                  end
+                end
+              end
+
+              found_unmatched_named_arg = true
+              next
+            end
 
             return nil
           end
+        end
+      end
+
+      # Match double splat arguments against double splat restriction
+      if double_splat_entries && double_splat_restriction.is_a?(DoubleSplat)
+        named_tuple_type = context.owner.program.named_tuple_of(double_splat_entries)
+        value = match_arg(named_tuple_type, double_splat_restriction.exp, context)
+        unless value
+          return nil
         end
       end
 
@@ -221,6 +269,11 @@ module Crystal
             return nil
           end
         end
+      end
+
+      # If there's a restriction on a double splat, zero matching named arguments don't matc
+      if double_splat && double_splat.restriction && !found_unmatched_named_arg
+        return nil
       end
 
       # We reuse a match context without free vars, but we create
