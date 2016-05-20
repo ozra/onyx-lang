@@ -40,6 +40,13 @@ module Crystal
     @stduint : IntegerType?
     @stdreal : FloatType?
 
+    # The cache directory where temporary files are placed.
+    setter cache_dir : String?
+
+    # Temporary files generates by macro runs that need to be
+    # deleted after compilation finishes.
+    getter! tempfiles : Array(String)
+
     # Here we store class var initializers and constants, in the
     # order that they are used. They will be initialized as soon
     # as the program starts, before the main code.
@@ -70,6 +77,7 @@ module Crystal
       @string_pool = StringPool.new
       @class_var_and_const_initializers = [] of ClassVarInitializer | Const
       @class_var_and_const_being_typed = [] of MetaTypeVar | Const
+      @tempfiles = [] of String
 
       types = @types = {} of String => Type
 
@@ -226,6 +234,16 @@ module Crystal
 
     private def crystal_path
       @crystal_path ||= CrystalPath.new(target_triple: target_machine.triple)
+    end
+
+    def new_tempfile(basename)
+      filename = if cache_dir = @cache_dir
+                   File.join(cache_dir, basename)
+                 else
+                   Crystal.tempfile(basename)
+                 end
+      tempfiles << filename
+      filename
     end
 
     def add_def(node : Def)

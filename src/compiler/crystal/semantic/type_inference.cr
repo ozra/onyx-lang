@@ -43,6 +43,7 @@ module Crystal
       _dbg_overview "\nCompiler stage: Semantic (cleanup):\n\n".white
       Crystal.timing("Semantic (cleanup)", stats) do
         cleanup_types
+        cleanup_files
       end
 
       _dbg_overview "\nCompiler stage: Semantic (recursive struct check):\n\n".white
