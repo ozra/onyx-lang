@@ -1,6 +1,5 @@
-# Onyx  - enjoyable, practical, efficient programming
+# Onyx - enjoyable, practical, efficient programming
 
-## "tl;dr Summary"
 _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/C++ with the sole effort of scripting or pseudo coding._
 
 ## Point by Point
@@ -12,16 +11,17 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
   - Full on mutating imperative knuckles fully available
 - Strong type system
   - Types inferred globally.
-  - Explicit annotation where wanted.
+  - Use explicit annotation where wanted.
+  - Generics and type-vars  - because Go is retarded.
+  - Nil is a type  - no weak ass C++/Java bullshit piss typing
   - Inheritance (_single!  - no deadly diamond of death dilemma_)
   - Traits / mixins
   - All types re-openable (aka monkey patchable)
   - Sum-types (union types)
-  - Nil is a type  - no weak ass C++/Java bullshit piss typing
   - Polymorphism and function overloading  - and when type is known: no cost over a straight call (and it might be inlined too). The code is very efficient (you can't make it faster yourself in C)
-  - Generics and type-vars  - because Go is retarded.
+- Macros - both template style and AST-manipulating
 - Almost everything can be changed by coder
-  - Most constructs in the language is changeable, just an override away (but don't!)
+  - Behaviour of most constructs in the language is changeable, just an override away (but don't!)
   - Operator overloading  - of course
   - Iterators are implemented as methods, imperative / structural notation available also because of its commonality. And no, there's no execution overhead.
 - Clean readable and writeable syntax
@@ -29,7 +29,6 @@ _Enjoy writing an app that runs with trustworthy solid stability at speeds of C/
   - Something akin to UFCS may be implemented. Discuss in issue!
 - FFI: Using C-API libs is piece of cake
 - Garbage Collected (_even I_, have accepted it as the way of the future  - now: let's just make it even faster [post 1.0 target])
-- Macros and templating
 - _Helpful_ error messages (_* as soon as the language spec has stabilized_)
 - Fast!
   - Pretty fast compiling

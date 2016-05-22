@@ -57,39 +57,47 @@ class Crystal::Doc::Generator
       Markdown.parse body, MarkdownDocRenderer.new(program_type, io)
     end
 
-    write_template "#{@dir}/index.html", MainTemplate.new(body, types, repository_name)
+    write_template "#{@dir}", MainTemplate.new(body, types, repository_name)
   end
 
   def copy_files
     Dir.mkdir_p "#{@dir}/css"
     Dir.mkdir_p "#{@dir}/js"
 
-    write_template "#{@dir}/css/style.css", StyleTemplate.new
-    write_template "#{@dir}/js/doc.js", JsTypeTemplate.new
+    write_raw_template "#{@dir}/css/style.css", StyleTemplate.new
+    write_raw_template "#{@dir}/js/doc.js", JsTypeTemplate.new
   end
 
   def generate_types_docs(types, dir, all_types)
     types.each do |type|
       if type.program?
-        filename = "#{dir}/toplevel.html"
+        uri = "#{dir}/toplevel"
       else
-        filename = "#{dir}/#{type.name}.html"
+        uri = "#{dir}/#{type.name}"
       end
 
-      write_template filename, TypeTemplate.new(type, all_types)
+      write_template uri, TypeTemplate.new(type, all_types)
 
       next if type.program?
 
       subtypes = type.types
       if subtypes && !subtypes.empty?
-        dirname = "#{dir}/#{type.name}"
-        Dir.mkdir_p dirname
+        dirname = "#{dir}/#{type.name}/"
         generate_types_docs subtypes, dirname, all_types
       end
     end
   end
 
-  def write_template(filename, template)
+  def write_template(uri, template)
+    Dir.mkdir_p uri
+    full_path = "#{uri}/index.html"
+
+    File.open(full_path, "w") do |file|
+      template.to_s file
+    end
+  end
+
+  def write_raw_template(filename, template)
     File.open(filename, "w") do |file|
       template.to_s file
     end

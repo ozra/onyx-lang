@@ -406,24 +406,24 @@ class Crystal::Doc::Type
 
   def path
     if program?
-      "toplevel.html"
+      "toplevel/index.html"
     elsif container = container()
-      "#{container.dir}/#{name}.html"
+      "#{container.dir}/#{name}/index.html"
     else
-      "#{name}.html"
+      "#{name}/index.html"
     end
   end
 
   def path_from(type)
     if type
-      type.path_to(self)
+      type.path_to(self).sub /\/index\.html$/, ""
     else
-      path
+      path.sub /\/index\.html$/, ""
     end
   end
 
   def path_to(filename : String)
-    "#{"../" * nesting}#{filename}"
+    "#{ "../" * (nesting + 1) }#{filename}"
   end
 
   def path_to(type : Type)

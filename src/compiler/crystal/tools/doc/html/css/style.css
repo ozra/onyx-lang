@@ -25,7 +25,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1.type-name {
-  color: #47266E;
+  color: #453730;
 }
 
 #types-list, #main-content {
@@ -38,7 +38,7 @@ h1.type-name {
 #types-list {
   left: 0;
   width: 20%;
-  background-color: #2E1052;
+  background-color: #302b25;
 }
 
 #types-list #search-box {
@@ -83,7 +83,7 @@ h1.type-name {
 
 #types-list .current > a,
 #types-list a:hover {
-  color: #866BA6;
+  color: #afaaaa;
 }
 
 #types-list li ul {
@@ -138,7 +138,7 @@ h1.type-name {
 
 .kind {
   font-size: 60%;
-  color: #866BA6;
+  color: #998877;
 }
 
 .superclass-hierarchy {
@@ -185,7 +185,7 @@ h1.type-name {
   margin-bottom: 4px;
   display: inline-block;
   background-color: #f8f8f8;
-  color: #47266E;
+  color: #453730;
   border: 1px solid #f0f0f0;
   text-decoration: none;
   border-radius: 3px;
@@ -217,7 +217,7 @@ h1.type-name {
   display: block;
   border-radius: 5px;
   background-color: #f8f8f8;
-  color: #47266E;
+  color: #453730;
   border: 1px solid #f0f0f0;
   transition: .2s ease-in-out;
 }
@@ -256,7 +256,7 @@ h1.type-name {
 .methods-inherited a {
   display: inline-block;
   text-decoration: none;
-  color: #47266E;
+  color: #453730;
 }
 
 .methods-inherited a:hover {
@@ -266,7 +266,7 @@ h1.type-name {
 
 .methods-inherited .tooltip span {
   background: #D5CAE3;
-  color: #47266E;
+  color: #453730;
   padding: 4px 8px;
   border-radius: 3px;
   margin: -4px -8px;

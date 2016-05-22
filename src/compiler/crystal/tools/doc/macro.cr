@@ -2,6 +2,8 @@ require "html"
 require "uri"
 require "./item"
 
+# *TODO* if suffix macro, re–format to suffix syntax
+
 class Crystal::Doc::Macro
   include Item
 
@@ -30,7 +32,7 @@ class Crystal::Doc::Macro
   def id
     String.build do |io|
       io << to_s.gsub(' ', "")
-      io << "-macro"
+      io << "-template"
     end
   end
 
@@ -51,7 +53,7 @@ class Crystal::Doc::Macro
   end
 
   def kind
-    "macro "
+    "template "
   end
 
   def to_s(io)
@@ -64,25 +66,25 @@ class Crystal::Doc::Macro
   end
 
   def args_to_s(io)
-    return if @macro.args.empty?
-
     printed = false
     io << '('
 
-    @macro.args.each_with_index do |arg, i|
-      io << ", " if printed
-      io << '*' if @macro.splat_index == i
-      io << arg
-      printed = true
+    unless @macro.args.empty?
+      @macro.args.each_with_index do |arg, i|
+        io << ", " if printed
+        io << "..." if @macro.splat_index == i
+        io << arg
+        printed = true
+      end
+
+      if double_splat = @macro.double_splat
+        io << ", " if printed
+        io << "..:"
+        io << double_splat
+      end
     end
 
-    if double_splat = @macro.double_splat
-      io << ", " if printed
-      io << "**"
-      io << double_splat
-    end
-
-    io << ')'
+    io << ") ="
   end
 
   def args_to_html
