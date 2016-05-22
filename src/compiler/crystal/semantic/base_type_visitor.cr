@@ -3,7 +3,7 @@ module Crystal
     getter mod : Program
     property types : Array(Type)
 
-    @free_vars : Hash(String, Type)?
+    @free_vars : Hash(String, TypeVar)?
     @type_lookup : Type?
     @scope : Type?
     @typed_def : Def?
@@ -453,20 +453,18 @@ module Crystal
     def resolve_ident?(node : Path, create_modules_if_missing = false)
       # _dbg "resolve_ident?(Path: #{node}) ->" # , auto-mod: #{create_modules_if_missing}"
 
-      if (free_vars = @free_vars) && !node.global
-        # _dbg "detaint just for free_vars check in free_vars = #{free_vars}"
-        first_detainted = babelfish_detaint node.names.first
-        type = free_vars[first_detainted]?
-      end
+      free_vars = @free_vars
+      first_detainted = babelfish_detaint node.names.first
 
-      if type
-        # _dbg "- resolve_ident? - matched '#{first_detainted} in free_vars: #{free_vars}"
-        target_type = type
-
-        if node.names.size > 1
-          target_type = lookup_type target_type, node.names[1..-1], node
+      if free_vars && !node.global && (type_var = free_vars[first_detainted]?)
+        if type_var.is_a?(Type)
+          target_type = type_var
+          if node.names.size > 1
+            target_type = lookup_type target_type, node.names[1..-1], node
+          end
+        else
+          target_type = type_var
         end
-
       else
         base_lookup = node.global ? mod : (@type_lookup || @scope || @types.last)
 
