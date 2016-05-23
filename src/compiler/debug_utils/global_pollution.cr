@@ -5,9 +5,18 @@ require "../../wild_colors"
 ifdef !release
   class DebuggingData
     @@dbg_output_on = false
+    @@dbg_enabled = true
+
+    def self.dbg_enabled=(v : Bool)
+      @@dbg_enabled = v
+    end
+
+    def self.dbg_enabled?
+      @@dbg_enabled
+    end
 
     def self.dbg_on
-      @@dbg_output_on = true
+      @@dbg_output_on = @@dbg_enabled
     end
 
     def self.dbg_off
@@ -32,17 +41,25 @@ macro _dbg_off()
   end
 end
 
-macro _dbg(*objs)
+macro _dbg(&block)
   ifdef !release
     if DebuggingData.dbg_output_on?
-      STDERR.puts({{*objs}})
+      {{block.body}}
     end
+  end
+end
+
+macro _dbg(*objs)
+  _dbg do
+    STDERR.puts({{*objs}})
   end
 end
 
 macro _dbg_overview(*objs)
   ifdef !release
-    STDERR.puts({{*objs}})
+    if DebuggingData.dbg_enabled?
+      STDERR.puts({{*objs}})
+    end
   end
 end
 
