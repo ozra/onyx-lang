@@ -5,7 +5,7 @@
 O := .build
 SOURCES := $(shell find src -name '*.cr')
 SPEC_SOURCES := $(shell find spec -name '*.cr') $(shell find spec -name '*.ox')
-FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads),--threads 3)
+FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads) )$(if $(debug),-d )
 EXPORTS := $(if $(release),,CRYSTAL_CONFIG_PATH=`pwd`/src)
 # EXPORTS := CRYSTAL_CONFIG_PATH=`pwd`/src
 
@@ -33,12 +33,18 @@ endif
 
 spec: all_spec
 	$(O)/all_spec
+std_spec: all_std_spec
+	$(O)/std_spec
+compiler_spec: all_compiler_spec
+	$(O)/compiler_spec
 doc:
 	$(BUILD_PATH) ./bin/cr-ox doc src/docs_main.cr
 
 onyx: $(O)/onyx
 
 all_spec: $(O)/all_spec
+all_std_spec: $(O)/std_spec
+all_compiler_spec: $(O)/compiler_spec
 
 llvm_ext: $(LLVM_EXT_OBJ)
 libcrystal: $(LIB_CRYSTAL_TARGET)
@@ -47,6 +53,14 @@ deps: llvm_ext libcrystal
 $(O)/all_spec: deps $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
 	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/all_spec.cr
+
+$(O)/std_spec: deps $(SOURCES) $(SPEC_SOURCES)
+	@mkdir -p $(O)
+	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/std_spec.cr
+
+$(O)/compiler_spec: deps $(SOURCES) $(SPEC_SOURCES)
+	@mkdir -p $(O)
+	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/compiler_spec.cr
 
 $(O)/onyx: deps $(SOURCES)
 	@mkdir -p $(O)
@@ -60,6 +74,5 @@ $(LIB_CRYSTAL_TARGET): $(LIB_CRYSTAL_OBJS)
 
 clean:
 	rm -rf $(O)
-	rm -rf ./doc
 	rm -rf $(LLVM_EXT_OBJ)
 	rm -rf $(LIB_CRYSTAL_OBJS) $(LIB_CRYSTAL_TARGET)

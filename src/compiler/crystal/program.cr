@@ -209,6 +209,9 @@ module Crystal
       proc.variadic = true
       proc.allowed_in_generics = false
 
+      types["Crystal"] = crystal_module = NonGenericModuleType.new self, self, "Crystal"
+      crystal_module.locations << Location.new(__LINE__ - 1, 0, __FILE__)
+
       argc_primitive = Primitive.new(:argc)
       argc_primitive.type = int32
 
@@ -233,18 +236,51 @@ module Crystal
       @nil_var = Var.new("<nil_var>", nil_t)
 
 
-
       @stdint = int64
       @archint = int64
       @stdreal = float64
       @archreal = float64
 
 
-
+      define_crystal_constants
     end
 
     private def crystal_path
       @crystal_path ||= CrystalPath.new(target_triple: target_machine.triple)
+    end
+
+    private def define_crystal_constants
+      types["Crystal"] = @crystal = crystal = NonGenericModuleType.new self, self, "Crystal"
+      crystal.locations << Location.new(__LINE__ - 1, 0, __FILE__)
+
+      tag, sha = Crystal::Config.tag_and_sha
+
+      if sha
+        define_crystal_string_constant "BUILD_COMMIT", sha
+      else
+        define_crystal_nil_constant "BUILD_COMMIT"
+      end
+
+      define_crystal_string_constant "BUILD_DATE", Crystal::Config.date
+      define_crystal_string_constant "CACHE_DIR", CacheDir.instance.dir
+      define_crystal_string_constant "DEFAULT_PATH", Crystal::Config.path
+      define_crystal_string_constant "DESCRIPTION", Crystal::Config.description
+      define_crystal_string_constant "PATH", Crystal::CrystalPath.default_path
+      define_crystal_string_constant "VERSION", tag
+    end
+
+    private def define_crystal_string_constant(name, value)
+      define_crystal_constant name, StringLiteral.new(value).tap(&.set_type(string))
+    end
+
+    private def define_crystal_nil_constant(name)
+      define_crystal_constant name, NilLiteral.new.tap(&.set_type(self.nil))
+    end
+
+    private def define_crystal_constant(name, value)
+      crystal.types[name] = const = Const.new self, crystal, name, value
+      const.locations << Location.new(0, 0, __FILE__)
+      const.initialized = true
     end
 
     def new_tempfile(basename)
@@ -458,7 +494,7 @@ module Crystal
                      uint8 uint16 uint32 uint64 float float32 float64 string symbol pointer array static_array
                      archint archreal archuint archnat
                      stdint stdreal stduint stdnat
-                     exception tuple named_tuple proc enum range regex) %}
+                     exception tuple named_tuple proc enum range regex crystal) %}
       def {{name.id}}
         @{{name.id}}.not_nil!
       end

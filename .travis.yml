@@ -15,9 +15,9 @@ matrix:
 before_install: bin/ci prepare_system
 install: bin/ci prepare_build
 script:
-  - bin/ci with_build_env 'make onyx spec doc'
+  - bin/ci with_build_env 'make onyx std_spec compiler_spec doc'
   - bin/ci with_build_env 'find samples -name "*.ox" | xargs -L 1 ./bin/crystal build --no-codegen'
-  - bin/ci with_build_env './bin/onyx tool format --check'
+  - bin/ci with_build_env './bin/onyx style-check'
 branches:
   only:
     - master
@@ -32,3 +32,4 @@ branches:
 #       - "%{repository_slug}#%{commit} (%{branch} - %{commit_subject}): %{message} %{build_url}"
   # slack:
   #   secure: Ng3nTqGWY+9p1pS6yjGqDhmRvdgbIZgTNpMWbO/ngwpCyicmD3jafZkShqqXbULZTJJr3OxIGzi6GHGusT0Ic/Pi9JCM3X3v/xuBruKIR+EnNyPo7IL4ZYAlwnXyJHlCHHDBq0gSHGvGJwsXn6IgZBPRfeIq+CCyQHVPyvc9EHE=
+
