@@ -401,7 +401,7 @@ class Crystal::Doc::Type
       container.full_name_without_type_vars(io)
       io << "."
     end
-    io << name # babelfish_reverse(name) + "__N"
+    io << name # + "__N"
   end
 
   def path
@@ -512,18 +512,18 @@ class Crystal::Doc::Type
   end
 
   def to_s(io)
-    io << name
+    io << name # << "__S"
     append_type_vars io
   end
 
   private def append_type_vars(io)
     type = @type
     if type_vars = type_vars()
-      io << "&lt;"
+      io << "‹"
       io << "..." if type.is_a?(GenericType) && type.variadic
       io << "..:" if type.is_a?(GenericType) && type.double_variadic
       type_vars.join(", ", io)
-      io << "&gt;"
+      io << "›"
     end
   end
 
@@ -539,9 +539,9 @@ class Crystal::Doc::Type
     begin
       match = lookup_type(node)
       if match
-        type_to_html match, io, node.to_s, links: links
+        type_to_html match, io, node.to_oxs, links: links
       else
-        io << node
+        io << node.to_oxs
       end
     ensure
       node.global = old_global
@@ -562,25 +562,26 @@ class Crystal::Doc::Type
           io << "</a>"
         end
       else
-        io << node.name
+        io << node.name.to_oxs
       end
     else
-      io << node.name
+      io << node.name.to_oxs
     end
-    io << "&lt;"
+    io << "‹"
     node.type_vars.join(", ", io) do |type_var|
       node_to_html type_var, io, links: links
     end
-    io << "&gt;"
+    io << "›"
   end
 
   def node_to_html(node : Fun, io, links = true)
+    io << "("
     if inputs = node.inputs
       inputs.join(", ", io) do |input|
         node_to_html input, io, links: links
       end
     end
-    io << " -&gt; "
+    io << ") -&gt; "
     if output = node.output
       node_to_html output, io, links: links
     end
@@ -593,7 +594,7 @@ class Crystal::Doc::Type
   end
 
   def node_to_html(node, io, links = true)
-    io << node
+    io << node.to_oxs
   end
 
   def type_to_html(type)
@@ -607,10 +608,11 @@ class Crystal::Doc::Type
   end
 
   def type_to_html(type : Crystal::FunInstanceType, io, text = nil, links = true)
+    io << "("
     type.arg_types.join(", ", io) do |arg_type|
       type_to_html arg_type, io, links: links
     end
-    io << " -&gt; "
+    io << ") -&gt; "
     return_type = type.return_type
     type_to_html return_type, io, links: links unless return_type.void?
   end
@@ -646,7 +648,7 @@ class Crystal::Doc::Type
         generic_class.full_name_without_type_vars(io)
       end
     end
-    io << "&lt;"
+    io << "‹"
     type.type_vars.values.join(", ", io) do |type_var|
       case type_var
       when Var
@@ -655,7 +657,7 @@ class Crystal::Doc::Type
         type_to_html type_var, io, links: links
       end
     end
-    io << "&gt;"
+    io << "›"
   end
 
   def type_to_html(type : Crystal::VirtualType, io, text = nil, links = true)

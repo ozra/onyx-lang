@@ -12,7 +12,7 @@ class Crystal::Doc::Method
   end
 
   def name
-    @def.name.gsub(/_/, '-') # *TODO* reverse-babeling if needed!
+    @def.name.gsub(/_/, '-') # + "__M" # *TODO* reverse-babeling if needed!
   end
 
   def args
@@ -110,26 +110,29 @@ class Crystal::Doc::Method
 
       printed = false
       @def.args.each_with_index do |arg, i|
-        io << ", " if printed
-        io << "..." if @def.splat_index == i
+        html_comma_if printed, links, io
+        if @def.splat_index == i
+          html_class_if links, "separator", "...", io
+        end
         arg_to_html arg, io, links: links
         printed = true
       end
       if double_splat = @def.double_splat
-        io << ", " if printed
-        io << "..:"
+        html_comma_if printed, links, io
+        html_class_if links, "separator", "..:", io
         io << double_splat
         printed = true
       end
 
       if block_arg = @def.block_arg
-        io << ", " if printed
-        io << '&'
+        html_comma_if printed, links, io
+        html_class_if links, "separator", "\\", io
         arg_to_html block_arg, io, links: links
 
       elsif @def.yields
-        io << ", " if printed
-        io << "&block"
+        html_comma_if printed, links, io
+        html_class_if links, "separator", "\\", io
+        html_class_if links, "arg-name", "fragment", io
       end
 
       io << ')'
@@ -138,36 +141,73 @@ class Crystal::Doc::Method
       io << "()"
     end
 
+    io << "&nbsp;-&gt;"
+
     case return_type
     when ASTNode
-      io << ' '
+      io << "&nbsp;"
+      io << "<span class=\"type-name\">" if links
       node_to_html return_type, io, links: links
+      io << "</span>" if links
     when Crystal::Type
-      io << ' '
+      io << "&nbsp;"
+      io << "<span class=\"type-name\">" if links
       @type.type_to_html return_type, io, links: links
+      io << "</span>" if links
     end
 
     io
   end
 
+  def html_class_if(cond, cls, text, io)
+    if cond
+      io << "<span class=\""
+      io << cls
+      io << "\">"
+    end
+    io << text
+    if cond
+      io << "</span>"
+    end
+    nil
+  end
+
+  def html_comma_if(cond, decorate, io)
+    if cond
+      io << "<span class=\"separator\">" if decorate
+      io << ", "
+      io << "</span>" if decorate
+    end
+    nil
+  end
+
   def arg_to_html(arg : Arg, io, links = true)
     if arg.external_name != arg.name
-      io << (arg.external_name.empty? ? "_" : arg.external_name)
+      io << (arg.external_name.empty? ? "_" : arg.external_name.gsub(/_/, "-"))
       io << " "
     end
 
-    io << arg.name
+    io << "<span class=\"arg-name\">"
+    io << arg.name.gsub(/_/, "-")
+    io << "</span>"
 
     if restriction = arg.restriction
       io << " "
+      io << "<span class=\"type-name\">"
       node_to_html restriction, io, links: links
+      io << "</span>"
     elsif type = arg.type?
       io << " "
+      io << "<span class=\"type-name\">"
       @type.type_to_html type, io, links: links
+      io << "</span>"
     end
     if default_value = arg.default_value
+      io << "<span class=\"default-value\">"
       io << " = "
-      io << Highlighter.highlight(default_value.to_s)
+      # io << Highlighter.highlight(default_value.to_s)
+      io << default_value.to_oxs
+      io << "</span>"
     end
   end
 

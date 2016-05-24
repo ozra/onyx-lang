@@ -41,7 +41,7 @@ macro _dbg_off()
   end
 end
 
-macro _dbg(&block)
+macro _dbg_will(&block)
   ifdef !release
     if DebuggingData.dbg_output_on?
       {{block.body}}
@@ -50,8 +50,10 @@ macro _dbg(&block)
 end
 
 macro _dbg(*objs)
-  _dbg do
-    STDERR.puts({{*objs}})
+  ifdef !release
+    if DebuggingData.dbg_output_on?
+      STDERR.puts({{*objs}})
+    end
   end
 end
 

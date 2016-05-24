@@ -29,7 +29,7 @@ module Crystal
       @count_whitespace = false
       @slash_is_regex = true
       @wants_raw = false
-      @string_pool = string_pool || StringPool.new
+      @string_pool = string_pool || SharedCompilationStringPool.get
       @tmp_buf = MemoryIO.new 1024
     end
 

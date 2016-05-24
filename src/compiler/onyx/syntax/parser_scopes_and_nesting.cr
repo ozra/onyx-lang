@@ -19,10 +19,8 @@ class Scope
    end
 
    def dbgstack
-      ifdef !release
-         STDERR.puts "VARS:".blue
-         STDERR.puts @vars
-      end
+      _dbg "VARS:".blue
+      _dbg @vars
    end
 
 end
@@ -76,7 +74,7 @@ class ScopeStack
       ifdef !release
          @scopes.each_with_index do |scope, i|
             #@scopes[@scopes.size - 2].dbgstack
-            STDERR.puts "#{i}:"
+            _dbg "#{i}:"
             scope.dbgstack
          end
       end
@@ -220,13 +218,9 @@ class NestingStack
          return pop_and_status indent, force
 
       elsif indent < nest.indent
-         ifdef !release
-            STDERR.puts "indents left to match alignment in nesting_stack:"
-         end
+         _dbg "indents left to match alignment in nesting_stack:"
          (@stack.size - 1..0).each do |i|
-            ifdef !release
-               STDERR.puts "ind: #{@stack[i].indent}"
-            end
+            _dbg "ind: #{@stack[i].indent}"
             # *TODO*
             # check so that the indent–level EXISTS further up (we don't allow dedent
             # to an "unspecified level" (in between)

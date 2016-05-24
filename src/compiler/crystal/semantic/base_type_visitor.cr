@@ -686,7 +686,7 @@ module Crystal
 
     def expand_macro_arguments(node, expansion_scope)
       _dbg "BaseTypeVisitor.expand_macro_arguments, node.is_onyx = #{node.is_onyx}".red
-      ifdef !release
+      _dbg_will do
         _dbg "\nargs BEFORE expand_macro_arguments".white
         node.args.each_with_index do |arg, i|
           _dbg "##{i}: #{arg.class}"
@@ -719,7 +719,7 @@ module Crystal
         @exp_nest += 1
       end
 
-      ifdef !release
+      _dbg_will do
         _dbg "\nargs AFTER expand_macro_arguments".white
         args.each_with_index do |arg, i|
           _dbg "##{i} #{arg.class}:"

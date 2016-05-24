@@ -65,7 +65,7 @@ module Crystal::Doc::Highlighter
           end
         end
       when :"+", :"-", :"*", :"/", :"=", :"==", :"<", :"<=", :">", :">=", :"!", :"!=", :"=~", :"!~", :"&", :"|", :"^", :"~", :"**", :">>", :"<<", :"%", :"[]", :"[]?", :"[]=", :"<=>", :"==="
-        highlight token, "o", io
+        highlight HTML.escape(token.to_s), "o", io
       when :"}"
         if break_on_rcurly
           break

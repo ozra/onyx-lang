@@ -328,6 +328,7 @@ babel_type  Ptr,    Pointer,     true
 # babel_type Str,    String,      false  -- added as alias instead currently
 babel_type  List,   Array,       true
 babel_type  Tup,    Tuple,       false
+babel_type  TTup,   NamedTuple,  false # "TaggedTuple"
 
 babel_type  Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
 

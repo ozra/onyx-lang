@@ -22,6 +22,7 @@
 </div>
 
 <div id="main-content">
+
 <h1 class="type-name">
 <% if type.program? %>
   <%= type.full_name %>
@@ -29,6 +30,16 @@
   <span class="kind"><%= type.kind %></span> <%= type.full_name %> <span class="kind"><%= type.abstract? ? "'abstract " : ""%></span>
 <% end %>
 </h1>
+
+
+<h1 class="type-name ghosted">
+<% if type.program? %>
+  <%= type.full_name %>
+<% else %>
+  <span class="kind"><%= type.kind %></span> <%= type.full_name %> <span class="kind"><%= type.abstract? ? "'abstract " : ""%></span>
+<% end %>
+</h1>
+
 
 <% if type.superclass %>
   <%= type.superclass_hierarchy %>

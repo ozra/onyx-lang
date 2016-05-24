@@ -328,13 +328,17 @@ USAGE
   private def docs
     # *TODO* debug
     _dbg "generate docs"
+    # setup_compier just to parse some flags - refactor!
+    config = setup_compiler "docs", no_codegen: true
 
-    if options.empty?
+    sources = config.not_nil!.sources
+
+    if sources.empty?
       sources = [Compiler::Source.new("require", %(require "./src/**"))]
       included_dirs = [] of String
     else
       filenames = options
-      sources = gather_sources(filenames)
+      # sources = gather_sources(filenames)
       included_dirs = sources.map { |source| File.dirname(source.filename) }
     end
 
@@ -603,35 +607,33 @@ USAGE
         opts.on("--verbose", "Display executed commands") do
           compiler.verbose = true
         end
+      end
 
+      ifdef !release
+        opts.on("--NID", "Internal: Turn off any dev debug-output of compiler internals") do
+          DebuggingData.dbg_enabled = false
+        end
+      end
 
-        opts.on("--test-a1", "Internal: Test forking codegen opt 1") do
-          OptTests.test_opt_mode_a = 1
-        end
-        opts.on("--test-a2", "Internal: Test spawning in-mem codegen opt 2") do
-          OptTests.test_opt_mode_a = 2
-        end
+      opts.on("--A1", "Internal: Test forking codegen opt 1") do
+        OptTests.test_opt_mode_a = 1
+      end
+      opts.on("--A2", "Internal: Test spawning in-mem codegen opt 2") do
+        OptTests.test_opt_mode_a = 2
+      end
 
-        opts.on("--test-b1", "Internal: Test tos-non-caching opt 1") do
-          OptTests.test_opt_mode_b = 1
-        end
-        opts.on("--test-b2", "Internal: Test tos-caching opt 2") do
-          OptTests.test_opt_mode_b = 2
-        end
+      opts.on("--B1", "Internal: Test tos-non-caching opt 1") do
+        OptTests.test_opt_mode_b = 1
+      end
+      opts.on("--B2", "Internal: Test tos-caching opt 2") do
+        OptTests.test_opt_mode_b = 2
+      end
 
-        opts.on("--test-c1", "Internal: Test str-pool-std opt 1") do
-          OptTests.test_opt_mode_c = 1
-        end
-        opts.on("--test-c2", "Internal: Test str-pool-opt opt 2") do
-          OptTests.test_opt_mode_c = 2
-        end
-
-        # if debug_release_flags > 1  # both debug and release (!?)
-        #   error "can't supply both --debug and --release - pick one!"
-
-        # elsif debug_release_flags == 0 && run == false  # neither
-        #   error "either --debug or --release must be specified"
-        # end
+      opts.on("--C1", "Internal: Test str-pool-std opt 1") do
+        OptTests.test_opt_mode_c = 1
+      end
+      opts.on("--C2", "Internal: Test str-pool-opt opt 2") do
+        OptTests.test_opt_mode_c = 2
       end
 
       opts.unknown_args do |before, after|

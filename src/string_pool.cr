@@ -15,6 +15,7 @@ class StringPool
     calculate_new_size
     _dbg_on
     _dbg "StringPool.init - initial_bucket_power=#{initial_bucket_power}, size=#{2 << initial_bucket_power}, bucket_mask=#{@bucket_mask.to_s(2)}"
+    # CallStack.print_backtrace
 
   end
 

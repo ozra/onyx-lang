@@ -2,10 +2,10 @@
   <% methods.each do |method| %>
     <div class="entry-detail" id="<%= method.html_id %>">
       <div class="signature">
-        <%= method.kind == :class_method ? "Type." : "" %><strong><%= method.name %></strong><%= method.args_to_html %>&nbsp;-&gt;
-        <%= method.abstract? ? "abstract " : "" %>
+        <%= method.kind == :class_method ? "<span class=\"type-name\">Self.</span>" : "" %><span class="method-name"><%= method.name %></span><%= method.args_to_html %>
+        <%= method.abstract? ? " abstract " : "" %>
 
-        <a class="method-permalink" href="<%= method.anchor %>">#</a>
+        <a class="method-permalink" href="<%= method.anchor %>">[#]</a>
 
         <% if source_link = method.source_link %>
           <a class="source-link" href="<%= source_link %>" target="_blank">[source]</a>

@@ -56,10 +56,14 @@ end
 
 
 class ASTNode
+   def to_oxs()
+      to_s nil, :onyx
+   end
+
    def to_s(io : Nil, as_kind = :auto)
       str = MemoryIO.new
       to_s str, as_kind
-      str.to_s
+      str.to_s # *TODO* needed?
    end
 
    def to_s(io, as_kind = :auto)

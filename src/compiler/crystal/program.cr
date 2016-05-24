@@ -2,6 +2,17 @@ require "llvm"
 require "dl"
 require "./types"
 
+module SharedCompilationStringPool
+  @@pool = StringPool.new
+  def self.flush
+    @@pool = StringPool.new
+    nil
+  end
+  def self.get : StringPool
+    @@pool
+  end
+end
+
 module Crystal
   class Program < NonGenericModuleType
     include DefContainer
@@ -74,7 +85,7 @@ module Crystal
       @wants_doc = false
       @color = true
       @after_inference_types = Set(Type).new
-      @string_pool = StringPool.new
+      @string_pool = SharedCompilationStringPool.get
       @class_var_and_const_initializers = [] of ClassVarInitializer | Const
       @class_var_and_const_being_typed = [] of MetaTypeVar | Const
       @tempfiles = [] of String

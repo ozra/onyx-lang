@@ -7,7 +7,7 @@ class Crystal::Call
   def dbgx(str : String)
     ifdef !release
       if @is_onyx
-        STDERR.puts str + " " + @name
+        _dbg str + " " + @name
       end
     end
   end

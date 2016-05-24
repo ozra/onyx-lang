@@ -1,15 +1,66 @@
+/* latin-ext */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Raleway'), local('Raleway-Regular'), url(https://fonts.gstatic.com/s/raleway/v11/yQiAaD56cjx1AooMTSghGfY6323mHUZFJMgTvxaG2iE.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+1E00-1EFF, U+20A0-20AB, U+20AD-20CF, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Raleway'), local('Raleway-Regular'), url(https://fonts.gstatic.com/s/raleway/v11/0dTEPzkLWceF7z0koJaX1A.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 600;
+  src: local('Raleway SemiBold'), local('Raleway-SemiBold'), url(https://fonts.gstatic.com/s/raleway/v11/STBOO2waD2LpX45SXYjQBSEAvth_LlrfE80CYdSH47w.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+1E00-1EFF, U+20A0-20AB, U+20AD-20CF, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 600;
+  src: local('Raleway SemiBold'), local('Raleway-SemiBold'), url(https://fonts.gstatic.com/s/raleway/v11/xkvoNo9fC8O2RDydKj12b_k_vArhqVIZ0nv9q090hN8.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 900;
+  src: local('Raleway Black'), local('Raleway-Black'), url(https://fonts.gstatic.com/s/raleway/v11/Ji5epXNcpHu3r63lhS0cTiEAvth_LlrfE80CYdSH47w.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+1E00-1EFF, U+20A0-20AB, U+20AD-20CF, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Raleway';
+  font-style: normal;
+  font-weight: 900;
+  src: local('Raleway Black'), local('Raleway-Black'), url(https://fonts.gstatic.com/s/raleway/v11/PKCRbVvRfd5n7BTjtGiFZPk_vArhqVIZ0nv9q090hN8.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+
 html, body {
   position: relative;
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  /*overflow: hidden;*/
 }
 
 body {
-  font-family: "Lucida Sans", "Lucida Grande", Verdana, Arial, sans-serif;
+  /*font-family: "Lucida Sans", "Lucida Grande", Verdana, Arial, sans-serif;*/
+  font-family: "Raleway", "Helvetica Neue", "HelveticaNeue", Helvetica, Arial, sans-serif; /*!important;*/
   color: #333;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -26,19 +77,39 @@ h1, h2, h3, h4, h5, h6 {
 
 h1.type-name {
   color: #453730;
+  font-weight: 900;
+  margin: 0;
+}
+
+h1.type-name.ghosted {
+  position: fixed;
+  opacity: 0.5;
+  z-index: 100;
+  background-color: rgb(255, 255, 255);
+  width: 100%;
+  top: 0px;
+  left: 80%;
+}
+
+#main-content {
+  width: 70%;
+  padding: 30px 0 0 5%;
+  /*left: 20%;*/
+  /*right: 0;*/
 }
 
 #types-list, #main-content {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  overflow: auto;
+  /*position: absolute;*/
+  /*top: 0;*/
+  /*bottom: 0;*/
+  /*overflow: auto;*/
+  float: left;
 }
 
 #types-list {
-  left: 0;
+  /*left: 0;*/
   width: 20%;
-  background-color: #302b25;
+  background-color: #fff; /* #302b25; */
 }
 
 #types-list #search-box {
@@ -75,10 +146,13 @@ h1.type-name {
 }
 
 #types-list a {
+  /*font-family: "Raleway", "Helvetica Neue", "HelveticaNeue", Helvetica, Arial, sans-serif; /*!important;*/*/
   display: block;
-  padding: 5px 15px 5px 30px;
+  padding: 2px 15px 2px 30px;
   text-decoration: none;
-  color: #fff;
+  color: #000;
+  /* color: #fff; */
+  font-size: 0.9em;
 }
 
 #types-list .current > a,
@@ -98,19 +172,34 @@ h1.type-name {
   padding-left: 30px;
 }
 
+#types-list li::before {
+  box-sizing: border-box;
+  content: "■";
+  display: block;
+  width: 30px;
+  height: 20px;
+  line-height: 20px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  text-align: center;
+  color: #000;
+  font-size: 8px;
+}
+
 #types-list li.parent::before {
   box-sizing: border-box;
   content: "▼";
   display: block;
   width: 30px;
-  height: 30px;
+  height: 20px;
+  line-height: 20px;
   position: absolute;
   top: 0;
   left: 0;
   text-align: center;
-  color: white;
+  color: #000;
   font-size: 8px;
-  line-height: 30px;
   transform: rotateZ(-90deg);
   cursor: pointer;
   transition: .2s linear;
@@ -130,19 +219,13 @@ h1.type-name {
   max-height: 1000em;
 }
 
-#main-content {
-  padding: 0 30px 30px 30px;
-  left: 20%;
-  right: 0;
-}
-
 .kind {
   font-size: 60%;
   color: #998877;
 }
 
 .superclass-hierarchy {
-  margin: -15px 0 30px 0;
+  margin: 15px 0 30px 0;
   padding: 0;
   list-style: none outside;
   font-size: 80%;
@@ -189,6 +272,7 @@ h1.type-name {
   border: 1px solid #f0f0f0;
   text-decoration: none;
   border-radius: 3px;
+  font-family: Courier New;
 }
 
 .superclass-hierarchy .superclass a:hover,
@@ -215,11 +299,52 @@ h1.type-name {
   padding: 5px 15px;
   margin-bottom: 10px;
   display: block;
-  border-radius: 5px;
-  background-color: #f8f8f8;
-  color: #453730;
-  border: 1px solid #f0f0f0;
+  border-radius: 5px 5px 0px 0px;
+  /*background-color: #f8f8f8;*/
+  /*color: #453730;*/
+
+  color: #352720;
+/*  box-shadow: rgba(152, 148, 144, 0.25) 0px -2px 2px,
+              inset rgba(252, 250, 248, 1) 0px 13px 10px;
+*/
+  /*background-color: rgba(252, 250, 248, 0.5);*/
+
+  border: 1px solid #f0f0e8;
+  border-bottom: 0;
   transition: .2s ease-in-out;
+  font-family: "Andale Mono", "Ubuntu Mono";
+  font-size: 12pt;
+  letter-spacing: -1pt;
+}
+
+.entry-detail .signature .arg-name,
+.entry-detail .signature .separator {
+  font-weight: 600;
+  color: #655750;
+}
+
+.entry-detail .signature .type-name,
+.entry-detail .signature .type-name a {
+  /*font-style: italic;*/
+  font-weight: 100;
+  color: #88a;
+  font-family: "Courier New";
+}
+
+.entry-detail .signature .type-name a {
+  text-decoration: none;
+  border-bottom: 1px dotted;
+}
+
+.entry-detail .signature .type-name a:hover {
+  color: #00a;
+}
+
+.entry-detail .signature .default-value {
+  font-weight: 100;
+  font-style: italic;
+  color: #988;
+  text-decoration: none;
 }
 
 .entry-detail:target .signature {
@@ -229,19 +354,24 @@ h1.type-name {
 
 .entry-detail .signature .method-permalink,
 .entry-detail .signature .source-link {
-/*  position: absolute;
-  top: 0;
-  right: 0;
-*/
   float: right;
   padding-right: 15px;
   text-decoration: none;
-  font-weight: bold;
-  color: #624288;
+  /*font-weight: 500;*/
+  color: #888072;
+}
+
+.entry-detail .signature .method-permalink:hover,
+.entry-detail .signature .source-link:hover {
+  color: #997242;
 }
 
 .entry-detail .signature .source-link.intrinsic {
-  color: #B2A2C8;
+  color: #C8B2A2;
+}
+
+.entry-detail .signature .method-name {
+  font-weight: 600;
 }
 
 .methods-inherited {
@@ -261,15 +391,33 @@ h1.type-name {
 
 .methods-inherited a:hover {
   text-decoration: underline;
-  color: #6C518B;
+  color: #4C518B;
 }
 
-.methods-inherited .tooltip span {
-  background: #D5CAE3;
+.methods-inherited .tooltip > span {
+  /*background: #eaf0ff;*/
+  background: #ddd0b2;
   color: #453730;
   padding: 4px 8px;
   border-radius: 3px;
   margin: -4px -8px;
+  text
+}
+
+.methods-inherited .tooltip pre {
+  background-color: #f8f8f8;
+}
+
+.tooltip > span {
+  position: absolute;
+  opacity: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.tooltip:hover > span {
+  display: inline-block;
+  opacity: 0.95;
 }
 
 pre {
@@ -277,8 +425,11 @@ pre {
   line-height: 1.45;
   overflow: auto;
   color: #333;
-  background: #f7f7f7;
-  font-size: 14px;
+  font-size: 10pt;
+
+  background: rgba(252, 248, 244, 0.4);
+  /*box-shadow: 0px 1px 1px rgba(152, 148, 144, 0.12)*/
+  border: 1px solid rgba(252,248,244,1);
 }
 
 .entry-detail pre {
@@ -294,18 +445,6 @@ pre {
 
 code {
   font-family: Consolas, 'Courier New', Courier, Monaco, monospace;
-}
-
-.tooltip span {
-  position: absolute;
-  opacity: 0;
-  display: none;
-  pointer-events: none;
-}
-
-.tooltip:hover span {
-  display: inline-block;
-  opacity: 1;
 }
 
 .c {

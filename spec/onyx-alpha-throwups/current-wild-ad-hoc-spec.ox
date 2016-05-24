@@ -1,5 +1,11 @@
 #!/usr/bin/env onyx
 
+
+-- Some Monofonts Safe Unicode Glyphs:
+-- ®©ªµþ¥€$£¢œ·°¤×÷¿¡¹²³§¶-–—“”‘’()[]{}‹›«»½ßð
+-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 -- Test all possible constructs in one go
 say "\n\nBefore requires!\n\n"
 
