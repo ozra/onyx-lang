@@ -6,6 +6,12 @@ module Crystal
     VERSION   = ONYX_VERSION
     CACHE_DIR = ENV["ONYX_CACHE_DIR"]? || ENV["CRYSTAL_CACHE_DIR"]? || ".onyx-cache"
 
+    @@cache_dir : String?
+
+    def self.cache_dir
+      @@cache_dir ||= File.expand_path(CACHE_DIR)
+    end
+
     def self.path
       PATH
     end
@@ -17,9 +23,9 @@ module Crystal
     def self.description
       tag, sha = tag_and_sha
       if sha
-        "Crystal #{tag} [#{sha}] (#{date})"
+        "Onyx #{tag} [#{sha}] (#{date})"
       else
-        "Crystal #{tag} (#{date})"
+        "Onyx #{tag} (#{date})"
       end
     end
 

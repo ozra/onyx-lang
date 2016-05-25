@@ -149,7 +149,7 @@ USAGE
         puts USAGE
         exit
       when "--version" == command, "-v" == command
-        puts "Onyx #{Crystal.version_string}"
+        puts Crystal::Config.description
         exit
       else
         if File.file?(command)
