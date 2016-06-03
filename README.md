@@ -10,40 +10,40 @@ _Enjoy writing apps that runs with trustworthy solid stability at speeds nearing
 ## Onyx is / has Goal of ##
 
 - Being pragmatic - get shit done! Does what you mean!
-    - OOP-_structured_ (studies point to pros)
-    - Imperative (because it still is the only way for fast programs, and small processors get more and more use)
-    - Easy to code functional where possible (because it _is_ safer, studies also say so)
-    - Concurrency, currently via channels and fibers - this area will get a lot of attention once the language settles. Because Moores Law is dead.
+   - OOP-_structured_ (studies point to pros)
+   - Imperative (because it still is the only way for fast programs, and small processors get more and more use)
+   - Easy to code functional where possible (because it _is_ safer, studies also say so)
+   - Concurrency, currently via channels and fibers - this area will get a lot of attention once the language settles. Because Moores Law is dead.
 - Utilize scientific studies where available for the language design
-    - Human<->Code centric studies - _not_ theoretical lambda-calculus
+   - Human<->Code centric studies - _not_ theoretical lambda-calculus
 - Innovate freely to simply make a better language - think outside the box!
 - Look at available prior art for inspiration as much as possible - remember the box!
 - Compiles to high performance native machine code
 - Compile fast in dev-mode for swift compile-test cycle
 - Type system:
-    - Strongly typed - (Nil is a type) no more Java/C++/Go-null-exceptions bullshit!
-    - And still: _almost global_ type inference (_the fully global has been ditched for compilation speed reasons_) - you can get away with _almost_ never writing a type-name (basically only types has to be typed ;-) ).
-    - Inheritance (_single! - no deadly diamond of death dilemma_)
-    - Traits (mixins)
-    - All types re-openable (aka monkey patchable)
-    - Sum-types
-    - Polymorphism and overloading - most of the time: no cost over a straight call. The code is very efficient (you can't make it faster yourself in C :-) )
-    - Generics and type-vars - because Go is retarded.
-- Almost everything can be changed by coder
-    - Most constructs in the language is just an override away
-    - Operator overloading - of course
-    - Iterators are simply implemented as methods taking "fragments". And no, there's no execution overhead over a hand-written while-loop.
+   - Strongly typed - (Nil is a type) no more Java/C++/Go-null-exceptions bullshit!
+   - And still: _almost global_ type inference (_the fully global has been ditched for compilation speed reasons_) - you can get away with _almost_ never writing a type-name (basically only types has to be typed ;-) ).
+   - Inheritance (_single! - no deadly diamond of death dilemma_)
+   - Traits (mixins)
+   - All types re-openable (aka monkey patchable)
+   - Sum-types
+   - Polymorphism and overloading - most of the time: no cost over a straight call. The code is very efficient (you can't make it faster yourself in C :-) )
+   - Generics and type-vars - because Go is retarded.
+- The behaviour of almost everything can be changed by coder
+   - Most constructs in the language is just an override away
+   - Operator overloading - of course
+   - Iterators are simply implemented as methods taking "fragments". And no, there's no execution overhead over a hand-written while-loop.
 - Clean readable and writeable syntax
-    + The common forms of _"casing"_ is allowed interchangeably (without conflicts): `dash-case`, `snake_case`, `endash—case` ~~, `camelCase`~~.
+   + The common forms of _"casing"_ is allowed interchangeably (without conflicts): `dash-case`, `snake_case`, `endash—case` ~~, `camelCase`~~.
+   - A lot of research regarding the fundamentals of brain functioning used in programming points to spatiality and visual recognition of structure, that and comparative studies leads to the choice of indent based syntax.
+   - Also available are voluntary explicit block ends (wysiwym + safety net). The recommendation is to use `end`-tokens when it makes things clearer, otherwise not.
 - FFI: Using C-API libs is piece of cake
 - Garbage Collected (_even I_, have accepted it as the way of the future - now: _let's just make it even faster [post 1.0 target]_)
 - Template-macros and AST-macros
-- A _terse and clear indent based syntax_ with voluntary explicit block ends (wysiwym + safety net).
-    - A lot of research regarding the fundamentals of brain functioning used in programming points to spatiality and visual recognition of structure.
 - Full compatibility with _Crystal lang modules_ - the language AST core - (any Crystal module can be used seamlessly in the same project) - this enlarges the module universe tremendously.
-    - It's hard for novel new-kid-on-the-block languages to get established when there are no libs (well, even then). Sharing a module universe with another language facilitates usage of both in the real world.
+   - It's hard for novel new-kid-on-the-block languages to get established when there are no libs (well, even then). Sharing a module universe with another language facilitates usage of both in the real world.
 - _Helpful_ error messages (_will be improved more when the language spec has stabilized_)
-    - The "Did you mean this:..." we've come to love in clang (compare gcc) - and even deeper analysis of likely errors
+   - The "Did you mean this:..." we've come to love in clang (compare gcc) - and even deeper analysis of likely errors
 - I won't stop optimizing until hell freezes over. - The compiler should make things fast - you should focus on keeping your code maintainable.
 - Modules, pretty much like name spaces
 - Closures, of course
@@ -66,13 +66,13 @@ What is _not_ meant is "highly abstract functional lambda theory proofs from out
 
 ## Relation to Crystal ##
 
-Onyx is built upon the AST, most semantics and IR generation of Crystal. There are some additional semantics for more fine-grained control in some contexts. The syntax is entirely different. The actual machine code generation is done by LLVM, a god sent to language loving mankind! Currently, by internally flagging AST-nodes, Onyx can compile both onyx _and_ crystal sources within the same program. Therefore great praise and credit goes out to the efforts of the Crystal team and the LLVM team, whom without Onyx would not be in this stage.
+Onyx is built upon the AST, most semantics and IR generation of Crystal. There are some additional semantics for more fine-grained control in some contexts. The syntax is entirely different. The actual machine code generation is done by LLVM, a god sent to language loving mankind! Currently, by internally flagging AST-nodes, Onyx can compile both Onyx _and_ Crystal sources within the same program. Therefore great praise and credit goes out to the efforts of the Crystal team and the LLVM team, whom without Onyx would not be in this stage.
 
 ## About Oscar Campbell ##
 
-I've always loved linguistics, programming and manipulation of text. I coded my first language 25 years ago (when I was twelve). Well, it was called "CP Torsk 0.2" ("CP Cod 0.2"), so not _that_ serious. For the Amiga or Commodore 64 if I remember correctly.
+I've always loved linguistics, programming and manipulation of text (kind of a weird interest when you think about it). And a whole lot of other stuff not relevant to this. I coded my first language 25 years ago (when I was twelve). Well, it was called "CP Torsk 0.2", so not _that_ serious. For the Amiga or Commodore 64 if I remember correctly.
 
-Onyx is the final frontier - this is where the accumulated interest and experiences will play out fully.
+Onyx is where the accumulated interest and experiences will distill to the optimal brew.
 
 ## Inspiration ##
 
@@ -101,23 +101,25 @@ A rather contrived example, just to show some basic constructs:
 ```onyx
 
 type Greeter
-    @greeting–phrase = "Greetings,"
+   @greeting–phrase = "Greetings,"
 
-    init() ->
-    init(@greeting–phrase) ->
+   init() ->
+   init(@greeting–phrase) ->
 
-    greet(who–or–what) ->!
-        say make–greeting who–or–what
+   greet(who–or–what) ->!
+      say make–greeting who–or–what
 
-    make–greeting(who–or–what) ->
-        "{@greeting–phrase} {who–or–what}"
+   make–greeting(who–or–what) ->
+      "{@greeting–phrase} {who–or–what}"
 end
 
 type HelloWorldishGreeter < Greeter
-    @greeting–phrase = "Hello"
+   @greeting–phrase = "Hello"
 end
 
-ext HelloWorldishGreeter: greet(who-or-what) -> previous-def(who-or-what).red
+ext HelloWorldishGreeter
+   greet(who-or-what) ->
+      previous-def(who-or-what).red
 
 greeter = HelloWorldishGreeter "Goodbye cruel"
 greeter.greet "world"  -- => "Goodbye cruel world"
@@ -132,42 +134,42 @@ And with some added explanations:
 -- All types begin with a capital
 
 type Greeter
-    @greeting–phrase = "Greetings,"  -- member-vars are prefixed with `@`
-    -- separator (-|–|_) completely interchangeable so above can be referred
-    -- to as @greeting_phrase, @greeting-phrase etc. from _your_ code - should
-    -- you prefer a different style than a lib-author
+   @greeting–phrase = "Greetings,"  -- member-vars are prefixed with `@`
+   -- separator (-|–|_) completely interchangeable so above can be referred
+   -- to as @greeting_phrase, @greeting-phrase etc. from _your_ code - should
+   -- you prefer a different style than a lib-author
 
-    init() ->        -- init does nothing - just keep defaults
+   init() ->      -- init does nothing - just keep defaults
 
-    init(@greeting–phrase) ->
-        -- does nothing in body. Sugar for assigning a member in the parameter
-        -- did all we need! (the `@` prefix to parameter name)
+   init(@greeting–phrase) ->
+      -- does nothing in body. Sugar for assigning a member in the parameter
+      -- did all we need! (the `@` prefix to parameter name)
 
-    -- above could have been written more verbose; in many different levels.
-    -- init(greeting–phrase Str) ->
-    --     @greeting–phrase = greeting–phrase
-    -- end      -- ending expressions blocks, is implicit, but can be done
-                -- explicitly.
+   -- above could have been written more verbose; in many different levels.
+   -- init(greeting–phrase Str) ->
+   --    @greeting–phrase = greeting–phrase
+   -- end     -- ending expressions blocks, is implicit, but can be done
+              -- explicitly.
 
-    -- define a method that greets someone
-    greet(who–or–what) ->!  -- `!` is sugar notation for methods that returns
-                            -- "nothing", it's ensured that return value is nil
-        say make–greeting who–or–what
-        -- say(make–greeting(who–or–what)) -- parentheses or "juxtapos-calls"
+   -- define a method that greets someone
+   greet(who–or–what) ->!  -- `!` is sugar notation for methods that returns
+                           -- "nothing", it's ensured that ret val is nil
+      say make–greeting who–or–what
+      -- say(make–greeting(who–or–what)) -- parentheses or "juxtapos-calls"
 
-    -- a method that constructs the message
-    make–greeting(who–or–what) ->
-        -- interpolation of exprs within strings is done with simple braces
-        "{@greeting–phrase} {who–or–what}"  -- last expression is returned
+   -- a method that constructs the message
+   make–greeting(who–or–what) ->
+      -- interpolation of exprs within strings is done with simple braces
+      "{@greeting–phrase} {who–or–what}"  -- last expression is returned
 
-    -- All on one line works too of course:
-    -- make–greeting(who–or–what) -> "{@greeting–phrase} {who–or–what}"
+   -- All on one line works too of course:
+   -- make–greeting(who–or–what) -> "{@greeting–phrase} {who–or–what}"
 
 end  -- as already mentioned, you can explicitly end code block at will
 
 -- another type, inheriting Greeter
 type HelloWorldishGreeter < Greeter
-    @greeting–phrase = "Hello"
+   @greeting–phrase = "Hello"
 end
 
 -- re-open the type! Here using nest-token instead of indent (colon here)
@@ -202,8 +204,8 @@ See it's own issue.
 - Clone the source tree: `git clone https://github.com/ozra/onyx-lang.git`
 
 - `cd` in to it and `make bootstrap` - to automatically download, install Crystal and compile and install Onyx. It's installed into `/opt/onyx/` to keep it separated from your package-managed `/usr/local/`. A link to the binary is made in `/usr/local/bin/`.
-    + You need `git`, `wget` and some more stuff on your system (the scipt solves most on debian-based systems currently).
-    + The script is unfortunately Debian-ish Linux centric atm. Anyone handy with other distros, Mac OS and Free BSF etc. are welcome to shape it up and PR.
+   + You need `git`, `wget` and some more stuff on your system (the scipt solves most on debian-based systems currently).
+   + The script is unfortunately Debian-ish Linux centric atm. Anyone handy with other distros, Mac OS and Free BSF etc. are welcome to shape it up and PR.
 
 ## Documentation ##
 
