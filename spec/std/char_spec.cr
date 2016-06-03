@@ -56,6 +56,18 @@ describe "Char" do
     assert { 'A'.whitespace?.should be_false }
   end
 
+  describe "hex?" do
+    "0123456789abcdefABCDEF".each_char do |char|
+      assert { char.hex?.should be_true }
+    end
+    ('g'..'z').each do |char|
+      assert { char.hex?.should be_false }
+    end
+    [' ', '-', '\0'].each do |char|
+      assert { char.hex?.should be_false }
+    end
+  end
+
   it "dumps" do
     'a'.dump.should eq("'a'")
     '\\'.dump.should eq("'\\\\'")
@@ -259,5 +271,31 @@ describe "Char" do
 
     ('酒'.ord).should eq(37202)
     ('酒' === 37202).should be_true
+  end
+
+  it "does digit?" do
+    256.times do |i|
+      chr = i.chr
+      ("01".chars.includes?(chr) == chr.digit?(2)).should be_true
+      ("01234567".chars.includes?(chr) == chr.digit?(8)).should be_true
+      ("0123456789".chars.includes?(chr) == chr.digit?).should be_true
+      ("0123456789".chars.includes?(chr) == chr.digit?(10)).should be_true
+      ("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".includes?(chr) == chr.digit?(36)).should be_true
+      unless 2 <= i <= 36
+        expect_raises ArgumentError do
+          '0'.digit?(i)
+        end
+      end
+    end
+  end
+
+  it "does control?" do
+    'ù'.control?.should be_false
+    'a'.control?.should be_false
+    '\u0019'.control?.should be_true
+  end
+
+  describe "clone" do
+    assert { 'a'.clone.should eq('a') }
   end
 end

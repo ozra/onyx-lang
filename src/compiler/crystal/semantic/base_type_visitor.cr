@@ -259,8 +259,9 @@ module Crystal
           node_return_type.accept self
         end
         return_type = check_primitive_like(node_return_type)
+        return_type = @mod.nil if return_type.void?
       else
-        return_type = @mod.void
+        return_type = @mod.nil
       end
 
       external = node.external?
@@ -298,7 +299,7 @@ module Crystal
 
         inferred_return_type = @mod.type_merge([node_body.type?, external.type?])
 
-        if return_type && return_type != @mod.void && inferred_return_type != return_type
+        if return_type && return_type != @mod.nil && inferred_return_type != return_type
           node.raise "expected fun to return #{return_type} but it returned #{inferred_return_type}"
         end
 
@@ -361,6 +362,8 @@ module Crystal
           unless node.expanded
             @attributes = nil
           end
+        when MacroExpression, MacroIf, MacroFor
+          # Don't clear attributes that were generating with macros
         else
           @attributes = nil
         end
@@ -614,7 +617,13 @@ module Crystal
           macro_scope, similar_name = resolve_ident?(obj)
         end
         return false unless macro_scope.is_a?(Type)
+<<<<<<< HEAD
         _dbg 3
+=======
+
+        macro_scope = macro_scope.remove_alias
+
+>>>>>>> foreign/master
         the_macro = macro_scope.metaclass.lookup_macro(node.name, node.args, node.named_args)
       when Nil
         _dbg 4
@@ -662,18 +671,29 @@ module Crystal
       true
     end
 
+<<<<<<< HEAD
     def expand_macro(the_macro, node)
       _dbg "BaseTypeVisitor.expand_macro the_macro".red
+=======
+    def expand_macro(the_macro, node, mode = nil)
+>>>>>>> foreign/master
       begin
         expanded_macro = yield
       rescue ex : Crystal::Exception
         node.raise "expanding macro", ex
       end
 
+      mode ||= if @lib_def_pass > 0
+                 MacroExpansionMode::Lib
+               else
+                 MacroExpansionMode::Normal
+               end
+
       generated_nodes = @mod.parse_macro_source(expanded_macro, the_macro, node, Set.new(@vars.keys),
         inside_def: !!@typed_def,
         inside_type: !current_type.is_a?(Program),
         inside_exp: @exp_nest > 0,
+        mode: mode,
       )
 
       if node_doc = node.doc
@@ -742,7 +762,7 @@ module Crystal
       expand_inline_macro node
     end
 
-    def expand_inline_macro(node)
+    def expand_inline_macro(node, mode = nil)
       if expanded = node.expanded
         begin
           expanded.accept self
@@ -754,7 +774,7 @@ module Crystal
 
       the_macro = Macro.new("macro_#{node.object_id}", [] of Arg, node).at(node.location)
 
-      generated_nodes = expand_macro(the_macro, node) do
+      generated_nodes = expand_macro(the_macro, node, mode: mode) do
         @mod.expand_macro node, (@scope || current_type), @type_lookup, @free_vars
       end
 
@@ -948,14 +968,14 @@ module Crystal
       type
     end
 
-    def check_declare_var_type(node, declared_type)
+    def check_declare_var_type(node, declared_type, variable_kind)
       type = declared_type.instance_type
 
       if type.is_a?(GenericClassType)
         node.raise "can't declare variable of generic non-instantiated type #{type}"
       end
 
-      Crystal.check_type_allowed_in_generics(node, type, "can't use #{type} as a Proc argument type")
+      Crystal.check_type_allowed_in_generics(node, type, "can't use #{type} as the type of #{variable_kind}")
 
       declared_type
     end

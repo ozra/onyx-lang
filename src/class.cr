@@ -20,7 +20,7 @@ class Class
   # ```
   # String.name # => "String"
   # ```
-  macro def name : String
+  def name : String
     {{ @type.name.stringify }}
   end
 
@@ -53,5 +53,13 @@ class Class
 
   def to_s(io)
     io << name
+  end
+
+  def dup
+    self
+  end
+
+  def clone
+    self
   end
 end

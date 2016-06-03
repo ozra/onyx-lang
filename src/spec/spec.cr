@@ -114,12 +114,7 @@ module Spec
 
   # :nodoc:
   def self.abort!
-    @@aborted = true
-  end
-
-  # :nodoc:
-  def self.aborted?
-    @@aborted
+    exit
   end
 
   # :nodoc:
@@ -226,12 +221,16 @@ OptionParser.parse! do |opts|
       exit
     end
   end
+  opts.on("--junit_output OUTPUT_DIR", "generate JUnit XML output") do |output_dir|
+    junit_formatter = Spec::JUnitFormatter.file(output_dir)
+    Spec.add_formatter(junit_formatter)
+  end
   opts.on("--help", "show this help") do |pattern|
     puts opts
     exit
   end
   opts.on("-v", "--verbose", "verbose output") do
-    Spec.formatters.replace([Spec::VerboseFormatter.new])
+    Spec.override_default_formatter(Spec::VerboseFormatter.new)
   end
   opts.on("--no-color", "Disable colored output") do
     Spec.use_colors = false

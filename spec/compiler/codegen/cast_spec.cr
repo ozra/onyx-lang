@@ -48,7 +48,7 @@ describe "Code gen: cast" do
         a as Char
         false
       rescue ex
-        (ex.message == "cast to Char failed") && (ex.class == TypeCastError)
+        ex.message.not_nil!.includes?("cast from Int32 to Char failed") && (ex.class == TypeCastError)
       end
       )).to_b.should be_true
   end
@@ -72,7 +72,7 @@ describe "Code gen: cast" do
         a as Float64 | Char
         false
       rescue ex
-        (ex.message == "cast to (Char | Float64) failed") && (ex.class == TypeCastError)
+        ex.message.not_nil!.includes?("cast from Int32 to (Char | Float64) failed") && (ex.class == TypeCastError)
       end
       )).to_b.should be_true
   end
@@ -120,7 +120,7 @@ describe "Code gen: cast" do
         a as CastSpecBaz
         false
       rescue ex
-        (ex.message == "cast to CastSpecBaz failed") && (ex.class == TypeCastError)
+        ex.message.not_nil!.includes?("cast from CastSpecBar to CastSpecBaz failed") && (ex.class == TypeCastError)
       end
       )).to_b.should be_true
   end
@@ -187,7 +187,7 @@ describe "Code gen: cast" do
         a as Nil
         false
       rescue ex
-        (ex.message.not_nil!.includes? "cast to Nil failed") && (ex.class == TypeCastError)
+        ex.message.not_nil!.includes?("cast from Reference to Nil failed") && (ex.class == TypeCastError)
       end
       )).to_b.should be_true
   end
@@ -246,29 +246,6 @@ describe "Code gen: cast" do
       a = 1 == 1 ? Reference.new : (1 == 2 ? Foo.new : nil)
       (a as Void*).address
       )).to_i.should_not eq(0)
-  end
-
-  it "errors if casting to a non-allocated type" do
-    run(%(
-      require "prelude"
-
-      class Foo
-      end
-
-      class Bar < Foo
-      end
-
-      class Baz < Foo
-      end
-
-      foo = Foo.new || Bar.new
-
-      begin
-        foo as Baz
-      rescue ex
-        ex.message.not_nil!.includes?("can't cast to Baz because it was never instantiated")
-      end
-      )).to_b.should be_true
   end
 
   it "casts (bug)" do

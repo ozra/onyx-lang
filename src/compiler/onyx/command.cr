@@ -1,12 +1,6 @@
 require "json"
 
 module Crystal
-  def self.tempfile(basename)
-    Dir.mkdir_p Config.cache_dir
-    File.join(Config.cache_dir, "onyx-run-#{basename}.tmp")
-  end
-
-
   module OptTests
     @@test_opt_mode_a : Int32 = 2
     @@test_opt_mode_b : Int32 = 2

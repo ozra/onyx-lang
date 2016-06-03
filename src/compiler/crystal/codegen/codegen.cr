@@ -119,7 +119,7 @@ module Crystal
       @llvm_typer = LLVMTyper.new(@mod)
       @llvm_id = LLVMId.new(@mod)
       @main_ret_type = node.type
-      ret_type = @llvm_typer.llvm_type(node.type)
+      ret_type = @llvm_typer.llvm_return_type(node.type)
       @main = @llvm_mod.functions.add(MAIN_NAME, [LLVM::Int32, LLVM::VoidPointer.pointer], ret_type)
       @main.linkage = LLVM::Linkage::Internal unless expose_crystal_main
 
@@ -438,8 +438,8 @@ module Crystal
       # If we don't care about a fun literal's return type then we mark the associated
       # def as returning void. This can't be done in the type inference phase because
       # of bindings and type propagation.
-      if node.force_void
-        node.def.set_type @mod.void
+      if node.force_nil
+        node.def.set_type @mod.nil
       else
         # Use fun literal's type, which might have a broader type then the body
         # (for example, return type: Int32 | String, body: String)
@@ -551,6 +551,8 @@ module Crystal
     def codegen_return(type : Type)
       method_type = context.return_type.not_nil!
       if method_type.void?
+        ret
+      elsif method_type.nil_type?
         ret
       elsif method_type.no_return?
         unreachable
@@ -1084,7 +1086,11 @@ module Crystal
           cond cmp, matches_block, doesnt_match_block
 
           position_at_end doesnt_match_block
-          accept type_cast_exception_call(to_type)
+
+          temp_var_name = @mod.new_temp_var_name
+          context.vars[temp_var_name] = LLVMVar.new(last_value, obj_type, already_loaded: true)
+          accept type_cast_exception_call(obj_type, to_type, node, temp_var_name)
+          context.vars.delete temp_var_name
 
           position_at_end matches_block
           @last = downcast last_value, resulting_type, obj_type, true
@@ -1134,11 +1140,25 @@ module Crystal
       false
     end
 
-    def type_cast_exception_call(to_type)
-      ex = Call.new(Path.global("TypeCastError"), "new", StringLiteral.new("cast to #{to_type} failed"))
-      call = Call.global("raise", ex)
+    def type_cast_exception_call(from_type, to_type, node, var_name)
+      pieces = [
+        StringLiteral.new("cast from "),
+        Call.new(Var.new(var_name), "class"),
+        StringLiteral.new(" to #{to_type} failed"),
+      ] of ASTNode
 
-      @mod.visit_main call
+      if location = node.location
+        pieces << StringLiteral.new (", at #{location.filename}:#{location.line_number}")
+      end
+
+      ex = Call.new(Path.global("TypeCastError"), "new", StringInterpolation.new(pieces))
+      call = Call.global("raise", ex)
+      call = @mod.normalize(call)
+
+      meta_vars = MetaVars.new
+      meta_vars[var_name] = MetaVar.new(var_name, type: from_type)
+      visitor = MainVisitor.new(@mod, meta_vars)
+      @mod.visit_main call, visitor: visitor
       call
     end
 

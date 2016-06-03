@@ -4,6 +4,7 @@
 
 ## Some things we currently need to focus on ##
 
+<<<<<<< HEAD
 * Settling the syntax.
 * Settling cornerstone library (standard library) API names.
 * Implementing syntax.
@@ -12,6 +13,12 @@
 * Highlighters - currently Sublime highlighter exists.
 * Documenting the language.
 * Making good examples, and "Onyx for C++-coders", "Onyx for Pythoners", "Onyx for Rubyists" etc. guides.
+=======
+You can find a list of tasks that we consider suitable for a first time contribution at
+the [newcomer label](https://github.com/crystal-lang/crystal/labels/newcomer).
+
+Furthermore these are the most important general things in need right now:
+>>>>>>> foreign/master
 
 ## Use GitHub issue tracker! ##
 

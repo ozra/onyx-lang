@@ -39,6 +39,6 @@ module Crystal
   end
 
   def self.tempfile(basename)
-    CacheDir.instance.join("crystal-run-#{basename}.tmp")
+    CacheDir.instance.join("onyx-run-#{basename}.tmp")
   end
 end

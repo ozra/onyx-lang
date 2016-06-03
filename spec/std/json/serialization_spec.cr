@@ -106,6 +106,17 @@ describe "JSON serialization" do
         JSONSpecEnum.from_json(%("Three"))
       end
     end
+
+    it "deserializes with root" do
+      Int32.from_json(%({"foo": 1}), root: "foo").should eq(1)
+      Array(Int32).from_json(%({"foo": [1, 2]}), root: "foo").should eq([1, 2])
+    end
+
+    {% if Crystal::VERSION == "0.18.0" %}
+      it "deserializes union" do
+        Array(Int32 | String).from_json(%([1, "hello"])).should eq([1, "hello"])
+      end
+    {% end %}
   end
 
   describe "to_json" do

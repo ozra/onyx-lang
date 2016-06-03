@@ -253,7 +253,7 @@ describe "Type inference: generic class" do
 
       Foo(Char | String).bar
       ),
-      "can't lookup type in union (Char | String)"
+      "undefined constant T::Bar"
   end
 
   it "instantiates generic class with default argument in initialize (#394)" do
@@ -588,8 +588,8 @@ describe "Type inference: generic class" do
         end
       end
 
-      fooA = ClsA.new
-      fooA.c.pos
+      foo = ClsA.new
+      foo.c.pos
       )) { int64 }
   end
 

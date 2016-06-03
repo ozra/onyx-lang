@@ -2,8 +2,8 @@ require "./base_type_visitor"
 
 module Crystal
   class Program
-    def visit_main(node)
-      node.accept MainVisitor.new(self)
+    def visit_main(node, visitor = MainVisitor.new(self))
+      node.accept visitor
 
       fix_empty_types node
       node = cleanup node
@@ -650,13 +650,20 @@ module Crystal
     end
 
     def visit(node : Yield)
-      if @fun_literal_context
-        node.raise "can't yield from function literal"
-      end
-
       call = @call
       unless call
-        node.raise "can't yield outside a method"
+        node.raise "can't use `yield` outside a method"
+      end
+
+      if ctx = @fun_literal_context
+        node.raise <<-MSG
+          can't use `yield` inside a proc literal or captured block
+
+          Make sure to read the whole docs section about blocks and procs,
+          including "Capturing blocks" and "Block forwarding":
+
+          http://crystal-lang.org/docs/syntax_and_semantics/blocks_and_procs.html
+          MSG
       end
 
       block = call.block || node.raise("no block given")
@@ -910,6 +917,15 @@ module Crystal
         return false
       end
 
+      # If the call has splats or double splats, and any of them are
+      # not variables, instance variables or global variables,
+      # we replace this call with a separate one that declares temporary
+      # variables with this splat expressions, so we don't evaluate them
+      # twice (#2677)
+      if call_needs_splat_expansion?(node)
+        return replace_call_splats(node)
+      end
+
       obj = node.obj
       args = node.args
       block_arg = node.block_arg
@@ -985,6 +1001,68 @@ module Crystal
       end
       node.with_scope = with_scope
       node.parent_visitor = self
+    end
+
+    def call_needs_splat_expansion?(node)
+      node.args.each do |arg|
+        case arg
+        when Splat
+          exp = arg.exp
+        when DoubleSplat
+          exp = arg.exp
+        else
+          next
+        end
+
+        case exp
+        when Var, InstanceVar, ClassVar, Global
+          next
+        end
+
+        return true
+      end
+
+      false
+    end
+
+    def replace_call_splats(node)
+      expanded = node.clone
+
+      exps = [] of ASTNode
+      expanded.args.each do |arg|
+        case arg
+        when Splat
+          exp = arg.exp
+        when DoubleSplat
+          exp = arg.exp
+        else
+          next
+        end
+
+        case exp
+        when Var, InstanceVar, ClassVar, Global
+          next
+        end
+
+        temp_var = @mod.new_temp_var.at(arg.location)
+        assign = Assign.new(temp_var, exp).at(arg.location)
+        exps << assign
+        case arg
+        when Splat
+          arg.exp = temp_var.clone.at(arg.location)
+        when DoubleSplat
+          arg.exp = temp_var.clone.at(arg.location)
+        else
+          next
+        end
+      end
+
+      exps << expanded
+      expansion = Expressions.from(exps)
+      expansion.accept self
+      node.expanded = expansion
+      node.bind_to(expanded)
+      return false
     end
 
     # If it's a super call inside an initialize we treat
@@ -1131,11 +1209,12 @@ module Crystal
       end
 
       expected_return_type = fun_type.return_type
+      expected_return_type = @mod.nil if expected_return_type.void?
 
       fun_def = Def.new("->", fun_args, block.body)
       fun_literal = FunLiteral.new(fun_def).at(node.location)
       fun_literal.expected_return_type = expected_return_type
-      fun_literal.force_void = true if expected_return_type.void?
+      fun_literal.force_nil = true if expected_return_type.nil_type?
       fun_literal.accept self
 
       node.bind_to fun_literal
@@ -1931,15 +2010,17 @@ module Crystal
     def visit_allocate(node)
       instance_type = scope.instance_type
 
-      if instance_type.is_a?(GenericClassType)
+      case instance_type
+      when GenericClassType
         node.raise "can't create instance of generic class #{instance_type} without specifying its type vars"
+      when UnionType
+        node.raise "can't create instance of a union type"
       end
 
       if !instance_type.virtual? && instance_type.abstract?
         node.raise "can't instantiate abstract #{instance_type.type_desc} #{instance_type}"
       end
 
-      instance_type.allocated = true
       node.type = instance_type
     end
 
@@ -1953,6 +2034,12 @@ module Crystal
 
     def visit_pointer_set(node)
       scope = scope().remove_typedef.as(PointerInstanceType)
+
+      # We don't want to change the value of Pointer(Void) to include Nil (Nil passes as Void)
+      if scope.element_type.void?
+        node.type = @mod.nil
+        return
+      end
 
       value = @vars["value"]
 
@@ -1988,7 +2075,7 @@ module Crystal
       unaliased_type = expected_type.remove_alias
 
       return if actual_type.compatible_with?(unaliased_type)
-      return if actual_type.is_implicitly_converted_in_c_to?(unaliased_type)
+      return if actual_type.implicitly_converted_in_c_to?(unaliased_type)
 
       case unaliased_type
       when IntegerType
@@ -2090,7 +2177,7 @@ module Crystal
         types = node_types.map do |type|
           type.accept self
           instance_type = type.type.instance_type
-          unless instance_type.is_subclass_of?(@mod.exception)
+          unless instance_type.subclass_of?(@mod.exception)
             type.raise "#{type} is not a subclass of Exception"
           end
           instance_type

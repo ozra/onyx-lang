@@ -339,6 +339,16 @@ describe "macro methods" do
       assert_macro "x", %({{x.chomp}}), [MacroId.new("hello\n")] of ASTNode, %(hello)
       assert_macro "x", %({{x.upcase}}), [MacroId.new("hello")] of ASTNode, %(HELLO)
     end
+
+    it "compares with string" do
+      assert_macro "x", %({{x == "foo"}}), [MacroId.new("foo")] of ASTNode, %(true)
+      assert_macro "x", %({{"foo" == x}}), [MacroId.new("foo")] of ASTNode, %(true)
+    end
+
+    it "compares with symbol" do
+      assert_macro "x", %({{x == :foo}}), [MacroId.new("foo")] of ASTNode, %(true)
+      assert_macro "x", %({{:foo == x}}), [MacroId.new("foo")] of ASTNode, %(true)
+    end
   end
 
   describe "symbol methods" do
@@ -977,6 +987,16 @@ describe "macro methods" do
     it "doesn't have key" do
       ENV.delete "FOO"
       assert_macro "", %({{env("FOO")}}), [] of ASTNode, %(nil)
+    end
+  end
+
+  describe "flag?" do
+    it "has flag" do
+      assert_macro "", %({{flag?(:foo)}}), [] of ASTNode, %(true), flags: "foo"
+    end
+
+    it "doesn't have flag" do
+      assert_macro "", %({{flag?(:foo)}}), [] of ASTNode, %(false)
     end
   end
 end

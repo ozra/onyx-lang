@@ -528,8 +528,9 @@ class Crystal::Call
     end
     type_lookup = MatchTypeLookup.new(self, match.context)
     return_type = type_lookup.lookup_node_type(typed_def_return_type)
+    return_type = mod.nil if return_type.void?
     typed_def.freeze_type = return_type
-    typed_def.type = return_type if return_type.no_return?
+    typed_def.type = return_type if return_type.no_return? || return_type.nil_type?
   end
 
   def check_tuple_indexer(owner, def_name, args, arg_types)
@@ -716,7 +717,7 @@ class Crystal::Call
 
     signature = CallSignature.new(previous.name, arg_types, block, named_args_types)
     context = MatchContext.new(scope, scope)
-    match = Match.new(previous, arg_types, context)
+    match = Match.new(previous, arg_types, context, named_args_types)
     matches = Matches.new([match] of Match, true)
 
     unless MatchesLookup.match_def(signature, previous_item, context)
@@ -817,6 +818,7 @@ class Crystal::Call
       end
       output = block_arg_type.return_type
       output_type = output
+      output_type = mod.nil if output_type.void?
     end
 
     # Bind block arguments to the yield vars, if any, or to nil otherwise
@@ -839,6 +841,7 @@ class Crystal::Call
       if output.is_a?(ASTNode) && !output.is_a?(Underscore)
         output_type = ident_lookup.lookup_node_type?(output)
         if output_type
+          output_type = mod.nil if output_type.void?
           Crystal.check_type_allowed_in_generics(output, output_type, "can't use #{output_type} as a block return type")
           output_type = output_type.virtual_type
         end
@@ -863,7 +866,7 @@ class Crystal::Call
 
           fun_literal = FunLiteral.new(a_def).at(self)
           fun_literal.expected_return_type = output_type if output_type
-          fun_literal.force_void = true unless output
+          fun_literal.force_nil = true unless output
           fun_literal.accept parent_visitor
         end
         block.fun_literal = fun_literal
@@ -896,6 +899,7 @@ class Crystal::Call
         if output
           if output.is_a?(ASTNode) && !output.is_a?(Underscore)
             output_type = ident_lookup.lookup_node_type(output).virtual_type
+            output_type = mod.nil if output_type.void?
             block.type = output_type
             block.freeze_type = output_type
             block_arg_type = mod.fun_of(fun_args, output_type)
@@ -925,6 +929,7 @@ class Crystal::Call
           if output.is_a?(ASTNode) && !output.is_a?(Underscore)
             begin
               block_type = ident_lookup.lookup_node_type(output).virtual_type
+              block_type = mod.nil if block_type.void?
             rescue ex : Crystal::Exception
               cant_infer_block_return_type
             end
@@ -987,7 +992,7 @@ class Crystal::Call
       type = output
     end
 
-    type.is_a?(Type) && type.void?
+    type.is_a?(Type) && (type.void? || type.nil_type?)
   end
 
   private def cant_infer_block_return_type

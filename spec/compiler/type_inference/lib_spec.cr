@@ -226,22 +226,6 @@ describe "Type inference: lib" do
       ", "argument 'x' of 'LibC#foo' must be Int32, not Foo (nor Char returned by 'Foo#to_unsafe')"
   end
 
-  it "error if passing nil to pointer through to_unsafe" do
-    assert_error "
-      lib LibC
-        fun foo(x : Void*) : Int32
-      end
-
-      class Foo
-        def to_unsafe
-          nil
-        end
-      end
-
-      LibC.foo Foo.new
-      ", "argument 'x' of 'LibC#foo' must be Pointer(Void), not Foo (nor Nil returned by 'Foo#to_unsafe')"
-  end
-
   it "error if passing non primitive type as varargs" do
     assert_error "
       lib LibC
@@ -282,6 +266,17 @@ describe "Type inference: lib" do
 
       t = {1, 2.5, 3, 4}
       LibC.foo *t
+      )) { float64 }
+  end
+
+  it "allows passing double splat to LibC fun" do
+    assert_type(%(
+      lib LibC
+        fun foo(x : Int32, y : Float64) : Float64
+      end
+
+      t = {y: 2.5, x: 3}
+      LibC.foo **t
       )) { float64 }
   end
 
@@ -515,6 +510,23 @@ describe "Type inference: lib" do
       end
 
       LibSDL.init(0_u32)
+      ))
+    sdl = result.program.types["LibSDL"].as(LibType)
+    attrs = sdl.link_attributes.not_nil!
+    attrs.size.should eq(1)
+    attrs[0].lib.should eq("SDL")
+  end
+
+  it "gathers link attributes from macro expression" do
+    result = infer_type(%(
+      {% begin %}
+        @[Link("SDL")]
+      {% end %}
+      lib LibSDL
+        fun init = SDL_Init : Int32
+      end
+
+      LibSDL.init
       ))
     sdl = result.program.types["LibSDL"].as(LibType)
     attrs = sdl.link_attributes.not_nil!
@@ -775,6 +787,62 @@ describe "Type inference: lib" do
 
       LibC.foo(x: out x)
       x
+      )) { int32 }
+  end
+
+  it "types fun returning nothing as nil" do
+    assert_type(%(
+      lib LibFoo
+        fun foo
+      end
+
+      LibFoo.foo
+      )) { |mod| mod.nil }
+  end
+
+  it "types fun returning void as nil" do
+    assert_type(%(
+      lib LibFoo
+        fun foo : Void
+      end
+
+      LibFoo.foo
+      )) { |mod| mod.nil }
+  end
+
+  it "types fun returning nil as nil" do
+    assert_type(%(
+      lib LibFoo
+        fun foo : Nil
+      end
+
+      LibFoo.foo
+      )) { |mod| mod.nil }
+  end
+
+  it "can use macros inside lib" do
+    assert_type(%(
+      lib LibFoo
+        {% begin %}
+          fun foo : Int32
+        {% end %}
+      end
+
+      LibFoo.foo
+      )) { int32 }
+  end
+
+  it "can use macros inside struct" do
+    assert_type(%(
+      lib LibFoo
+        struct Foo
+          {% begin %}
+            x : Int32
+          {% end %}
+        end
+      end
+
+      LibFoo::Foo.new.x
       )) { int32 }
   end
 end

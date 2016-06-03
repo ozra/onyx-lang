@@ -89,7 +89,7 @@ module Crystal
       msg = String.build do |io|
         io.puts "Error: can't create cache directory."
         io.puts
-        io.puts "Crystal needs a cache directory. These directories were candidates for it:"
+        io.puts "Onyx needs a cache directory. These directories were candidates for it:"
         io.puts
         candidates.each do |candidate|
           io << " - " << candidate << "\n"

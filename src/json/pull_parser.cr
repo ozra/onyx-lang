@@ -167,8 +167,8 @@ class JSON::PullParser
       first = true
       while kind != :end_object
         io << "," unless first
-        read_object_key
         @string_value.to_json(io)
+        read_object_key
         io << ":"
         read_raw(io)
         first = false
@@ -226,11 +226,12 @@ class JSON::PullParser
 
   def on_key!(key)
     found = false
+    value = uninitialized typeof(yield)
 
     read_object do |some_key|
       if some_key == key
         found = true
-        yield
+        value = yield
       else
         skip
       end
@@ -239,6 +240,8 @@ class JSON::PullParser
     unless found
       raise "json key not found: #{key}"
     end
+
+    value
   end
 
   def read_next

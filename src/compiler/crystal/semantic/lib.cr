@@ -198,7 +198,7 @@ class Crystal::Call
     actual_type = self_arg.type
     actual_type = mod.pointer_of(actual_type) if self_arg.is_a?(Out)
     return if actual_type.compatible_with?(expected_type)
-    return if actual_type.is_implicitly_converted_in_c_to?(expected_type)
+    return if actual_type.implicitly_converted_in_c_to?(expected_type)
 
     unaliased_type = expected_type.remove_alias
     case unaliased_type
@@ -226,7 +226,7 @@ class Crystal::Call
 
     implicit_call_type = implicit_call.type?
     if implicit_call_type
-      if implicit_call_type.compatible_with?(expected_type)
+      if implicit_call_type.compatible_with?(expected_type) || implicit_call_type.implicitly_converted_in_c_to?(expected_type)
         self.args[index] = implicit_call
       else
         arg_name = lib_arg_name(typed_def_arg, index)

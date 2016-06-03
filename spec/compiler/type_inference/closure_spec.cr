@@ -2,7 +2,11 @@ require "../../spec_helper"
 
 describe "Type inference: closure" do
   it "gives error when doing yield inside fun literal" do
-    assert_error "-> { yield }", "can't yield from function literal"
+    assert_error "-> { yield }", "can't use `yield` outside a method"
+  end
+
+  it "gives error when doing yield inside fun literal" do
+    assert_error "def foo; -> { yield }; end; foo {}", "can't use `yield` inside a proc literal or captured block"
   end
 
   it "marks variable as closured in program" do
@@ -317,7 +321,7 @@ describe "Type inference: closure" do
       foo do |x|
         x.to_f
       end
-      ") { void }
+      ") { |mod| mod.nil }
   end
 
   it "errors when transforming block to fun literal if type mismatch" do

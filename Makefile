@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 .PHONY: all spec onyx doc clean bootstrap
 
+=======
+>>>>>>> foreign/master
 -include Makefile.local # for optional local options e.g. threads
 
 O := .build
@@ -31,21 +34,53 @@ ifeq (${LLVM_CONFIG},)
 $(error Could not locate llvm-config, make sure it is installed and in your PATH)
 endif
 
+<<<<<<< HEAD
 spec: all_spec
+=======
+.PHONY: all
+all: crystal
+
+.PHONY: help
+help: ## Show this help
+	@printf '\033[34mtargets:\033[0m\n'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) |\
+		sort |\
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: spec
+spec: all_spec ## Run all specs
+>>>>>>> foreign/master
 	$(O)/all_spec
-std_spec: all_std_spec
+
+.PHONY: std_spec
+std_spec: all_std_spec ## Run standard library specs
 	$(O)/std_spec
-compiler_spec: all_compiler_spec
+
+.PHONY: compiler_spec
+compiler_spec: all_compiler_spec ## Run compiler specs
 	$(O)/compiler_spec
+<<<<<<< HEAD
 doc:
 	$(BUILD_PATH) ./bin/cr-ox doc src/docs_main.cr
 
 onyx: $(O)/onyx
 
+=======
+
+.PHONY: doc
+doc: ## Generate standard library documentation
+	$(BUILD_PATH) ./bin/crystal doc src/docs_main.cr
+
+.PHONY: crystal
+crystal: $(O)/crystal ## Build the compiler
+
+.PHONY: all_spec all_std_spec all_compiler_spec
+>>>>>>> foreign/master
 all_spec: $(O)/all_spec
 all_std_spec: $(O)/std_spec
 all_compiler_spec: $(O)/compiler_spec
 
+.PHONY: llvm_ext libcrystal deps
 llvm_ext: $(LLVM_EXT_OBJ)
 libcrystal: $(LIB_CRYSTAL_TARGET)
 deps: llvm_ext libcrystal
@@ -72,7 +107,8 @@ $(LLVM_EXT_OBJ): $(LLVM_EXT_DIR)/llvm_ext.cc
 $(LIB_CRYSTAL_TARGET): $(LIB_CRYSTAL_OBJS)
 	ar -rcs $@ $^
 
-clean:
+.PHONY: clean
+clean: ## Clean up built directories and files
 	rm -rf $(O)
 	rm -rf $(LLVM_EXT_OBJ)
 	rm -rf $(LIB_CRYSTAL_OBJS) $(LIB_CRYSTAL_TARGET)

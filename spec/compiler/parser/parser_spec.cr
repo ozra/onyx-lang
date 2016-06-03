@@ -161,11 +161,11 @@ describe "Parser" do
   it_parses "def foo(var = 1); end", Def.new("foo", [Arg.new("var", 1.int32)])
   it_parses "def foo(var : Int); end", Def.new("foo", [Arg.new("var", restriction: "Int".path)])
   it_parses "def foo(var : self); end", Def.new("foo", [Arg.new("var", restriction: Self.new)])
-  it_parses "def foo(var : self?); end", Def.new("foo", [Arg.new("var", restriction: Union.new([Self.new, Path.global("Nil")] of ASTNode))])
+  it_parses "def foo(var : self?); end", Def.new("foo", [Arg.new("var", restriction: Crystal::Union.new([Self.new, Path.global("Nil")] of ASTNode))])
   it_parses "def foo(var : self.class); end", Def.new("foo", [Arg.new("var", restriction: Metaclass.new(Self.new))])
   it_parses "def foo(var : self*); end", Def.new("foo", [Arg.new("var", restriction: Self.new.pointer_of)])
-  it_parses "def foo(var : Int | Double); end", Def.new("foo", [Arg.new("var", restriction: Union.new(["Int".path, "Double".path] of ASTNode))])
-  it_parses "def foo(var : Int?); end", Def.new("foo", [Arg.new("var", restriction: Union.new(["Int".path, "Nil".path(true)] of ASTNode))])
+  it_parses "def foo(var : Int | Double); end", Def.new("foo", [Arg.new("var", restriction: Crystal::Union.new(["Int".path, "Double".path] of ASTNode))])
+  it_parses "def foo(var : Int?); end", Def.new("foo", [Arg.new("var", restriction: Crystal::Union.new(["Int".path, "Nil".path(true)] of ASTNode))])
   it_parses "def foo(var : Int*); end", Def.new("foo", [Arg.new("var", restriction: "Int".path.pointer_of)])
   it_parses "def foo(var : Int**); end", Def.new("foo", [Arg.new("var", restriction: "Int".path.pointer_of.pointer_of)])
   it_parses "def foo(var : Int -> Double); end", Def.new("foo", [Arg.new("var", restriction: Fun.new(["Int".path] of ASTNode, "Double".path))])
@@ -403,9 +403,9 @@ describe "Parser" do
   it_parses "struct Foo; end", ClassDef.new("Foo".path, struct: true)
 
   it_parses "Foo(T)", Generic.new("Foo".path, ["T".path] of ASTNode)
-  it_parses "Foo(T | U)", Generic.new("Foo".path, [Union.new(["T".path, "U".path] of ASTNode)] of ASTNode)
-  it_parses "Foo(Bar(T | U))", Generic.new("Foo".path, [Generic.new("Bar".path, [Union.new(["T".path, "U".path] of ASTNode)] of ASTNode)] of ASTNode)
-  it_parses "Foo(T?)", Generic.new("Foo".path, [Union.new(["T".path, Path.global("Nil")] of ASTNode)] of ASTNode)
+  it_parses "Foo(T | U)", Generic.new("Foo".path, [Crystal::Union.new(["T".path, "U".path] of ASTNode)] of ASTNode)
+  it_parses "Foo(Bar(T | U))", Generic.new("Foo".path, [Generic.new("Bar".path, [Crystal::Union.new(["T".path, "U".path] of ASTNode)] of ASTNode)] of ASTNode)
+  it_parses "Foo(T?)", Generic.new("Foo".path, [Crystal::Union.new(["T".path, Path.global("Nil")] of ASTNode)] of ASTNode)
   it_parses "Foo(1)", Generic.new("Foo".path, [1.int32] of ASTNode)
   it_parses "Foo(T, 1)", Generic.new("Foo".path, ["T".path, 1.int32] of ASTNode)
   it_parses "Foo(T, U, 1)", Generic.new("Foo".path, ["T".path, "U".path, 1.int32] of ASTNode)
@@ -604,7 +604,7 @@ describe "Parser" do
   it_parses "lib LibC\nfun getchar\nend", LibDef.new("LibC", [FunDef.new("getchar")] of ASTNode)
   it_parses "lib LibC\nfun getchar(...)\nend", LibDef.new("LibC", [FunDef.new("getchar", varargs: true)] of ASTNode)
   it_parses "lib LibC\nfun getchar : Int\nend", LibDef.new("LibC", [FunDef.new("getchar", return_type: "Int".path)] of ASTNode)
-  it_parses "lib LibC\nfun getchar : (->)?\nend", LibDef.new("LibC", [FunDef.new("getchar", return_type: Union.new([Fun.new, "Nil".path(true)] of ASTNode))] of ASTNode)
+  it_parses "lib LibC\nfun getchar : (->)?\nend", LibDef.new("LibC", [FunDef.new("getchar", return_type: Crystal::Union.new([Fun.new, "Nil".path(true)] of ASTNode))] of ASTNode)
   it_parses "lib LibC\nfun getchar(Int, Float)\nend", LibDef.new("LibC", [FunDef.new("getchar", [Arg.new("", restriction: "Int".path), Arg.new("", restriction: "Float".path)])] of ASTNode)
   it_parses "lib LibC\nfun getchar(a : Int, b : Float)\nend", LibDef.new("LibC", [FunDef.new("getchar", [Arg.new("a", restriction: "Int".path), Arg.new("b", restriction: "Float".path)])] of ASTNode)
   it_parses "lib LibC\nfun getchar(a : Int)\nend", LibDef.new("LibC", [FunDef.new("getchar", [Arg.new("a", restriction: "Int".path)])] of ASTNode)
@@ -643,6 +643,12 @@ describe "Parser" do
   it_parses "lib LibC\nifdef foo\ntype A = B\nend\nend", LibDef.new("LibC", [IfDef.new("foo".var, TypeDef.new("A", "B".path))] of ASTNode)
 
   it_parses "fun foo(x : Int32) : Int64\nx\nend", FunDef.new("foo", [Arg.new("x", restriction: "Int32".path)], "Int64".path, body: "x".var)
+
+  it_parses "lib LibC; {{ 1 }}; end", LibDef.new("LibC", body: [MacroExpression.new(1.int32)] of ASTNode)
+  it_parses "lib LibC; {% if 1 %}2{% end %}; end", LibDef.new("LibC", body: [MacroIf.new(1.int32, MacroLiteral.new("2"))] of ASTNode)
+
+  it_parses "lib LibC; struct Foo; {{ 1 }}; end; end", LibDef.new("LibC", body: StructDef.new("Foo", Expressions.from([MacroExpression.new(1.int32)] of ASTNode)))
+  it_parses "lib LibC; struct Foo; {% if 1 %}2{% end %}; end; end", LibDef.new("LibC", body: StructDef.new("Foo", Expressions.from([MacroIf.new(1.int32, MacroLiteral.new("2"))] of ASTNode)))
 
   it_parses "1 .. 2", RangeLiteral.new(1.int32, 2.int32, false)
   it_parses "1 ... 2", RangeLiteral.new(1.int32, 2.int32, true)
@@ -694,6 +700,7 @@ describe "Parser" do
   it_parses "macro def foo : String; 1; end", Def.new("foo", body: 1.int32, return_type: "String".path, macro_def: true)
   it_parses "macro def foo(x) : String; 1; end", Def.new("foo", ["x".arg], 1.int32, return_type: "String".path, macro_def: true)
   it_parses "macro def foo; 1; end", Def.new("foo", body: 1.int32, macro_def: true)
+  it_parses "def foo;{{@type}};end", Def.new("foo", body: Expressions.from([MacroExpression.new("@type".instance_var)] of ASTNode), macro_def: true)
 
   it_parses "macro foo;bar{% begin %}body{% end %}baz;end", Macro.new("foo", [] of Arg, Expressions.from(["bar".macro_literal, MacroIf.new(true.bool, "body".macro_literal), "baz;".macro_literal] of ASTNode))
 
@@ -719,7 +726,7 @@ describe "Parser" do
   it_parses "instance_sizeof(X)", InstanceSizeOf.new("X".path)
 
   it_parses "foo.is_a?(Const)", IsA.new("foo".call, "Const".path)
-  it_parses "foo.is_a?(Foo | Bar)", IsA.new("foo".call, Union.new(["Foo".path, "Bar".path] of ASTNode))
+  it_parses "foo.is_a?(Foo | Bar)", IsA.new("foo".call, Crystal::Union.new(["Foo".path, "Bar".path] of ASTNode))
   it_parses "foo.is_a? Const", IsA.new("foo".call, "Const".path)
   it_parses "foo.responds_to?(:foo)", RespondsTo.new("foo".call, "foo")
   it_parses "foo.responds_to? :foo", RespondsTo.new("foo".call, "foo")
@@ -849,9 +856,9 @@ describe "Parser" do
   it_parses "a = 1\nfoo -a", [Assign.new("a".var, 1.int32), Call.new(nil, "foo", Call.new("a".var, "-"))]
 
   it_parses "a : Foo", TypeDeclaration.new("a".var, "Foo".path)
-  it_parses "a : Foo | Int32", TypeDeclaration.new("a".var, Union.new(["Foo".path, "Int32".path] of ASTNode))
+  it_parses "a : Foo | Int32", TypeDeclaration.new("a".var, Crystal::Union.new(["Foo".path, "Int32".path] of ASTNode))
   it_parses "@a : Foo", TypeDeclaration.new("@a".instance_var, "Foo".path)
-  it_parses "@a : Foo | Int32", TypeDeclaration.new("@a".instance_var, Union.new(["Foo".path, "Int32".path] of ASTNode))
+  it_parses "@a : Foo | Int32", TypeDeclaration.new("@a".instance_var, Crystal::Union.new(["Foo".path, "Int32".path] of ASTNode))
   it_parses "@@a : Foo", TypeDeclaration.new("@@a".class_var, "Foo".path)
   it_parses "$x : Foo", TypeDeclaration.new(Global.new("$x"), "Foo".path)
 
@@ -1133,6 +1140,8 @@ describe "Parser" do
 
   it_parses "case :foo; when :bar; 2; end", Case.new("foo".symbol, [When.new(["bar".symbol] of ASTNode, 2.int32)])
 
+  it_parses "Foo.foo(count: 3).bar { }", Call.new(Call.new("Foo".path, "foo", named_args: [NamedArgument.new("count", 3.int32)]), "bar", block: Block.new)
+
   assert_syntax_error "return do\nend", "unexpected token: do"
 
   %w(def macro class struct module fun alias abstract include extend lib).each do |keyword|
@@ -1304,6 +1313,9 @@ describe "Parser" do
 
   assert_syntax_error "Foo{one: :two, three: :four}", "can't use named tuple syntax for Hash-like literal"
   assert_syntax_error "{one: :two, three: :four} of Symbol => Symbol"
+
+  assert_syntax_error "{foo: 1\nbar: 2}"
+  assert_syntax_error "{foo: 1, bar: 2\nbaz: 3}"
 
   describe "end locations" do
     assert_end_location "nil"

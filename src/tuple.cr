@@ -77,8 +77,47 @@ struct Tuple
   #
   # {}                         # syntax error
   # ```
-  def self.new(*args)
+  def self.new(*args : *T)
     args
+  end
+
+  # Creates a tuple from the given array, with elements casted to the given types. See `#from`.
+  #
+  # ```
+  # Tuple(String, Int64).from(["world", 2])       # => {"world", 2}
+  # Tuple(String, Int64).from(["world", 2]).class # => {String, Int64}
+  # ```
+  def self.from(array : Array)
+    {% begin %}
+    Tuple.new({{@type.type_vars.argify}}).from(array)
+    {% end %}
+  end
+
+  # Expects to be called on a tuple of types, creates a tuple from the given array,
+  # with types casted appropriately.
+  #
+  # This allows you to easily pass an array as individual arguments to a method.
+  #
+  # ```
+  # def speak_about(thing : String, n : Int64)
+  #   "I see #{n} #{thing}s"
+  # end
+  #
+  # data = JSON.parse(%(["world", 2])).as_a
+  # speak_about(*{String, Int64}).from(data)) # => "I see 2 worlds"
+  # ```
+  def from(array : Array)
+    if size != array.size
+      raise ArgumentError.new "Expected array of size #{size} but one of size #{array.size} was given."
+    end
+
+    {% begin %}
+    Tuple.new(
+    {% for i in 0...@type.size %}
+      self[{{i}}].cast(array[{{i}}]),
+    {% end %}
+    )
+    {% end %}
   end
 
   # Returns the element at the given index. Read the type docs to understand
@@ -291,11 +330,6 @@ struct Tuple
       hash = 31 * hash + self[{{i}}].hash
     {% end %}
     hash
-  end
-
-  # Returns self.
-  def dup
-    self
   end
 
   # Returns a tuple containing cloned elements of this tuple using the `clone` method.

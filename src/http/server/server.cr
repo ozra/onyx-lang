@@ -89,7 +89,7 @@ require "../common"
 # ```
 class HTTP::Server
   ifdef !without_openssl
-    property ssl : OpenSSL::SSL::Context?
+    property ssl : OpenSSL::SSL::Context::Server?
   end
 
   @wants_close = false
@@ -139,7 +139,7 @@ class HTTP::Server
   def listen
     server = bind
     until @wants_close
-      spawn handle_client(server.accept)
+      spawn handle_client(server.accept?)
     end
   end
 
@@ -152,11 +152,14 @@ class HTTP::Server
   end
 
   private def handle_client(io)
+    # nil means the server was closed
+    return unless io
+
     io.sync = false
 
     ifdef !without_openssl
       if ssl = @ssl
-        io = OpenSSL::SSL::Socket.new(io, :server, ssl, sync_close: true)
+        io = OpenSSL::SSL::Socket::Server.new(io, ssl, sync_close: true)
       end
     end
 
@@ -167,10 +170,16 @@ class HTTP::Server
       until @wants_close
         begin
           request = HTTP::Request.from_io(io)
-        rescue
+        rescue e
+          STDERR.puts "Bug: Unhandled exception while parsing request"
+          e.inspect_with_backtrace(STDERR)
+        end
+
+        unless request
+          response.respond_with_error("Bad Request", 400)
+          response.close
           return
         end
-        break unless request
 
         response.version = request.version
         response.reset
@@ -189,6 +198,11 @@ class HTTP::Server
 
         break unless request.keep_alive?
       end
+    rescue e
+      response.respond_with_error
+      response.close
+      STDERR.puts "Unhandled exception while computing response, make sure to catch all your exceptions"
+      e.inspect_with_backtrace(STDERR)
     ensure
       io.close if must_close
     end

@@ -132,7 +132,7 @@ describe "Type inference: double splat" do
 
       foo x: 1
       ),
-      "wrong number of arguments"
+      "no overload matches"
   end
 
   it "uses restriction on double splat, means all types must be that type" do
@@ -191,5 +191,15 @@ describe "Type inference: double splat" do
       NamedTuple(x: Int32, y: Char).foo(x: 1, y: true)
       ),
       "no overload matches"
+  end
+
+  it "matches named args producing an empty double splat (#2678)" do
+    assert_type(%(
+      def test(x, **kwargs)
+        kwargs
+      end
+
+      test(x: 7)
+      )) { named_tuple_of({} of String => Type) }
   end
 end

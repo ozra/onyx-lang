@@ -7,7 +7,7 @@ class Crystal::Command
 
     Command:
         init                     generate a new project
-        build                    compile program
+        compile                  compile program
         deps                     install project dependencies
         docs                     generate documentation
         env                      print Crystal environment information
@@ -52,9 +52,12 @@ class Crystal::Command
       when "init".starts_with?(command)
         options.shift
         init
-      when "build".starts_with?(command)
+      when "build".starts_with?(command), "compile".starts_with?(command)
+        if "build".starts_with?(command)
+          STDERR.puts "Deprecation: The build command was renamed to compile and will be removed in a future version."
+        end
         options.shift
-        build
+        compile
       when "play".starts_with?(command)
         options.shift
         playground
@@ -150,8 +153,8 @@ class Crystal::Command
     Init.run(options)
   end
 
-  private def build
-    config = create_compiler "build"
+  private def compile
+    config = create_compiler "compile"
     config.compile
   end
 
@@ -411,10 +414,9 @@ class Crystal::Command
   private def execute(output_filename, run_args)
     begin
       Process.run(output_filename, args: run_args, input: true, output: true, error: true) do |process|
-        Signal::INT.trap do
-          process.kill
-          exit
-        end
+        # Ignore the signal so we don't exit the running process
+        # (the running process can still handle this signal)
+        Signal::INT.ignore # do
       end
       status = $?
     ensure
@@ -429,6 +431,8 @@ class Crystal::Command
         STDERR.puts "Program was killed"
       when Signal::SEGV
         STDERR.puts "Program exited because of a segmentation fault (11)"
+      when Signal::INT
+        # OK, bubbled from the sub-program
       else
         STDERR.puts "Program received and didn't handle signal #{status.exit_signal} (#{status.exit_signal.value})"
       end
