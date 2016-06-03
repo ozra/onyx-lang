@@ -216,7 +216,7 @@ See it's own issue.
 
 Whatever you think promotes and helps the language forward is enough for code of conduct for now. Cursing is ~~fucking~~ allowed, but not necessarily decreed. If someone is offended - you've probably been an asshole;  acknowledge it and apologize. We can all stumble down that road some times. Apologizing is a strong and proud act.
 
-Everyone with an interest is welcome, no matter where you come from linguistically or otherwise (creed, religion, sexual orientation, sexual make-up or _even_ musical taste). In fact different backgrounds are essential for a good project!
+Everyone with an interest is welcome, no matter where you come from linguistically or otherwise (creed, religion, sexual configuration or _even_ musical taste). In fact different backgrounds are essential for a good project!
 
 ## Community ##
 
