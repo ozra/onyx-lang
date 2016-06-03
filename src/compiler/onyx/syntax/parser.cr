@@ -1297,6 +1297,7 @@ class OnyxParser < OnyxLexer
          end
 
          if possible_func_def?
+            # *TODO* *16060301*
             fdef = try_parse_def supplied_receiver: atomic
             return fdef if fdef
          end
@@ -4316,13 +4317,12 @@ class OnyxParser < OnyxLexer
          ret = parse_def(supplied_receiver, is_macro_def, doc)
          return ret # as ASTNode
 
-      rescue
-      # rescue e : WrongParsePathException
-         # if certain_def_count != @certain_def_count   # *TODO* should be removed in favour of specific exception...
-         #    dbgtail_off!
-         #    ::raise @error_stack.last
-         # end
+      # rescue e  # this means it _can_ be a legitimate func-def error, and not wrong-parse-error
+      #    dbg "failed try_parse_def, still uncertain status on parse".white
+      #    restore_full backed
+      #    return e
 
+      rescue e : WrongParsePathException
          dbg "failed try_parse_def".white
          restore_full backed
          return nil

@@ -423,7 +423,7 @@ class Crystal::Doc::Type
   end
 
   def path_to(filename : String)
-    "#{ "../" * (nesting + 1) }#{filename}"
+    "#{ "../" * nesting }#{filename}"
   end
 
   def path_to(type : Type)
