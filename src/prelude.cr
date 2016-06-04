@@ -11,21 +11,6 @@
 require "lib_c"
 require "macros"
 require "object"
-<<<<<<< HEAD
-require "reference"
-require "exception"
-require "value"
-require "struct"
-require "proc"
-require "thread"
-
-require "gc"
-# require "gc/null"
-require "gc/boehm"
-
-require "class"
-=======
->>>>>>> foreign/master
 require "comparable"
 require "exception"
 require "iterable"
@@ -37,16 +22,6 @@ require "array"
 require "bool"
 require "box"
 require "char"
-<<<<<<< HEAD
-require "number"
-require "int"
-require "float"
-require "pointer"
-
-require "slice"
-require "range"
-=======
->>>>>>> foreign/master
 require "char/reader"
 require "class"
 require "concurrent"

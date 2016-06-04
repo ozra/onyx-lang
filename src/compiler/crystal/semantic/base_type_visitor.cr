@@ -606,38 +606,33 @@ module Crystal
         return true
       end
 
-      _dbg 1
+      _dbg "1a"
       obj = node.obj
       case obj
       when Path
-        _dbg 2
+        # _dbg "2a"
         if raise_on_missing_const
           macro_scope = resolve_ident(obj)
         else
           macro_scope, similar_name = resolve_ident?(obj)
         end
         return false unless macro_scope.is_a?(Type)
-<<<<<<< HEAD
-        _dbg 3
-=======
-
+        # _dbg "2b"
         macro_scope = macro_scope.remove_alias
-
->>>>>>> foreign/master
         the_macro = macro_scope.metaclass.lookup_macro(node.name, node.args, node.named_args)
       when Nil
-        _dbg 4
+        # _dbg "3a"
         return false if node.name == "super" || node.name == "previous_def"
-        _dbg 5
+        # _dbg "3b"
         the_macro = node.lookup_macro
       else
         return false
       end
 
-      _dbg 6
+      _dbg "1b"
       return false unless the_macro
 
-      _dbg 7
+      _dbg "1c"
 
       # If we find a macro outside a def/block and this is not the first pass it means that the
       # macro was defined before we first found this call, so it's an error
@@ -671,12 +666,8 @@ module Crystal
       true
     end
 
-<<<<<<< HEAD
-    def expand_macro(the_macro, node)
-      _dbg "BaseTypeVisitor.expand_macro the_macro".red
-=======
     def expand_macro(the_macro, node, mode = nil)
->>>>>>> foreign/master
+      _dbg "BaseTypeVisitor.expand_macro the_macro".red
       begin
         expanded_macro = yield
       rescue ex : Crystal::Exception

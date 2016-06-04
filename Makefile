@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-.PHONY: all spec onyx doc clean bootstrap
-
-=======
->>>>>>> foreign/master
 -include Makefile.local # for optional local options e.g. threads
 
 O := .build
@@ -22,23 +17,24 @@ LIB_CRYSTAL_OBJS = $(subst .c,.o,$(LIB_CRYSTAL_SOURCES))
 LIB_CRYSTAL_TARGET = src/ext/libcrystal.a
 CFLAGS += -fPIC
 
-all: onyx
-
-bootstrap:
-	./bootstrap.sh
-
-install:
-	./install.sh
-
 ifeq (${LLVM_CONFIG},)
 $(error Could not locate llvm-config, make sure it is installed and in your PATH)
 endif
 
-<<<<<<< HEAD
-spec: all_spec
-=======
 .PHONY: all
-all: crystal
+all: onyx
+
+.PHONY: bootstrap
+bootstrap:
+	./bootstrap.sh
+
+.PHONY: install
+install:
+	./install.sh
+
+.PHONY: spec
+spec: all_spec
+	$(O)/all_spec
 
 .PHONY: help
 help: ## Show this help
@@ -47,10 +43,8 @@ help: ## Show this help
 		sort |\
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: spec
-spec: all_spec ## Run all specs
->>>>>>> foreign/master
-	$(O)/all_spec
+
+
 
 .PHONY: std_spec
 std_spec: all_std_spec ## Run standard library specs
@@ -59,23 +53,15 @@ std_spec: all_std_spec ## Run standard library specs
 .PHONY: compiler_spec
 compiler_spec: all_compiler_spec ## Run compiler specs
 	$(O)/compiler_spec
-<<<<<<< HEAD
+
+.PHONY: doc
 doc:
 	$(BUILD_PATH) ./bin/cr-ox doc src/docs_main.cr
 
+.PHONY: onyx
 onyx: $(O)/onyx
 
-=======
-
-.PHONY: doc
-doc: ## Generate standard library documentation
-	$(BUILD_PATH) ./bin/crystal doc src/docs_main.cr
-
-.PHONY: crystal
-crystal: $(O)/crystal ## Build the compiler
-
 .PHONY: all_spec all_std_spec all_compiler_spec
->>>>>>> foreign/master
 all_spec: $(O)/all_spec
 all_std_spec: $(O)/std_spec
 all_compiler_spec: $(O)/compiler_spec
