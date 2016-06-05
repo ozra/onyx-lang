@@ -42,6 +42,7 @@ Commands:
   Compilation:
     devel                    compile development program file
     release                  compile release program file
+    nobelt                   compile release program without any implicit checks (bounds etc.)
     run  (default)           compile and run program file
     eval                     eval code from args or standard input
     spec                     compile and run specs (in spec directory)
