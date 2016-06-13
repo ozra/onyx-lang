@@ -229,7 +229,7 @@ class ToOnyxSVisitor < Visitor
     @str << "("
     node.entries.each_with_index do |entry, i|
       @str << ", " if i > 0
-      @str << entry.key
+      visit_named_arg_name(entry.key)
       @str << ": "
       entry.value.accept self
     end
@@ -560,7 +560,7 @@ class ToOnyxSVisitor < Visitor
   end
 
   def visit(node : NamedArgument)
-    @str << node.name
+    visit_named_arg_name(node.name)
     @str << ": "
     node.value.accept self
     false
@@ -618,7 +618,7 @@ class ToOnyxSVisitor < Visitor
     str
   end
 
-  def def_name(str, literal_style : Symbol)
+  def func_name(str, literal_style : Symbol)
     stylize_idfr str, literal_style
   end
 
@@ -741,7 +741,7 @@ class ToOnyxSVisitor < Visitor
     @str << node.name
   end
 
-  def visit(node : FunLiteral)
+  def visit(node : ProcLiteral)
     # if node.def.args.size > 0
     @str << "("
     node.def.args.each_with_index do |arg, i|
@@ -761,13 +761,13 @@ class ToOnyxSVisitor < Visitor
     false
   end
 
-  def visit(node : FunPointer)
+  def visit(node : ProcPointer)
     @str << "->"
     if obj = node.obj
       obj.accept self
       @str << "."
     end
-    @str << def_name(node.name, :dash)
+    @str << func_name(node.name, :dash)
 
     if node.args.size > 0
       @str << "("
@@ -799,13 +799,13 @@ class ToOnyxSVisitor < Visitor
 
     case node.name
     when "initialize"
-      @str << def_name("init", :snake)
+      @str << func_name("init", :snake)
 
     when "===" # *TODO*
-      @str << def_name("~~", :snake)
+      @str << func_name("~~", :snake)
 
     else
-      @str << def_name(node.name, :dash)
+      @str << func_name(node.name, :dash)
       @str << case node.visibility
       when Visibility::Public then ""
       when Visibility::Protected then "*"
@@ -959,30 +959,30 @@ class ToOnyxSVisitor < Visitor
   end
 
   def visit(node : Arg)
+    if node.external_name != node.name
+      visit_named_arg_name(node.external_name)
+      @str << " "
+    end
+
     if node.name
       @str << decorate_arg(node, node.name)
     else
       @str << "?"
     end
 
-    if default_value = node.default_value
-      @str << " = "
-      default_value.accept self
-    end
-
-    if type = node.type?
-      @str << " " # *TODO*: unless mut and mut_word == "~"
-      to_s_mutability node.mutability
-      TypeNode.new(type).accept(self)
-
-    elsif restriction = node.restriction
-      @str << " " # *TODO*: unless mut and mut_word == "~"
+    if restriction = node.restriction
+      @str << " "
       to_s_mutability node.mutability
       if restriction.is_a? Underscore
         @str << "*"
       else
         restriction.accept self
       end
+    end
+
+    if default_value = node.default_value
+      @str << " = "
+      default_value.accept self
     end
     false
   end
@@ -996,7 +996,7 @@ class ToOnyxSVisitor < Visitor
   #   false
   # end
 
-  def visit(node : Fun)
+  def visit(node : ProcNotation)
     @str << "("
     if inputs = node.inputs
       inputs.each_with_index do |input, i|
@@ -1030,10 +1030,10 @@ class ToOnyxSVisitor < Visitor
   def visit(node : Generic)
     if @inside_lib && node.name.names.size == 1
       case node.name.names.first
-      when "Pointer"
-        node.type_vars.first.accept self
-        @str << "*"
-        return false
+      # when "Pointer"
+      #   node.type_vars.first.accept self
+      #   @str << "*"
+      #   return false
       when "StaticArray"
         if node.type_vars.size == 2
           node.type_vars[0].accept self
@@ -1046,13 +1046,35 @@ class ToOnyxSVisitor < Visitor
     end
 
     node.name.accept self
-    @str << "<"
+
+    printed_arg = false
+
+    @str << "‹"
     node.type_vars.each_with_index do |var, i|
       @str << ", " if i > 0
       var.accept self
+      printed_arg = true
     end
-    @str << ">"
+
+    if named_args = node.named_args
+      named_args.each do |named_arg|
+        @str << ", " if printed_arg
+        visit_named_arg_name(named_arg.name)
+        @str << ": "
+        named_arg.value.accept self
+        printed_arg = true
+      end
+    end
+    @str << "›"
     false
+  end
+
+  def visit_named_arg_name(name)
+    if Symbol.needs_quotes?(name)
+      name.inspect(@str)
+    else
+      @str << name
+    end
   end
 
   def visit(node : Underscore)
@@ -1061,13 +1083,13 @@ class ToOnyxSVisitor < Visitor
   end
 
   def visit(node : Splat)
-    @str << "..." # *TODO* verify _right_ splat...
+    @str << "*"
     node.exp.accept self
     false
   end
 
   def visit(node : DoubleSplat)
-    @str << "**"
+    @str << "*:"
     node.exp.accept self
     false
   end
@@ -1613,7 +1635,6 @@ class ToOnyxSVisitor < Visitor
 
   def visit(node : Attribute)
     @str << "'"
-    #@str << "@["
     @str << node.name
     if !node.args.empty? || node.named_args
       @str << "("
@@ -1626,7 +1647,7 @@ class ToOnyxSVisitor < Visitor
       if named_args = node.named_args
         @str << ", " if printed_arg
         named_args.each do |named_arg|
-          @str << named_arg.name
+          visit_named_arg_name(named_arg.name)
           @str << ": "
           named_arg.value.accept self
           printed_arg = true
@@ -1634,7 +1655,6 @@ class ToOnyxSVisitor < Visitor
       end
       @str << ")"
     end
-    #@str << "]"
     false
   end
 
@@ -1699,6 +1719,10 @@ class ToOnyxSVisitor < Visitor
     @str << "-- " << node.filename
     @str.puts
     node.node.accept self
+    false
+  end
+
+  def visit(node : YieldBlockBinder)
     false
   end
 
