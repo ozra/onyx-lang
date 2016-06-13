@@ -254,6 +254,10 @@ describe "macro methods" do
       assert_macro "", %({{"hello"[1...-2]}}), [] of ASTNode, %("el")
     end
 
+    it "executes string [Range] inclusive (computed)" do
+      assert_macro "", %({{"hello"[[1].size..-2]}}), [] of ASTNode, %("ell")
+    end
+
     it "executes string chomp" do
       assert_macro "", %({{"hello\n".chomp}}), [] of ASTNode, %("hello")
     end
@@ -523,6 +527,18 @@ describe "macro methods" do
 
     it "executes +" do
       assert_macro "", %({{ [1, 2] + [3, 4, 5] }}), [] of ASTNode, %([1, 2, 3, 4, 5])
+    end
+
+    it "executes [] with range" do
+      assert_macro "", %({{ [1, 2, 3, 4][1...-1] }}), [] of ASTNode, %([2, 3])
+    end
+
+    it "executes [] with computed range" do
+      assert_macro "", %({{ [1, 2, 3, 4][[1].size...-1] }}), [] of ASTNode, %([2, 3])
+    end
+
+    it "executes [] with two numbers" do
+      assert_macro "", %({{ [1, 2, 3, 4, 5][1, 3] }}), [] of ASTNode, %([2, 3, 4])
     end
   end
 
@@ -974,6 +990,44 @@ describe "macro methods" do
   describe "splat methods" do
     it "executes exp" do
       assert_macro "x", %({{x.exp}}), [2.int32.splat] of ASTNode, "2"
+    end
+  end
+
+  describe "generic methods" do
+    it "executes name" do
+      assert_macro "x", %({{x.name}}), [Generic.new("Foo".path, ["T".path] of ASTNode)] of ASTNode, "Foo"
+    end
+
+    it "executes type_vars" do
+      assert_macro "x", %({{x.type_vars}}), [Generic.new("Foo".path, ["T".path, "U".path] of ASTNode)] of ASTNode, "[T, U]"
+    end
+
+    it "executes named_args" do
+      assert_macro "x", %({{x.named_args}}), [Generic.new("Foo".path, [] of ASTNode, named_args: [NamedArgument.new("x", "U".path), NamedArgument.new("y", "V".path)])] of ASTNode, "{x: U, y: V}"
+    end
+  end
+
+  describe "range methods" do
+    it "executes begin" do
+      assert_macro "x", %({{x.begin}}), [RangeLiteral.new(1.int32, 2.int32, true)] of ASTNode, "1"
+    end
+
+    it "executes end" do
+      assert_macro "x", %({{x.end}}), [RangeLiteral.new(1.int32, 2.int32, true)] of ASTNode, "2"
+    end
+
+    it "executes excludes_end?" do
+      assert_macro "x", %({{x.excludes_end?}}), [RangeLiteral.new(1.int32, 2.int32, true)] of ASTNode, "true"
+    end
+
+    it "executes map" do
+      assert_macro "x", %({{x.map(&.stringify)}}), [RangeLiteral.new(1.int32, 3.int32, false)] of ASTNode, %(["1", "2", "3"])
+      assert_macro "x", %({{x.map(&.stringify)}}), [RangeLiteral.new(1.int32, 3.int32, true)] of ASTNode, %(["1", "2"])
+    end
+
+    it "executes to_a" do
+      assert_macro "x", %({{x.to_a}}), [RangeLiteral.new(1.int32, 3.int32, false)] of ASTNode, %([1, 2, 3])
+      assert_macro "x", %({{x.to_a}}), [RangeLiteral.new(1.int32, 3.int32, true)] of ASTNode, %([1, 2])
     end
   end
 

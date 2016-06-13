@@ -8,7 +8,10 @@ module Crystal::Macros
   # Outputs the current macro's buffer to the standard output. Useful for debugging
   # a macro to see what's being generated. Use it like `{{debug()}}`, the parenthesis
   # are mandatory.
-  def debug : Nop
+  #
+  # By default, the output is tried to be formatted using Crystal's
+  # formatter, but you can disable this by passing `false` to this method.
+  def debug(format = true) : Nop
   end
 
   # Gets the value of an environment variable at compile-time, or `nil` if it doesn't exist.
@@ -555,6 +558,27 @@ module Crystal::Macros
 
   # A range literal.
   class RangeLiteral < ASTNode
+    # Similar to `Range#begin`
+    def begin : ASTNode
+    end
+
+    # Similar to `Range#end`
+    def end : ASTNode
+    end
+
+    # Similar to `Range#excludes_end?`
+    def excludes_end? : ASTNode
+    end
+
+    # Similar to `Enumerable#map` for a `Range`.
+    # Only works on ranges of `NumberLiteral`s considered as integers.
+    def map : ArrayLiteral
+    end
+
+    # Similar to `Enumerable#to_a` for a `Range`.
+    # Only works on ranges of `NumberLiteral`s considered as integers.
+    def to_a : ArrayLiteral
+    end
   end
 
   # A regex literal.
@@ -717,7 +741,7 @@ module Crystal::Macros
     end
   end
 
-  # class Fun < ASTNode
+  # class ProcNotation < ASTNode
   # end
 
   # A method definition.
@@ -851,10 +875,10 @@ module Crystal::Macros
   # class ExceptionHandler < ASTNode
   # end
 
-  # class FunLiteral < ASTNode
+  # class ProcLiteral < ASTNode
   # end
 
-  # class FunPointer < ASTNode
+  # class ProcPointer < ASTNode
   # end
 
   # class Union < ASTNode

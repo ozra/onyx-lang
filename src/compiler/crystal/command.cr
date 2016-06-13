@@ -99,6 +99,8 @@ class Crystal::Command
       puts USAGE
       exit
     end
+  rescue ex : Crystal::ToolException
+    error ex.message
   rescue ex : Crystal::Exception
     ex.color = @color
     if @config.try(&.output_format) == "json"
@@ -174,9 +176,9 @@ class Crystal::Command
     end
 
     vars = {
-      "CRYSTAL_CACHE_DIR": CacheDir.instance.dir,
-      "CRYSTAL_PATH":      CrystalPath.default_path,
-      "CRYSTAL_VERSION":   Config.version || "",
+      "CRYSTAL_CACHE_DIR" => CacheDir.instance.dir,
+      "CRYSTAL_PATH"      => CrystalPath.default_path,
+      "CRYSTAL_VERSION"   => Config.version || "",
     }
 
     if ARGV.empty?
@@ -390,7 +392,7 @@ class Crystal::Command
 
       opts.on("-h", "--help", "Show this message") do
         puts opts
-        exit 1
+        exit
       end
 
       opts.unknown_args do |before, after|
@@ -520,7 +522,7 @@ class Crystal::Command
 
       opts.on("-h", "--help", "Show this message") do
         puts opts
-        exit 1
+        exit
       end
 
       unless no_codegen

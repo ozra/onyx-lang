@@ -463,7 +463,7 @@ module Crystal
     def check_args_are_not_closure(node, message)
       node.args.each do |arg|
         case arg
-        when FunLiteral
+        when ProcLiteral
           if arg.def.closure
             vars = ClosuredVarsCollector.collect arg.def
             unless vars.empty?
@@ -472,7 +472,7 @@ module Crystal
 
             arg.raise message
           end
-        when FunPointer
+        when ProcPointer
           if arg.obj.try &.type?.try &.passed_as_self?
             arg.raise "#{message} (closured vars: self)"
           end
@@ -485,7 +485,7 @@ module Crystal
       end
     end
 
-    def transform(node : FunPointer)
+    def transform(node : ProcPointer)
       super
 
       if call = node.call?
@@ -501,7 +501,7 @@ module Crystal
       node
     end
 
-    def transform(node : FunLiteral)
+    def transform(node : ProcLiteral)
       body = node.def.body
       if node.def.no_returns? && !body.type?
         node.def.body = untyped_expression(body)
@@ -769,6 +769,20 @@ module Crystal
 
       if obj_type.no_return?
         rebind_type node, @program.no_return
+        return node
+      end
+
+      # If there's no way to cast obj to the given type,
+      # just return `obj; nil`
+      resulting_type = obj_type.filter_by(to_type)
+      unless resulting_type
+        nil_literal = NilLiteral.new
+        nil_literal.set_type(@program.nil)
+        exps = Expressions.new([node.obj, nil_literal] of ASTNode)
+        exps.set_type(@program.nil)
+        @changed = true
+        rebind_node(node, @program.nil_var)
+        return exps
       end
 
       node
@@ -804,6 +818,10 @@ module Crystal
         unless instance_type.class?
           node.exp.raise "#{instance_type} is not a class, it's a #{instance_type.type_desc}"
         end
+      end
+
+      if expanded = node.expanded
+        return expanded
       end
 
       node

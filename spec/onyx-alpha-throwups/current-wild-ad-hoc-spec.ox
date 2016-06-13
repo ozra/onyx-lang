@@ -38,15 +38,16 @@ template dpp(...exps) =
   {% for exp in exps %}
     $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
   {% end %}
-end
+end dpp
+  -- *TODO* above end, if no comment after, makes one line-no disappear
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 say "Lambda Type as value"
 
--- lambda-type = '(Int, Bool) -> Int
-lambda-type = (Int, Bool) -> Int
-pp lambda-type
+-- lambda-type = '(Int, Bool) -> Int  -- FUCKS UP HIGHLIGHT IN ATOM ONLY
+-- lambda-type = (Int, Bool) -> Int  -- NOT ALLOWED YET
+-- pp lambda-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -99,10 +100,11 @@ nfoo = Nilish 3
 say (nfoo?foo?bar?qwo || 0) + 100
 nfoo.internal
 
-nfoo = Nilish 2
-say (nfoo~foo~bar?~qwo || 0) + 100
-say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
-nfoo.internal
+-- NOT LEGAL YET
+-- nfoo = Nilish 2
+-- say (nfoo~foo~bar?~qwo || 0) + 100
+-- say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
+-- nfoo.internal
 
 -- '!literal-int = I64
 say "remove me for crash"
@@ -817,18 +819,18 @@ list.each_ (v, i) ~> say "each-value: v: {v}, i: {i}"
 say " x:"
 x = list.each((v) ~> p v).map(~> _1 * 2)
 say " y:"
-y = ( ( list.each((v) ~> p v) ).map(~> _1 * 2) )
+y = ( ( list.each((v) \\ p v) ).map(\\ _1 * 2) )
 say " z:"
-z = list.each((v) ~> p v).map ~> _1 * 2
+z = list.each((v) \\ p v).map \\ _1 * 2
 say " u:"
-u = list.each((v) ~> p v).map ~> _1 * 2
+u = list.each((v) \\ p v).map \\ _1 * 2
 say " v:"
-v = ( ( list.each((v) ~> p v) ).map \.* 2 )
+v = ( ( list.each((v) \\ p v) ).map \.* 2 )
 say " w:"
-w = ( ( list.each((v) ~> p v) ).map(~.* 2))
+w = ( ( list.each((v) \\ p v) ).map(\\.* 2))
 say " pw:"
 
-pw = (list.each \p _1).map \.* 2
+pw = (list.each \\p _1).map \.* 2
 
 
 say "All lists should equal [94, 26, 84, 22]"

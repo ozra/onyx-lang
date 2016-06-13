@@ -99,8 +99,8 @@ module Crystal
       end
     end
 
-    def visit(node : Fun)
-      _dbg "BaseTypeVisitor.visit Fun: #{node}"
+    def visit(node : ProcNotation)
+      _dbg "BaseTypeVisitor.visit ProcNotation: #{node}"
 
       @in_type_args += 1
       node.inputs.try &.each &.accept(self)
@@ -119,7 +119,7 @@ module Crystal
         types << mod.void
       end
 
-      node.type = mod.fun_of(types)
+      node.type = mod.proc_of(types)
 
       false
     end
@@ -195,7 +195,7 @@ module Crystal
         unless node.named_args
           node.raise "can only instantiate NamedTuple with named arguments"
         end
-      elsif instance_type.variadic
+      elsif instance_type.splat_index
         if node.named_args
           node.raise "can only use named arguments with NamedTuple"
         end
@@ -209,8 +209,24 @@ module Crystal
           node.raise "can only use named arguments with NamedTuple"
         end
 
-        if instance_type.type_vars.size != node.type_vars.size
-          node.wrong_number_of "type vars", instance_type, node.type_vars.size, instance_type.type_vars.size
+        # Need to count type vars because there might be splats
+        type_vars_count = 0
+        knows_count = true
+        node.type_vars.each do |type_var|
+          if type_var.is_a?(Splat)
+            if type_var.type?
+              type_vars_count += type_var.type.as(TupleInstanceType).size
+            else
+              knows_count = false
+              break
+            end
+          else
+            type_vars_count += 1
+          end
+        end
+
+        if knows_count && instance_type.type_vars.size != type_vars_count
+          node.wrong_number_of "type vars", instance_type, type_vars_count, instance_type.type_vars.size
         end
       end
 
@@ -823,7 +839,7 @@ module Crystal
         node.raise msg
       end
 
-      if type.is_a?(TypeDefType) && type.typedef.fun?
+      if type.is_a?(TypeDefType) && type.typedef.proc?
         type = type.typedef
       end
 
@@ -1016,20 +1032,12 @@ module Crystal
         node.raise "can't use class variables in generic types"
       end
 
-      if scope.is_a?(VirtualType)
-        node.raise "can't access class variable from a type that is #{scope.base_type.instance_type} or any of its subclasses"
-      end
-
-      if scope.is_a?(VirtualMetaclassType)
-        node.raise "can't access class variable from a type that is #{scope.base_type.instance_type} or any of its subclasses"
-      end
-
       scope.as(ClassVarContainer)
     end
 
     def lookup_class_var(node)
       class_var_owner = class_var_owner(node)
-      var = class_var_owner.class_vars[node.name]?
+      var = class_var_owner.lookup_class_var?(node.name)
       unless var
         undefined_class_variable(node, class_var_owner)
       end
