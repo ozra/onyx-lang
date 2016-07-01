@@ -591,9 +591,23 @@ class Array(T)
   # ```
   @[AlwaysInline]
   def at_unsafe(index : Int)
+    ifdef !release
+    # {% if !flags(release) %}
+      if !(0 <= index < size)
+        fatal "at_unsafe - out of bounds #{index}, size = #{size}"
+        # raise nil # Ugly way to satisfy inference without messing with the code
+      end
+    # {% end %}
+    end
     @buffer[index]
   end
 
+  # *TODO*
+  def fatal(msg)
+    LibC.printf msg
+    CallStack.print_backtrace
+    LibC.exit(1)
+  end
   # Returns a tuple populated with the elements at the given indexes.
   # Raises `IndexError` if any index is invalid.
   #

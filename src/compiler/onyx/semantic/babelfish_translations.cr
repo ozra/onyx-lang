@@ -359,6 +359,7 @@ babel_func  :"~~",       :"==="
 babel_func  each,        each_with_index,  false
 babel_func  each_,       each,             false
 
-babel_func  some!,       not_nil!,         false
+# babel_func  some!,       not_nil!,         false
+babel_func  is!,           not_nil!,         false
 
 

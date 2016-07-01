@@ -788,8 +788,8 @@ say ""
 
 -- '!literal-int=I64
 
-foo-named(awol, foo = 47, bar = "fds") ->!
-   say "foo-named: (awol): {awol}, foo: {foo}, bar: {bar}"
+foo-named(awol=>my-awol Int, foo: my-foo = 47, bar = "fds") ->!
+   say "foo-named: (awol): {my-awol}, foo: {my-foo}, bar: {bar}"
 
 foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, bar: "yo"
