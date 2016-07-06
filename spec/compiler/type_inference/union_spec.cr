@@ -140,4 +140,19 @@ describe "Type inference: union" do
       Union(Int32, String).foo
       )) { int32 }
   end
+
+  it "merges types in the same hierarchy with Union" do
+    assert_type(%(
+      class Foo; end
+      class Bar < Foo; end
+
+      Union(Foo, Bar)
+      )) { types["Foo"].virtual_type!.metaclass }
+  end
+
+  it "treats void as nil in union" do
+    assert_type(%(
+      nil.as(Void?)
+      )) { nil_type }
+  end
 end

@@ -155,6 +155,23 @@ describe IO do
     dst.to_s.should eq(string)
   end
 
+  it "copies with limit" do
+    string = "abcあぼ"
+    src = MemoryIO.new(string)
+    dst = MemoryIO.new
+    IO.copy(src, dst, 3).should eq(3)
+    dst.to_s.should eq("abc")
+  end
+
+  it "raises on copy with negative limit" do
+    string = "abcあぼ"
+    src = MemoryIO.new(string)
+    dst = MemoryIO.new
+    expect_raises(ArgumentError, "negative limit") do
+      IO.copy(src, dst, -10)
+    end
+  end
+
   it "reopens" do
     File.open("#{__DIR__}/../data/test_file.txt") do |file1|
       File.open("#{__DIR__}/../data/test_file.ini") do |file2|
@@ -265,6 +282,16 @@ describe IO do
       io.read_char.should eq('世')
       io.read_char.should eq('界')
       io.read_char.should be_nil
+
+      io.write UInt8.slice(0xf8, 0xff, 0xff, 0xff)
+      expect_raises(InvalidByteSequenceError) do
+        io.read_char
+      end
+
+      io.write UInt8.slice(0x81)
+      expect_raises(InvalidByteSequenceError) do
+        io.read_char
+      end
     end
 
     it "reads byte" do

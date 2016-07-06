@@ -791,8 +791,8 @@ describe "String" do
 
     it "subs with regex and hash" do
       str = "hello"
-      str.sub(/(he|l|o)/, {"he": "ha", "l": "la"}).should eq("hallo")
-      str.sub(/(he|l|o)/, {"l": "la"}).should be(str)
+      str.sub(/(he|l|o)/, {"he" => "ha", "l" => "la"}).should eq("hallo")
+      str.sub(/(he|l|o)/, {"l" => "la"}).should be(str)
     end
 
     it "subs using $~" do
@@ -840,6 +840,62 @@ describe "String" do
 
     it "ignores if backreferences: false" do
       "foo".sub(/o/, "x\\0x", backreferences: false).should eq("fx\\0xo")
+    end
+
+    it "subs at index with char" do
+      string = "hello".sub(1, 'a')
+      string.should eq("hallo")
+      string.bytesize.should eq(5)
+      string.size.should eq(5)
+    end
+
+    it "subs at index with char, non-ascii" do
+      string = "あいうえお".sub(2, 'の')
+      string.should eq("あいのえお")
+      string.size.should eq(5)
+      string.bytesize.should eq("あいのえお".bytesize)
+    end
+
+    it "subs at index with string" do
+      string = "hello".sub(1, "eee")
+      string.should eq("heeello")
+      string.bytesize.should eq(7)
+      string.size.should eq(7)
+    end
+
+    it "subs at index with string, non-ascii" do
+      string = "あいうえお".sub(2, "けくこ")
+      string.should eq("あいけくこえお")
+      string.bytesize.should eq("あいけくこえお".bytesize)
+      string.size.should eq(7)
+    end
+
+    it "subs range with char" do
+      string = "hello".sub(1..2, 'a')
+      string.should eq("halo")
+      string.bytesize.should eq(4)
+      string.size.should eq(4)
+    end
+
+    it "subs range with char, non-ascii" do
+      string = "あいうえお".sub(1..2, 'け')
+      string.should eq("あけえお")
+      string.size.should eq(4)
+      string.bytesize.should eq("あけえお".bytesize)
+    end
+
+    it "subs range with string" do
+      string = "hello".sub(1..2, "eee")
+      string.should eq("heeelo")
+      string.size.should eq(6)
+      string.bytesize.should eq(6)
+    end
+
+    it "subs range with string, non-ascii" do
+      string = "あいうえお".sub(1..2, "けくこ")
+      string.should eq("あけくこえお")
+      string.size.should eq(6)
+      string.bytesize.should eq("あけくこえお".bytesize)
     end
   end
 
@@ -943,7 +999,7 @@ describe "String" do
 
     it "gsubs with regex and hash" do
       str = "hello"
-      str.gsub(/(he|l|o)/, {"he": "ha", "l": "la"}).should eq("halala")
+      str.gsub(/(he|l|o)/, {"he" => "ha", "l" => "la"}).should eq("halala")
     end
 
     it "gsubs using $~" do
@@ -1629,18 +1685,18 @@ describe "String" do
 
   context "%" do
     it "substitutes one placeholder" do
-      res = "change %{this}" % {"this": "nothing"}
+      res = "change %{this}" % {"this" => "nothing"}
       res.should eq "change nothing"
     end
 
     it "substitutes multiple placeholder" do
-      res = "change %{this} and %{more}" % {"this": "nothing", "more": "something"}
+      res = "change %{this} and %{more}" % {"this" => "nothing", "more" => "something"}
       res.should eq "change nothing and something"
     end
 
     it "throws an error when the key is not found" do
       expect_raises KeyError do
-        "change %{this}" % {"that": "wrong key"}
+        "change %{this}" % {"that" => "wrong key"}
       end
     end
 
@@ -1652,12 +1708,12 @@ describe "String" do
 
     it "raises on unbalanced curly" do
       expect_raises(ArgumentError, "malformed name - unmatched parenthesis") do
-        "change %{this" % {"this": 1}
+        "change %{this" % {"this" => 1}
       end
     end
 
     it "applies formatting to %<...> placeholder" do
-      res = "change %<this>.2f" % {"this": 23.456}
+      res = "change %<this>.2f" % {"this" => 23.456}
       res.should eq "change 23.46"
     end
   end
@@ -1800,5 +1856,14 @@ describe "String" do
     string = "foo"
     clone = string.clone
     string.should be(clone)
+  end
+
+  it "#at" do
+    "foo".at(0).should eq('f')
+    "foo".at(4) { 'x' }.should eq('x')
+
+    expect_raises(IndexError) do
+      "foo".at(4)
+    end
   end
 end

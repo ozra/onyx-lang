@@ -91,7 +91,7 @@ module Crystal
       # Copy enclosing def's args to super/previous_def without parenthesis
       case node.name
       when "super", "previous_def"
-        if node.args.empty? && !node.has_parenthesis
+        if node.args.empty? && !node.has_parentheses
           if current_def = @current_def
             current_def.args.each_with_index do |arg, i|
               arg = Var.new(arg.name)
@@ -99,7 +99,7 @@ module Crystal
               node.args.push arg
             end
           end
-          node.has_parenthesis = true
+          node.has_parentheses = true
         end
       end
 
@@ -145,7 +145,7 @@ module Crystal
       block_arg = node.block_arg
       if !node.uses_block_arg && block_arg
         block_arg_restriction = block_arg.restriction
-        if block_arg_restriction.is_a?(Fun) && !block_arg_restriction.inputs && !block_arg_restriction.output
+        if block_arg_restriction.is_a?(ProcNotation) && !block_arg_restriction.inputs && !block_arg_restriction.output
           node.block_arg = nil
         elsif !block_arg_restriction
           node.block_arg = nil

@@ -94,7 +94,6 @@ server.listen
 A rather contrived example, just to show some basic constructs:
 
 ```onyx
-
 type Greeter
    @greeting–phrase = "Greetings,"
 

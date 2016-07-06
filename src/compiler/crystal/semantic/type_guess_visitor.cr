@@ -17,8 +17,9 @@ module Crystal
     class TypeInfo
       property type
       property outside_def
+      getter location
 
-      def initialize(@type : Type)
+      def initialize(@type : Type, @location : Location)
         @outside_def = false
       end
     end
@@ -257,11 +258,11 @@ module Crystal
                 next if owner.class_vars[target.name]?
 
                 owner_vars = @class_vars[owner] ||= {} of String => TypeInfo
-                add_type_info(owner_vars, target.name, tuple_type)
+                add_type_info(owner_vars, target.name, tuple_type, target)
               when Global
                 next if @mod.global_vars[target.name]?
 
-                add_type_info(@globals, target.name, tuple_type)
+                add_type_info(@globals, target.name, tuple_type, target)
               end
             end
           end
@@ -277,7 +278,7 @@ module Crystal
 
       type = guess_type(value)
       if type
-        add_type_info(@globals, target.name, type)
+        add_type_info(@globals, target.name, type, target)
       end
       type
     end
@@ -293,7 +294,7 @@ module Crystal
       type = guess_type(value)
       if type
         owner_vars = @class_vars[owner] ||= {} of String => TypeInfo
-        add_type_info(owner_vars, target.name, type)
+        add_type_info(owner_vars, target.name, type, target)
       end
       type
     end
@@ -376,6 +377,11 @@ module Crystal
     end
 
     def process_uninitialized_instance_var_on_non_generic(owner, target, value)
+      if @outside_def
+        outside_vars = @instance_vars_outside[owner] ||= [] of String
+        outside_vars << target.name unless outside_vars.includes?(target.name)
+      end
+
       # If there is already a type restriction, skip
       existing = @explicit_instance_vars[owner]?.try &.[target.name]?
       if existing
@@ -392,6 +398,11 @@ module Crystal
     end
 
     def process_uninitialized_instance_var_on_generic(owner, target, value)
+      if @outside_def
+        outside_vars = @instance_vars_outside[owner] ||= [] of String
+        outside_vars << target.name unless outside_vars.includes?(target.name)
+      end
+
       # Skip if the generic class already defines an explicit type
       existing = @explicit_instance_vars[owner]?.try &.[target.name]?
       if existing
@@ -432,10 +443,10 @@ module Crystal
       type_vars
     end
 
-    def add_type_info(vars, name, type)
+    def add_type_info(vars, name, type, node)
       info = vars[name]?
       unless info
-        info = TypeInfo.new(type)
+        info = TypeInfo.new(type, node.location.not_nil!)
         info.outside_def = true if @outside_def
         vars[name] = info
       else
@@ -855,7 +866,7 @@ module Crystal
           return type if type
         else
           # If there's no restriction it means it's a `-> Void` proc
-          return @mod.fun_of([@mod.void] of Type)
+          return @mod.proc_of([@mod.void] of Type)
         end
       end
 
@@ -1403,7 +1414,7 @@ module Crystal
       false
     end
 
-    def visit(node : FunLiteral)
+    def visit(node : ProcLiteral)
       node.def.body.accept self
       false
     end
@@ -1459,7 +1470,7 @@ module Crystal
       false
     end
 
-    def visit(node : Fun)
+    def visit(node : ProcNotation)
       false
     end
 

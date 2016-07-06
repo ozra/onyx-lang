@@ -619,23 +619,39 @@ module Crystal
         when Const
           matched_type.value
         when Type
-          # The T of a tuple, named tuple or union produce tuple literals
+          # If it's the T of a variadic generic type, produce tuple literals
           # or named tuple literals. The compiler has them as a type
           # (a tuple type, or a named tuple type) but the user should see
           # them as literals, and having them as a type doesn't add
           # any useful information.
-          if node.single?("T")
-            instance_type = @type_lookup.instance_type
-            case instance_type
-            when TupleInstanceType
-              return TupleLiteral.map(instance_type.tuple_types) { |t| TypeNode.new(t) }
-            when NamedTupleInstanceType
-              entries = instance_type.entries.map do |entry|
-                NamedTupleLiteral::Entry.new(entry.name, TypeNode.new(entry.type))
-              end
-              return NamedTupleLiteral.new(entries)
+          type_lookup = @type_lookup.instance_type
+          if node.names.size == 1
+            case type_lookup
             when UnionType
-              return TupleLiteral.map(instance_type.union_types) { |t| TypeNode.new(t) }
+              produce_tuple = node.names.first == "T"
+            when GenericClassInstanceType
+              produce_tuple = ((splat_index = type_lookup.splat_index) &&
+                type_lookup.type_vars.keys.index(node.names.first) == splat_index) ||
+                (type_lookup.double_variadic && type_lookup.type_vars.first_key == node.names.first)
+            when IncludedGenericModule
+              a_module = type_lookup.module
+              produce_tuple = (splat_index = a_module.splat_index) &&
+                type_lookup.mapping.keys.index(node.names.first) == splat_index
+            else
+              produce_tuple = false
+            end
+            if produce_tuple
+              case matched_type
+              when TupleInstanceType
+                return TupleLiteral.map(matched_type.tuple_types) { |t| TypeNode.new(t) }
+              when NamedTupleInstanceType
+                entries = matched_type.entries.map do |entry|
+                  NamedTupleLiteral::Entry.new(entry.name, TypeNode.new(entry.type))
+                end
+                return NamedTupleLiteral.new(entries)
+              when UnionType
+                return TupleLiteral.map(matched_type.union_types) { |t| TypeNode.new(t) }
+              end
             end
           end
 

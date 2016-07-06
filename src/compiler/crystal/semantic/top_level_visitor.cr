@@ -62,7 +62,7 @@ module Crystal
       @process_types > 0 ? super : false
     end
 
-    def visit(node : Fun)
+    def visit(node : ProcNotation)
       @process_types > 0 ? super : false
     end
 
@@ -287,6 +287,7 @@ module Crystal
         created_new_type = true
         if type_vars = node.type_vars
           type = GenericClassType.new @mod, scope, name, superclass, type_vars, false
+          type.splat_index = node.splat_index
         else
           type = NonGenericClassType.new @mod, scope, name, superclass, false
         end
@@ -347,6 +348,7 @@ module Crystal
       else
         if type_vars = node.type_vars
           type = GenericModuleType.new @mod, scope, name, type_vars
+          type.splat_index = node.splat_index
         else
           type = NonGenericModuleType.new @mod, scope, name
         end
@@ -817,15 +819,15 @@ module Crystal
 
         return false
       when Call
-        if exp.expanded
-          return false
-        end
+        # Don't give an error yet: wait to see if the
+        # call doesn't resolve to a method/macro
+        return false
       end
 
       node.raise "can't apply visibility modifier"
     end
 
-    def visit(node : FunLiteral)
+    def visit(node : ProcLiteral)
       false
     end
 
@@ -1064,11 +1066,32 @@ module Crystal
           node_name.raise "#{type} is not a generic module"
         end
 
-        if type.type_vars.size != node_name.type_vars.size
+        if !type.splat_index && type.type_vars.size != node_name.type_vars.size
           node_name.wrong_number_of "type vars", type, node_name.type_vars.size, type.type_vars.size
         end
 
-        mapping = Hash.zip(type.type_vars, node_name.type_vars)
+        node_name_type_vars = node_name.type_vars
+
+        if splat_index = type.splat_index
+          new_type_vars = Array(ASTNode).new(node_name_type_vars.size)
+          type_var_index = 0
+          type.type_vars.each_index do |index|
+            if index == splat_index
+              tuple_elements = [] of ASTNode
+              (node_name_type_vars.size - (type.type_vars.size - 1)).times do
+                tuple_elements << node_name_type_vars[type_var_index]
+                type_var_index += 1
+              end
+              new_type_vars << TupleLiteral.new(tuple_elements)
+            else
+              new_type_vars << node_name_type_vars[type_var_index]
+              type_var_index += 1
+            end
+          end
+          node_name_type_vars = new_type_vars
+        end
+
+        mapping = Hash.zip(type.type_vars, node_name_type_vars)
         module_to_include = IncludedGenericModule.new(@mod, type, current_type, mapping)
 
         type.add_inherited(current_type)

@@ -231,7 +231,7 @@ describe "Type inference: const" do
       end
 
       A
-      )) { |mod| mod.nil }
+      )) { nil_type }
   end
 
   it "errors on dynamic constant assignment inside block" do
@@ -283,5 +283,24 @@ describe "Type inference: const" do
       end
       ),
       "recursive dependency of class var Foo::@@a: Foo::@@a -> Foo::B -> Foo::@@a"
+  end
+
+  it "can use constant defined later (#2906)" do
+    assert_type(%(
+      FOO = Foo.new
+
+      class Foo
+        A = Bar.new
+
+        def initialize
+          A
+        end
+      end
+
+      class Bar
+      end
+
+      FOO
+      )) { types["Foo"] }
   end
 end

@@ -819,4 +819,91 @@ describe "Type inference: def overload" do
       f(a: a, b: 2)
       )) { union_of bool, char }
   end
+
+  it "uses long name when no overload matches and name is the same (#1030)" do
+    assert_error %(
+      module A::String
+        def self.foo(a : String, b : Bool)
+          puts a if b
+        end
+      end
+
+      A::String.foo("Hello, World!", true)
+      ),
+      " - A::String.foo(a : A::String, b : Bool)"
+  end
+
+  it "overloads on metaclass (#2916)" do
+    assert_type(%(
+      def foo(x : String.class)
+        1
+      end
+
+      def foo(x : String?.class)
+        'a'
+      end
+
+      {foo(String), foo(typeof("" || nil))}
+      )) { tuple_of([int32, char]) }
+  end
+
+  it "overloads on metaclass (2) (#2916)" do
+    assert_type(%(
+      def foo(x : String.class)
+        1
+      end
+
+      def foo(x : ::String.class)
+        'a'
+      end
+
+      foo(String)
+      )) { char }
+  end
+
+  it "overloads on metaclass (3) (#2916)" do
+    assert_type(%(
+      class Foo
+      end
+
+      class Bar < Foo
+      end
+
+      def foo(x : Foo.class)
+        1
+      end
+
+      def foo(x : Bar.class)
+        'a'
+      end
+
+      {foo(Bar), foo(Foo)}
+      )) { tuple_of([char, int32]) }
+  end
+
+  it "doesn't crash on unknown metaclass" do
+    assert_type(%(
+      def foo(x : Foo.class)
+      end
+
+      def foo(x : Bar.class)
+      end
+
+      1
+      )) { int32 }
+  end
+
+  it "overloads union against non-union (#2904)" do
+    assert_type(%(
+      def foo(x : Int32?)
+        true
+      end
+
+      def foo(x : Int32)
+        'a'
+      end
+
+      {foo(1), foo(nil)}
+      )) { tuple_of([char, bool]) }
+  end
 end

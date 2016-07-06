@@ -25,7 +25,6 @@ module Crystal
       node = parser.parse
       node = normalize node
       node = infer_type node
-      load_libs
       evaluate node
     end
 
@@ -59,6 +58,20 @@ module Crystal
       visitor.finish
 
       visitor.modules
+    end
+
+    def llvm_typer
+      @llvm_typer ||= LLVMTyper.new(self)
+    end
+
+    def size_of(type)
+      size = llvm_typer.size_of(llvm_typer.llvm_type(type))
+      size = 1 if size == 0
+      size
+    end
+
+    def instance_size_of(type)
+      llvm_typer.size_of(llvm_typer.llvm_struct_type(type))
     end
   end
 
@@ -116,7 +129,7 @@ module Crystal
       @single_module = !!single_module
       @debug = !!debug
       @abi = @mod.target_machine.abi
-      @llvm_typer = LLVMTyper.new(@mod)
+      @llvm_typer = @mod.llvm_typer
       @llvm_id = LLVMId.new(@mod)
       @main_ret_type = node.type
       ret_type = @llvm_typer.llvm_return_type(node.type)
@@ -203,7 +216,7 @@ module Crystal
           class_var = initializer.owner.class_vars[initializer.name]
           next if class_var.thread_local?
 
-          initialize_class_var(initializer)
+          initialize_class_var(initializer.owner, initializer.name, initializer.meta_vars, initializer.node)
         end
       end
     end
@@ -268,7 +281,6 @@ module Crystal
       end
 
       env_dump = ENV["DUMP"]?
-      env_verify = ENV["VERIFY"]? == "1"
       case env_dump
       when Nil
         # Nothing
@@ -285,7 +297,11 @@ module Crystal
 
         mod.dump if dump_all_llvm || name =~ dump_llvm_regex
         # puts mod
-        mod.verify if env_verify
+
+        # Always run verifications so we can catch bugs earlier and more often.
+        # We can probably remove this, or only enable this when compiling in
+        # release mode, once we reach 1.0.
+        mod.verify
       end
     end
 
@@ -415,7 +431,7 @@ module Crystal
                 if node_exp.var.initializer
                   initialize_class_var(node_exp)
                 end
-                get_global class_var_global_name(node_exp.var), node_exp.type, node_exp.var
+                get_global class_var_global_name(node_exp.var.owner, node_exp.var.name), node_exp.type, node_exp.var
               when Global
                 get_global node_exp.name, node_exp.type, node_exp.var
               when Path
@@ -431,17 +447,17 @@ module Crystal
       false
     end
 
-    def visit(node : FunLiteral)
+    def visit(node : ProcLiteral)
       fun_literal_name = fun_literal_name(node)
       is_closure = node.def.closure
 
-      # If we don't care about a fun literal's return type then we mark the associated
+      # If we don't care about a proc literal's return type then we mark the associated
       # def as returning void. This can't be done in the type inference phase because
       # of bindings and type propagation.
       if node.force_nil
         node.def.set_type @mod.nil
       else
-        # Use fun literal's type, which might have a broader type then the body
+        # Use proc literal's type, which might have a broader type then the body
         # (for example, return type: Int32 | String, body: String)
         node.def.set_type node.return_type
       end
@@ -460,7 +476,7 @@ module Crystal
       false
     end
 
-    def fun_literal_name(node : FunLiteral)
+    def fun_literal_name(node : ProcLiteral)
       location = node.location.try &.original_location
       if location && (type = node.type?)
         proc_name = true
@@ -485,7 +501,7 @@ module Crystal
       fun_literal_name
     end
 
-    def visit(node : FunPointer)
+    def visit(node : ProcPointer)
       owner = node.call.target_def.owner
       if obj = node.obj
         accept obj
@@ -850,6 +866,8 @@ module Crystal
 
       return if value.no_returns?
 
+      last = @last
+
       set_current_debug_location node if @debug
       ptr = case target
             when InstanceVar
@@ -857,7 +875,7 @@ module Crystal
             when Global
               get_global target.name, target_type, target.var
             when ClassVar
-              get_global class_var_global_name(target.var), target_type, target.var
+              read_class_var_ptr(target)
             when Var
               # Can't assign void
               return if target.type.void?
@@ -876,6 +894,8 @@ module Crystal
             else
               node.raise "Unknown assign target in codegen: #{target}"
             end
+
+      @last = last
 
       if target.is_a?(Var) && target.special_var? && !target_type.reference_like?
         # For special vars that are not reference-like, the function argument will
@@ -1026,7 +1046,7 @@ module Crystal
     end
 
     def visit(node : ClassVar)
-      read_class_var(node)
+      @last = read_class_var(node)
     end
 
     def read_global(name, type, real_var)
@@ -1249,6 +1269,7 @@ module Crystal
 
       block_context = context.block_context.not_nil!
       block = context.block
+      splat_index = block.splat_index
 
       closured_vars = closured_vars(block.vars, block)
 
@@ -1264,8 +1285,9 @@ module Crystal
       end
 
       # First accept all yield expressions and assign them to block vars
+      i = 0
       unless node.exps.empty?
-        exp_values = Array(LLVM::Value).new(node.exps.size)
+        exp_values = Array({LLVM::Value, Type}).new(node.exps.size)
 
         # We first accept the expressions and store the values, without
         # assigning them to the block vars yet because we might have
@@ -1274,22 +1296,59 @@ module Crystal
           request_value do
             accept exp
           end
-          exp_values << @last
-        end
 
-        node.exps.each_with_index do |exp, i|
-          if arg = block.args[i]?
-            block_var = block_context.vars[arg.name]
-            assign block_var.pointer, block_var.type, exp.type, exp_values[i]
+          if exp.is_a?(Splat)
+            tuple_type = exp.type.as(TupleInstanceType)
+            tuple_type.tuple_types.each_with_index do |subtype, j|
+              exp_values << {codegen_tuple_indexer(tuple_type, @last, j), subtype}
+            end
+          else
+            exp_values << {@last, exp.type}
           end
         end
-      end
 
-      # Then assign nil to remaining block args
-      node.exps.size.upto(block.args.size - 1) do |i|
-        arg = block.args[i]
-        block_var = block_context.vars[arg.name]
-        assign block_var.pointer, block_var.type, @mod.nil, llvm_nil
+        # Now assign exp values to block arguments
+        if splat_index
+          j = 0
+          block.args.each_with_index do |arg, i|
+            block_var = block_context.vars[arg.name]
+            if i == splat_index
+              exp_value = allocate_tuple(arg.type.as(TupleInstanceType)) do |tuple_type|
+                exp_value, exp_type = exp_values[j]
+                j += 1
+                {exp_type, exp_value}
+              end
+              exp_type = arg.type
+            else
+              exp_value, exp_type = exp_values[j]
+              j += 1
+            end
+            assign block_var.pointer, block_var.type, exp_type, exp_value
+          end
+        else
+          # Check if tuple unpacking is needed
+          if exp_values.size == 1 &&
+             (exp_type = exp_values.first[1]).is_a?(TupleInstanceType) &&
+             block.args.size > 1
+            exp_value = exp_values.first[0]
+            exp_type.tuple_types.each_with_index do |tuple_type, i|
+              arg = block.args[i]?
+              if arg
+                t_type = tuple_type
+                t_value = codegen_tuple_indexer(exp_type, exp_value, i)
+                block_var = block_context.vars[arg.name]
+                assign block_var.pointer, block_var.type, t_type, t_value
+              end
+            end
+          else
+            exp_values.each_with_index do |(exp_value, exp_type), i|
+              if arg = block.args[i]?
+                block_var = block_context.vars[arg.name]
+                assign block_var.pointer, block_var.type, exp_type, exp_value
+              end
+            end
+          end
+        end
       end
 
       Phi.open(self, block, @needs_value) do |phi|
@@ -1436,16 +1495,16 @@ module Crystal
       false
     end
 
-    def check_fun_is_not_closure(value, type)
-      check_fun_name = "~check_fun_is_not_closure"
-      func = @main_mod.functions[check_fun_name]? || create_check_fun_is_not_closure_fun(check_fun_name)
+    def check_proc_is_not_closure(value, type)
+      check_fun_name = "~check_proc_is_not_closure"
+      func = @main_mod.functions[check_fun_name]? || create_check_proc_is_not_closure_fun(check_fun_name)
       func = check_main_fun check_fun_name, func
       value = call func, [value] of LLVM::Value
-      bit_cast value, llvm_fun_type(type)
+      bit_cast value, llvm_proc_type(type)
     end
 
-    def create_check_fun_is_not_closure_fun(fun_name)
-      define_main_function(fun_name, [LLVMTyper::FUN_TYPE], LLVM::VoidPointer) do |func|
+    def create_check_proc_is_not_closure_fun(fun_name)
+      define_main_function(fun_name, [LLVMTyper::PROC_TYPE], LLVM::VoidPointer) do |func|
         param = func.params.first
 
         fun_ptr = extract_value param, 0
@@ -1838,7 +1897,7 @@ module Crystal
       if malloc_fun = @malloc_fun
         malloc_fun = check_main_fun MALLOC_NAME, malloc_fun
         size = trunc(type.size, LLVM::Int32)
-        pointer = call malloc_fun, [size]
+        pointer = call malloc_fun, size
         bit_cast pointer, type.pointer
       else
         builder.malloc type
@@ -1847,15 +1906,19 @@ module Crystal
 
     def array_malloc(type, count)
       @malloc_fun ||= @main_mod.functions[MALLOC_NAME]?
+      size = trunc(type.size, LLVM::Int32)
+      count = trunc(count, LLVM::Int32)
+      size = builder.mul size, count
       if malloc_fun = @malloc_fun
         malloc_fun = check_main_fun MALLOC_NAME, malloc_fun
-        size = trunc(type.size, LLVM::Int32)
-        count = trunc(count, LLVM::Int32)
-        size = builder.mul size, count
-        pointer = call malloc_fun, [size]
+        pointer = call malloc_fun, size
+        memset pointer, int8(0), size
         bit_cast pointer, type.pointer
       else
-        builder.array_malloc(type, count)
+        pointer = builder.array_malloc(type, count)
+        void_pointer = bit_cast pointer, LLVM::VoidPointer
+        memset void_pointer, int8(0), size
+        pointer
       end
     end
 
@@ -1908,9 +1971,13 @@ module Crystal
 
       if type.is_a?(VirtualType)
         if type.struct?
-          # For a struct we need to cast the second part of the union to the base type
-          value_ptr = gep(pointer, 0, 1)
-          pointer = bit_cast value_ptr, llvm_type(type.base_type).pointer
+          if type.remove_indirection.is_a?(UnionType)
+            # For a struct we need to cast the second part of the union to the base type
+            value_ptr = gep(pointer, 0, 1)
+            pointer = bit_cast value_ptr, llvm_type(type.base_type).pointer
+          else
+            # Nothing, there's only one subclass so it's the struct already
+          end
         else
           pointer = cast_to pointer, type.base_type
         end

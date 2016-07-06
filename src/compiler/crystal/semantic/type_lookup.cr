@@ -28,7 +28,7 @@ module Crystal
     def initialize(@root, @self_type, @raise = true, @allow_typeof = true)
     end
 
-    delegate program, @root
+    delegate program, to: @root
 
     def visit(node : ASTNode)
       true
@@ -61,6 +61,8 @@ module Crystal
 
     def visit(node : Metaclass)
       node.name.accept self
+      return false if !@raise && !@type
+
       @type = type.virtual_type.metaclass.virtual_type
       false
     end
@@ -97,11 +99,11 @@ module Crystal
         begin
           @type = instance_type.instantiate_named_args(entries)
         rescue ex : Crystal::Exception
-          node.raise ex.message if @raise
+          node.raise "instantiating #{node}", inner: ex if @raise
         end
 
         return false
-      elsif instance_type.variadic
+      elsif instance_type.splat_index
         if node.named_args
           node.raise "can only use named arguments with NamedTuple"
         end
@@ -120,15 +122,31 @@ module Crystal
         end
       end
 
-      type_vars = node.type_vars.map do |type_var|
-        if type_var.is_a?(NumberLiteral)
-          type_var
+      type_vars = Array(TypeVar).new(node.type_vars.size + 1)
+      node.type_vars.each do |type_var|
+        case type_var
+        when NumberLiteral
+          type_vars << type_var
+        when Splat
+          @type = nil
+          type_var.exp.accept self
+          return false if !@raise && !@type
+
+          splat_type = type
+          if splat_type.is_a?(TupleInstanceType)
+            type_vars.concat splat_type.tuple_types
+          else
+            return false if !@raise
+
+            type_var.raise "can only splat tuple type, not #{splat_type}"
+          end
         else
           # Check the case of T resolving to a number
           if type_var.is_a?(Path) && type_var.names.size == 1
             the_type = @root.lookup_type(type_var)
             if the_type.is_a?(ASTNode)
-              next the_type.as(TypeVar)
+              type_vars << the_type
+              next
             end
           end
 
@@ -138,29 +156,45 @@ module Crystal
 
           Crystal.check_type_allowed_in_generics(type_var, type, "can't use #{type} as a generic type argument")
 
-          type.virtual_type
-        end.as(TypeVar)
+          type_vars << type.virtual_type
+        end
       end
 
       begin
         @type = instance_type.instantiate(type_vars)
       rescue ex : Crystal::Exception
-        node.raise ex.message if @raise
+        node.raise "instantiating #{node}", inner: ex if @raise
       end
 
       false
     end
 
-    def visit(node : Fun)
+    def visit(node : ProcNotation)
       types = [] of Type
       if inputs = node.inputs
         inputs.each do |input|
-          input.accept self
-          return false if !@raise && !@type
+          if input.is_a?(Splat)
+            input.exp.accept self
+            return false if !@raise && !@type
 
-          Crystal.check_type_allowed_in_generics(input, type, "can't use #{type} as proc argument")
+            a_type = type
+            if a_type.is_a?(TupleInstanceType)
+              types.concat(a_type.tuple_types)
+            else
+              if @raise
+                input.exp.raise "can only splat tuple type, not #{a_type}"
+              else
+                return false
+              end
+            end
+          else
+            input.accept self
+            return false if !@raise && !@type
 
-          types << type.virtual_type
+            Crystal.check_type_allowed_in_generics(input, type, "can't use #{type} as proc argument")
+
+            types << type.virtual_type
+          end
         end
       end
 
@@ -176,11 +210,15 @@ module Crystal
         types << program.void
       end
 
-      @type = program.fun_of(types)
+      @type = program.proc_of(types)
       false
     end
 
     def visit(node : Self)
+      if @self_type.is_a?(Program)
+        node.raise "there's no self in this scope"
+      end
+
       @type = @self_type.virtual_type
       false
     end
@@ -194,9 +232,13 @@ module Crystal
         end
       end
 
-      meta_vars = MetaVars{"self": MetaVar.new("self", @self_type)}
+      meta_vars = MetaVars{"self" => MetaVar.new("self", @self_type)}
       visitor = MainVisitor.new(program, meta_vars)
-      node.expressions.each &.accept visitor
+      begin
+        node.expressions.each &.accept visitor
+      rescue ex : Crystal::Exception
+        node.raise "typing typeof", inner: ex
+      end
       @type = program.type_merge node.expressions
       false
     end
@@ -248,6 +290,8 @@ module Crystal
       else
         scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
       end
+    rescue ex : Crystal::Exception
+      raise ex
     rescue ex
       node.raise ex.message
     end
@@ -356,6 +400,14 @@ module Crystal
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
       # _dbg "IncludedGenericModule.lookup_type(#{names}) - #{object_id}"
       if (names.size == 1) && (m = @mapping[names[0]]?)
+        # Case of a variadic tuple
+        if m.is_a?(TupleLiteral)
+          types = m.elements.map do |element|
+            TypeLookup.lookup(@including_class, element).as(Type)
+          end
+          return program.tuple_of(types)
+        end
+
         case @including_class
         when GenericClassType, GenericModuleType
           # skip
@@ -372,11 +424,17 @@ module Crystal
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
       # _dbg "InheritedGenericClass.lookup_type(#{names}) - #{object_id}"
       if (names.size == 1) && (m = @mapping[names[0]]?)
+        extending_class = self.extending_class
         case extending_class
         when GenericClassType
           # skip
         else
-          return TypeLookup.lookup(extending_class, m)
+          if extending_class.is_a?(NamedType)
+            self_type = extending_class.container
+          else
+            self_type = extending_class.program
+          end
+          return TypeLookup.lookup(extending_class, m, self_type: self_type)
         end
       end
 
@@ -449,7 +507,7 @@ module Crystal
   end
 
   class AliasType
-    delegate types, aliased_type
-    delegate types?, aliased_type
+    delegate types, to: aliased_type
+    delegate types?, to: aliased_type
   end
 end

@@ -2,7 +2,7 @@ require "../../spec_helper"
 
 describe "Type inference: uninitialized" do
   it "declares as uninitialized" do
-    assert_type("a = uninitialized Int32") { |mod| mod.nil }
+    assert_type("a = uninitialized Int32") { nil_type }
   end
 
   it "declares as uninitialized and reads it" do
@@ -23,15 +23,6 @@ describe "Type inference: uninitialized" do
 
       Foo.new.x
       ") { int32 }
-  end
-
-  it "errors if using uninitialize for instance var outside method" do
-    assert_error %(
-      class Foo
-        @a = uninitialized Int32
-      end
-      ),
-      "can't uninitialize instance variable outside method"
   end
 
   it "errors if declaring generic type without type vars (with instance var)" do
@@ -67,6 +58,34 @@ describe "Type inference: uninitialized" do
       end
       ),
       "variable 'buf' already declared with type Int32"
+  end
+
+  it "can uninitialize variable outside initialize (#2828)" do
+    assert_type(%(
+      class Foo
+        @x = uninitialized Int32
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "can uninitialize variable outside initialize, generic (#2828)" do
+    assert_type(%(
+      class Foo(T)
+        @x = uninitialized T
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Int32).new.x
+      )) { int32 }
   end
 
   %w(Object Value Reference Number Int Float Struct Class Enum).each do |type|

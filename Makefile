@@ -73,19 +73,19 @@ deps: llvm_ext libcrystal
 
 $(O)/all_spec: deps $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/all_spec.cr
+	$(BUILD_PATH) ./bin/cr-ox copmile $(FLAGS) -o $@ spec/all_spec.cr
 
 $(O)/std_spec: deps $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/std_spec.cr
+	$(BUILD_PATH) ./bin/cr-ox compile $(FLAGS) -o $@ spec/std_spec.cr
 
 $(O)/compiler_spec: deps $(SOURCES) $(SPEC_SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) ./bin/cr-ox build $(FLAGS) -o $@ spec/compiler_spec.cr
+	$(BUILD_PATH) ./bin/cr-ox compile $(FLAGS) -o $@ spec/compiler_spec.cr
 
 $(O)/onyx: deps $(SOURCES)
 	@mkdir -p $(O)
-	$(BUILD_PATH) $(EXPORTS) ./bin/cr-ox build $(FLAGS) -o $@ src/compiler/onyx.cr -D without_openssl -D without_zlib
+	$(BUILD_PATH) $(EXPORTS) ./bin/cr-ox compile $(FLAGS) -o $@ src/compiler/onyx.cr -D without_openssl -D without_zlib
 
 $(LLVM_EXT_OBJ): $(LLVM_EXT_DIR)/llvm_ext.cc
 	$(CXX) -c -o $@ $< `$(LLVM_CONFIG) --cxxflags`

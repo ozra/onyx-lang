@@ -41,9 +41,9 @@ struct Char
     #
     # ```
     # reader = Char::Reader.new("ab")
-    # reader.current_char # => 0
+    # reader.pos # => 0
     # reader.next_char
-    # reader.current_char # => 1
+    # reader.pos # => 1
     # ```
     getter pos : Int32
 
@@ -104,7 +104,7 @@ struct Char
       end
 
       decode_char_at(next_pos) do |code_point, width|
-        code_point.chr
+        code_point.unsafe_chr
       end
     end
 
@@ -179,12 +179,12 @@ struct Char
       end
 
       if first < 0xc2
-        invalid_byte_sequence
+        invalid_byte_sequence(first, pos)
       end
 
       second = byte_at(pos + 1)
       if (second & 0xc0) != 0x80
-        invalid_byte_sequence
+        invalid_byte_sequence(second, pos + 1)
       end
 
       if first < 0xe0
@@ -193,35 +193,35 @@ struct Char
 
       third = byte_at(pos + 2)
       if (third & 0xc0) != 0x80
-        invalid_byte_sequence
+        invalid_byte_sequence(third, pos + 2)
       end
 
       if first < 0xf0
         if first == 0xe0 && second < 0xa0
-          invalid_byte_sequence
+          invalid_byte_sequence(second, pos + 1)
         end
 
         return yield (first << 12) + (second << 6) + (third - 0xE2080), 3
       end
 
       if first == 0xf0 && second < 0x90
-        invalid_byte_sequence
+        invalid_byte_sequence(second, pos + 1)
       end
 
       if first == 0xf4 && second >= 0x90
-        invalid_byte_sequence
+        invalid_byte_sequence(second, pos + 1)
       end
 
       fourth = byte_at(pos + 3)
       if (fourth & 0xc0) != 0x80
-        invalid_byte_sequence
+        invalid_byte_sequence(fourth, pos + 3)
       end
 
       if first < 0xf5
         return yield (first << 18) + (second << 12) + (third << 6) + (fourth - 0x3C82080), 4
       end
 
-      invalid_byte_sequence
+      invalid_byte_sequence(first, pos)
     end
 
     def unsafe_decode_char_at(i)
@@ -232,16 +232,16 @@ struct Char
       end
     end
 
-    private def invalid_byte_sequence
-      # *TODO*
-      raise InvalidByteSequenceError.new  "invalid byte sequence in char reader"
+    private def invalid_byte_sequence(byte, byte_position)
+      raise InvalidByteSequenceError.new("Unexpected byte 0x#{byte.to_s(16)} at position #{byte_position}, malformed UTF-8")
     end
 
+    @[AlwaysInline]
     private def decode_current_char
       decode_char_at(@pos) do |code_point, width|
         @current_char_width = width
         @end = @pos == @string.bytesize
-        @current_char = code_point.chr
+        @current_char = code_point.unsafe_chr
       end
     end
 
