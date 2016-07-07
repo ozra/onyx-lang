@@ -672,15 +672,7 @@ class String
   # "hello"[1...-1] # "ell"
   # ```
   def [](range : Range(Int, Int))
-    from = range.begin
-    from += size if from < 0
-    raise IndexError.new if from < 0
-
-    to = range.end
-    to += size if to < 0
-    to -= 1 if range.excludes_end?
-    size = to - from + 1
-    size = 0 if size < 0
+    from, size = range_to_index_and_size(range)
     self[from, size]
   end
 
@@ -724,6 +716,8 @@ class String
       return "" if count == 0
 
       count = end_pos - start_pos
+      return self if count == bytesize
+
       String.new(count) do |buffer|
         buffer.copy_from(to_unsafe + start_pos, count)
         {count, 0}
@@ -798,6 +792,7 @@ class String
 
       count = bytesize - start if start + count > bytesize
       return "" if count == 0
+      return self if count == bytesize
 
       String.new(count) do |buffer|
         buffer.copy_from(to_unsafe + start, count)
@@ -1396,6 +1391,111 @@ class String
       $~ = match
       yield str, match, buffer
       buffer.write unsafe_byte_slice(match.byte_begin + str.bytesize)
+    end
+  end
+
+  # Returns a new String with the character at the given index
+  # replaced by *replacement*.
+  #
+  # ```
+  # "hello".sub(1, 'a') # => "hallo"
+  # ```
+  def sub(index : Int, replacement : Char)
+    sub_index(index.to_i, replacement) do |buffer|
+      replacement.each_byte do |byte|
+        buffer.value = byte
+        buffer += 1
+      end
+      {buffer, @length}
+    end
+  end
+
+  # Returns a new String with the character at the given index
+  # replaced by *replacement*.
+  #
+  # ```
+  # "hello".sub(1, "eee") # => "heeello"
+  # ```
+  def sub(index : Int, replacement : String)
+    sub_index(index.to_i, replacement) do |buffer|
+      buffer.copy_from(replacement.to_unsafe, replacement.bytesize)
+      buffer += replacement.bytesize
+      {buffer, self.size_known? && replacement.size_known? ? self.size + replacement.size - 1 : 0}
+    end
+  end
+
+  private def sub_index(index, replacement)
+    index += size + 1 if index < 0
+
+    byte_index = char_index_to_byte_index(index)
+    raise IndexError.new unless byte_index
+
+    reader = Char::Reader.new(self)
+    reader.pos = byte_index
+    width = reader.current_char_width
+    replacement_width = replacement.bytesize
+    new_bytesize = bytesize - width + replacement_width
+
+    String.new(new_bytesize) do |buffer|
+      buffer.copy_from(to_unsafe, byte_index)
+      buffer += byte_index
+      buffer, length = yield buffer
+      buffer.copy_from(to_unsafe + byte_index + width, bytesize - byte_index - width)
+      {new_bytesize, length}
+    end
+  end
+
+  # Returns a new String with characters at the given range
+  # replaced by *replacement*.
+  #
+  # ```
+  # "hello".sub(1..2, 'a') # => "halo"
+  # ```
+  def sub(range : Range(Int, Int), replacement : Char)
+    sub_range(range, replacement) do |buffer, from_index, to_index|
+      replacement.each_byte do |byte|
+        buffer.value = byte
+        buffer += 1
+      end
+      {buffer, single_byte_optimizable? ? bytesize - (to_index - from_index) + 1 : 0}
+    end
+  end
+
+  # Returns a new String with characters at the given range
+  # replaced by *replacement*.
+  #
+  # ```
+  # "hello".sub(1..2, "eee") # => "heeelo"
+  # ```
+  def sub(range : Range(Int, Int), replacement : String)
+    sub_range(range, replacement) do |buffer|
+      buffer.copy_from(replacement.to_unsafe, replacement.bytesize)
+      buffer += replacement.bytesize
+      {buffer, 0}
+    end
+  end
+
+  private def sub_range(range, replacement)
+    from, size = range_to_index_and_size(range)
+
+    from_index = char_index_to_byte_index(from)
+    raise IndexError.new unless from_index
+
+    if size == 0
+      to_index = from_index
+    else
+      to_index = char_index_to_byte_index(from + size)
+      raise IndexError.new unless to_index
+    end
+
+    new_bytesize = bytesize - (to_index - from_index) + replacement.bytesize
+
+    String.new(new_bytesize) do |buffer|
+      buffer.copy_from(to_unsafe, from_index)
+      buffer += from_index
+      buffer, length = yield buffer, from_index, to_index
+      buffer.copy_from(to_unsafe + to_index, bytesize - to_index)
+      {new_bytesize, length}
     end
   end
 
@@ -2595,30 +2695,10 @@ class String
   end
 
   # Finds match of *regex*, starting at *pos*.
-  def match(regex : Regex, pos = 0)
+  def match(regex : Regex, pos = 0) : Regex::MatchData?
     match = regex.match self, pos
     $~ = match
     match
-  end
-
-  # Searches the string for *regex* starting at *pos*, yielding the match if there is one.
-  #
-  # ```
-  # "Pine".match(/P/) do |match|
-  #   puts match
-  # end
-  # # => #<Regex::MatchData "P">
-  #
-  # "Oak".match(/P/) do |match|
-  #   # This is never invoked.
-  #   puts match
-  # end
-  # ```
-  def match(regex : Regex, pos = 0)
-    match = self.match(regex, pos)
-    if match
-      yield match
-    end
   end
 
   # Searches the string for instances of *pattern*, yielding a `Regex::MatchData` for each match.
@@ -3056,6 +3136,20 @@ class String
     end
 
     {bytes, bytesize}
+  end
+
+  private def range_to_index_and_size(range)
+    from = range.begin
+    from += size if from < 0
+    raise IndexError.new if from < 0
+
+    to = range.end
+    to += size if to < 0
+    to -= 1 if range.excludes_end?
+    size = to - from + 1
+    size = 0 if size < 0
+
+    {from, size}
   end
 
   # Raises an `ArgumentError` if `self` has null bytes. Returns `self` otherwise.

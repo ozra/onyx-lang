@@ -407,7 +407,11 @@ module Crystal
       when "==", "!="
         case arg = args.first?
         when MacroId
-          return BoolLiteral.new(@value == arg.value)
+          if method == "=="
+            return BoolLiteral.new(@value == arg.value)
+          else
+            return BoolLiteral.new(@value != arg.value)
+          end
         else
           return super
         end
@@ -447,6 +451,24 @@ module Crystal
             BoolLiteral.new(!!(@value =~ regex))
           else
             BoolLiteral.new(false)
+          end
+        end
+      when ">"
+        interpret_one_arg_method(method, args) do |arg|
+          case arg
+          when StringLiteral, MacroId
+            return BoolLiteral.new(interpret_compare(arg) > 0)
+          else
+            raise "Can't compare StringLiteral with #{arg.class_desc}"
+          end
+        end
+      when "<"
+        interpret_one_arg_method(method, args) do |arg|
+          case arg
+          when StringLiteral, MacroId
+            return BoolLiteral.new(interpret_compare(arg) < 0)
+          else
+            raise "Can't compare StringLiteral with #{arg.class_desc}"
           end
         end
       when "+"
@@ -920,9 +942,17 @@ module Crystal
       when "==", "!="
         case arg = args.first?
         when StringLiteral
-          return BoolLiteral.new(@value == arg.value)
+          if method == "=="
+            return BoolLiteral.new(@value == arg.value)
+          else
+            return BoolLiteral.new(@value != arg.value)
+          end
         when SymbolLiteral
-          return BoolLiteral.new(@value == arg.value)
+          if method == "=="
+            return BoolLiteral.new(@value == arg.value)
+          else
+            return BoolLiteral.new(@value != arg.value)
+          end
         else
           return super
         end
@@ -948,7 +978,11 @@ module Crystal
       when "==", "!="
         case arg = args.first?
         when MacroId
-          return BoolLiteral.new(@value == arg.value)
+          if method == "=="
+            return BoolLiteral.new(@value == arg.value)
+          else
+            return BoolLiteral.new(@value != arg.value)
+          end
         else
           return super
         end
@@ -1015,7 +1049,7 @@ module Crystal
         end
       when "size"
         interpret_argless_method(method, args) do
-          type = type.instance_type
+          type = self.type.instance_type
           case type
           when TupleInstanceType
             NumberLiteral.new(type.tuple_types.size)
@@ -1027,7 +1061,7 @@ module Crystal
         end
       when "keys"
         interpret_argless_method(method, args) do
-          type = type.instance_type
+          type = self.type.instance_type
           if type.is_a?(NamedTupleInstanceType)
             ArrayLiteral.map(type.entries) { |entry| MacroId.new(entry.name) }
           else
@@ -1036,7 +1070,7 @@ module Crystal
         end
       when "[]"
         interpret_one_arg_method(method, args) do |arg|
-          type = type.instance_type
+          type = self.type.instance_type
           case type
           when NamedTupleInstanceType
             case arg
@@ -1070,6 +1104,28 @@ module Crystal
         end
       when "class"
         interpret_argless_method(method, args) { TypeNode.new(type.metaclass) }
+      when "instance"
+        interpret_argless_method(method, args) { TypeNode.new(type.instance_type) }
+      when "<", "<=", ">", ">="
+        interpret_one_arg_method(method, args) do |arg|
+          unless arg.is_a?(TypeNode)
+            raise "TypeNode##{method} expects TypeNode, not #{arg.class_desc}"
+          end
+
+          self_type = self.type
+          other_type = arg.type
+          case method
+          when "<"
+            value = self_type != other_type && self_type.implements?(other_type)
+          when "<="
+            value = self_type.implements?(other_type)
+          when ">"
+            value = self_type != other_type && other_type.implements?(self_type)
+          else # ">="
+            value = other_type.implements?(self_type)
+          end
+          BoolLiteral.new(!!value)
+        end
       else
         super
       end

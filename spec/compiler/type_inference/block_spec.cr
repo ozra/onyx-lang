@@ -1312,4 +1312,32 @@ describe "Block inference" do
       ),
       "too many block arguments (given 3, expected maximum 2)"
   end
+
+  it "doesn't crash on #2531" do
+    run(%(
+      def foo
+        yield
+      end
+
+      value = true ? 1 : nil
+      foo do
+        value ? nil : nil
+      end
+      value ? 10 : 20
+      )).to_i.should eq(10)
+  end
+
+  it "yields in overload, matches type" do
+    assert_type(%(
+      struct Int
+        def foo(&block : self ->)
+          yield self
+        end
+      end
+
+      (1 || 1_i64).foo do |x|
+        x
+      end
+      )) { union_of(int32, int64) }
+  end
 end

@@ -4,21 +4,14 @@
 
 ## Some things we currently need to focus on ##
 
-<<<<<<< HEAD
 * Settling the syntax.
 * Settling cornerstone library (standard library) API names.
-* Implementing syntax.
+* Implementing syntax, that isn't already (changes).
 * Finding bugs.
 * Fixing bugs.
-* Highlighters - currently Sublime highlighter exists.
+* Highlighters - currently Sublime and Atom highlighter exists.
 * Documenting the language.
 * Making good examples, and "Onyx for C++-coders", "Onyx for Pythoners", "Onyx for Rubyists" etc. guides.
-=======
-You can find a list of tasks that we consider suitable for a first time contribution at
-the [newcomer label](https://github.com/crystal-lang/crystal/labels/newcomer).
-
-Furthermore these are the most important general things in need right now:
->>>>>>> foreign/master
 
 ## Use GitHub issue tracker! ##
 
@@ -56,6 +49,79 @@ or that. It will be super much faster. Or whatever stuff.
 This and that language has this construct [...example], which seem to
 have worked well in practice. Bla bla. By the proposed syntax, it merges
 fine with the rest of Onyx, bla bla.
+=======
+* Documenting the language
+* Documenting the standard library
+* Adding missing bits of the standard library, and/or improving its performance
+
+## Contributing to the documentation
+
+The main website is at [crystal-lang/crystal-website](https://github.com/crystal-lang/crystal-website),
+please have a look over there if you want to contribute to it.
+
+We use [GitBook](https://www.gitbook.com/) for the [language documentation](https://crystal-lang.org/docs/).
+See the repository at [crystal-lang/crystal-book](https://github.com/crystal-lang/crystal-book) for how to contribute to it.
+
+The [standard library documentation](https://crystal-lang.org/api/) is on the code itself, in this repository.
+There is a version updated with every push to the master branch [here](https://crystal-lang.org/api/master/).
+It uses a subset of [Markdown](http://daringfireball.net/projects/markdown/). You can [use Ruby as a source
+of inspiration](https://twitter.com/yukihiro_matz/status/549317901002342400) whenever applicable. To generate
+the docs execute `make doc`. Please follow the guidelines described in our
+[language documentation](https://crystal-lang.org/docs/conventions/documenting_code.html), like the use of the third person.
+
+## Contributing to the standard library
+
+1. Fork it ( https://github.com/crystal-lang/crystal/fork )
+2. Clone it
+
+Be sure to execute `make libcrystal` inside the cloned repository.
+
+Once in the cloned directory, and once you [installed Crystal](http://crystal-lang.org/docs/installation/index.html),
+you can execute `bin/crystal` instead of `crystal`. This is a wrapper that will use the cloned repository
+as the standard library. Otherwise the barebones `crystal` executable uses the standard library that comes in
+your installation.
+
+Next, make changes to the standard library, making sure you also provide corresponding specs. To run
+the specs for the standard library, run `bin/crystal spec/std_spec.cr`. To run a particular spec: `bin/crystal spec/std/array_spec.cr`.
+
+Note: at this point you might get long compile error that include "library not found for: ...". This means
+you are [missing some libraries](https://github.com/crystal-lang/crystal/wiki/All-required-libraries).
+
+Make sure that your changes follow the recommended [Coding Style](https://crystal-lang.org/docs/conventions/coding_style.html).
+You can run `crystal tool format` to automate this.
+
+Then push your changes and create a pull request.
+
+## Contributing to the compiler itself
+
+If you want to add/change something in the compiler,
+the first thing you will need to do is to [install the compiler](https://crystal-lang.org/docs/installation/index.html).
+
+Once you have a compiler up and running, and that executing `crystal` on the command line prints its usage,
+it's time to setup your environment to compile Crystal itself, which is written in Crystal. Check out
+the `install` and `before_install` sections found in [.travis.yml](https://github.com/crystal-lang/crystal/blob/master/.travis.yml).
+These set-up LLVM 3.6 and its required libraries.
+
+Next, executing `make clean crystal spec` should compile a compiler and using that compiler compile and execute
+the specs. All specs should pass.
+
+## Maintain clean pull requests
+
+The commit history should consist of commits that transform the codebase from one state into another one, motivated by something that
+should change, be it a bugfix, a new feature or some ground work to support a new feature, like changing an existing API or introducing
+a new isolated class that is later used in the same pull request. It should not show development history ("Start work on X",
+"More work on X", "Finish X") nor review history ("Fix comment A", "Fix comment B"). Review fixes should be squashed into the commits
+that introduced them. If your change fits well into a single commit, simply keep editing it with `git commit --amend`. Partial staging and
+committing with `git add -p` and `git commit -p` respectively are also very useful. Another good tool is `git stash` to put changes aside while
+switching to another commit. But Git's most useful tool towards this goal is the interactive rebase.
+
+### Doing an interactive rebase
+
+First let's make sure we have a clean reference to rebase upon:
+
+```sh
+git remote add upstream https://github.com/crystal-lang/crystal.git
+>>>>>>> foreign/master
 ```
 
 Ok - you catch the drift - right?

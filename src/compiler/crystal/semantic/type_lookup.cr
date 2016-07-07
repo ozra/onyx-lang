@@ -61,6 +61,8 @@ module Crystal
 
     def visit(node : Metaclass)
       node.name.accept self
+      return false if !@raise && !@type
+
       @type = type.virtual_type.metaclass.virtual_type
       false
     end
@@ -97,7 +99,7 @@ module Crystal
         begin
           @type = instance_type.instantiate_named_args(entries)
         rescue ex : Crystal::Exception
-          node.raise ex.message if @raise
+          node.raise "instantiating #{node}", inner: ex if @raise
         end
 
         return false
@@ -161,7 +163,7 @@ module Crystal
       begin
         @type = instance_type.instantiate(type_vars)
       rescue ex : Crystal::Exception
-        node.raise ex.message if @raise
+        node.raise "instantiating #{node}", inner: ex if @raise
       end
 
       false
@@ -213,6 +215,10 @@ module Crystal
     end
 
     def visit(node : Self)
+      if @self_type.is_a?(Program)
+        node.raise "there's no self in this scope"
+      end
+
       @type = @self_type.virtual_type
       false
     end
@@ -228,7 +234,11 @@ module Crystal
 
       meta_vars = MetaVars{"self" => MetaVar.new("self", @self_type)}
       visitor = MainVisitor.new(program, meta_vars)
-      node.expressions.each &.accept visitor
+      begin
+        node.expressions.each &.accept visitor
+      rescue ex : Crystal::Exception
+        node.raise "typing typeof", inner: ex
+      end
       @type = program.type_merge node.expressions
       false
     end
@@ -280,6 +290,8 @@ module Crystal
       else
         scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
       end
+    rescue ex : Crystal::Exception
+      raise ex
     rescue ex
       node.raise ex.message
     end
@@ -412,11 +424,17 @@ module Crystal
     def lookup_type(names : Array, already_looked_up = ObjectIdSet.new, lookup_in_container = true)
       # _dbg "InheritedGenericClass.lookup_type(#{names}) - #{object_id}"
       if (names.size == 1) && (m = @mapping[names[0]]?)
+        extending_class = self.extending_class
         case extending_class
         when GenericClassType
           # skip
         else
-          return TypeLookup.lookup(extending_class, m)
+          if extending_class.is_a?(NamedType)
+            self_type = extending_class.container
+          else
+            self_type = extending_class.program
+          end
+          return TypeLookup.lookup(extending_class, m, self_type: self_type)
         end
       end
 

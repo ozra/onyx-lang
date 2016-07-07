@@ -7,14 +7,14 @@ class Crystal::Command
 
     Command:
         init                     generate a new project
-        compile                  compile program
+        build                    build an executable
         deps                     install project dependencies
         docs                     generate documentation
         env                      print Crystal environment information
         eval                     eval code from args or standard input
         play                     starts crystal playground server
-        run (default)            compile and run program
-        spec                     compile and run specs (in spec directory)
+        run (default)            build and run program
+        spec                     build and run specs (in spec directory)
         tool                     run a tool
         help, --help, -h         show this help
         version, --version, -v   show version
@@ -53,11 +53,11 @@ class Crystal::Command
         options.shift
         init
       when "build".starts_with?(command), "compile".starts_with?(command)
-        if "build".starts_with?(command)
-          STDERR.puts "Deprecation: The build command was renamed to compile and will be removed in a future version."
+        if "compile".starts_with?(command)
+          STDERR.puts "Deprecation: The compile command was renamed to build and will be removed in a future version."
         end
         options.shift
-        compile
+        build
       when "play".starts_with?(command)
         options.shift
         playground
@@ -155,8 +155,8 @@ class Crystal::Command
     Init.run(options)
   end
 
-  private def compile
-    config = create_compiler "compile"
+  private def build
+    config = create_compiler "build"
     config.compile
   end
 
@@ -218,7 +218,7 @@ class Crystal::Command
 
   private def hierarchy
     config, result = compile_no_codegen "tool hierarchy", hierarchy: true, top_level: true
-    Crystal.print_hierarchy result.program, config.hierarchy_exp
+    Crystal.print_hierarchy result.program, config.hierarchy_exp, config.output_format
   end
 
   private def implementations
@@ -485,8 +485,8 @@ class Crystal::Command
 
       unless no_codegen
         unless run
-          opts.on("--cross-compile flags", "cross-compile") do |cross_compile|
-            compiler.cross_compile_flags = cross_compile
+          opts.on("--cross-compile", "cross-compile") do |cross_compile|
+            compiler.cross_compile = true
           end
         end
         opts.on("-d", "--debug", "Add symbolic debug info") do
@@ -613,6 +613,9 @@ class Crystal::Command
 
     output_filename ||= original_output_filename
     output_format ||= "text"
+    if !["text", "json"].includes?(output_format)
+      error "You have input an invalid format, only text and JSON are supported"
+    end
 
     if !no_codegen && !run && Dir.exists?(output_filename)
       error "can't use `#{output_filename}` as output filename because it's a directory"

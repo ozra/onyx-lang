@@ -504,7 +504,7 @@ module Crystal
     property named_args : Array(NamedArgument)?
     property global : Bool
     property name_column_number : Int32
-    property has_parenthesis : Bool
+    property has_parentheses : Bool
     property name_size : Int32
     property doc : String?
     property? is_expansion : Bool
@@ -512,11 +512,12 @@ module Crystal
 
     property? implicit_construction : Bool
 
-    def initialize(@obj, @name, args : Array(ASTNode)? = nil, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parenthesis = false, @implicit_construction = false, @is_nil_sugared = false)
+
+    def initialize(@obj, @name, args : Array(ASTNode)? = nil, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parentheses = false, @implicit_construction = false, @is_nil_sugared = false)
       @args = args || [] of ASTNode
       @name_size = -1
       @global = !!global
-      @has_parenthesis = !!has_parenthesis
+      @has_parentheses = !!has_parentheses
       @is_expansion = false
       @visibility = Visibility::Public
       if block = @block
@@ -556,7 +557,7 @@ module Crystal
     end
 
     def clone_specific_impl
-      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parenthesis, @implicit_construction, @is_nil_sugared)
+      clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parentheses, @implicit_construction, @is_nil_sugared)
       clone.name_size = name_size
       clone.is_expansion = is_expansion?
       clone

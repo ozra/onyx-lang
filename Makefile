@@ -56,7 +56,7 @@ compiler_spec: all_compiler_spec ## Run compiler specs
 
 .PHONY: doc
 doc:
-	$(BUILD_PATH) ./bin/cr-ox doc src/docs_main.cr
+	$(BUILD_PATH) ./bin/onyx doc src/docs_main.cr
 
 .PHONY: onyx
 onyx: $(O)/onyx

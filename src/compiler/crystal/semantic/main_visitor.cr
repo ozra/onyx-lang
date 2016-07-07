@@ -157,7 +157,7 @@ module Crystal
         special_var = define_special_var(node.name, mod.nil_var)
         node.bind_to special_var
       else
-        node.raise "read before definition of '#{node.name}'"
+        node.raise "read before definition of local variable '#{node.name}'"
       end
     end
 
@@ -210,9 +210,11 @@ module Crystal
           var.raise "variable '#{var.name}' already declared"
         end
 
+        @in_type_args += 1
         node.declared_type.accept self
+        @in_type_args -= 1
 
-        var_type = check_declare_var_type node
+        var_type = check_declare_var_type node, node.declared_type.type, "a variable"
         var.type = var_type
 
         meta_var = @meta_vars[var.name] ||= new_meta_var(var.name)
@@ -229,33 +231,40 @@ module Crystal
       when InstanceVar
         type = scope? || current_type
         if @untyped_def
+          @in_type_args += 1
           node.declared_type.accept self
+          @in_type_args -= 1
 
-          var_type = check_declare_var_type node
-
-          ivar = lookup_instance_var var
-          ivar.type = var_type
-          var.type = var_type
+          check_declare_var_type node, node.declared_type.type, "an instance variable"
+          ivar = lookup_instance_var(var, type)
 
           if @is_initialize
-            @vars[var.name] = MetaVar.new(var.name, var_type)
+            @vars[var.name] = MetaVar.new(var.name, ivar.type)
           end
         else
-          node.raise "can't uninitialize instance variable outside method"
+          # Already handled in a previous visitor
+          node.type = @mod.nil
+          return false
         end
 
         case type
         when NonGenericClassType
+          @in_type_args += 1
           node.declared_type.accept self
-          var_type = check_declare_var_type node
-          type.declare_instance_var(var.name, var_type)
+          @in_type_args -= 1
+          check_declare_var_type node, node.declared_type.type, "an instance variable"
         when GenericClassType
-          type.declare_instance_var(var.name, node.declared_type)
+          # OK
         when GenericClassInstanceType
           # OK
         else
           node.raise "can only declare instance variables of a non-generic class, not a #{type.type_desc} (#{type})"
         end
+      when ClassVar
+        attributes = check_valid_attributes node, ValidGlobalAttributes, "global variable"
+
+        class_var = visit_class_var var
+        class_var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
       end
 
       node.type = @mod.nil
@@ -301,6 +310,21 @@ module Crystal
     end
 
     def visit(node : Global)
+      # Reading from a special global variable is actually
+      # reading from a local variable with that same not,
+      # invoking `not_nil!` on it (because these are usually
+      # accessed after invoking a method that brought them
+      # into the current scope, and it would be annoying
+      # to ask the user to always invoke `not_nil!` on it)
+      case node.name
+      when "$~", "$?"
+        expanded = Call.new(Var.new(node.name).at(node), "not_nil!").at(node)
+        expanded.accept self
+        node.bind_to expanded
+        node.expanded = expanded
+        return false
+      end
+
       visit_global node
       false
     end
@@ -359,6 +383,8 @@ module Crystal
     end
 
     def first_time_accessing_meta_type_var?(var)
+      return false if var.uninitialized
+
       if var.freeze_type
         deps = var.dependencies?
         # If no dependencies it's the case of a global for a regex literal.
@@ -403,20 +429,6 @@ module Crystal
 
     def visit_class_var(node)
       var = lookup_class_var(node)
-
-      existing = @mod.class_var_and_const_being_typed.find &.same?(var)
-      if existing
-        raise_recursive_dependency node, var
-      end
-
-      if first_time_accessing_meta_type_var?(var)
-        var_type = var.type?
-        if var_type && !var_type.includes_type?(mod.nil)
-          node.raise "class variable '#{var.name}' of #{var.owner} is read here before it was initialized, rendering it nilable, but its type is #{var_type}"
-        end
-        var.bind_to mod.nil_var
-      end
-
       node.bind_to var
       node.var = var
       var
@@ -616,13 +628,6 @@ module Crystal
       var = lookup_class_var(target)
       check_class_var_is_thread_local(target, var, attributes)
 
-      # If we are assigning to a class variable inside a method, make it nilable
-      # if this is the first time we are assigning to it, because
-      # the method might be called conditionally
-      if @typed_def && first_time_accessing_meta_type_var?(var)
-        var.bind_to mod.nil_var
-      end
-
       target.bind_to var
 
       node.bind_to value
@@ -692,10 +697,7 @@ module Crystal
 
       # We use a binder to support splats and other complex forms
       binder = block.binder ||= YieldBlockBinder.new(@mod, block)
-      binder.add_yield(node)
-      if (yield_vars = @yield_vars) && !node.scope
-        binder.yield_vars ||= yield_vars
-      end
+      binder.add_yield(node, @yield_vars)
       binder.update
 
       unless block.visited
@@ -1701,6 +1703,16 @@ module Crystal
 
     def visit(node : While)
       old_while_vars = @while_vars
+
+      before_cond_vars_copy = @vars.dup
+
+      @vars.each do |name, var|
+        before_var = MetaVar.new(name)
+        before_var.bind_to(var)
+        before_var.nil_if_read = var.nil_if_read
+        @vars[name] = before_var
+      end
+
       before_cond_vars = @vars.dup
 
       request_type_filters do
@@ -1721,7 +1733,7 @@ module Crystal
       node.body.accept self
 
       endless_while = node.cond.true_literal?
-      merge_while_vars node.cond, endless_while, before_cond_vars, after_cond_vars, @vars, node.break_vars
+      merge_while_vars node.cond, endless_while, before_cond_vars_copy, before_cond_vars, after_cond_vars, @vars, node.break_vars
 
       @while_stack.pop
       @block = old_block
@@ -1740,7 +1752,7 @@ module Crystal
     end
 
     # Here we assign the types of variables after a while.
-    def merge_while_vars(cond, endless, before_cond_vars, after_cond_vars, while_vars, all_break_vars)
+    def merge_while_vars(cond, endless, before_cond_vars_copy, before_cond_vars, after_cond_vars, while_vars, all_break_vars)
       after_while_vars = MetaVars.new
 
       cond_var = get_while_cond_assign_target(cond)
@@ -1759,7 +1771,6 @@ module Crystal
           # If there was a previous variable, we use that type merged
           # with the last type inside the while.
         elsif before_cond_var
-          before_cond_var.bind_to(while_var)
           after_while_var = MetaVar.new(name)
 
           # If the loop is endless
@@ -1767,11 +1778,18 @@ module Crystal
             after_while_var.bind_to(while_var)
             after_while_var.nil_if_read = while_var.nil_if_read
           else
-            after_while_var.bind_to(before_cond_var)
+            # We need to bind to the variable *before* the condition, even
+            # after before the variables that are used in the condition
+            # `before_cond_vars` are modified in the while body
+            after_while_var.bind_to(before_cond_vars_copy[name])
             after_while_var.bind_to(while_var)
             after_while_var.nil_if_read = before_cond_var.nil_if_read || while_var.nil_if_read
           end
           after_while_vars[name] = after_while_var
+
+          # We must also bind the variable before the condition, because
+          # its type now must also include the type at the exit of the while
+          before_cond_var.bind_to(while_var)
 
           # Otherwise, it's a new variable inside the while: used
           # outside it must be nilable, unless the loop is endless.
@@ -2224,6 +2242,7 @@ module Crystal
         var = @vars[node_name] = new_meta_var(node_name)
         meta_var = (@meta_vars[node_name] ||= new_meta_var(node_name))
         meta_var.bind_to(var)
+        meta_var.assigned_to = true
 
         if types
           unified_type = @mod.type_merge(types).not_nil!
@@ -2614,6 +2633,19 @@ module Crystal
       false
     end
 
+    def visit(node : VisibilityModifier)
+      exp = node.exp
+      exp.accept self
+
+      # Only check for calls that didn't resolve to a macro:
+      # all other cases are already covered in TopLevelVisitor
+      if exp.is_a?(Call) && !exp.expanded
+        node.raise "can't apply visibility modifier"
+      end
+
+      false
+    end
+
     # # Helpers
 
     def check_closured(var)
@@ -2789,7 +2821,7 @@ module Crystal
       @untyped_def || @block_context
     end
 
-    def visit(node : Require | When | Unless | Until | MacroLiteral)
+    def visit(node : When | Unless | Until | MacroLiteral)
       raise "Bug: #{node.class_desc} node '#{node}' (#{node.location}) should have been eliminated in normalize"
     end
   end

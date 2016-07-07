@@ -1,7 +1,9 @@
 require "socket"
 require "http"
 require "base64"
-require "openssl" ifdef !without_openssl
+{% if !flag?(:without_openssl) %}
+  require "openssl"
+{% end %}
 require "uri"
 
 # :nodoc:
@@ -219,27 +221,27 @@ class HTTP::WebSocket::Protocol
     end
   end
 
-  def self.new(host : String, path : String, port = nil, ssl = false)
-    ifdef without_openssl
-      if ssl
-        raise "WebSocket ssl is disabled because `-D without_openssl` was passed at compile time"
+  def self.new(host : String, path : String, port = nil, tls = false)
+    {% if flag?(:without_openssl) %}
+      if tls
+        raise "WebSocket TLS is disabled because `-D without_openssl` was passed at compile time"
       end
-    end
+    {% end %}
 
-    port = port || (ssl ? 443 : 80)
+    port = port || (tls ? 443 : 80)
 
     socket = TCPSocket.new(host, port)
 
-    ifdef !without_openssl
-      if ssl
-        if ssl.is_a?(Bool) # true, but we want to get rid of the union
+    {% if !flag?(:without_openssl) %}
+      if tls
+        if tls.is_a?(Bool) # true, but we want to get rid of the union
           context = OpenSSL::SSL::Context::Client.new
         else
-          context = ssl
+          context = tls
         end
         socket = OpenSSL::SSL::Socket::Client.new(socket, context: context, sync_close: true)
       end
-    end
+    {% end %}
 
     headers = HTTP::Headers.new
     headers["Host"] = "#{host}:#{port}"
@@ -263,8 +265,8 @@ class HTTP::WebSocket::Protocol
     uri = URI.parse(uri) if uri.is_a?(String)
 
     if (host = uri.host) && (path = uri.path)
-      ssl = uri.scheme == "https" || uri.scheme == "wss"
-      return new(host, path, uri.port, ssl)
+      tls = uri.scheme == "https" || uri.scheme == "wss"
+      return new(host, path, uri.port, tls)
     end
 
     raise ArgumentError.new("No host or path specified which are required.")

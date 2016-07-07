@@ -93,7 +93,7 @@ class Crystal::Call
         elsif convert_to_logical_operator(def_name)
           msg << "undefined method '#{def_name}'"
           similar_name = convert_to_logical_operator(def_name)
-        elsif args.size > 0 || has_parenthesis
+        elsif args.size > 0 || has_parentheses
           msg << "undefined method '#{def_name}'"
         else
           similar_name = parent_visitor.lookup_similar_var_name(def_name) unless similar_name
@@ -120,7 +120,7 @@ class Crystal::Call
 
         # Check if it's an instance variable that was never assigned a value
         if obj.is_a?(InstanceVar)
-          scope = scope.as(InstanceVarContainer)
+          scope = self.scope.as(InstanceVarContainer)
           ivar = scope.lookup_instance_var(obj.name)
           deps = ivar.dependencies?
           if deps && deps.size == 1 && deps.first.same?(mod.nil_var)
@@ -369,13 +369,21 @@ class Crystal::Call
         owner.all_subclasses.each do |subclass|
           submatches = subclass.lookup_matches(signature)
           if submatches.empty?
-            raise "abstract `def #{def_full_name(a_def.owner, a_def)}` must be implemented by #{subclass}"
+            raise_abstract_method_must_be_implemented a_def, subclass
           end
         end
-        raise "abstract `def #{def_full_name(a_def.owner, a_def)}` must be implemented by #{owner}"
+        raise_abstract_method_must_be_implemented a_def, owner
       else
-        raise "abstract `def #{def_full_name(a_def.owner, a_def)}` must be implemented by #{owner}"
+        raise_abstract_method_must_be_implemented a_def, owner
       end
+    end
+  end
+
+  def raise_abstract_method_must_be_implemented(a_def, owner)
+    if owner.abstract?
+      raise "undefined method '#{def_full_name(a_def.owner, a_def)}'"
+    else
+      raise "abstract `def #{def_full_name(a_def.owner, a_def)}` must be implemented by #{owner}"
     end
   end
 
@@ -419,10 +427,6 @@ class Crystal::Call
 
       str << arg.name
 
-      if arg_default = arg.default_value
-        str << " = "
-        str << arg.default_value
-      end
       if arg_type = arg.type?
         str << " : "
         str << arg_type
@@ -442,6 +446,10 @@ class Crystal::Call
             str << res_to_s
           end
         end
+      end
+      if arg_default = arg.default_value
+        str << " = "
+        str << arg.default_value
       end
       printed = true
     end

@@ -51,7 +51,7 @@ describe "Type inference: splat" do
       a = {1} || {1, 2}
       foo *a
       ),
-      "splatting a union ({Int32, Int32} | {Int32}) is not yet supported"
+      "not yet supported"
   end
 
   it "errors if splatting non-tuple type" do
@@ -469,6 +469,21 @@ describe "Type inference: splat" do
       foo = Foo(Int32, Char, String, Bool).new
       method(foo)
       )) { tuple_of([int32.metaclass, tuple_of([char, string]).metaclass, bool.metaclass]) }
+  end
+
+  it "errors if using two splat indices on restriction" do
+    assert_error %(
+      class Foo(*T)
+      end
+
+      def method(x : Foo(A, *B, *C))
+        {A, B, C}
+      end
+
+      foo = Foo(Int32, Char, String, Bool).new
+      method(foo)
+      ),
+      "can't specify more than one splat in restriction"
   end
 
   it "matches with splat" do

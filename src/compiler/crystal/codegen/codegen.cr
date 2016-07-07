@@ -281,7 +281,6 @@ module Crystal
       end
 
       env_dump = ENV["DUMP"]?
-      env_verify = ENV["VERIFY"]? == "1"
       case env_dump
       when Nil
         # Nothing
@@ -298,7 +297,11 @@ module Crystal
 
         mod.dump if dump_all_llvm || name =~ dump_llvm_regex
         # puts mod
-        mod.verify if env_verify
+
+        # Always run verifications so we can catch bugs earlier and more often.
+        # We can probably remove this, or only enable this when compiling in
+        # release mode, once we reach 1.0.
+        mod.verify
       end
     end
 
@@ -1311,9 +1314,9 @@ module Crystal
             block_var = block_context.vars[arg.name]
             if i == splat_index
               exp_value = allocate_tuple(arg.type.as(TupleInstanceType)) do |tuple_type|
-                exp_value, exp_type = exp_values[j]
+                exp_value2, exp_type = exp_values[j]
                 j += 1
-                {exp_type, exp_value}
+                {exp_type, exp_value2}
               end
               exp_type = arg.type
             else
@@ -1894,7 +1897,7 @@ module Crystal
       if malloc_fun = @malloc_fun
         malloc_fun = check_main_fun MALLOC_NAME, malloc_fun
         size = trunc(type.size, LLVM::Int32)
-        pointer = call malloc_fun, [size]
+        pointer = call malloc_fun, size
         bit_cast pointer, type.pointer
       else
         builder.malloc type
@@ -1903,15 +1906,19 @@ module Crystal
 
     def array_malloc(type, count)
       @malloc_fun ||= @main_mod.functions[MALLOC_NAME]?
+      size = trunc(type.size, LLVM::Int32)
+      count = trunc(count, LLVM::Int32)
+      size = builder.mul size, count
       if malloc_fun = @malloc_fun
         malloc_fun = check_main_fun MALLOC_NAME, malloc_fun
-        size = trunc(type.size, LLVM::Int32)
-        count = trunc(count, LLVM::Int32)
-        size = builder.mul size, count
-        pointer = call malloc_fun, [size]
+        pointer = call malloc_fun, size
+        memset pointer, int8(0), size
         bit_cast pointer, type.pointer
       else
-        builder.array_malloc(type, count)
+        pointer = builder.array_malloc(type, count)
+        void_pointer = bit_cast pointer, LLVM::VoidPointer
+        memset void_pointer, int8(0), size
+        pointer
       end
     end
 
@@ -1964,9 +1971,13 @@ module Crystal
 
       if type.is_a?(VirtualType)
         if type.struct?
-          # For a struct we need to cast the second part of the union to the base type
-          value_ptr = gep(pointer, 0, 1)
-          pointer = bit_cast value_ptr, llvm_type(type.base_type).pointer
+          if type.remove_indirection.is_a?(UnionType)
+            # For a struct we need to cast the second part of the union to the base type
+            value_ptr = gep(pointer, 0, 1)
+            pointer = bit_cast value_ptr, llvm_type(type.base_type).pointer
+          else
+            # Nothing, there's only one subclass so it's the struct already
+          end
         else
           pointer = cast_to pointer, type.base_type
         end

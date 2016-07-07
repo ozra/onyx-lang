@@ -478,17 +478,6 @@ describe "Global inference" do
       )) { int32 }
   end
 
-  it "doesn't crash when trying to infer from a recursive constant definition" do
-    assert_error %(
-      A = B
-      B = A
-
-      $x = A
-      $x
-      ),
-      "recursive dependency of constant A: A -> B -> A"
-  end
-
   it "doesn't infer from redefined method" do
     assert_type(%(
       def foo
@@ -693,5 +682,17 @@ describe "Global inference" do
       $x : Int
       ),
       "can't use Int as the type of a global variable yet, use a more specific type"
+  end
+
+  it "declares uninitialized (#2935)" do
+    assert_type(%(
+      $x = uninitialized Int32
+
+      def foo
+        $x
+      end
+
+      foo
+      )) { int32 }
   end
 end

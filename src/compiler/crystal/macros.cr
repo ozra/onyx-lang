@@ -251,6 +251,14 @@ module Crystal::Macros
     def =~(range : RegexLiteral) : BoolLiteral
     end
 
+    # Similar to `String#>`
+    def >(other : StringLiteral | MacroId) : BoolLiteral
+    end
+
+    # Similar to `String#<`
+    def <(other : StringLiteral | MacroId) : BoolLiteral
+    end
+
     # Similar to `String#+`.
     def +(other : StringLiteral | CharLiteral) : StringLiteral
     end
@@ -1193,6 +1201,29 @@ module Crystal::Macros
     # Returns the class of this type. With this you can, for example, obtain class
     # methods by invoking `type.class.methods`.
     def class : TypeNode
+    end
+
+    # Returns the instance type of this type, if it's a class type,
+    # or `self` otherwise. This is the opposite of `#class`.
+    def instance : TypeNode
+    end
+
+    # Returns `true` if *other* is an ancestor of `self`.
+    def <(other : TypeNode) : BoolLiteral
+    end
+
+    # Returns `true` if `self` is the same as *other* or if
+    # *other* is an ancestor of `self`.
+    def <=(other : TypeNode) : BoolLiteral
+    end
+
+    # Returns `true` if `self` is an ancestor of *other*.
+    def >(other : TypeNode) : BoolLiteral
+    end
+
+    # Returns `true` if *other* is the same as `self` or if
+    # `self` is an ancestor of *other*.
+    def >=(other : TypeNode) : BoolLiteral
     end
   end
 

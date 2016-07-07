@@ -575,7 +575,7 @@ class Crystal::Call
       elsif instance_type.size == 0
         raise "index '#{arg}' out of bounds for empty tuple"
       else
-        raise "index out of bounds for tuple #{owner} (#{arg} not in 0..#{instance_type.size - 1})"
+        raise "index out of bounds for #{owner} (#{arg} not in 0..#{instance_type.size - 1})"
       end
     end
     nil
@@ -585,7 +585,7 @@ class Crystal::Call
     arg = args.first
     if arg.is_a?(SymbolLiteral)
       name = arg.value
-      index = index = instance_type.name_index(name)
+      index = instance_type.name_index(name)
       if index || nilable
         indexer_def = yield instance_type, (index || -1)
         indexer_match = Match.new(indexer_def, arg_types, MatchContext.new(owner, owner))

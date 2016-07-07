@@ -126,6 +126,33 @@ module Spec
   def self.line=(@@line : Int32)
   end
 
+  def self.slowest=(@@slowest : Int32)
+  end
+
+  def self.slowest
+    @@slowest
+  end
+
+  def self.to_human(span : Time::Span)
+    total_milliseconds = span.total_milliseconds
+    if total_milliseconds < 1
+      return "#{(span.total_milliseconds * 1000).round.to_i} microseconds"
+    end
+
+    total_seconds = span.total_seconds
+    if total_seconds < 1
+      return "#{span.total_milliseconds.round(2)} milliseconds"
+    end
+
+    if total_seconds < 60
+      return "#{total_seconds.round(2)} seconds"
+    end
+
+    minutes = span.minutes
+    seconds = span.seconds
+    "#{minutes}:#{seconds < 10 ? "0" : ""}#{seconds} minutes"
+  end
+
   def self.add_location(file, line)
     locations = @@locations ||= {} of String => Array(Int32)
     lines = locations[File.expand_path(file)] ||= [] of Int32
@@ -209,6 +236,9 @@ OptionParser.parse! do |opts|
   end
   opts.on("-l ", "--line LINE", "run examples whose line matches LINE") do |line|
     Spec.line = line.to_i
+  end
+  opts.on("-p", "--profile", "Print the 10 slowest specs") do
+    Spec.slowest = 10
   end
   opts.on("--fail-fast", "abort the run on first failure") do
     Spec.fail_fast = true

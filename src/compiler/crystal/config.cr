@@ -2,34 +2,28 @@ require "../onyx/version_number"
 
 module Crystal
   module Config
-    PATH      = {{ env("ONYX_CONFIG_PATH") || env("CRYSTAL_CONFIG_PATH") || "" }}
-    VERSION   = ONYX_VERSION
-
     def self.path
-      PATH
+      {{ env("ONYX_CONFIG_PATH") || env("CRYSTAL_CONFIG_PATH") || "" }}
     end
 
     def self.version
-      VERSION
+      version_and_sha.first
     end
 
     def self.description
-      tag, sha = tag_and_sha
-      if sha
-        "Onyx #{tag} [#{sha}] (#{date})"
-      else
-        "Onyx #{tag} (#{date})"
-      end
+      version, sha = version_and_sha
+      # if sha
+      #   "Onyx #{version} [#{sha}] (#{date})"
+      # else
+        "Onyx #{version} (#{date})"
+      # end
     end
 
-    def self.tag_and_sha
-      pieces = version.split("-")
-      tag = pieces[0]? || "?"
-      sha = pieces[2]?
-      if sha
-        sha = sha[1..-1] if sha.starts_with? 'g'
-      end
-      {tag, sha}
+    # @@version_and_sha : {String, String?}?
+
+    def self.version_and_sha
+      {ONYX_VERSION, nil}
+      # @@version_and_sha ||= compute_version_and_sha
     end
 
     def self.date
