@@ -157,7 +157,7 @@ module Crystal
         special_var = define_special_var(node.name, mod.nil_var)
         node.bind_to special_var
       else
-        node.raise "read before definition of '#{node.name}'"
+        node.raise "read before definition of local variable '#{node.name}'"
       end
     end
 
@@ -210,9 +210,11 @@ module Crystal
           var.raise "variable '#{var.name}' already declared"
         end
 
+        @in_type_args += 1
         node.declared_type.accept self
+        @in_type_args -= 1
 
-        var_type = check_declare_var_type node
+        var_type = check_declare_var_type node, node.declared_type.type, "a variable"
         var.type = var_type
 
         meta_var = @meta_vars[var.name] ||= new_meta_var(var.name)
@@ -229,16 +231,15 @@ module Crystal
       when InstanceVar
         type = scope? || current_type
         if @untyped_def
+          @in_type_args += 1
           node.declared_type.accept self
+          @in_type_args -= 1
 
-          var_type = check_declare_var_type node
-
-          ivar = lookup_instance_var var
-          ivar.type = var_type
-          var.type = var_type
+          check_declare_var_type node, node.declared_type.type, "an instance variable"
+          ivar = lookup_instance_var(var, type)
 
           if @is_initialize
-            @vars[var.name] = MetaVar.new(var.name, var_type)
+            @vars[var.name] = MetaVar.new(var.name, ivar.type)
           end
         else
           # Already handled in a previous visitor
@@ -248,16 +249,22 @@ module Crystal
 
         case type
         when NonGenericClassType
+          @in_type_args += 1
           node.declared_type.accept self
-          var_type = check_declare_var_type node
-          type.declare_instance_var(var.name, var_type)
+          @in_type_args -= 1
+          check_declare_var_type node, node.declared_type.type, "an instance variable"
         when GenericClassType
-          type.declare_instance_var(var.name, node.declared_type)
+          # OK
         when GenericClassInstanceType
           # OK
         else
           node.raise "can only declare instance variables of a non-generic class, not a #{type.type_desc} (#{type})"
         end
+      when ClassVar
+        attributes = check_valid_attributes node, ValidGlobalAttributes, "global variable"
+
+        class_var = visit_class_var var
+        class_var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
       end
 
       node.type = @mod.nil
@@ -422,20 +429,6 @@ module Crystal
 
     def visit_class_var(node)
       var = lookup_class_var(node)
-
-      existing = @mod.class_var_and_const_being_typed.find &.same?(var)
-      if existing
-        raise_recursive_dependency node, var
-      end
-
-      if first_time_accessing_meta_type_var?(var)
-        var_type = var.type?
-        if var_type && !var_type.includes_type?(mod.nil)
-          node.raise "class variable '#{var.name}' of #{var.owner} is read here before it was initialized, rendering it nilable, but its type is #{var_type}"
-        end
-        var.bind_to mod.nil_var
-      end
-
       node.bind_to var
       node.var = var
       var
@@ -634,13 +627,6 @@ module Crystal
 
       var = lookup_class_var(target)
       check_class_var_is_thread_local(target, var, attributes)
-
-      # If we are assigning to a class variable inside a method, make it nilable
-      # if this is the first time we are assigning to it, because
-      # the method might be called conditionally
-      if @typed_def && first_time_accessing_meta_type_var?(var)
-        var.bind_to mod.nil_var
-      end
 
       target.bind_to var
 
@@ -2835,7 +2821,7 @@ module Crystal
       @untyped_def || @block_context
     end
 
-    def visit(node : Require | When | Unless | Until | MacroLiteral)
+    def visit(node : When | Unless | Until | MacroLiteral)
       raise "Bug: #{node.class_desc} node '#{node}' (#{node.location}) should have been eliminated in normalize"
     end
   end

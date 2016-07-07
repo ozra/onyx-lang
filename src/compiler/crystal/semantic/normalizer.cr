@@ -301,61 +301,10 @@ module Crystal
       end
     end
 
-    # Transform require to its source code.
-    # The source code can be a Nop if the file was already required.
-    def transform(node : Require)
-      if @exp_nest > 0
-        node.raise "can't require dynamically"
-      end
-
-      location = node.location
-      filenames = @program.find_in_path(node.string, location.try &.filename)
-      if filenames
-        nodes = Array(ASTNode).new(filenames.size)
-        filenames.each do |filename|
-          if @program.add_to_requires(filename)
-            if filename.ends_with? ".ox"
-            #   parser = OnyxParser.new File.read(filename), @program.string_pool
-            # else
-            #   parser = Parser.new File.read(filename), @program.string_pool
-            # end
-              parser = OnyxParserPool.borrow(File.read(filename), @program.string_pool, nil)
-            else
-              parser = ParserPool.borrow(File.read(filename), @program.string_pool, nil)
-            end
-
-            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
-            _dbg_overview " parses \"#{filename}\"\n\n".white
-
-            parser.filename = filename
-            parser.wants_doc = @program.wants_doc?
-            nodes << FileNode.new(parser.parse.transform(self), filename)
-
-            if parser.is_a? OnyxParser
-              OnyxParserPool.leave parser
-            else
-              ParserPool.leave parser
-            end
-
-          else
-            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
-            _dbg_overview " ALREADY PROCESSED \"#{filename}\"\n\n".white
-          end
-        end
-        Expressions.from(nodes)
-      else
-        Nop.new
-      end
-    rescue ex : Crystal::Exception
-      node.raise "while requiring \"#{node.string}\"", ex
-    rescue ex
-      node.raise "while requiring \"#{node.string}\": #{ex.message}"
-    end
-
-
     # Remove pragmas used at parsing stage
     def transform(node : Attribute) : ASTNode
 
+      # *TODO*/160707 - re-evaluate this - dead code??
       # *TODO* when macros are fixed
       # return node unless node.is_onyx
 
@@ -394,7 +343,6 @@ module Crystal
         node
       end
     end
-
 
     # Check if the right hand side is dead code
     def transform(node : Assign)

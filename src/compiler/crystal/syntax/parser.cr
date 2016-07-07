@@ -473,7 +473,7 @@ module Crystal
             else
               if atomic.is_a?(Var) && !var?(atomic.name)
                 @assigned_vars.push atomic.name
-              value = parse_op_assign_no_control
+                value = parse_op_assign_no_control
                 @assigned_vars.pop
               else
                 value = parse_op_assign_no_control

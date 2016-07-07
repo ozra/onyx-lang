@@ -797,7 +797,7 @@ module Crystal
     def update(from = nil)
       return unless entries.all? &.value.type?
 
-      entries = entries.map do |element|
+      entries = self.entries.map do |element|
         NamedArgumentType.new(element.key, element.value.type)
       end
 
@@ -1148,7 +1148,7 @@ module Crystal
                    NumberLiteral
                    Case StringInterpolation
                    MacroExpression MacroIf MacroFor MultiAssign
-                   SizeOf InstanceSizeOf Global) %}
+                   SizeOf InstanceSizeOf Global Require) %}
     class {{name.id}}
       include ExpandableNode
     end

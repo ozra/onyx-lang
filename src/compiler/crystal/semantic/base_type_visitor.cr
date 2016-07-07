@@ -38,11 +38,6 @@ module Crystal
       type = resolve_ident(node)
       case type
       when Const
-        existing = @mod.class_var_and_const_being_typed.find &.same?(type)
-        if existing
-          raise_recursive_dependency node, type
-        end
-
         if !type.value.type? && !type.visited?
           type.visited = true
 
@@ -52,14 +47,11 @@ module Crystal
           type_visitor.types = type.scope_types
           type_visitor.scope = type.scope
 
-          @mod.class_var_and_const_being_typed.push type
           type.value.accept type_visitor
-          @mod.class_var_and_const_being_typed.pop
 
           type.vars = const_def.vars
           type.visitor = self
           type.used = true
-          @mod.class_var_and_const_initializers << type
         end
 
         node.target_const = type
@@ -82,15 +74,6 @@ module Crystal
 
       # _dbg "/BaseTypeVisitor.visit Path #{node}"
 
-    end
-
-    private def raise_recursive_dependency(node, const_or_class_var)
-      msg = mod.class_var_and_const_being_typed.join(" -> ") { |x| const_or_class_var_name(x) }
-      if const_or_class_var.is_a?(Const)
-        node.raise "recursive dependency of constant #{const_or_class_var}: #{msg} -> #{const_or_class_var_name(const_or_class_var)}"
-      else
-        node.raise "recursive dependency of class var #{const_or_class_var_name(const_or_class_var)}: #{msg} -> #{const_or_class_var_name(const_or_class_var)}"
-      end
     end
 
     private def const_or_class_var_name(const_or_class_var)
@@ -397,7 +380,7 @@ module Crystal
       case node
       when Expressions, LibDef, ExtendTypeDef, ClassDef, ModuleDef, FunDef, Def, Macro,
            Alias, Include, Extend, EnumDef, VisibilityModifier, MacroFor, MacroIf, MacroExpression,
-           FileNode, TypeDeclaration
+           FileNode, TypeDeclaration, Require
         false
       else
         true
@@ -973,6 +956,75 @@ module Crystal
       false
     end
 
+    # Transform require to its source code.
+    # The source code can be a Nop if the file was already required.
+    def visit(node : Require)
+      if expanded = node.expanded
+        expanded.accept self
+        return false
+      end
+
+      if inside_exp?
+        node.raise "can't require dynamically"
+      end
+
+      location = node.location
+      filenames = @mod.find_in_path(node.string, location.try &.original_filename)
+      if filenames
+        nodes = Array(ASTNode).new(filenames.size)
+        filenames.each do |filename|
+          if @mod.add_to_requires(filename)
+
+
+            if filename.ends_with? ".ox"
+            #   parser = OnyxParser.new File.read(filename), @mod.string_pool
+            # else
+            #   parser = Parser.new File.read(filename), @mod.string_pool
+            # end
+              parser = OnyxParserPool.borrow(File.read(filename), @mod.string_pool, nil)
+            else
+              parser = ParserPool.borrow(File.read(filename), @mod.string_pool, nil)
+            end
+
+            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
+            _dbg_overview " parses \"#{filename}\"\n\n".white
+
+            parser.filename = filename
+            parser.wants_doc = @mod.wants_doc?
+
+            parsed_nodes = parser.parse
+            parsed_nodes = @mod.normalize(parsed_nodes, inside_exp: inside_exp?)
+            # We must type the node immediately, in case a file requires another
+            # *before* one of the files in `filenames`
+            parsed_nodes.accept self
+            nodes << FileNode.new(parsed_nodes, filename)
+
+            if parser.is_a? OnyxParser
+              OnyxParserPool.leave parser
+            else
+              ParserPool.leave parser
+            end
+
+          else
+            _dbg_overview "\nCompiler stage: Normalizer.transform(#{node} #{node.class})"
+            _dbg_overview " ALREADY PROCESSED \"#{filename}\"\n\n".white
+          end
+        end
+        expanded = Expressions.from(nodes)
+        expanded.bind_to(nodes)
+      else
+        expanded = Nop.new
+      end
+
+      node.expanded = expanded
+      node.bind_to(expanded)
+      false
+    rescue ex : Crystal::Exception
+      node.raise "while requiring \"#{node.string}\"", ex
+    rescue ex
+      node.raise "while requiring \"#{node.string}\": #{ex.message}"
+    end
+
     def check_call_convention_attributes(node)
       attributes = @attributes
       return unless attributes
@@ -1005,18 +1057,6 @@ module Crystal
       end
 
       call_convention
-    end
-
-    def check_declare_var_type(node)
-      type = node.declared_type.type.instance_type
-
-      if type.is_a?(GenericClassType)
-        node.raise "can't declare variable of generic non-instantiated type #{type}"
-      end
-
-      Crystal.check_type_allowed_in_generics(node, type, "can't use #{type} as a Proc argument type")
-
-      type
     end
 
     def check_declare_var_type(node, declared_type, variable_kind)

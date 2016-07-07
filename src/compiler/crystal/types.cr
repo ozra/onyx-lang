@@ -895,7 +895,8 @@ module Crystal
     end
 
     def has_instance_var_initializer?(name)
-      @instance_vars_initializers.try(&.any? { |init| init.name == name })
+      @instance_vars_initializers.try(&.any? { |init| init.name == name }) ||
+        ancestors.any?(&.has_instance_var_initializer?(name))
     end
   end
 
