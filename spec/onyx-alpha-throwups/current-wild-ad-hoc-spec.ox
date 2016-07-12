@@ -606,7 +606,7 @@ type Blk
    @foo = 1
    @bar = "qwö"
 
-   init(x, &fragment) ->  -- (T) -> U - does not work for fragment...
+   init(x, ~fragment) ->  -- (T) -> U - does not work for fragment...
       yield x + @foo
       yield x - 2
    ;
@@ -1036,7 +1036,8 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
-zoo*(a; b; ...c 'Int) -> Str  'pure
+-- zoo*(a; b; ...c 'Int) -> Str  'pure  # *TODO* variation two (type after arrow)
+zoo*(a; b; ...c 'Int) Str ->  'pure
    if true:
       i = 1
 
@@ -1315,7 +1316,7 @@ branch
 end–branch
 
 -- onyx style 2 `switch ref`
-branch n
+match n
    593
       say "19.1"
    2 =>
@@ -1360,7 +1361,7 @@ branch
    *          then say n.to–s
 
 -- onyx style 5 `switch ref`
-switch n
+match n
 | 593
    say "23.1"
 | 2 =>
@@ -1435,10 +1436,12 @@ booze1(f1 Fn<I32,List<*>,List<List<Ptr<I32>>>>, f2 Lambda<Str, Nil, List<Bool>>)
 booze2(f1 (List<*>, List<List<Ptr<I32>>>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
 
 say "List<List<Ptr<I32>>> => " + List<List<Ptr<I32>>>.to–s
+-- say "Li<Li<Ptr<I32>>> => " + Li<Li<Ptr<I32>>>.to–s
 
 booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
 
-booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
+-- This notation of Lambdas-Type has been depreceated
+-- booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
 end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -1723,7 +1726,8 @@ type Foo<S1> < Bar
    'pure
    fn–1aa(x) -> nil  -- 'public   -- should this be legal? - looks very confusing!
    'pure
-   fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   fn–1ab(x) Nil -> nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   -- fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
 
    -- \ private inline
    'inline 'pure
@@ -1755,7 +1759,8 @@ type Foo<S1> < Bar
    fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
-   fn–c*(a, b S1) -> S1 'redef 'inline
+   -- fn–c*(a, b S1) -> S1 'redef 'inline
+   fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
 
    end–def
@@ -1842,8 +1847,9 @@ type FooStyle2<S1> < Bar
 
    --| Do some 1aa action!
    'pure
-   fn–1aa(x) -> 'pure:  nil   -- should this be legal? - looks very confusing!
-   fn–1ab(x) -> Nil 'pure:  nil   -- should this be legal? - looks very confusing!
+   fn–1aa(x) -> 'pure;  nil   -- should this be legal? - looks very confusing!
+   fn–1ab(x) Nil -> 'pure:  nil   -- should this be legal? - looks very confusing!
+   -- fn–1ab(x) -> Nil 'pure:  nil   -- should this be legal? - looks very confusing!
 
    -- (private ) ~>inline
    'inline 'pure
@@ -1879,7 +1885,8 @@ type FooStyle2<S1> < Bar
    fn–b(a S1, b Int) -> -- fdsa
       "b: {a}, {b}"
 
-   fn–c*(a, b S1) -> S1 'redef 'inline
+   -- fn–c*(a, b S1) -> S1 'redef 'inline
+   fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
    end–def
    -- end fn–c
@@ -2062,15 +2069,30 @@ api MyLibGmp
 
    alias MpzP = Ptr<Mpz>
 
-   init = __gmpz_init(x MpzP) -> Void
-   init_set_si = __gmpz_init_set_si(rop MpzP, op Long) -> Void
-   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) -> Void
+   -- init = __gmpz_init(x MpzP) -> Void
+   -- init_set_si = __gmpz_init_set_si(rop MpzP, op Long) -> Void
+   -- init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) -> Void
+   --
+   -- get_si = __gmpz_get_si(op MpzP) -> Long
+   -- get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) -> Ptr<U8>
+   --
+   -- add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
+   -- set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
 
-   get_si = __gmpz_get_si(op MpzP) -> Long
-   get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) -> Ptr<U8>
+   init = __gmpz_init(x MpzP) Void
+   init_set_si = __gmpz_init_set_si(rop MpzP, op Long) Void
+   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) Void
 
-   add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
-   set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
+   get_si = __gmpz_get_si(op MpzP) Long
+   get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) Ptr<U8>
+
+   add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) Void
+   set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) Void
+   -- set-memory-functions-2 = __gmp_set_memory_functions(
+   --                               malloc '(SizeT)->Ptr<Void>,
+   --                               realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>,
+   --                               free '(Ptr<Void>,SizeT)->Void
+   --                            ) Void
 
 end
 
@@ -2079,6 +2101,17 @@ MyLibGmp.set-memory-functions
    (size) -> GC.malloc(size)
    (ptr, old_size, new_size) -> GC.realloc(ptr, new_size)
    (ptr, size) -> GC.free(ptr)
+
+-- indent call style 2
+MyLibGmp.set-memory-functions
+   (size) ->
+      GC.malloc(size)
+
+   (ptr, old_size, new_size) ->
+      GC.realloc ptr, new_size
+
+   (ptr, size) ->
+      GC.free ptr
 
 -- old school call style
 MyLibGmp.set-memory-functions(
@@ -2182,7 +2215,8 @@ extend RestFoo
       false
 
 ext RestFoo
-   rest-foo() -> Bool 'redef
+   -- rest-foo() -> Bool 'redef
+   rest-foo() Bool -> 'redef
       false
 
 xx = 47

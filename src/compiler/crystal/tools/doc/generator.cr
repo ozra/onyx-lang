@@ -187,7 +187,8 @@ class Crystal::Doc::Generator
     false
   end
 
-  def type(type)
+  # `def type(type)` in crystal
+  def to_doc_type(type)
     @types[type] ||= Type.new(self, type)
   end
 

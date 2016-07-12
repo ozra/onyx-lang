@@ -327,6 +327,8 @@ babel_type  Ptr,    Pointer,     true
 
 # babel_type Str,    String,      false  -- added as alias instead currently
 babel_type  List,   Array,       true
+# Make an alias: Li => List
+
 babel_type  Tup,    Tuple,       false
 babel_type  TTup,   NamedTuple,  false # "TaggedTuple"
 
@@ -353,6 +355,8 @@ babel_type  F64,    Float64,     true
 
 babel_func  init,        initialize,         true
 babel_func  deinit,      finalize,           true
+# babel_func  :class,      itype,              true
+
 
 babel_func  :"~~",       :"==="
 
@@ -361,5 +365,3 @@ babel_func  each_,       each,             false
 
 # babel_func  some!,       not_nil!,         false
 babel_func  is!,           not_nil!,         false
-
-

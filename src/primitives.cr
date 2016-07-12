@@ -7,21 +7,22 @@
 #   and then reading back the value.
 
 class Object
-  # Returns the **runtime** `Class` of an object.
+  # Returns the current type of an instance at run-time
   #
   # ```
-  # 1.class       # => Int32
-  # "hello".class # => String
+  # 1.itype        --> I32
+  # "hello".itype  --> Str
   # ```
   #
-  # Compare it with `typeof`, which returns the **compile-time** type of an object:
+  # Compare it with `dtype`, which returns the "declaration type", that is
+  # the **compile-time** type of an instance:
   #
   # ```
-  # random_value = rand # => 0.627423
+  # random_value = rand  --> 0.627423
   # value = random_value < 0.5 ? 1 : "hello"
-  # value         # => "hello"
-  # value.class   # => String
-  # typeof(value) # => Int32 | String
+  # value          --> "hello"
+  # value.itype    --> Str
+  # dtype(value)   --> I32 | Str
   # ```
   @[Primitive(:class)]
   def class
@@ -40,11 +41,11 @@ class Reference
   #
   # ```
   # string = "hello"
-  # string.object_id # => 4460249568
+  # string.object_id  --> 4460249568
   #
   # pointer = Pointer(String).new(string.object_id)
   # string2 = pointer.as(String)
-  # string2.object_id == string.object_id # => true
+  # string2.object_id == string.object_id  --> true
   # ```
   @[Primitive(:object_id)]
   def object_id : UInt64
@@ -75,10 +76,10 @@ struct Char
   # and thus its byte representation.
   #
   # ```
-  # 'a'.ord      # => 97
-  # '\0'.ord     # => 0
-  # '\u007f'.ord # => 127
-  # '☃'.ord      # => 9731
+  # 'a'.ord       --> 97
+  # '\0'.ord      --> 0
+  # '\u007f'.ord  --> 127
+  # '☃'.ord       --> 9731
   # ```
   @[Primitive(:cast)]
   def ord : Int32
@@ -118,8 +119,8 @@ struct Symbol
   # Returns the symbol's name as a String.
   #
   # ```
-  # :foo.to_s           # => "foo"
-  # :"hello world".to_s # => "hello world"
+  # :foo.to_s            --> "foo"
+  # :"hello world".to_s  --> "hello world"
   # ```
   @[Primitive(:symbol_to_s)]
   def to_s : String
@@ -152,7 +153,7 @@ struct Pointer(T)
   #
   # ```
   # ptr = Pointer(Int32).new(5678_u64)
-  # ptr.address # => 5678
+  # ptr.address  --> 5678
   # ```
   @[Primitive(:pointer_new)]
   def self.new(address : UInt64)
@@ -163,7 +164,7 @@ struct Pointer(T)
   # ```
   # ptr = Pointer(Int32).malloc(4)
   # ptr.value = 42
-  # ptr.value # => 42
+  # ptr.value  --> 42
   # ```
   @[Primitive(:pointer_get)]
   def value : T
@@ -174,7 +175,7 @@ struct Pointer(T)
   # ```
   # ptr = Pointer(Int32).malloc(4)
   # ptr.value = 42
-  # ptr.value # => 42
+  # ptr.value  --> 42
   # ```
   @[Primitive(:pointer_set)]
   def value=(value : T)
@@ -184,7 +185,7 @@ struct Pointer(T)
   #
   # ```
   # ptr = Pointer(Int32).new(1234)
-  # ptr.address # => 1234
+  # ptr.address  --> 1234
   # ```
   @[Primitive(:pointer_address)]
   def address : UInt64
@@ -213,11 +214,11 @@ struct Pointer(T)
   #
   # ```
   # ptr = Pointer(Int32).new(1234)
-  # ptr.address # => 1234
+  # ptr.address  --> 1234
   #
   # # An Int32 occupies four bytes
   # ptr2 = ptr + 1_u64
-  # ptr2.address # => 1238
+  # ptr2.address  --> 1238
   # ```
   @[Primitive(:pointer_add)]
   def +(offset : Int64) : self
@@ -229,7 +230,7 @@ struct Pointer(T)
   # ```
   # ptr1 = Pointer(Int32).malloc(4)
   # ptr2 = ptr1 + 2
-  # ptr2 - ptr1 # => 2
+  # ptr2 - ptr1  --> 2
   # ```
   @[Primitive(:pointer_diff)]
   def -(other : self) : Int64
@@ -241,7 +242,7 @@ struct Proc
   #
   # ```
   # add = ->(x : Int32, y : Int32) { x + y }
-  # add.call(1, 2) # => 3
+  # add.call(1, 2)  --> 3
   # ```
   @[Primitive(:proc_call)]
   @[Raises]
@@ -307,7 +308,7 @@ end
       # be a bottleneck.
       #
       # ```
-      # 97.unsafe_chr # => 'a'
+      # 97.unsafe_chr  --> 'a'
       # ```
       @[Primitive(:cast)]
       def unsafe_chr : Char

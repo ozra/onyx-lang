@@ -413,7 +413,7 @@ class StylizeOnyxVisitor < Visitor
 
       @str << "$." if node.global
 
-      call_args_need_parens = node.has_parenthesis
+      call_args_need_parens = node.has_parentheses
 
       case
       when is_new
@@ -833,7 +833,7 @@ class StylizeOnyxVisitor < Visitor
       @str << node.name
    end
 
-   def visit(node : FunLiteral)
+   def visit(node : ProcLiteral)
       # if node.def.args.size > 0
       @str << "("
       node.def.args.each_with_index do |arg, i|
@@ -853,7 +853,7 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
-   def visit(node : FunPointer)
+   def visit(node : ProcPointer)
       @str << "->"
       if obj = node.obj
          obj.accept self
@@ -1095,7 +1095,7 @@ class StylizeOnyxVisitor < Visitor
    #    false
    # end
 
-   def visit(node : Fun)
+   def visit(node : ProcNotation)
       @str << "("
       if inputs = node.inputs
          inputs.each_with_index do |input, i|
@@ -1813,6 +1813,11 @@ class StylizeOnyxVisitor < Visitor
       node.node.accept self
       false
    end
+
+   def visit(node : YieldBlockBinder)
+      false
+   end
+
 
    def newline
       @str << "\n"

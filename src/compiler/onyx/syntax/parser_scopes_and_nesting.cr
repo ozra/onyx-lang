@@ -104,7 +104,7 @@ class Nesting
    @@nesting_keywords = %w(
       program
       module trait
-      type enum class struct
+      type enum flags class struct
       def fun fragment lambda
       template macro
       lib api
@@ -114,7 +114,7 @@ class Nesting
       scope scoped contain contained
       if ifdef unless else
       elif elsif
-      case when
+      switcheroo when
       while until for each loop
       try rescue catch ensure
       indent_call

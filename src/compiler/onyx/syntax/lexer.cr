@@ -45,8 +45,8 @@ module Crystal
       @string_pool = string_pool || SharedCompilationStringPool.get
       @tmp_buf = MemoryIO.new 1024
 
-      @dbg–switch = false
-      @dbg–tail–switch = false
+      @dbg_switch = false
+      @dbg_tail_switch = false
       @dbgindent__ = 0
 
       @indent = 0
@@ -74,8 +74,8 @@ module Crystal
       @slash_is_regex = true
       @wants_raw = false
 
-      @dbg–switch = false
-      @dbg–tail–switch = false
+      @dbg_switch = false
+      @dbg_tail_switch = false
       @dbgindent__ = 0
 
       @indent = 0
@@ -98,32 +98,32 @@ module Crystal
 
     def dbg_on
       ifdef !release
-        return if @dbg–switch
-        @dbg–switch = true
-        @dbg–tail–switch = true
+        return if @dbg_switch
+        @dbg_switch = true
+        @dbg_tail_switch = true
         dbg "TURNS DEBUG LOGGING ON".red
       end
     end
 
     def dbg_off
       ifdef !release
-        return if !@dbg–switch
+        return if !@dbg_switch
         dbg "TURNS DEBUG LOGGING OFF".red
-        @dbg–switch = false
-        @dbg–tail–switch = false
+        @dbg_switch = false
+        @dbg_tail_switch = false
       end
     end
 
     def dbgtail_off!
       ifdef !release
-        @dbg–tail–switch = false
+        @dbg_tail_switch = false
       end
     end
 
     def dbgtail(str : String)
       ifdef !release
       # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
-        return if @dbg–tail–switch == false
+        return if @dbg_tail_switch == false
         STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": /" + str +
               ("  (at: '" + @token.type.to_s + "':'" + @token.value.to_s +
               "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
@@ -134,7 +134,7 @@ module Crystal
     def dbg(str : String)
       ifdef !release
       # str = str.gsub /'(.*?):(.*?)'/, "'$1':'$2'"
-        return if @dbg–switch == false
+        return if @dbg_switch == false
         STDERR.puts (" " * (@dbgindent__ * 1)) + @dbgindent__.to_s + ": " + str +
               ("  (at: '" + @token.type.to_s + "':'" + @token.value.to_s +
               "' [" + @token.line_number.to_s + ":" + @token.column_number.to_s +
@@ -153,14 +153,14 @@ module Crystal
 
     def dbg_lex(s)
       ifdef !release
-        return if @dbg–switch == false
+        return if @dbg_switch == false
         STDERR.puts "## #{s} ".blue2 + "@#{@line_number}:#{@column_number - 1}".blue2
       end
     end
 
     def dbg_ind(s)
       ifdef !release
-        return if @dbg–switch == false
+        return if @dbg_switch == false
         STDERR.puts "## #{s}".blue2 + "@#{@line_number}:#{@column_number - 1}".blue2
       end
     end
@@ -298,7 +298,7 @@ module Crystal
           dbg_lex "Got comment"
 
           # *TODO* COMMENTS = NOT INDENT FORMING, OR, _ARE_ INDENT FORMING??
-          # ONLY DOC–COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
+          # ONLY DOC_COMMENTS PERHAPS? <-- SEEMS MOST REASONABLE CHOICE!
           # (ALL COMMENTS INDENT FORMING ATM!)
 
           # *TODO* handle_comment??
@@ -429,7 +429,7 @@ module Crystal
           toktype_then_nextch :">="
 
         when '>'
-          # parametrization, tuple–encloser or operator?!
+          # parametrization, tuple_encloser or operator?!
 
           if prev_tok?(:SPACE) && peekch == '='
             toktype_then_nextch :">>="
@@ -487,7 +487,7 @@ module Crystal
         else
           @token.type = :"-"
         end
-      when '—' # em–dash!
+      when '—' # em_dash!
         # p "got EMDASH"
         if (ret = handle_comment) == false
           raise "unexpected EMDASH!"
@@ -516,7 +516,7 @@ module Crystal
         char = nextch
         if char == '='
           toktype_then_nextch :"/="
-          # *TODO* change syntax for regex? `regex = //regex–contents/i`
+          # *TODO* change syntax for regex? `regex = //regex_contents/i`
         elsif @slash_is_regex
           @token.type = :DELIMITER_START
           @token.delimiter_state = Token::DelimiterState.new(:regex, '/', '/', 0)
@@ -1773,7 +1773,7 @@ module Crystal
 
       end
 
-      # macro parsing is indent–ignorant, thus random indents and dedents may
+      # macro parsing is indent_ignorant, thus random indents and dedents may
       # occur legally, thus we need to make them "disappear"
       if macro_parse_mode? && tok?(:INDENT, :DEDENT)
         @token.type = :NEWLINE
@@ -2022,7 +2022,7 @@ module Crystal
         case curch
         when '!', '?'
           if (((c = peekch) >= 'a' && c <= 'z') || (c == '_') || (c >= 'A' && c <= 'Z'))
-            # It's nil–sugar
+            # It's nil_sugar
           else
             nextch
           end
@@ -2050,7 +2050,7 @@ module Crystal
           elsif chr == '–'
             @tmp_buf << '_'
 
-          # *TODO* _ONLY_ of onyxify and translate–humps set!!!
+          # *TODO* _ONLY_ of onyxify and translate_humps set!!!
           # elsif do_hump_magic && ('A' <= chr <= 'Z')
           #   str << '_'
           #   str << chr.downcase
@@ -2632,7 +2632,7 @@ module Crystal
 
           dbg_lex "- next_macro_token - got indent calced to #{current_indent}"
 
-          # macro closing is now indent–based (while internals are not, of course)
+          # macro closing is now indent_based (while internals are not, of course)
           if (current_indent <= @macro_base_indent_level &&
               char != '\n' && !(char == '-' && peekch == '-')
           )
@@ -2680,7 +2680,7 @@ module Crystal
         when '%'
           if delimiter_state
             whitespace = false
-            break if idfr_start?(peekch) # *TODO* remove when delimiter–nesting is fixed - otherwise "str w %s in it" fucks up!
+            break if idfr_start?(peekch) # *TODO* remove when delimiter_nesting is fixed - otherwise "str w %s in it" fucks up!
           else
             case peekch
             when '(', '[', '<', '{'

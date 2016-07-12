@@ -221,7 +221,7 @@ USAGE
 
   private def hierarchy
     config, result = compile_no_codegen "tool hierarchy", hierarchy: true
-    Crystal.print_hierarchy result.program, config.hierarchy_exp
+    Crystal.print_hierarchy result.program, config.hierarchy_exp, config.output_format
   end
 
   private def implementations
@@ -499,8 +499,8 @@ USAGE
 
       unless no_codegen
         unless run
-          opts.on("--cross-compile flags", "cross-compile") do |cross_compile|
-            compiler.cross_compile_flags = cross_compile
+          opts.on("--cross-compile", "cross-compile") do |cross_compile|
+            compiler.cross_compile = true
           end
         end
         opts.on("-d", "--debug", "Add symbolic debug info") do
