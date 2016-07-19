@@ -1317,6 +1317,10 @@ module Crystal
     def reference_like?
       true
     end
+
+    def primitive_like?
+      false
+    end
   end
 
   abstract class EmptyType < Type
@@ -3175,6 +3179,10 @@ module Crystal
       nil
     end
 
+    def implements?(other : VirtualMetaclassType)
+      base_type.implements?(other.base_type)
+    end
+
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
       instance_type.to_s_with_options(io, codegen: codegen)
       io << ":Class"
@@ -3244,7 +3252,7 @@ module Crystal
     end
 
     def primitive_like?
-      arg_types.all?(&.primitive_like?) && return_type.primitive_like?
+      arg_types.all?(&.primitive_like?) && (return_type.primitive_like? || return_type.nil_type?)
     end
 
     def passed_by_value?

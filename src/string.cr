@@ -686,7 +686,7 @@ class String
   #
   # Raises `ArgumentError` if `count` is negative.
   def [](start : Int, count : Int)
-    if single_byte_optimizable?
+    if ascii_only?
       return byte_slice(start, count)
     end
 
@@ -767,7 +767,7 @@ class String
   end
 
   def at(index : Int)
-    if single_byte_optimizable?
+    if ascii_only?
       byte = byte_at?(index)
       return byte ? byte.unsafe_chr : yield
     end
@@ -785,7 +785,7 @@ class String
 
   def byte_slice(start : Int, count : Int)
     start += bytesize if start < 0
-    single_byte_optimizable = single_byte_optimizable?
+    single_byte_optimizable = ascii_only?
 
     if 0 <= start < bytesize
       raise ArgumentError.new "negative count" if count < 0
@@ -968,7 +968,7 @@ class String
       return byte_slice(0, bytesize - 2)
     end
 
-    if to_unsafe[bytesize - 1] < 128 || single_byte_optimizable?
+    if to_unsafe[bytesize - 1] < 128 || ascii_only?
       return byte_slice(0, bytesize - 1)
     end
 
@@ -1038,7 +1038,7 @@ class String
     bytes, count = String.char_bytes_and_bytesize(other)
 
     new_bytesize = bytesize + count
-    new_size = single_byte_optimizable? ? new_bytesize : 0
+    new_size = ascii_only? ? new_bytesize : 0
 
     insert_impl(byte_index, bytes.to_unsafe, count, new_bytesize, new_size)
   end
@@ -1067,7 +1067,7 @@ class String
     raise IndexError.new unless byte_index
 
     new_bytesize = bytesize + other.bytesize
-    new_size = single_byte_optimizable? && other.single_byte_optimizable? ? new_bytesize : 0
+    new_size = ascii_only? && other.ascii_only? ? new_bytesize : 0
 
     insert_impl(byte_index, other.to_unsafe, other.bytesize, new_bytesize, new_size)
   end
@@ -1457,7 +1457,7 @@ class String
         buffer.value = byte
         buffer += 1
       end
-      {buffer, single_byte_optimizable? ? bytesize - (to_index - from_index) + 1 : 0}
+      {buffer, ascii_only? ? bytesize - (to_index - from_index) + 1 : 0}
     end
   end
 
@@ -1979,6 +1979,9 @@ class String
   # "abc" + 'd'   # => "abcd"
   # ```
   def +(other : self)
+    return self if other.empty?
+    return other if self.empty?
+
     size = bytesize + other.bytesize
     String.new(size) do |buffer|
       buffer.copy_from(to_unsafe, bytesize)
@@ -2174,7 +2177,7 @@ class String
   # "こんにちは".char_index_to_byte_index(5) # => 15
   # ```
   def char_index_to_byte_index(index)
-    if single_byte_optimizable?
+    if ascii_only?
       return 0 <= index <= bytesize ? index : nil
     end
 
@@ -2190,7 +2193,7 @@ class String
   # It is valid to pass `bytesize` to *index*, and in this case the answer
   # will be the size of this string.
   def byte_index_to_char_index(index)
-    if single_byte_optimizable?
+    if ascii_only?
       return 0 <= index <= bytesize ? index : nil
     end
 
@@ -2231,7 +2234,7 @@ class String
     end
 
     ary = Array(String).new
-    single_byte_optimizable = single_byte_optimizable?
+    single_byte_optimizable = ascii_only?
     index = 0
     i = 0
     looking_for_space = false
@@ -2293,7 +2296,7 @@ class String
     ary = Array(String).new
 
     byte_offset = 0
-    single_byte_optimizable = single_byte_optimizable?
+    single_byte_optimizable = ascii_only?
 
     reader = Char::Reader.new(self)
     reader.each_with_index do |char, i|
@@ -2339,7 +2342,7 @@ class String
     byte_offset = 0
     separator_bytesize = separator.bytesize
 
-    single_byte_optimizable = single_byte_optimizable?
+    single_byte_optimizable = ascii_only?
 
     i = 0
     stop = bytesize - separator.bytesize + 1
@@ -2767,7 +2770,7 @@ class String
   # end
   # ```
   def each_char
-    if single_byte_optimizable?
+    if ascii_only?
       each_byte do |byte|
         yield byte.unsafe_chr
       end
@@ -3019,7 +3022,7 @@ class String
   def ends_with?(char : Char)
     return false unless bytesize > 0
 
-    if char.ord < 0x80 || single_byte_optimizable?
+    if char.ord < 0x80 || ascii_only?
       return to_unsafe[bytesize - 1] == char.ord
     end
 
@@ -3068,11 +3071,7 @@ class String
   end
 
   def ascii_only?
-    @bytesize == 0 || size == @bytesize
-  end
-
-  protected def single_byte_optimizable?
-    @bytesize == @length
+    @bytesize == size
   end
 
   protected def size_known?
