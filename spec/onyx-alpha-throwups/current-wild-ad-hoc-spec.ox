@@ -1,6 +1,10 @@
 #!/usr/bin/env onyx
 
 
+-- 1. template dpp - dpp isn't looked up - probably signature mismatch
+-- 2. sigsegv crash on the foo?bar?qwo chain
+
+
 -- Some Monofonts Safe Unicode Glyphs:
 -- ®©ªµþ¥€$£¢œ·°¤×÷¿¡¹²³§¶-–—“”‘’()[]{}‹›«»½ßð
 -- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -38,7 +42,7 @@ template dpp(...exps) =
   {% for exp in exps %}
     $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
   {% end %}
-end dpp
+end  -- dpp
   -- *TODO* above end, if no comment after, makes one line-no disappear
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -77,6 +81,7 @@ type Nilish
 
    internal() ->
       say (foo?bar?qwo || 0) + 200
+      -- say "SHOULD BE: but it crashes atm: `(foo?bar?qwo || 0) + 200`"
       -- say (foo~bar?~qwo || 0) + 200
 
    foo()  ->   @val = 1; if @nil-at >= 1 ? this : nil
@@ -512,7 +517,7 @@ pp $.MY_CONST
 Glob: @@my-global = 47_i32 'get 'set
 -- -- '!literal-int = I64
 
-Glob: @@my-typed-global 'I32 'get 'set
+Glob: @@my-typed-global 'I32|Nil 'get 'set
 -- -- '!literal-int=I32
 Glob: @@my-typed-and-assigned-global 'I32 = 47i32 'get 'set
 Glob.my-global = Glob.my-typed-and-assigned-global

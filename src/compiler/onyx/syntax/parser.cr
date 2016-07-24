@@ -48,7 +48,7 @@ class OnyxParser < OnyxLexer
   property type_nest : Int32
   getter? wants_doc : Bool
 
-  @explicit_fragment_param_name : String?
+  @def_explicit_fragment_param_name : String?
   @scope_stack : ScopeStack
 
 
@@ -72,7 +72,7 @@ class OnyxParser < OnyxLexer
     @calls_super = false
     @calls_initialize = false
     @calls_previous_def = false
-    @uses_explicit_fragment_param = false
+    @def_has_explicit_fragment_param = false
     @assigns_special_var = false
 
     # *TODO* clean these three up - similar chores
@@ -87,7 +87,7 @@ class OnyxParser < OnyxLexer
 
     @anon_param_counter = 1
 
-    @explicit_fragment_param_count = 0
+    @terse_fragment_implicit_param_counter = 0
     @in_macro_expression = false
     @stop_on_yield = 0
     @inside_c_struct = false
@@ -122,7 +122,7 @@ class OnyxParser < OnyxLexer
     @calls_super = false
     @calls_initialize = false
     @calls_previous_def = false
-    @uses_explicit_fragment_param = false
+    @def_has_explicit_fragment_param = false
     @assigns_special_var = false
 
     # *TODO* clean these three up - similar chores
@@ -137,7 +137,7 @@ class OnyxParser < OnyxLexer
 
     @anon_param_counter = 1
 
-    @explicit_fragment_param_count = 0
+    @terse_fragment_implicit_param_counter = 0
     @in_macro_expression = false
     @stop_on_yield = 0
     @inside_c_struct = false
@@ -1140,7 +1140,11 @@ class OnyxParser < OnyxLexer
     column_number = @token.column_number
     try_slant = parse_oneletter_fragment flag_as_nilish_first: true, dont_skip_initial_token: dont_skip_initial_token
 
-    atomic = Call.new(atomic, "try", [] of ASTNode, try_slant,
+    atomic = Call.new(
+                 atomic,
+                 "try",
+                 [] of ASTNode,
+                 try_slant,
                  name_column_number: column_number
                 ).at(location)
     return atomic
@@ -1338,29 +1342,46 @@ class OnyxParser < OnyxLexer
 
         if call_args
           args = call_args.args
-          block = call_args.block
-          explicit_fragment_param = call_args.explicit_fragment_param
+          fragment = call_args.fragment
+
+          # *TODO* we want `my-fragment-name` simply, as pass-through fragment
+          # syntax (not `my-call 1, &block`) - so we have to fix this semantically
+          # (since Onyx demands naming a fragment in the params explicitly - deduce!)
+          # pass_on_arg_fragment = call_args.pass_on_arg_fragment
           named_args = call_args.named_args
         else
-          args = block = explicit_fragment_param = nil
+          args = fragment = nil # pass_on_arg_fragment = nil
         end
 
-        if block || explicit_fragment_param
+        if fragment # || pass_on_arg_fragment
           atomic = Call.new(
             atomic,
             name,
             (args || [] of ASTNode),
-            block,
-            explicit_fragment_param, named_args,
+            fragment,
+            nil, # pass_on_arg_fragment,
+            named_args,
             name_column_number: name_column_number,
             has_parentheses: has_parens
           )
         elsif args
-          atomic = (Call.new atomic, name, args, named_args: named_args, name_column_number: name_column_number, has_parentheses: has_parens)
+          atomic = Call.new(
+            atomic,
+            name,
+            args,
+            named_args: named_args,
+            name_column_number: name_column_number,
+            has_parentheses: has_parens
+          )
         else
-          atomic = (Call.new atomic, name, name_column_number: name_column_number, has_parentheses: has_parens)
+          atomic = Call.new(
+            atomic,
+            name,
+            name_column_number: name_column_number,
+            has_parentheses: has_parens
+          )
         end
-        atomic.end_location = call_args.try(&.end_location) || block.try(&.end_location) || end_location
+        atomic.end_location = call_args.try(&.end_location) || fragment.try(&.end_location) || end_location
         atomic.at(location)
         return atomic # *TODO* *BUG* - if we return here, atomic below has no type (!)
       end
@@ -1633,7 +1654,7 @@ class OnyxParser < OnyxLexer
 
       when :suffix
         check_not_inside_def("can't define suffix inside def") do
-          parse_suffix
+          parse_literal_suffix_def
         end
 
       when :require then parse_require
@@ -1913,19 +1934,29 @@ class OnyxParser < OnyxLexer
 
   def parse_constish_type_new_call_sugar(idfr, curr_indent)
     dbg "parse_constish_type_new_call_sugar ->".yellow
-    has_parens, arg_node = parse_call_args true, curr_indent
+    has_parens, call_args = parse_call_args true, curr_indent
 
-    if arg_node
-      args = arg_node.args || [] of ASTNode
-      block = arg_node.block
-      explicit_fragment_param = arg_node.explicit_fragment_param
-      named_args = arg_node.named_args
+    if call_args
+      args = call_args.args || [] of ASTNode
+      fragment = call_args.fragment
+      # pass_on_arg_fragment = call_args.pass_on_arg_fragment
+      named_args = call_args.named_args
     else
       dbgtail_off!
       raise "bug in onyx when trying to parse Type.new() sugar!"
     end
 
-    return Call.new(idfr, "new", args, block, explicit_fragment_param, named_args, false, 0, has_parens)
+    return Call.new(
+      idfr,
+      "new",
+      args,
+      fragment,
+      nil, # pass_on_arg_fragment,
+      named_args,
+      false,
+      0,
+      has_parens
+    )
 
   ensure
     dbgtail "/parse_constish_type_new_call_sugar".yellow
@@ -3305,11 +3336,21 @@ class OnyxParser < OnyxLexer
       has_parens, call_args = parse_call_args true, -47
       call_args = call_args.not_nil!
       args = call_args.args
-      block = call_args.block
-      explicit_fragment_param = call_args.explicit_fragment_param
+      fragment = call_args.fragment
+      # pass_on_arg_fragment = call_args.pass_on_arg_fragment
       named_args = call_args.named_args
 
-      Call.new(ret, "call", args, block, explicit_fragment_param, named_args, false, name_column_number, has_parentheses: has_parens)
+      Call.new(
+        ret,
+        "call",
+        args,
+        fragment,
+        nil, # pass_on_arg_fragment,
+        named_args,
+        false,
+        name_column_number,
+        has_parentheses: has_parens
+      )
     else
       ret
     end
@@ -4319,7 +4360,7 @@ class OnyxParser < OnyxLexer
     a_def.calls_super = @calls_super
     a_def.calls_initialize = @calls_initialize
     a_def.calls_previous_def = @calls_previous_def
-    a_def.uses_block_arg = @uses_explicit_fragment_param
+    a_def.uses_block_arg = @def_has_explicit_fragment_param
     a_def.assigns_special_var = @assigns_special_var
 
     result
@@ -4358,7 +4399,7 @@ class OnyxParser < OnyxLexer
     a_def.calls_super = @calls_super
     a_def.calls_initialize = @calls_initialize
     a_def.calls_previous_def = @calls_previous_def
-    a_def.uses_block_arg = @uses_explicit_fragment_param
+    a_def.uses_block_arg = @def_has_explicit_fragment_param
     a_def.assigns_special_var = @assigns_special_var
     a_def.doc = doc
     # @instance_vars = nil
@@ -4375,8 +4416,8 @@ class OnyxParser < OnyxLexer
     @calls_super = false
     @calls_initialize = false
     @calls_previous_def = false
-    @uses_explicit_fragment_param = false
-    @explicit_fragment_param_name = nil
+    @def_has_explicit_fragment_param = false
+    @def_explicit_fragment_param_name = nil
     @assigns_special_var = false
   end
 
@@ -4386,7 +4427,7 @@ class OnyxParser < OnyxLexer
   MACRO_TOK_START_EXPR = :"{="
   MACRO_TOK_END_EXPR = :"=}"
 
-  def parse_macro(supplied_receiver = nil)
+  def parse_macro
     dbg "parse_macro ->".cyan
 
     doc = @token.doc
@@ -4445,7 +4486,10 @@ class OnyxParser < OnyxLexer
         double_splat = params.pop
         found_double_splat = double_splat
       end
-      if explicit_fragment_param = extras.explicit_fragment_param
+
+      # *TODO* should we deduce this already in parsing (since we need to compare arg-name of current def and that it is a fragment - to know this)
+      pass_on_arg_fragment = nil #  = extras.pass_on_arg_fragment
+      if pass_on_arg_fragment
         check :")"
         break
       elsif @token.type == :","
@@ -4465,12 +4509,12 @@ class OnyxParser < OnyxLexer
 
     next_token
 
-    parse_macro_main indent_level, name, params, explicit_fragment_param, splat_index,
-                name_line_number, name_column_number, doc
+    parse_macro_main indent_level, name, params, pass_on_arg_fragment, splat_index,
+                double_splat, name_line_number, name_column_number, doc
   end
 
-  def parse_macro_main(indent_level, name, args, explicit_fragment_param, splat_index,
-                name_line_number, name_column_number, doc
+  def parse_macro_main(indent_level, name, args, pass_on_arg_fragment, splat_index,
+                double_splat, name_line_number, name_column_number, doc
                 )
     end_location = nil
 
@@ -4517,7 +4561,7 @@ class OnyxParser < OnyxLexer
 
     dbg @nesting_stack.dbgstack
 
-    node = Macro.new name, args, body, explicit_fragment_param, splat_index
+    node = Macro.new name, args, body, pass_on_arg_fragment, splat_index, double_splat: double_splat
     node.name_column_number = name_column_number
     node.doc = doc
     node.end_location = end_location
@@ -5005,8 +5049,11 @@ class OnyxParser < OnyxLexer
           double_splat = arg_list.pop
           found_double_splat = double_splat
         end
-        if explicit_fragment_param = extras.explicit_fragment_param
-          compute_explicit_fragment_param_yields explicit_fragment_param
+
+        # *TODO* the pass_on_fragment
+        pass_on_arg_fragment = nil # extras.pass_on_arg_fragment
+        if pass_on_arg_fragment
+          compute_explicit_fragment_param_yields pass_on_arg_fragment
           check :")"
           break
         elsif tok?(:",") || tok?(:";") || @token.type == :"NEWLINE"
@@ -5174,7 +5221,7 @@ class OnyxParser < OnyxLexer
     @doc_enabled = @wants_doc
     pop_scope
 
-    node = Def.new name, arg_list, body, receiver, explicit_fragment_param, return_type, is_macro_def, @yields, is_abstract, splat_index
+    node = Def.new name, arg_list, body, receiver, pass_on_arg_fragment, return_type, is_macro_def, @yields, is_abstract, splat_index
     node.name_column_number = name_column_number
     node.visibility = marked_visibility # @visibility
     node.end_location = end_location
@@ -5199,17 +5246,17 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  def compute_explicit_fragment_param_yields(explicit_fragment_param)
-    explicit_fragment_param_restriction = explicit_fragment_param.restriction
-    if explicit_fragment_param_restriction.is_a?(ProcNotation)
-      @yields = explicit_fragment_param_restriction.inputs.try(&.size) || 0
+  def compute_explicit_fragment_param_yields(pass_on_arg_fragment)
+    pass_on_arg_fragment_restriction = pass_on_arg_fragment.restriction
+    if pass_on_arg_fragment_restriction.is_a?(ProcNotation)
+      @yields = pass_on_arg_fragment_restriction.inputs.try(&.size) || 0
     else
       @yields = 0
     end
   end
 
   record ParamExtras,
-    explicit_fragment_param : Arg?,
+    pass_on_arg_fragment : Arg?,
     default_value : Bool,
     splat : Bool,
     double_splat : Bool,
@@ -5346,7 +5393,7 @@ class OnyxParser < OnyxLexer
     arg_name, external_name, uses_arg =
           parse_param_name(name_location, extra_assigns, allow_external_name: false)
 
-    @uses_explicit_fragment_param = true if uses_arg
+    @def_has_explicit_fragment_param = true if uses_arg
 
     inputs = nil
     output = nil
@@ -5358,11 +5405,11 @@ class OnyxParser < OnyxLexer
 
     # *TODO* - check that (if not :"(") the ending parentheses is in place instead - or error "expected"
 
-    explicit_fragment_param = Arg.new(arg_name, restriction: type_spec).at(name_location)
-    add_var explicit_fragment_param
-    @explicit_fragment_param_name = explicit_fragment_param.name
+    pass_on_arg_fragment = Arg.new(arg_name, restriction: type_spec).at(name_location)
+    add_var pass_on_arg_fragment
+    @def_explicit_fragment_param_name = pass_on_arg_fragment.name
 
-    explicit_fragment_param
+    pass_on_arg_fragment
   end
 
   def parse_param_name(location, extra_assigns, allow_external_name)
@@ -5479,8 +5526,8 @@ class OnyxParser < OnyxLexer
     ret
   end
 
-  def parse_suffix()
-    dbg "parse_suffix ->".cyan
+  def parse_literal_suffix_def()
+    dbg "parse_literal_suffix_def ->".cyan
 
     doc = @token.doc
     indent_level = @indent
@@ -5521,7 +5568,7 @@ class OnyxParser < OnyxLexer
       name = "plain"
     end
 
-    node = parse_macro_main indent_level, name, args, nil, nil,
+    node = parse_macro_main indent_level, name, args, nil, nil, nil,
                     name_line_number, name_column_number, doc
 
     if name_prefix
@@ -5861,8 +5908,11 @@ class OnyxParser < OnyxLexer
 
     if call_args
       args = call_args.args
-      block = call_args.block
-      explicit_fragment_param = call_args.explicit_fragment_param
+      fragment = call_args.fragment
+
+      # pass_on_arg_fragment = call_args.pass_on_arg_fragment
+      pass_on_arg_fragment = nil
+
       named_args = call_args.named_args
 
       # check if functor–ish
@@ -5873,9 +5923,9 @@ class OnyxParser < OnyxLexer
     end
 
     node = case
-    when block || explicit_fragment_param || global
-      dbg "parse_var_or_call - got some kinda block"
-      Call.new instance, name, (args || [] of ASTNode), block, explicit_fragment_param, named_args, global, name_column_number, has_parentheses: has_parens
+    when fragment || pass_on_arg_fragment || global
+      dbg "parse_var_or_call - got some kinda fragment"
+      Call.new instance, name, (args || [] of ASTNode), fragment, pass_on_arg_fragment, named_args, global, name_column_number, has_parentheses: has_parens
     else
       if args
         dbg "parse_var_or_call - got some kinda args"
@@ -5887,7 +5937,7 @@ class OnyxParser < OnyxLexer
           num.value = num.value.byte_slice(1)
           Call.new(Var.new(name), sign, args, has_parentheses: has_parens)
         else
-          Call.new(instance, name, args, nil, explicit_fragment_param, named_args, global, name_column_number, has_parentheses: has_parens)
+          Call.new(instance, name, args, nil, pass_on_arg_fragment, named_args, global, name_column_number, has_parentheses: has_parens)
         end
       else
         dbg "check for type annotation prefixes"
@@ -5897,13 +5947,13 @@ class OnyxParser < OnyxLexer
           add_var declared_var
           declared_var
         elsif (!force_call && is_var)
-          if @explicit_fragment_param_name && !@uses_explicit_fragment_param && name == @explicit_fragment_param_name
-            @uses_explicit_fragment_param = true
+          if @def_explicit_fragment_param_name && !@def_has_explicit_fragment_param && name == @def_explicit_fragment_param_name
+            @def_has_explicit_fragment_param = true
           end
           Var.new name
         else
           dbg "parse_var_or_call - got call as default else case"
-          Call.new instance, name, [] of ASTNode, nil, explicit_fragment_param, named_args, global, name_column_number, has_parentheses: has_parens
+          Call.new instance, name, [] of ASTNode, nil, pass_on_arg_fragment, named_args, global, name_column_number, has_parentheses: has_parens
         end
       end
     end
@@ -5915,7 +5965,7 @@ class OnyxParser < OnyxLexer
     end
 
     node.doc = doc
-    node.end_location = block.try(&.end_location) || call_args.try(&.end_location) || end_location
+    node.end_location = fragment.try(&.end_location) || call_args.try(&.end_location) || end_location
     # node.literal_style = name_literal_style
     node
 
@@ -5925,10 +5975,10 @@ class OnyxParser < OnyxLexer
 
   record CallArgs,
     args : Array(ASTNode)?,
-    block : Block?,
-    explicit_fragment_param : ASTNode?,
+    fragment : Block?,
+    # pass_on_arg_fragment : ASTNode?,
     named_args : Array(NamedArgument)?,
-    stopped_on_do_after_space : Bool,
+    # stopped_on_do_after_space : Bool,
     end_location : Location?
 
   # current_name is only used by parse_call_args_indented
@@ -5982,7 +6032,7 @@ class OnyxParser < OnyxLexer
 
     args = [] of ASTNode
     end_location = nil
-    block = nil
+    fragment = nil
     named_args = nil
 
     open("call") do
@@ -6001,8 +6051,8 @@ class OnyxParser < OnyxLexer
           arg = parse_call_arg
 
           if arg.is_a? Block
-            block = arg
-            dbg "parse_call_args_parenthesized after block arg - check for ')'"
+            fragment = arg
+            dbg "parse_call_args_parenthesized after fragment arg - check for ')'"
 
           elsif named_args
             dbg "named_args: #{named_args}, arg: #{arg}, #{arg.class}, args: #{args}"
@@ -6034,10 +6084,11 @@ class OnyxParser < OnyxLexer
 
     end
 
-    CallArgs.new args, block, nil, named_args, false, end_location
+    # CallArgs.new args, fragment, nil, named_args, false, end_location
+    CallArgs.new args, fragment, named_args, end_location
   end
 
-  def parse_call_args_spaced(block = nil, check_plus_and_minus = true, allow_curly = false)
+  def parse_call_args_spaced(fragment = nil, check_plus_and_minus = true, allow_curly = false)
     dbg "parse_call_args_spaced ->"
     return nil if parse_call_args_spaced_any_non_call_hints?(check_plus_and_minus, allow_curly)
     args = [] of ASTNode
@@ -6058,8 +6109,8 @@ class OnyxParser < OnyxLexer
         arg = parse_call_arg
 
         if arg.is_a? Block
-          block = arg
-          dbg "parse_call_args_spaced after block arg - check for ')'"
+          fragment = arg
+          dbg "parse_call_args_spaced after fragment arg - check for ')'"
 
         elsif named_args
           dbg "named_args: #{named_args}, arg: #{arg}, #{arg.class}, args: #{args}"
@@ -6088,7 +6139,8 @@ class OnyxParser < OnyxLexer
 
     dbg "- parse_call_args_spaced - after 'while' - do next_token_skip_space"
 
-    CallArgs.new args, block, nil, named_args, false, end_location
+    # CallArgs.new args, fragment, nil, named_args, false, end_location
+    CallArgs.new args, fragment, named_args, end_location
 
   ensure
     dbgtail "/parse_call_args_spaced"
@@ -6169,7 +6221,7 @@ class OnyxParser < OnyxLexer
     false
   end
 
-  def parse_call_args_indented(indent_level, current_name, block = nil, check_plus_and_minus = true, allow_curly = false)
+  def parse_call_args_indented(indent_level, current_name, fragment = nil, check_plus_and_minus = true, allow_curly = false)
     dbg "parse_call_args_indented ->"
     return nil if parse_call_args_spaced_any_non_call_hints?(check_plus_and_minus, allow_curly)
 
@@ -6196,8 +6248,8 @@ class OnyxParser < OnyxLexer
         arg = parse_call_arg
 
         if arg.is_a? Block
-          block = arg
-          dbg "parse_call_args_indented after block arg - check for ')'"
+          fragment = arg
+          dbg "parse_call_args_indented after fragment arg - check for ')'"
 
         elsif named_args
           dbg "named_args: #{named_args}, arg: #{arg}, #{arg.class}, args: #{args}"
@@ -6236,7 +6288,8 @@ class OnyxParser < OnyxLexer
       raise "dbg_prev_nest_is != @nesting_stack.last doesn't match - de-nest missed for #{current_name}!"
     end
 
-    CallArgs.new args, block, nil, named_args, false, end_location
+    # CallArgs.new args, fragment, nil, named_args, false, end_location
+    CallArgs.new args, fragment, named_args, end_location
 
   ensure
     dbgtail "/parse_call_args_indented"
@@ -6365,7 +6418,7 @@ class OnyxParser < OnyxLexer
   #     block = parse_oneletter_fragment
   #   # atm. we can't handle this because '~' will be handle as the operator then. so we might have to either use '.~.' for operator (again!) or change the notation for one–char-fragment
   #   # else
-  #   #   explicit_fragment_param = parse_op_assign - carried out with `&block_name` *TODO* revisit this
+  #   #   pass_on_arg_fragment = parse_op_assign - carried out with `&block_name` *TODO* revisit this
   #   # end
 
   #   end_location = token_end_location
@@ -6377,17 +6430,17 @@ class OnyxParser < OnyxLexer
   #     skip_space
   #   end
 
-  #   explicit_fragment_param = nil
-  #   CallArgs.new args, block, explicit_fragment_param, named_args, false, end_location
+  #   pass_on_arg_fragment = nil
+  #   CallArgs.new args, block, pass_on_arg_fragment, named_args, false, end_location
   # end
 
   def parse_oneletter_fragment(flag_as_nilish_first = false, dont_skip_initial_token = false)
     next_token_skip_space unless dont_skip_initial_token
 
-    explicit_fragment_param_name = "__arg#{@explicit_fragment_param_count}"
-    @explicit_fragment_param_count += 1
+    implicit_param_name = get_str("__arg",@terse_fragment_implicit_param_counter.to_s)
+    @terse_fragment_implicit_param_counter += 1
 
-    obj = Var.new(explicit_fragment_param_name)
+    obj = Var.new(implicit_param_name)
     @wants_regex = false
 
     location = @token.location
@@ -6427,8 +6480,7 @@ class OnyxParser < OnyxLexer
 
       if flag_as_nilish_first
         call.is_nil_sugared = true
-
-        call.name += '?'
+        call.name = get_str call.name, "?"
       end
 
 
@@ -6459,7 +6511,7 @@ class OnyxParser < OnyxLexer
       end
     end
 
-    Block.new([Var.new(explicit_fragment_param_name)], call).at(location)
+    Block.new([Var.new(implicit_param_name)], call).at(location)
   end
 
   def add_magic_param(name)

@@ -8,12 +8,13 @@ module Crystal
   abstract class ASTNode
     property location : Location?
     property end_location : Location?
-
-    # *TODO* opt to struct! And optimally to file_loc, start_loc, end_loc
-    # saves only about 6MB on compiler-compile
-
     property is_onyx : Bool = false
     property parenthesized : Bool = false
+
+    # TODO debug intell:
+    # crash addr:
+    # (8)+8+8+4 = 28 => +1 = 0x1d => 29
+    # (8)+8+8 = 24 => +1 = 0x19 => 25
 
     def at(@location : Location?)
       self
@@ -492,10 +493,6 @@ module Crystal
   # the symbol of that operator instead of a string.
   #
   class Call < ASTNode
-    @implicit_construction = false
-
-    property is_nil_sugared : Bool
-
     property obj : ASTNode?
     property name : String
     property args : Array(ASTNode)
@@ -510,7 +507,8 @@ module Crystal
     property? is_expansion : Bool
     property visibility : Visibility
 
-    property? implicit_construction : Bool
+    property is_nil_sugared : Bool
+    property? implicit_construction : Bool = false
 
 
     def initialize(@obj, @name, args : Array(ASTNode)? = nil, @block = nil, @block_arg = nil, @named_args = nil, global = false, @name_column_number = 0, has_parentheses = false, @implicit_construction = false, @is_nil_sugared = false)
