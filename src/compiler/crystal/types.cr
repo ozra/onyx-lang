@@ -12,16 +12,12 @@ module Crystal
       false
     end
 
-    def locations
-      @locations ||= [] of Location
-    end
+    getter(locations) { [] of Location }
 
-    def metaclass
-      @metaclass ||= begin
-        metaclass = MetaclassType.new(program, self)
-        initialize_metaclass(metaclass)
-        metaclass
-      end
+    getter(metaclass) do
+      metaclass = MetaclassType.new(program, self)
+      initialize_metaclass(metaclass)
+      metaclass
     end
 
     def initialize_metaclass(metaclass)
@@ -76,10 +72,6 @@ module Crystal
     end
 
     def class?
-      false
-    end
-
-    def value?
       false
     end
 
@@ -519,9 +511,7 @@ module Crystal
     def initialize(@program, @container, @name)
     end
 
-    def types
-      @types ||= {} of String => Type
-    end
+    getter(types) { {} of String => Type }
 
     def types?
       @types
@@ -764,9 +754,7 @@ module Crystal
     named_args : Array(NamedArgumentType)?
 
   module DefInstanceContainer
-    def def_instances
-      @def_instances ||= {} of DefInstanceKey => Def
-    end
+    getter(def_instances) { {} of DefInstanceKey => Def }
 
     def add_def_instance(key, typed_def)
       def_instances[key] = typed_def
@@ -780,9 +768,7 @@ module Crystal
   abstract class ModuleType < NamedType
     include DefContainer
 
-    def parents
-      @parents ||= [] of Type
-    end
+    getter(parents) { [] of Type }
 
     def include(mod)
       if mod == self
@@ -810,9 +796,7 @@ module Crystal
   end
 
   module ClassVarContainer
-    def class_vars
-      @class_vars ||= {} of String => MetaTypeVar
-    end
+    getter(class_vars) { {} of String => MetaTypeVar }
 
     def class_vars?
       @class_vars
@@ -975,9 +959,7 @@ module Crystal
       true
     end
 
-    def known_instance_vars
-      @known_instance_vars ||= Set(String).new
-    end
+    getter(known_instance_vars) { Set(String).new }
 
     def declare_instance_var(name, var_type : Type)
       @including_types.try &.each do |type|
@@ -1008,9 +990,7 @@ module Crystal
 
   # A module that is related to a file and contains its private defs.
   class FileModule < NonGenericModuleType
-    def vars
-      @vars ||= MetaVars.new
-    end
+    getter(vars) { MetaVars.new }
 
     def vars?
       @vars
@@ -1026,25 +1006,16 @@ module Crystal
     include InstanceVarInitializerContainer
 
     getter superclass : Type?
-    getter subclasses : Array(Type)
+    getter subclasses = [] of Type
     getter depth : Int32
-    property? abstract : Bool
-    property? struct : Bool
-    property? allowed_in_generics : Bool
-    property? lookup_new_in_ancestors : Bool
+    property? :abstract; @abstract = false
+    property? :struct; @struct = false
+    property? allowed_in_generics = true
+    property? lookup_new_in_ancestors = false
 
     def initialize(program, container, name, @superclass, add_subclass = true)
       super(program, container, name)
-      if superclass
-        @depth = superclass.depth + 1
-      else
-        @depth = 0
-      end
-      @subclasses = [] of Type
-      @abstract = false
-      @struct = false
-      @allowed_in_generics = true
-      @lookup_new_in_ancestors = false
+      @depth = superclass ? (superclass.depth + 1) : 0
       parents.push superclass if superclass
       force_add_subclass if add_subclass
     end
@@ -1090,9 +1061,7 @@ module Crystal
   end
 
   module InstanceVarContainer
-    def instance_vars
-      @instance_vars ||= {} of String => MetaTypeVar
-    end
+    getter(instance_vars) { {} of String => MetaTypeVar }
 
     def lookup_instance_var(name, create = true)
       lookup_instance_var?(name, create).not_nil!
@@ -1147,11 +1116,6 @@ module Crystal
       else
         instance_vars.key_index(name)
       end
-    end
-
-    def each_instance_var(&block)
-      superclass.try &.each_instance_var &block
-      instance_vars.each(&block)
     end
 
     def all_instance_vars
@@ -1246,10 +1210,6 @@ module Crystal
       self.struct = true
     end
 
-    def value?
-      true
-    end
-
     def primitive_like?
       true
     end
@@ -1260,10 +1220,6 @@ module Crystal
 
     def abstract?
       false
-    end
-
-    def hierarcy_type
-      self
     end
   end
 
@@ -1373,15 +1329,9 @@ module Crystal
 
   module GenericType
     getter type_vars : Array(String)
-
     property splat_index : Int32?
-
-    property double_variadic : Bool
-    @double_variadic = false
-
-    def generic_types
-      @generic_types ||= {} of Array(TypeVar) => Type
-    end
+    property? double_variadic = false
+    getter(generic_types) { {} of Array(TypeVar) => Type }
 
     def instantiate(type_vars)
       # _dbg "GenericType.instantiate(#{type_vars})"
@@ -1528,9 +1478,7 @@ module Crystal
       @including_types
     end
 
-    def known_instance_vars
-      @known_instance_vars ||= Set(String).new
-    end
+    getter(known_instance_vars) { Set(String).new }
 
     getter declared_instance_vars : Hash(String, Array(TypeVar))?
 
@@ -1580,9 +1528,7 @@ module Crystal
       GenericClassInstanceType.new program, generic_type, type_vars
     end
 
-    def known_instance_vars
-      @known_instance_vars ||= Set(String).new
-    end
+    getter(known_instance_vars) { Set(String).new }
 
     getter declared_instance_vars : Hash(String, Array(TypeVar))?
 
@@ -1671,11 +1617,10 @@ module Crystal
     getter program : Program
     getter generic_class : GenericClassType
     getter type_vars : Hash(String, ASTNode)
-    getter subclasses : Array(Type)
+    getter subclasses = [] of Type
     getter generic_nest : Int32
 
     def initialize(@program, @generic_class, @type_vars, generic_nest = nil)
-      @subclasses = [] of Type
       @generic_nest = generic_nest || (1 + @type_vars.values.max_of { |node| node.type?.try(&.generic_nest) || 0 })
     end
 
@@ -1700,19 +1645,9 @@ module Crystal
       self
     end
 
-    delegate leaf?, to: @generic_class
-    delegate depth, to: @generic_class
-    delegate defs, to: @generic_class
-    delegate superclass, to: @generic_class
-    delegate macros, to: @generic_class
-    delegate :abstract?, to: @generic_class
-    delegate struct?, to: @generic_class
-    delegate passed_by_value?, to: @generic_class
-    delegate type_desc, to: @generic_class
-    delegate container, to: @generic_class
-    delegate lookup_new_in_ancestors?, to: @generic_class
-    delegate splat_index, to: @generic_class
-    delegate double_variadic, to: @generic_class
+    delegate leaf?, depth, defs, superclass, macros, abstract?, struct?,
+      passed_by_value?, type_desc, container, lookup_new_in_ancestors?,
+      splat_index, double_variadic?, to: @generic_class
 
     def declare_instance_var(name, type_vars : Array(TypeVar))
       type = solve_type_vars(type_vars)
@@ -1736,9 +1671,7 @@ module Crystal
       !struct?
     end
 
-    def metaclass
-      @metaclass ||= GenericClassInstanceMetaclassType.new(program, self)
-    end
+    getter(metaclass) { GenericClassInstanceMetaclassType.new(self.program, self) }
 
     def subclass_of?(type)
       super || generic_class.subclass_of?(type)
@@ -2127,17 +2060,9 @@ module Crystal
       @module.add_including_type type
     end
 
-    delegate container, to: @module
-    delegate name, to: @module
-    delegate defs, to: @module
-    delegate macros, to: @module
-    delegate implements?, to: @module
-    delegate lookup_defs, to: @module
-    delegate lookup_defs_with_modules, to: @module
-    delegate lookup_macro, to: @module
-    delegate lookup_macros, to: @module
-    delegate has_def?, to: @module
-    delegate metaclass, to: @module
+    delegate container, name, defs, macros, implements?, lookup_defs,
+      lookup_defs_with_modules, lookup_macro, lookup_macros, has_def?,
+      metaclass, to: @module
 
     def instance_of?(type)
       type == @module
@@ -2176,9 +2101,7 @@ module Crystal
     def initialize(@program, @extended_class, @mapping, @extending_class = nil)
     end
 
-    def metaclass
-      @metaclass ||= InheritedGenericClass.new(@program, @extended_class.metaclass, @mapping, @extending_class)
-    end
+    getter(metaclass) { InheritedGenericClass.new(@program, @extended_class.metaclass, @mapping, @extending_class) }
 
     def type_vars
       mapping.keys
@@ -2188,22 +2111,10 @@ module Crystal
       type == @extended_class
     end
 
-    delegate depth, to: @extended_class
-    delegate superclass, to: @extended_class
-    delegate add_subclass, to: @extended_class
-    delegate container, to: @extended_class
-    delegate name, to: @extended_class
-    delegate defs, to: @extended_class
-    delegate macros, to: @extended_class
-    delegate implements?, to: @extended_class
-    delegate lookup_defs, to: @extended_class
-    delegate lookup_defs_with_modules, to: @extended_class
-    delegate lookup_macro, to: @extended_class
-    delegate lookup_macros, to: @extended_class
-    delegate has_def?, to: @extended_class
-    delegate notify_subclass_added, to: @extended_class
-    delegate has_def_without_parents?, to: @extended_class
-    delegate add_def, to: @extended_class
+    delegate depth, superclass, add_subclass, container, name,
+      defs, macros, implements?, lookup_defs, lookup_defs_with_modules,
+      lookup_macro, lookup_macros, has_def?, notify_subclass_added,
+      has_def_without_parents?, add_def, to: @extended_class
 
     def lookup_instance_var?(name, create = false)
       nil
@@ -2249,11 +2160,10 @@ module Crystal
 
   class LibType < ModuleType
     getter link_attributes : Array(LinkAttribute)?
-    property? used : Bool
+    property? used = false
 
     def initialize(program, container, name)
       super(program, container, name)
-      @used = false
     end
 
     def add_link_attributes(link_attributes)
@@ -2269,14 +2179,14 @@ module Crystal
       self
     end
 
-    def add_var(name, type, real_name, attributes)
+    def add_var(name, type, real_name, thread_local)
       setter = External.new("#{name}=", [Arg.new("value", type: type)], Primitive.new(:external_var_set, type), real_name)
       setter.set_type(type)
-      setter.attributes = attributes
+      setter.thread_local = thread_local
 
       getter = External.new("#{name}", [] of Arg, Primitive.new(:external_var_get, type), real_name)
       getter.set_type(type)
-      getter.attributes = attributes
+      getter.thread_local = thread_local
 
       add_def setter
       add_def getter
@@ -2301,19 +2211,8 @@ module Crystal
       super(program, container, name)
     end
 
-    def remove_typedef
-      typedef.remove_typedef
-    end
-
-    def remove_indirection
-      typedef.remove_indirection
-    end
-
-    delegate pointer?, to: typedef
-    delegate defs, to: typedef
-    delegate macros, to: typedef
-    delegate passed_by_value?, to: typedef
-    delegate reference_like?, to: typedef
+    delegate remove_typedef, remove_indirection, pointer?, defs,
+      macros, passed_by_value?, reference_link?, to: typedef
 
     def parents
       # We need to repoint "self" in included generic modules to this typedef,
@@ -2348,27 +2247,18 @@ module Crystal
   end
 
   class AliasType < NamedType
-    getter? value_processed : Bool
+    getter? value_processed = false
 
     @aliased_type : Type?
 
     def initialize(program, container, name, @value : ASTNode)
       super(program, container, name)
       @simple = true
-      @value_processed = false
     end
 
-    delegate lookup_defs, to: aliased_type
-    delegate lookup_defs_with_modules, to: aliased_type
-    delegate lookup_first_def, to: aliased_type
-    delegate def_instances, to: aliased_type
-    delegate add_def_instance, to: aliased_type
-    delegate lookup_def_instance, to: aliased_type
-    delegate lookup_macro, to: aliased_type
-    delegate lookup_macros, to: aliased_type
-    delegate cover, to: aliased_type
-    delegate cover_size, to: aliased_type
-    delegate passed_by_value?, to: aliased_type
+    delegate lookup_defs, lookup_defs_with_modules, lookup_first_def,
+      def_instances, add_def_instance, lookup_def_instance,
+      lookup_macro, lookup_macros, passed_by_value?, to: aliased_type
 
     def aliased_type
       aliased_type?.not_nil!
@@ -2442,12 +2332,10 @@ module Crystal
   abstract class CStructOrUnionType < NonGenericClassType
     include DefContainer
     include DefInstanceContainer
-
-    getter vars : Hash(String, MetaTypeVar)
+    include InstanceVarContainer
 
     def initialize(program, container, name)
       super(program, container, name, program.struct)
-      @vars = {} of String => MetaTypeVar
       @struct = true
     end
 
@@ -2458,56 +2346,15 @@ module Crystal
     def primitive_like?
       true
     end
-
-    def has_var?(name)
-      @vars.has_key?(name)
-    end
-
-    def lookup_instance_var(name, create = nil)
-      lookup_instance_var?(name).not_nil!
-    end
-
-    def lookup_instance_var?(name, create = nil)
-      @vars[remove_at_from_var_name(name)]
-    end
-
-    def lookup_instance_var_with_owner?(name)
-      ivar = lookup_instance_var?(name)
-      if ivar
-        InstanceVarWithOwner.new(ivar, self)
-      else
-        nil
-      end
-    end
-
-    def all_instance_vars
-      @vars
-    end
-
-    def instance_vars
-      @vars
-    end
-
-    def index_of_var(name)
-      @vars.key_index(remove_at_from_var_name(name)).not_nil!
-    end
-
-    def index_of_instance_var(name)
-      index_of_var(name)
-    end
-
-    private def remove_at_from_var_name(name)
-      name.starts_with?('@') ? name[1..-1] : name
-    end
   end
 
   class CStructType < CStructOrUnionType
     property packed = false
 
-    def add_var(var)
-      @vars[var.name] = var
-      add_def Def.new("#{var.name}=", [Arg.new("value")], Primitive.new(:struct_set))
-      add_def Def.new(var.name, body: Primitive.new(:struct_get))
+    def add_var(field_name, var)
+      instance_vars[var.name] = var
+      add_def Def.new("#{field_name}=", [Arg.new("value")], Primitive.new(:struct_set))
+      add_def Def.new(field_name, body: Primitive.new(:struct_get))
     end
 
     def initialize_metaclass(metaclass)
@@ -2525,10 +2372,10 @@ module Crystal
   end
 
   class CUnionType < CStructOrUnionType
-    def add_var(var)
-      @vars[var.name] = var
-      add_def Def.new("#{var.name}=", [Arg.new("value")], Primitive.new(:union_set))
-      add_def Def.new(var.name, body: Primitive.new(:union_get))
+    def add_var(field_name, var)
+      instance_vars[var.name] = var
+      add_def Def.new("#{field_name}=", [Arg.new("value")], Primitive.new(:union_set))
+      add_def Def.new(field_name, body: Primitive.new(:union_get))
     end
 
     def initialize_metaclass(metaclass)
@@ -2616,9 +2463,7 @@ module Crystal
       @program.class_type
     end
 
-    delegate :abstract?, to: instance_type
-    delegate :generic_nest, to: instance_type
-    delegate :lookup_new_in_ancestors?, to: instance_type
+    delegate abstract?, generic_nest, lookup_new_in_ancestors?, to: instance_type
 
     def class_var_owner
       instance_type
@@ -2672,13 +2517,8 @@ module Crystal
       end
     end
 
-    delegate add_def, to: instance_type.generic_class.metaclass
-    delegate defs, to: instance_type.generic_class.metaclass
-    delegate macros, to: instance_type.generic_class.metaclass
-    delegate type_vars, to: instance_type
-    delegate :abstract?, to: instance_type
-    delegate generic_nest, to: instance_type
-    delegate lookup_new_in_ancestors?, to: instance_type
+    delegate add_def, defs, macros, to: instance_type.generic_class.metaclass
+    delegate type_vars, abstract?, generic_nest, lookup_new_in_ancestors?, to: instance_type
 
     def metaclass?
       true
@@ -2937,16 +2777,14 @@ module Crystal
     getter scope_types : Array(Type)
     getter scope : Type?
     property vars : MetaVars?
-    property used : Bool
+    property? used : Bool
     property? visited : Bool
-    property? initialized : Bool
     property visitor : BaseTypeVisitor?
 
     def initialize(program, container, name, @value, @scope_types = [] of Type, @scope = nil)
       super(program, container, name)
       @used = false
       @visited = false
-      @initialized = false
     end
 
     def type_desc
@@ -3019,25 +2857,11 @@ module Crystal
     def initialize(@program, @base_type)
     end
 
-    delegate leaf?, to: base_type
-    delegate superclass, to: base_type
-    delegate lookup_first_def, to: base_type
-    delegate lookup_defs, to: base_type
-    delegate lookup_defs_with_modules, to: base_type
-    delegate lookup_instance_var, to: base_type
-    delegate lookup_instance_var?, to: base_type
-    delegate lookup_instance_var_with_owner, to: base_type
-    delegate lookup_instance_var_with_owner?, to: base_type
-    delegate index_of_instance_var, to: base_type
-    delegate lookup_macro, to: base_type
-    delegate lookup_macros, to: base_type
-    delegate all_instance_vars, to: base_type
-    delegate :abstract?, to: base_type
-    delegate subclass_of?, to: base_type
-    delegate implements?, to: base_type
-    delegate covariant?, to: base_type
-    delegate ancestors, to: base_type
-    delegate struct?, to: base_type
+    delegate leaf?, superclass, lookup_first_def, lookup_defs,
+      lookup_defs_with_modules, lookup_instance_var, lookup_instance_var?,
+      lookup_instance_var_with_owner, lookup_instance_var_with_owner?,
+      index_of_instance_var, lookup_macro, lookup_macros, all_instance_vars,
+      abstract?, subclass_of?, implements?, covariant?, ancestors, struct?, to: base_type
 
     def passed_by_value?
       struct?
@@ -3135,9 +2959,7 @@ module Crystal
       instance_type.leaf?
     end
 
-    delegate base_type, to: instance_type
-    delegate cover, to: instance_type
-    delegate lookup_first_def, to: instance_type
+    delegate base_type, lookup_first_def, to: instance_type
 
     def virtual_lookup(type)
       type.metaclass
@@ -3261,7 +3083,8 @@ module Crystal
 
     def implements?(other : Type)
       if other.is_a?(ProcInstanceType)
-        if other.return_type.void? && arg_types == other.arg_types
+        if (self.return_type.no_return? || other.return_type.void?) &&
+           arg_types == other.arg_types
           return true
         end
       end

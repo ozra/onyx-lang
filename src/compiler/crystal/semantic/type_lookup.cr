@@ -263,7 +263,7 @@ module Crystal
     def lookup_type(node : Path, lookup_in_container = true)
       _dbg "Type.lookup_type(Path #{node})"
 
-      scope = (node.global ? program : self)
+      scope = (node.global? ? program : self)
 
       # Also, mangling should be looked up non–foreign first, but if non foreign
       # hit is at Program, it should be tested as foreign and that takes
@@ -290,6 +290,7 @@ module Crystal
       else
         scope.lookup_type(node.names, lookup_in_container: lookup_in_container)
       end
+
     rescue ex : Crystal::Exception
       raise ex
     rescue ex
@@ -504,7 +505,6 @@ module Crystal
   end
 
   class AliasType
-    delegate types, to: aliased_type
-    delegate types?, to: aliased_type
+    delegate types, types?, to: aliased_type
   end
 end

@@ -617,31 +617,95 @@ class String
     ToU64Info.new value, negative, invalid
   end
 
-  # Returns the result of interpreting leading characters in this string as a floating point number (`Float64`).
-  # Extraneous characters past the end of a valid number are ignored. If there is not a valid number at the start of str,
-  # 0.0 is returned. This method never raises an exception.
+  # Returns the result of interpreting characters in this string as a floating point number (`Float64`).
+  # This method raises an exception if the string is not a valid float representation.
+  #
+  # Options:
+  # * **whitespace**: if true, leading and trailing whitespaces are allowed
+  # * **strict**: if true, extraneous characters past the end of the number are disallowed
   #
   # ```
-  # "123.45e1".to_f      # => 1234.5
-  # "45.67 degrees".to_f # => 45.67
-  # "thx1138".to_f       # => 0.0
+  # "123.45e1".to_f                # => 1234.5
+  # "45.67 degrees".to_f           # => 45.67
+  # "thx1138".to_f                 # => ArgumentError
+  # " 1.2".to_f(whitespace: false) # => ArgumentError
+  # "1.2foo".to_f(strict: false)   # => 1.2
   # ```
-  def to_f
-    to_f64
+  def to_f(whitespace = true, strict = true)
+    to_f64(whitespace: whitespace, strict: strict)
   end
 
-  # Returns the result of interpreting leading characters in this string as a floating point number (`Float32`).
-  # Extraneous characters past the end of a valid number are ignored. If there is not a valid number at the start of str,
-  # 0.0 is returned. This method never raises an exception.
+  # Returns the result of interpreting characters in this string as a floating point number (`Float64`).
+  # This method returns `nil` if the string is not a valid float representation.
   #
-  # See `#to_f`.
-  def to_f32
-    LibC.strtof self, nil
+  # Options:
+  # * **whitespace**: if true, leading and trailing whitespaces are allowed
+  # * **strict**: if true, extraneous characters past the end of the number are disallowed
+  #
+  # ```
+  # "123.45e1".to_f?                # => 1234.5
+  # "45.67 degrees".to_f?           # => 45.67
+  # "thx1138".to_f?                 # => nil
+  # " 1.2".to_f?(whitespace: false) # => nil
+  # "1.2foo".to_f?(strict: false)   # => 1.2
+  # ```
+  def to_f?(whitespace = true, strict = true)
+    to_f64?(whitespace: whitespace, strict: strict)
+  end
+
+  # Same as `#to_f` but returns a Float32.
+  def to_f32(whitespace = true, strict = true)
+    to_f32?(whitespace: whitespace, strict: strict) || raise ArgumentError.new("Invalid Float32: #{self}")
+  end
+
+  # Same as `#to_f?` but returns a Float32.
+  def to_f32?(whitespace = true, strict = true)
+    to_f_impl(whitespace: whitespace, strict: strict) do
+      v = LibC.strtof self, out endptr
+      {v, endptr}
+    end
   end
 
   # Same as `#to_f`.
-  def to_f64
-    LibC.atof self
+  def to_f64(whitespace = true, strict = true)
+    to_f64?(whitespace: whitespace, strict: strict) || raise ArgumentError.new("Invalid Float64: #{self}")
+  end
+
+  # Same as `#to_f?`.
+  def to_f64?(whitespace = true, strict = true)
+    to_f_impl(whitespace: whitespace, strict: strict) do
+      v = LibC.strtod self, out endptr
+      {v, endptr}
+    end
+  end
+
+  private def to_f_impl(whitespace = true, strict = true)
+    return unless whitespace || '0' <= self[0] <= '9' || self[0] == '-' || self[0] == '+'
+
+    v, endptr = yield
+    string_end = to_unsafe + bytesize
+
+    # blank string
+    return if endptr == to_unsafe
+
+    if strict
+      if whitespace
+        while endptr < string_end && endptr.value.chr.whitespace?
+          endptr += 1
+        end
+      end
+      # reached the end of the string
+      v if endptr == string_end
+    else
+      ptr = to_unsafe
+      if whitespace
+        while ptr < string_end && ptr.value.chr.whitespace?
+          ptr += 1
+        end
+      end
+      # consumed some bytes
+      v if endptr > ptr
+    end
   end
 
   # Returns the `Char` at the given *index*, or raises `IndexError` if out of bounds.
@@ -909,12 +973,12 @@ class String
     case to_unsafe[bytesize - 1]
     when '\n'
       if bytesize > 1 && to_unsafe[bytesize - 2] === '\r'
-        byte_slice 0, bytesize - 2
+        unsafe_byte_slice_string(0, bytesize - 2)
       else
-        byte_slice 0, bytesize - 1
+        unsafe_byte_slice_string(0, bytesize - 1)
       end
     when '\r'
-      byte_slice 0, bytesize - 1
+      unsafe_byte_slice_string(0, bytesize - 1)
     else
       self
     end
@@ -928,7 +992,7 @@ class String
   # ```
   def chomp(char : Char)
     if ends_with?(char)
-      String.new(unsafe_byte_slice(0, bytesize - char.bytesize))
+      unsafe_byte_slice_string(0, bytesize - char.bytesize)
     else
       self
     end
@@ -942,7 +1006,7 @@ class String
   # ```
   def chomp(str : String)
     if ends_with?(str)
-      String.new(unsafe_byte_slice(0, bytesize - str.bytesize))
+      unsafe_byte_slice_string(0, bytesize - str.bytesize)
     else
       self
     end
@@ -965,11 +1029,11 @@ class String
     return "" if bytesize <= 1
 
     if bytesize >= 2 && to_unsafe[bytesize - 1] === '\n' && to_unsafe[bytesize - 2] === '\r'
-      return byte_slice(0, bytesize - 2)
+      return unsafe_byte_slice_string(0, bytesize - 2)
     end
 
     if to_unsafe[bytesize - 1] < 128 || ascii_only?
-      return byte_slice(0, bytesize - 1)
+      return unsafe_byte_slice_string(0, bytesize - 1)
     end
 
     self[0, size - 1]
@@ -1100,7 +1164,7 @@ class String
     if excess_right == 0 && excess_left == 0
       self
     else
-      String.new(unsafe_byte_slice excess_left, bytesize - excess_left - excess_right)
+      unsafe_byte_slice_string(excess_left, bytesize - excess_left - excess_right)
     end
   end
 
@@ -2468,12 +2532,12 @@ class String
     offset = 0
 
     while byte_index = byte_index('\n'.ord.to_u8, offset)
-      yield String.new(unsafe_byte_slice(offset, byte_index + 1 - offset))
+      yield unsafe_byte_slice_string(offset, byte_index + 1 - offset)
       offset = byte_index + 1
     end
 
     unless offset == bytesize
-      yield String.new(unsafe_byte_slice(offset))
+      yield unsafe_byte_slice_string(offset)
     end
   end
 
@@ -3135,6 +3199,14 @@ class String
     Slice.new(to_unsafe + byte_offset, bytesize - byte_offset)
   end
 
+  protected def unsafe_byte_slice_string(byte_offset)
+    String.new(unsafe_byte_slice(byte_offset))
+  end
+
+  protected def unsafe_byte_slice_string(byte_offset, count)
+    String.new(unsafe_byte_slice(byte_offset, count))
+  end
+
   protected def self.char_bytes_and_bytesize(char : Char)
     bytes = uninitialized UInt8[4]
 
@@ -3231,13 +3303,13 @@ class String
 
       byte_index = @string.byte_index('\n'.ord.to_u8, @offset)
       if byte_index
-        value = String.new(@string.unsafe_byte_slice(@offset, byte_index + 1 - @offset))
+        value = @string.unsafe_byte_slice_string(@offset, byte_index + 1 - @offset)
         @offset = byte_index + 1
       else
         if @offset == @string.bytesize
           value = stop
         else
-          value = String.new(@string.unsafe_byte_slice(@offset))
+          value = @string.unsafe_byte_slice_string(@offset)
         end
         @end = true
       end

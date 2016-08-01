@@ -1,7 +1,7 @@
 require "llvm"
 require "../syntax/parser"
 require "../syntax/visitor"
-require "../semantic/type_inference"
+require "../semantic"
 require "../program"
 require "./llvm_builder_helper"
 
@@ -15,6 +15,9 @@ module Crystal
   PERSONALITY_NAME   = "__crystal_personality"
   GET_EXCEPTION_NAME = "__crystal_get_exception"
 
+  DataLayout32 = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:16:32"
+  DataLayout64 = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
+
   class Program
     def run(code, filename = nil)
 
@@ -24,7 +27,7 @@ module Crystal
       parser.filename = filename
       node = parser.parse
       node = normalize node
-      node = infer_type node
+      node = semantic node
       evaluate node
     end
 
@@ -124,13 +127,13 @@ module Crystal
     @cant_pass_closure_to_c_exception_call : Call?
     @realloc_fun : LLVM::Function?
 
-    def initialize(@mod : Program, @node : ASTNode, single_module = false, debug = false, @llvm_mod = LLVM::Module.new("main_module"), expose_crystal_main = true)
+    def initialize(@program : Program, @node : ASTNode, single_module = false, debug = false, @llvm_mod = LLVM::Module.new("main_module"), expose_crystal_main = true)
       @main_mod = @llvm_mod
       @single_module = !!single_module
       @debug = !!debug
-      @abi = @mod.target_machine.abi
-      @llvm_typer = @mod.llvm_typer
-      @llvm_id = LLVMId.new(@mod)
+      @abi = @program.target_machine.abi
+      @llvm_typer = @program.llvm_typer
+      @llvm_id = LLVMId.new(@program)
       @main_ret_type = node.type
       ret_type = @llvm_typer.llvm_return_type(node.type)
       @main = @llvm_mod.functions.add(MAIN_NAME, [LLVM::Int32, LLVM::VoidPointer.pointer], ret_type)
@@ -138,7 +141,7 @@ module Crystal
 
       emit_main_def_debug_metadata(@main, "??") if @debug
 
-      @context = Context.new @main, @mod
+      @context = Context.new @main, @program
       @context.return_type = @main_ret_type
 
       @argc = @main.params[0]
@@ -161,7 +164,7 @@ module Crystal
       @strings = {} of StringKey => LLVM::Value
       @symbols = {} of String => Int32
       @symbol_table_values = [] of LLVM::Value
-      mod.symbols.each_with_index do |sym, index|
+      program.symbols.each_with_index do |sym, index|
         @symbols[sym] = index
         @symbol_table_values << build_string_constant(sym, sym)
 
@@ -169,9 +172,9 @@ module Crystal
 
       end
 
-      unless mod.symbols.empty?
+      unless program.symbols.empty?
         symbol_table = define_symbol_table @llvm_mod
-        symbol_table.initializer = LLVM.array(llvm_type(@mod.string), @symbol_table_values)
+        symbol_table.initializer = LLVM.array(llvm_type(@program.string), @symbol_table_values)
       end
 
       @last = llvm_nil
@@ -190,6 +193,8 @@ module Crystal
 
       @node_ensure_exception_handlers = {} of UInt64 => Handler
 
+      @llvm_mod.data_layout = self.data_layout
+
       # We need to define __crystal_malloc and __crystal_realloc as soon as possible,
       # to avoid some memory being allocated with plain malloc.
       codgen_well_known_functions @node
@@ -198,13 +203,13 @@ module Crystal
 
       initialize_simple_class_vars_and_constants
 
-      alloca_vars @mod.vars, @mod
+      alloca_vars @program.vars, @program
     end
 
     # Here we only initialize simple constants and class variables, those
     # that has simple values like 1, "foo" and other literals.
     def initialize_simple_class_vars_and_constants
-      @mod.class_var_and_const_initializers.each do |initializer|
+      @program.class_var_and_const_initializers.each do |initializer|
         case initializer
         when Const
           next unless initializer.simple?
@@ -222,11 +227,15 @@ module Crystal
     end
 
     def wrap_builder(builder)
-      CrystalLLVMBuilder.new builder, @mod.printf(@llvm_mod)
+      CrystalLLVMBuilder.new builder, @program.printf(@llvm_mod)
     end
 
     def define_symbol_table(llvm_mod)
-      llvm_mod.globals.add llvm_type(@mod.string).array(@symbol_table_values.size), SYMBOL_TABLE_NAME
+      llvm_mod.globals.add llvm_type(@program.string).array(@symbol_table_values.size), SYMBOL_TABLE_NAME
+    end
+
+    def data_layout
+      @program.has_flag?("x86_64") ? DataLayout64 : DataLayout32
     end
 
     class CodegenWellKnownFunctions < Visitor
@@ -277,7 +286,7 @@ module Crystal
       end
 
       @unused_fun_defs.each do |node|
-        codegen_fun node.real_name, node.external, @mod, is_exported_fun: true
+        codegen_fun node.real_name, node.external, @program, is_exported_fun: true
       end
 
       env_dump = ENV["DUMP"]?
@@ -314,16 +323,16 @@ module Crystal
         return false
       end
 
-      unless node.external.dead
-        if node.external.used
-          codegen_fun node.real_name, node.external, @mod, is_exported_fun: true
+      unless node.external.dead?
+        if node.external.used?
+          codegen_fun node.real_name, node.external, @program, is_exported_fun: true
         else
           # If the fun is not invoked we codegen it at the end so
           # we don't have issues with constants being used before
           # they are declared.
           # But, apparenty, llvm requires us to define them so that
           # calls can find them, so we do so.
-          codegen_fun node.real_name, node.external, @mod, is_exported_fun: false
+          codegen_fun node.real_name, node.external, @program, is_exported_fun: false
           @unused_fun_defs << node
         end
       end
@@ -333,7 +342,7 @@ module Crystal
 
     def visit(node : FileNode)
       with_context(Context.new(context.fun, context.type)) do
-        file_module = @mod.file_module(node.filename)
+        file_module = @program.file_module(node.filename)
         if vars = file_module.vars?
           alloca_vars vars, file_module
         end
@@ -449,13 +458,13 @@ module Crystal
 
     def visit(node : ProcLiteral)
       fun_literal_name = fun_literal_name(node)
-      is_closure = node.def.closure
+      is_closure = node.def.closure?
 
       # If we don't care about a proc literal's return type then we mark the associated
       # def as returning void. This can't be done in the type inference phase because
       # of bindings and type propagation.
-      if node.force_nil
-        node.def.set_type @mod.nil
+      if node.force_nil?
+        node.def.set_type @program.nil
       else
         # Use proc literal's type, which might have a broader type then the body
         # (for example, return type: Int32 | String, body: String)
@@ -481,7 +490,7 @@ module Crystal
       if location && (type = node.type?)
         proc_name = true
         filename = location.filename.as(String)
-        fun_literal_name = Crystal.safe_mangling(@mod, "~proc#{type}@#{Crystal.relative_filename(filename)}:#{location.line_number}")
+        fun_literal_name = Crystal.safe_mangling(@program, "~proc#{type}@#{Crystal.relative_filename(filename)}:#{location.line_number}")
       else
         proc_name = false
         fun_literal_name = "~fun_literal"
@@ -797,10 +806,10 @@ module Crystal
         request_value do
           accept exp
         end
-        exp.type? || @mod.nil
+        exp.type? || @program.nil
       else
         @last = llvm_nil
-        @mod.nil
+        @program.nil
       end
     end
 
@@ -836,7 +845,7 @@ module Crystal
         return false
       when Path
         const = target.target_const.not_nil!
-        if const.used && !const.simple?
+        if const.used? && !const.simple?
           initialize_const(const)
         end
         @last = llvm_nil
@@ -1084,7 +1093,7 @@ module Crystal
       last_value = @last
 
       obj_type = node.obj.type
-      to_type = node.to.type
+      to_type = node.to.type.virtual_type
 
       if to_type.pointer?
         if obj_type.nil_type?
@@ -1107,7 +1116,7 @@ module Crystal
 
           position_at_end doesnt_match_block
 
-          temp_var_name = @mod.new_temp_var_name
+          temp_var_name = @program.new_temp_var_name
           context.vars[temp_var_name] = LLVMVar.new(last_value, obj_type, already_loaded: true)
           accept type_cast_exception_call(obj_type, to_type, node, temp_var_name)
           context.vars.delete temp_var_name
@@ -1145,7 +1154,7 @@ module Crystal
           cond cmp, matches_block, doesnt_match_block
 
           position_at_end doesnt_match_block
-          @last = upcast llvm_nil, resulting_type, @mod.nil
+          @last = upcast llvm_nil, resulting_type, @program.nil
           phi.add @last, resulting_type
 
           position_at_end matches_block
@@ -1173,19 +1182,19 @@ module Crystal
 
       ex = Call.new(Path.global("TypeCastError"), "new", StringInterpolation.new(pieces))
       call = Call.global("raise", ex)
-      call = @mod.normalize(call)
+      call = @program.normalize(call)
 
       meta_vars = MetaVars.new
       meta_vars[var_name] = MetaVar.new(var_name, type: from_type)
-      visitor = MainVisitor.new(@mod, meta_vars)
-      @mod.visit_main call, visitor: visitor
+      visitor = MainVisitor.new(@program, meta_vars)
+      @program.visit_main call, visitor: visitor
       call
     end
 
     def cant_pass_closure_to_c_exception_call
       @cant_pass_closure_to_c_exception_call ||= begin
         call = Call.global("raise", StringLiteral.new("passing a closure to C is not allowed"))
-        @mod.visit_main call
+        @program.visit_main call
         call
       end
     end
@@ -1216,12 +1225,12 @@ module Crystal
       context.vars[var.name] ||= LLVMVar.new(alloca(llvm_type(var.type), var.name), var.type)
     end
 
-    def declare_lib_var(name, type, attributes)
+    def declare_lib_var(name, type, thread_local)
       var = @llvm_mod.globals[name]?
       unless var
         var = llvm_mod.globals.add(llvm_c_return_type(type), name)
         var.linkage = LLVM::Linkage::External
-        var.thread_local = true if Attribute.any?(attributes, "ThreadLocal")
+        var.thread_local = thread_local
       end
       var
     end
@@ -1463,7 +1472,7 @@ module Crystal
         end
 
         raise_fun = main_fun(RAISE_NAME)
-        codegen_call_or_invoke(node, nil, nil, raise_fun, [bit_cast(unwind_ex_obj, raise_fun.params.first.type)], true, @mod.no_return)
+        codegen_call_or_invoke(node, nil, nil, raise_fun, [bit_cast(unwind_ex_obj, raise_fun.params.first.type)], true, @program.no_return)
       end
 
       old_last = @last
@@ -1482,7 +1491,7 @@ module Crystal
 
         accept node_ensure
         raise_fun = main_fun(RAISE_NAME)
-        codegen_call_or_invoke(node, nil, nil, raise_fun, [bit_cast(unwind_ex_obj, raise_fun.params.first.type)], true, @mod.no_return)
+        codegen_call_or_invoke(node, nil, nil, raise_fun, [bit_cast(unwind_ex_obj, raise_fun.params.first.type)], true, @program.no_return)
 
         position_at_end old_block
 
@@ -1643,13 +1652,8 @@ module Crystal
     end
 
     def alloca_vars(vars, obj = nil, args = nil, parent_context = nil)
-      self_closured = false
-      if obj.is_a?(Def)
-        self_closured = obj.self_closured
-      end
-
+      self_closured = obj.is_a?(Def) && obj.self_closured?
       closured_vars = closured_vars(vars, obj)
-
       alloca_non_closured_vars(vars, obj, args)
       malloc_closure closured_vars, context, parent_context, self_closured
     end
@@ -1662,10 +1666,10 @@ module Crystal
         vars.each do |name, var|
           next if name == "self" || context.vars[name]?
 
-          var_type = var.type? || @mod.nil
+          var_type = var.type? || @program.nil
 
           if var_type.void?
-            context.vars[name] = LLVMVar.new(llvm_nil, @mod.void)
+            context.vars[name] = LLVMVar.new(llvm_nil, @program.void)
           elsif var_type.no_return?
             # No alloca for NoReturn
           elsif var.closure_in?(obj)
@@ -1680,7 +1684,7 @@ module Crystal
 
             # Assign default nil for variables that are bound to the nil variable
             if bound_to_mod_nil?(var)
-              assign ptr, var_type, @mod.nil, llvm_nil
+              assign ptr, var_type, @program.nil, llvm_nil
             end
           else
             # The variable belong to an outer closure
@@ -1766,13 +1770,13 @@ module Crystal
       vars.each do |name, var|
         if var.context == block && bound_to_mod_nil?(var)
           context_var = context.vars[name]
-          assign context_var.pointer, context_var.type, @mod.nil, llvm_nil
+          assign context_var.pointer, context_var.type, @program.nil, llvm_nil
         end
       end
     end
 
     def bound_to_mod_nil?(var)
-      var.dependencies.any? &.same?(@mod.nil_var)
+      var.dependencies.any? &.same?(@program.nil_var)
     end
 
     def alloca(type, name = "")
@@ -1814,7 +1818,7 @@ module Crystal
     end
 
     def printf(format, args = [] of LLVM::Value)
-      call @mod.printf(@llvm_mod), [builder.global_string_pointer(format)] + args
+      call @program.printf(@llvm_mod), [builder.global_string_pointer(format)] + args
     end
 
     def allocate_aggregate(type)
@@ -1871,17 +1875,21 @@ module Crystal
         value = init.value
 
         # Don't need to initialize false
-        if ivar.type == @mod.bool && value.false?
+        if ivar.type == @program.bool && value.false?
           next
         end
 
         # Don't need to initialize zero
-        if ivar.type == @mod.int32 && value.zero?
+        if ivar.type == @program.int32 && value.zero?
           next
         end
 
         with_cloned_context do
+          # Instance var initializers must run with "self"
+          # properly set up to the type being allocated
+          context.type = real_type
           context.vars = LLVMVars.new
+          context.vars["self"] = LLVMVar.new(type_ptr, real_type)
           alloca_vars init.meta_vars
 
           value.accept self
@@ -1924,11 +1932,11 @@ module Crystal
 
     def memset(pointer, value, size)
       pointer = cast_to_void_pointer pointer
-      call @mod.memset(@llvm_mod), [pointer, value, trunc(size, LLVM::Int32), int32(4), int1(0)]
+      call @program.memset(@llvm_mod), [pointer, value, trunc(size, LLVM::Int32), int32(4), int1(0)]
     end
 
     def memcpy(dest, src, len, align, volatile)
-      call @mod.memcpy(@llvm_mod), [dest, src, len, align, volatile]
+      call @program.memcpy(@llvm_mod), [dest, src, len, align, volatile]
     end
 
     def realloc(buffer, size)
@@ -1938,7 +1946,7 @@ module Crystal
         size = trunc(size, LLVM::Int32)
         call realloc_fun, [buffer, size]
       else
-        call @mod.realloc(@llvm_mod), [buffer, size]
+        call @program.realloc(@llvm_mod), [buffer, size]
       end
     end
 
@@ -1999,12 +2007,12 @@ module Crystal
         global.linkage = LLVM::Linkage::Private
         global.global_constant = true
         global.initializer = LLVM.struct [
-          type_id(@mod.string),
+          type_id(@program.string),
           int32(str.bytesize),
           int32(str.size),
           LLVM.string(str),
         ]
-        cast_to global, @mod.string
+        cast_to global, @program.string
       end
     end
 

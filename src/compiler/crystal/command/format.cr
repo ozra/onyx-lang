@@ -1,3 +1,8 @@
+# Implementation of the `crystal tool format` command
+#
+# This is just the command-line part. The formatter
+# logic is in `crystal/tools/formatter.cr`.
+
 class Crystal::Command
   record FormatResult, filename : String, code : Code do
     enum Code
@@ -125,7 +130,7 @@ class Crystal::Command
     if File.file?(filename)
       format_file filename, check_files
     elsif Dir.exists?(filename)
-      filename = filename[0...-1] if filename.ends_with?('/')
+      filename = filename.chomp('/')
       filenames = Dir["#{filename}/**/*.cr"]
       format_many filenames, check_files
     else

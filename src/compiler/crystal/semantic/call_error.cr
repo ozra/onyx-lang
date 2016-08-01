@@ -30,11 +30,8 @@ class Crystal::Call
   end
 
   def raise_struct_or_union_field_not_found(owner, def_name)
-    if def_name.ends_with?('=')
-      def_name = def_name[0..-2]
-    end
-
-    var = owner.vars[def_name]?
+    def_name = def_name.chomp('=')
+    var = owner.instance_vars['@' + def_name]?
     if var
       args[0].raise "field '#{def_name}' of #{owner.type_desc} #{owner} has type #{var.type}, not #{args[0].type}"
     else
@@ -74,10 +71,10 @@ class Crystal::Call
 
     # Check if this is a `foo` call and we actually find it in the Program
     if !obj && defs.empty?
-      program_defs = mod.lookup_defs(def_name)
+      program_defs = program.lookup_defs(def_name)
       unless program_defs.empty?
         defs = program_defs
-        owner = mod
+        owner = program
       end
     end
 
@@ -88,12 +85,12 @@ class Crystal::Call
       similar_name = owner.lookup_similar_def_name(def_name, self.args.size, block)
 
       error_msg = String.build do |msg|
-        if obj && owner != mod
+        if obj && owner != program
           msg << "undefined method '#{def_name}' for #{owner}"
         elsif convert_to_logical_operator(def_name)
           msg << "undefined method '#{def_name}'"
           similar_name = convert_to_logical_operator(def_name)
-        elsif args.size > 0 || has_parentheses
+        elsif args.size > 0 || has_parentheses?
           msg << "undefined method '#{def_name}'"
         else
           similar_name = parent_visitor.lookup_similar_var_name(def_name) unless similar_name
@@ -123,7 +120,7 @@ class Crystal::Call
           scope = self.scope.as(InstanceVarContainer)
           ivar = scope.lookup_instance_var(obj.name)
           deps = ivar.dependencies?
-          if deps && deps.size == 1 && deps.first.same?(mod.nil_var)
+          if deps && deps.size == 1 && deps.first.same?(program.nil_var)
             similar_name = scope.lookup_similar_instance_var_name(ivar.name)
             if similar_name
               msg << colorize(" (#{ivar.name} was never assigned a value, did you mean #{similar_name}?)").yellow.bold
@@ -217,8 +214,8 @@ class Crystal::Call
       end
     end
 
-    if args.size == 1 && args.first.type.includes_type?(mod.nil)
-      owner_trace = args.first.find_owner_trace(mod.nil)
+    if args.size == 1 && args.first.type.includes_type?(program.nil)
+      owner_trace = args.first.find_owner_trace(program.nil)
     end
 
     arg_names = [] of Array(String)
@@ -626,14 +623,14 @@ class Crystal::Call
   def check_recursive_splat_call(a_def, args)
     if a_def.splat_index
       current_splat_type = args.values.last.type
-      if previous_splat_type = mod.splat_expansions[a_def.object_id]?
+      if previous_splat_type = program.splat_expansions[a_def.object_id]?
         if current_splat_type.has_in_type_vars?(previous_splat_type)
           raise "recursive splat expansion: #{previous_splat_type}, #{current_splat_type}, ..."
         end
       end
-      mod.splat_expansions[a_def.object_id] = current_splat_type
+      program.splat_expansions[a_def.object_id] = current_splat_type
       yield
-      mod.splat_expansions.delete a_def.object_id
+      program.splat_expansions.delete a_def.object_id
     else
       yield
     end
@@ -648,6 +645,6 @@ class Crystal::Call
   end
 
   private def colorize(obj)
-    mod.colorize(obj)
+    program.colorize(obj)
   end
 end

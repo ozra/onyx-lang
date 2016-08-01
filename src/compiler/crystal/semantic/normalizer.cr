@@ -91,7 +91,7 @@ module Crystal
       # Copy enclosing def's args to super/previous_def without parenthesis
       case node.name
       when "super", "previous_def"
-        if node.args.empty? && !node.has_parentheses
+        if node.args.empty? && !node.has_parentheses?
           if current_def = @current_def
             current_def.args.each_with_index do |arg, i|
               arg = Var.new(arg.name)
@@ -143,7 +143,7 @@ module Crystal
       # and it doesn't use it, we remove it because it's useless
       # and the semantic code won't have to bother checking it
       block_arg = node.block_arg
-      if !node.uses_block_arg && block_arg
+      if !node.uses_block_arg? && block_arg
         block_arg_restriction = block_arg.restriction
         if block_arg_restriction.is_a?(ProcNotation) && !block_arg_restriction.inputs && !block_arg_restriction.output
           node.block_arg = nil
@@ -293,7 +293,7 @@ module Crystal
     # If they hold, keep the "then" part.
     # If they don't, keep the "else" part.
     def transform(node : IfDef)
-      cond_value = program.eval_flags(node.cond)
+      cond_value = eval_flags(node.cond)
       if cond_value
         node.then.transform(self)
       else
@@ -357,6 +357,50 @@ module Crystal
 
     def new_temp_var
       program.new_temp_var
+    end
+
+    def eval_flags(node)
+      evaluator = FlagsEvaluator.new(program)
+      node.accept evaluator
+      evaluator.value
+    end
+
+    class FlagsEvaluator < Visitor
+      getter value : Bool
+
+      def initialize(@program : Program)
+        @value = false
+      end
+
+      def visit(node : Var)
+        @value = @program.has_flag?(node.name)
+      end
+
+      def visit(node : Not)
+        node.exp.accept self
+        @value = !@value
+        false
+      end
+
+      def visit(node : And)
+        node.left.accept self
+        left_value = @value
+        node.right.accept self
+        @value = left_value && @value
+        false
+      end
+
+      def visit(node : Or)
+        node.left.accept self
+        left_value = @value
+        node.right.accept self
+        @value = left_value || @value
+        false
+      end
+
+      def visit(node : ASTNode)
+        raise "Bug: shouldn't visit #{node} in FlagsEvaluator"
+      end
     end
   end
 end

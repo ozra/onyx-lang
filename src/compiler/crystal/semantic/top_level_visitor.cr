@@ -1,4 +1,4 @@
-require "./base_type_visitor"
+require "./semantic_visitor"
 
 module Crystal
   class Program
@@ -108,12 +108,12 @@ module Crystal
 
       target.bind_to value
 
-      const = Const.new(@mod, current_type, target.names.first, value, @types.dup, @scope)
+      const = Const.new(@program, current_type, target.names.first, value, @types.dup, @scope)
       attach_doc const, node
 
       current_type.types[target.names.first] = const
 
-      node.type = @mod.nil
+      node.type = @program.nil
       target.target_const = const
     end
 
@@ -201,7 +201,7 @@ module Crystal
       if node_superclass
         superclass = lookup_path_type(node_superclass)
       else
-        superclass = node.struct? ? mod.struct : mod.reference
+        superclass = node.struct? ? program.struct : program.reference
       end
 
       if node_superclass.is_a?(Generic)
@@ -276,7 +276,7 @@ module Crystal
         when GenericClassType
           if node_superclass.is_a?(Generic)
             mapping = Hash.zip(superclass.type_vars, node_superclass.type_vars)
-            superclass = InheritedGenericClass.new(@mod, superclass, mapping)
+            superclass = InheritedGenericClass.new(@program, superclass, mapping)
           else
             node_superclass.not_nil!.wrong_number_of "type vars", superclass, 0, superclass.type_vars.size
           end
@@ -286,10 +286,10 @@ module Crystal
 
         created_new_type = true
         if type_vars = node.type_vars
-          type = GenericClassType.new @mod, scope, name, superclass, type_vars, false
+          type = GenericClassType.new @program, scope, name, superclass, type_vars, false
           type.splat_index = node.splat_index
         else
-          type = NonGenericClassType.new @mod, scope, name, superclass, false
+          type = NonGenericClassType.new @program, scope, name, superclass, false
         end
         type.abstract = node.abstract?
         type.struct = node.struct?
@@ -324,7 +324,7 @@ module Crystal
         end
       end
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
@@ -347,10 +347,10 @@ module Crystal
         end
       else
         if type_vars = node.type_vars
-          type = GenericModuleType.new @mod, scope, name, type_vars
+          type = GenericModuleType.new @program, scope, name, type_vars
           type.splat_index = node.splat_index
         else
-          type = NonGenericModuleType.new @mod, scope, name
+          type = NonGenericModuleType.new @program, scope, name
         end
         scope.types[name] = type
       end
@@ -363,7 +363,7 @@ module Crystal
         node.body.accept self
       end
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
@@ -389,11 +389,11 @@ module Crystal
         end
       end
 
-      alias_type = AliasType.new(@mod, current_type, node.name, node.value)
+      alias_type = AliasType.new(@program, current_type, node.name, node.value)
       attach_doc alias_type, node
       current_type.types[node.name] = alias_type
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
@@ -431,7 +431,7 @@ module Crystal
         node.raise ex.message
       end
 
-      node.set_type @mod.nil
+      node.set_type @program.nil
       false
     end
 
@@ -440,7 +440,7 @@ module Crystal
 
       check_outside_block_or_exp node, "declare def"
 
-      check_valid_attributes node, ValidDefAttributes, "def"
+      attributes = check_valid_attributes node, ValidDefAttributes, "def"
       node.doc ||= attributes_doc()
       check_ditto node
 
@@ -461,7 +461,7 @@ module Crystal
                       type
                     end
 
-      node.raises = true if node.has_attribute?("Raises")
+      process_def_attributes node, attributes
 
       if node.abstract?
         if (target_type.class? || target_type.struct?) && !target_type.abstract?
@@ -486,13 +486,15 @@ module Crystal
         babelfish_mangling rtype, current_type
       end
 
-      primitive_attribute = node.attributes.try &.find { |attr| attr.name == "Primitive" }
+      primitive_attribute = attributes.try &.find { |attr| attr.name == "Primitive" }
+
+
       if primitive_attribute
         process_primitive_attribute(node, primitive_attribute)
       end
 
       target_type.add_def node
-      node.set_type @mod.nil
+      node.set_type @program.nil
 
       if is_instance_method
         # If it's an initialize method, we define a `self.new` for
@@ -505,7 +507,7 @@ module Crystal
           target_type.metaclass.add_def(new_method)
 
           # And we register it to later complete it
-          @mod.new_expansions << Program::NewExpansion.new(node, new_method)
+          @program.new_expansions << Program::NewExpansion.new(node, new_method)
         end
 
         run_hooks target_type.metaclass, target_type, :method_added, node, Call.new(nil, "method_added", [node] of ASTNode).at(node.location)
@@ -538,7 +540,7 @@ module Crystal
 
       include_in current_type, node, :included
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
@@ -548,7 +550,7 @@ module Crystal
 
       include_in current_type.metaclass, node, :extended
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
@@ -569,7 +571,7 @@ module Crystal
       if type
         node.raise "#{node.name} is not a lib" unless type.is_a?(LibType)
       else
-        type = LibType.new @mod, current_type, node.name
+        type = LibType.new @program, current_type, node.name
         current_type.types[node.name] = type
       end
       node.resolved_type = type
@@ -584,14 +586,14 @@ module Crystal
         @lib_def_pass = 0
       end
 
-      node.type = @mod.nil
+      node.type = @program.nil
 
       false
     end
 
     def visit(node : StructDef)
       if @lib_def_pass == 1
-        check_valid_attributes node, ValidStructDefAttributes, "struct"
+        attributes = check_valid_attributes node, ValidStructDefAttributes, "struct"
       end
 
       type = process_struct_or_union_def(node, CStructType) do |t|
@@ -601,7 +603,7 @@ module Crystal
       end
 
       if @lib_def_pass == 1
-        if node.has_attribute?("Packed")
+        if Attribute.any?(attributes, "Packed")
           type.as(CStructType).packed = true
         end
       end
@@ -631,7 +633,7 @@ module Crystal
         end
 
         typed_def_type = check_primitive_like node.type_spec
-        current_type.types[node.name] = TypeDefType.new @mod, current_type, node.name, typed_def_type
+        current_type.types[node.name] = TypeDefType.new @program, current_type, node.name, typed_def_type
       end
     end
 
@@ -640,7 +642,7 @@ module Crystal
 
       check_outside_block_or_exp node, "declare enum"
 
-      check_valid_attributes node, ValidEnumDefAttributes, "enum"
+      attributes = check_valid_attributes node, ValidEnumDefAttributes, "enum"
       attributes_doc = attributes_doc()
       is_flags = node.has_attribute?("Flags")
 
@@ -666,12 +668,13 @@ module Crystal
           base_type.raise "#{str_kwd} base type must be an integer type"
         end
       else
-        enum_base_type = @mod.int32
+        enum_base_type = @program.int32
       end
 
+      is_flags = Attribute.any?(attributes, "Flags")
       all_value = interpret_enum_value(NumberLiteral.new(0), enum_base_type)
       existed = !!enum_type
-      enum_type ||= EnumType.new(@mod, scope, name, enum_base_type, is_flags)
+      enum_type ||= EnumType.new(@program, scope, name, enum_base_type, is_flags)
 
       node.resolved_type = enum_type
       attach_doc enum_type, node
@@ -707,7 +710,7 @@ module Crystal
         node.created_new_type = true
       end
 
-      node.type = mod.nil
+      node.type = program.nil
 
       false
     end
@@ -789,16 +792,17 @@ module Crystal
     def visit(node : ExternalVar)
       return unless @lib_def_pass == 2
 
-      check_valid_attributes node, ValidExternalVarAttributes, "external var"
+      attributes = check_valid_attributes node, ValidExternalVarAttributes, "external var"
 
       processing_types do
         node.type_spec.accept self
       end
 
       var_type = check_primitive_like node.type_spec
+      thread_local = Attribute.any?(attributes, "ThreadLocal")
 
       type = current_type.as(LibType)
-      type.add_var node.name, var_type, (node.real_name || node.name), node.attributes
+      type.add_var node.name, var_type, (node.real_name || node.name), thread_local
 
       false
     end
@@ -806,14 +810,14 @@ module Crystal
     def visit(node : VisibilityModifier)
       node.exp.visibility = node.modifier
       node.exp.accept self
-      node.type = @mod.nil
+      node.type = @program.nil
 
       # Can only apply visibility modifier to def, macro or a macro call
       case exp = node.exp
       when Def
         return false
       when Macro
-        if current_type != @mod.program
+        if current_type != @program.program
           node.raise "#{node.modifier.to_s.downcase} macros can only be declared at the top-level"
         end
 
@@ -893,11 +897,7 @@ module Crystal
     end
 
     def visit(node : Call)
-      if node.global
-        node.scope = @mod
-      else
-        node.scope = current_type.metaclass
-      end
+      node.scope = node.global? ? @program : current_type.metaclass
 
       if expand_macro(node, raise_on_missing_const: false, first_pass: true)
         false
@@ -1084,7 +1084,7 @@ module Crystal
         end
 
         mapping = Hash.zip(type.type_vars, node_name_type_vars)
-        module_to_include = IncludedGenericModule.new(@mod, type, current_type, mapping)
+        module_to_include = IncludedGenericModule.new(@program, type, current_type, mapping)
 
         type.add_inherited(current_type)
       else
@@ -1112,11 +1112,11 @@ module Crystal
       if type
         yield type
         type = type.as(CStructOrUnionType)
-        unless type.vars.empty?
+        unless type.instance_vars.empty?
           node.raise "#{node.name} is already defined"
         end
       else
-        type = current_type.types[node.name] = klass.new @mod, current_type, node.name
+        type = current_type.types[node.name] = klass.new @program, current_type, node.name
       end
 
       if @lib_def_pass == 2
@@ -1131,17 +1131,15 @@ module Crystal
     end
 
     class StructOrUnionVisitor < Visitor
-      @type_inference : TopLevelVisitor
-      @struct_or_union : CStructOrUnionType
-
-      def initialize(@type_inference, @struct_or_union)
+      def initialize(@top_level_visitor : TopLevelVisitor, @struct_or_union : CStructOrUnionType)
       end
 
       def visit(field : Arg)
+
         _dbg "muddafuckin StructOrUnionVisitor visit Arg #{field}"
 
-        @type_inference.processing_types do
-          field.accept @type_inference
+        @top_level_visitor.processing_types do
+          field.accept @top_level_visitor
         end
 
         restriction = field.restriction.not_nil!
@@ -1160,7 +1158,8 @@ module Crystal
 
         # end
 
-        field_type = @type_inference.check_primitive_like restriction
+        field_type = @top_level_visitor.check_primitive_like restriction
+
         if field_type.remove_typedef.void?
           if @struct_or_union.is_a?(CStructType)
             restriction.raise "can't use Void as a struct field type"
@@ -1169,17 +1168,19 @@ module Crystal
           end
         end
 
-        if @struct_or_union.has_var?(field.name)
+        var_name = '@' + field.name
+
+        if @struct_or_union.lookup_instance_var?(var_name)
           field.raise "#{@struct_or_union.type_desc} #{@struct_or_union} already defines a field named '#{field.name}'"
         end
-        ivar = MetaTypeVar.new(field.name, field_type)
+        ivar = MetaTypeVar.new(var_name, field_type)
         ivar.owner = @struct_or_union
-        @struct_or_union.add_var ivar
+        @struct_or_union.add_var field.name, ivar
       end
 
       def visit(node : Include)
-        @type_inference.processing_types do
-          node.name.accept @type_inference
+        @top_level_visitor.processing_types do
+          node.name.accept @top_level_visitor
         end
 
         type = node.name.type.instance_type
@@ -1187,18 +1188,19 @@ module Crystal
           node.name.raise "can only include C struct, not #{type.type_desc}"
         end
 
-        type.vars.each_value do |var|
-          if @struct_or_union.has_var?(var.name)
-            node.raise "struct #{type} has a field named '#{var.name}', which #{@struct_or_union} already defines"
+        type.instance_vars.each_value do |var|
+          field_name = var.name[1..-1]
+          if @struct_or_union.lookup_instance_var?(var.name)
+            node.raise "struct #{type} has a field named '#{field_name}', which #{@struct_or_union} already defines"
           end
-          @struct_or_union.add_var(var)
+          @struct_or_union.add_var(field_name, var)
         end
 
         false
       end
 
       def visit(node : MacroIf | MacroFor | MacroExpression)
-        expanded = @type_inference.expand_inline_macro(node, mode: MacroExpansionMode::StructOrUnion)
+        expanded = @top_level_visitor.expand_inline_macro(node, mode: MacroExpansionMode::StructOrUnion)
         expanded.accept self
         false
       end

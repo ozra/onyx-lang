@@ -5,87 +5,137 @@ require "colorize"
 require "crypto/md5"
 
 module Crystal
+  # Main interface to the compiler.
+  #
+  # A Compiler parses source code, type checks it and
+  # optionally generates an executable.
   class Compiler
-    DataLayout32 = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:16:32"
-    DataLayout64 = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
-
     CC = ENV["CC"]? || "cc"
     LD_ADD = "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH"
     DEFAULT_LIBBING = "-L/opt/onyx/embedded/lib -L/usr/local/lib"
 
+    # A source to the compiler: it's filename and source code.
     record Source,
       filename : String,
       code : String
 
+    # The result of a compilation: the program containing all
+    # the type and method definitions, and the parsed program
+    # as an ASTNode.
     record Result,
       program : Program,
-      node : ASTNode,
-      original_node : ASTNode
+      node : ASTNode
 
-    property cross_compile : Bool
-    property flags : Array(String)
-    property? debug : Bool
-    property? dump_ll : Bool
+    # If `true`, doesn't generate an executable but instead
+    # creates a `.o` file and outputs a command line to link
+    # it in the target machine.
+    property cross_compile = false
+
+    # Compiler flags. These will be true when checked in macro
+    # code by the `flag?(...)` macro method.
+    property flags = [] of String
+
+    # If `true`, the executable will be generated with debug code
+    # that can be understood by `gdb` and `lldb`.
+    property? debug = false
+
+    # If `true`, `.ll` files will be generated in the default cache
+    # directory for each generated LLVM module.
+    property? dump_ll = false
+
+    # Additional link flags to pass to the linker.
     property link_flags : String?
+
+    # Sets the mcpu. Check LLVM docs to learn about this.
     property mcpu : String?
-    property? color : Bool
-    property? no_codegen : Bool
-    property n_threads : Int32
-    property n_concurrent : Int32
-    property prelude : String
-    property? release : Bool
-    property? single_module : Bool
-    property? stats : Bool
+
+    # If `false`, color won't be used in output messages.
+    property? color = true
+
+    # If `true`, no executable will be generated after compilation
+    # (useful to type-check a prorgam)
+    property? no_codegen = false
+
+    # Maximum number of LLVM modules that are compiled in parallel
+    property n_threads = 8
+    property n_concurrent = 1000
+
+    # Default prelude file to use. This ends up adding a
+    # `require "prelude"` (or whatever name is set here) to
+    # the source file to compile.
+    property prelude = "prelude"
+
+    # If `true`, runs LLVM optimizations.
+    property? release = false
+
+    # If `true`, generates a single LLVM module. By default
+    # one LLVM module is created for each type in a program.
+    property? single_module = false
+
+    # If `true`, prints time and memory stats to STDOUT.
+    property? stats = false
+
+    # Target triple to use in the compilation.
+    # If not set, asks LLVM the default one for the current machine.
     property target_triple : String?
-    property? verbose : Bool
-    property? wants_doc : Bool
+
+    # If `true`, prints the link command line that is performed
+    # to create the executable.
+    property? verbose = false
+
+    # If `true`, doc comments are attached to types and methods
+    # and can later be used to generate API docs.
+    property? wants_doc = false
+
+    # Can be set to an array of strings to emit other files other
+    # than the executable file:
+    # * asm: assembly files
+    # * llvm-bc: LLVM bitcode
+    # * llvm-ir: LLVM IR
+    # * obj: object file
     property emit : Array(String)?
-    property original_output_filename : String?
-    property? cleanup : Bool?
 
-    @target_machine : LLVM::TargetMachine?
-    @pass_manager_builder : LLVM::PassManagerBuilder?
-    @module_pass_manager : LLVM::ModulePassManager?
+    # Base filename to use for `emit` output.
+    property emit_base_filename : String?
 
-    def initialize
-      @cross_compile = false
-      @debug = false
-      @dump_ll = false
-      @color = true
-      @no_codegen = false
-      @n_threads = 8.to_i32  # try 8 again
-      @n_concurrent = 1000_i32
-      @prelude = "onyx_prelude"
-      @release = false
-      @single_module = false
-      @stats = false
-      @verbose = false
-      @wants_doc = false
-      @flags = [] of String
-      @cleanup = true
+    # By default the compiler cleans up the default cache directory
+    # to keep the most recent 10 directories used. If this is set
+    # to `false` that cleanup is not performed.
+    property? cleanup = true
+
+    # Compiles the given *source*, with *output_filename* as the name
+    # of the generated executable.
+    #
+    # Raises `Crystal::Exception` if there's an error in the
+    # source code.
+    #
+    # Raies `InvalidByteSequenceError` if the source code is not
+    # valid UTF-8.
+    def compile(source : Source | Array(Source), output_filename : String) : Result
+      source = [source] unless source.is_a?(Array)
+      program = new_program(source)
+      node = parse program, source
+      node = program.semantic node, @stats
+      codegen program, node, source, output_filename unless @no_codegen
+      Result.new program, node
     end
 
-    def compile(source : Source, output_filename)
-      compile [source], output_filename
-    end
-
-    def compile(sources : Array(Source), output_filename)
-      program = new_program(sources)
-      node, original_node = parse program, sources
-      node = program.infer_type node, @stats
-      codegen program, node, sources, output_filename unless @no_codegen
-      Result.new program, node, original_node
-    end
-
-    def type_top_level(source : Source)
-      type_top_level [source]
-    end
-
-    def type_top_level(sources : Array(Source))
-      program = new_program(sources)
-      node, original_node = parse program, sources
-      node, processor = program.infer_type_top_level(node, @stats)
-      Result.new program, node, original_node
+    # Runs the semantic pass on the given source, without generating an
+    # executable nor analyzing methods. The returned `Program` in the result will
+    # contain all types and methods. This can be useful to generate
+    # API docs, analyze type relationships, etc.
+    #
+    # Raises `Crystal::Exception` if there's an error in the
+    # source code.
+    #
+    # Raies `InvalidByteSequenceError` if the source code is not
+    # valid UTF-8.
+    def top_level_semantic(source : Source | Array(Source)) : Result
+      source = [source] unless source.is_a?(Array)
+      program = new_program(source)
+      node = parse program, source
+      node, processor = program.top_level_semantic(node, @stats)
+      Result.new program, node
     end
 
     private def new_program(sources)
@@ -99,34 +149,22 @@ module Crystal
       program
     end
 
-    def add_flag(flag)
-      @flags << flag
-    end
-
     private def parse(program, sources : Array)
-      node = nil
-      require_node = nil
-
-      timing("Parse") do
+      Crystal.timing("Parse", @stats) do
         nodes = sources.map do |source|
+          # We add the source to the list of required file,
+          # so it can't be required again
           program.add_to_requires source.filename
           parse(program, source).as(ASTNode)
         end
-        node = Expressions.from(nodes)
+        nodes = Expressions.from(nodes)
 
-        require_node = Require.new(@prelude)
-        require_node = program.normalize(require_node)
+        # Prepend the prelude to the parsed program
+        nodes = Expressions.new([Require.new(prelude), nodes] of ASTNode)
 
-        node = program.normalize(node)
+        # And normalize
+        program.normalize(nodes)
       end
-
-      node = node.not_nil!
-      require_node = require_node.not_nil!
-
-      original_node = node
-      node = Expressions.new([require_node, node] of ASTNode)
-
-      {node, original_node}
     end
 
     private def parse(program, source : Source)
@@ -153,24 +191,23 @@ module Crystal
 
       @link_flags = "#{@link_flags} -rdynamic"
       bc_flags_md5 = Crypto::MD5.hex_digest "#{@target_triple}#{@mcpu}#{@release}#{@link_flags}"
-
       lib_flags = program.lib_flags
 
-      llvm_modules = timing("Codegen (onyx)") do
+      llvm_modules = Crystal.timing("Codegen (onyx)", @stats) do
         program.codegen node, debug: @debug, single_module: @single_module || @release || @cross_compile || @emit, expose_crystal_main: false
       end
-
-      cache_dir = CacheDir.instance
 
       if @cross_compile
         output_dir = "."
       else
-        output_dir = cache_dir.directory_for(sources)
+        output_dir = CacheDir.instance.directory_for(sources)
       end
 
       units = llvm_modules.map do |type_name, llvm_mod|
         CompilationUnit.new(self, type_name, llvm_mod, output_dir, bc_flags_md5)
       end
+
+      lib_flags = program.lib_flags
 
       if @cross_compile
         cross_compile program, units, lib_flags, output_filename
@@ -178,7 +215,7 @@ module Crystal
         codegen program, units, lib_flags, output_filename, output_dir
       end
 
-      cache_dir.cleanup if @cleanup
+      CacheDir.instance.cleanup if @cleanup
     end
 
     private def cross_compile(program, units, lib_flags, output_filename)
@@ -186,13 +223,7 @@ module Crystal
       _dbg_overview "\nCompiler stage: Compiler.cross_compile \"#{output_filename}.o\"\n\n".white
 
       llvm_mod = units.first.llvm_mod
-      o_name = "#{output_filename}.o"
-
-      if program.has_flag?("x86_64")
-        llvm_mod.data_layout = DataLayout64
-      else
-        llvm_mod.data_layout = DataLayout32
-      end
+      object_name = "#{output_filename}.o"
 
       if @release
         timing("LLVM Optimizer") do
@@ -200,11 +231,8 @@ module Crystal
         end
       end
 
-      if dump_ll?
-        llvm_mod.print_to_file o_name.gsub(/\.o/, ".ll")
-      end
-
-      target_machine.emit_obj_to_file llvm_mod, o_name
+      llvm_mod.print_to_file object_name.gsub(/\.o/, ".ll") if dump_ll?
+      target_machine.emit_obj_to_file llvm_mod, object_name
 
       puts "\nUse the following command on the target platform to link the cross compiled object:"
       puts "#{LD_ADD}  #{CC} #{o_name} -o #{output_filename} #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}".yellow
@@ -217,14 +245,14 @@ module Crystal
       object_names = units.map &.object_filename
       target_triple = target_machine.triple
 
-      timing("Codegen (bc+obj)") do
+      Crystal.timing("Codegen (bc+obj)", @stats) do
         if units.size == 1
           first_unit = units.first
 
           codegen_single_unit(program, first_unit, target_triple)
 
           if emit = @emit
-            first_unit.emit(emit, original_output_filename || output_filename)
+            first_unit.emit(emit, emit_base_filename || output_filename)
           end
         else
           codegen_many_units(program, units, target_triple)
@@ -238,7 +266,7 @@ module Crystal
 
       output_filename = File.expand_path(output_filename)
 
-      timing("Codegen (linking)") do
+      Crystal.timing("Codegen (linking)", @stats) do
         Dir.cd(output_dir) do
           system %(#{LD_ADD}  #{CC} -o "#{output_filename}" "${@}" #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}), object_names
         end
@@ -247,7 +275,7 @@ module Crystal
 
     private def codegen_many_units(program, units, target_triple)
       jobs_count = 0
-      wait_channel = Channel(Nil).new(@n_concurrent)
+      wait_channel = Channel(Nil).new(@n_n_concurrent)
 
       perf_tmp = Time.now
 
@@ -255,7 +283,7 @@ module Crystal
         spawn_and_codegen_single_unit(program, unit, target_triple, wait_channel)
         jobs_count += 1
 
-        if jobs_count >= @n_concurrent
+        if jobs_count >= @n_n_concurrent
           wait_channel.receive
           jobs_count -= 1
         end
@@ -277,16 +305,11 @@ module Crystal
 
     private def codegen_single_unit(program, unit, target_triple)
       unit.llvm_mod.target = target_triple
-      if program.has_flag?("x86_64")
-        unit.llvm_mod.data_layout = DataLayout64
-      else
-        unit.llvm_mod.data_layout = DataLayout32
-      end
-
+      unit.write_bitcode if multithreaded
       unit.compile
     end
 
-    def target_machine
+    protected def target_machine
       @target_machine ||= begin
         triple = @target_triple || LLVM.default_target_triple
         TargetMachine.create(triple, @mcpu || "", @release)
@@ -298,14 +321,15 @@ module Crystal
       exit 1
     end
 
-    def optimize(llvm_mod)
+    protected def optimize(llvm_mod)
       fun_pass_manager = llvm_mod.new_function_pass_manager
       fun_pass_manager.add_target_data target_machine.data_layout
       pass_manager_builder.populate fun_pass_manager
       fun_pass_manager.run llvm_mod
-
       module_pass_manager.run llvm_mod
     end
+
+    @module_pass_manager : LLVM::ModulePassManager?
 
     private def module_pass_manager
       @module_pass_manager ||= begin
@@ -315,6 +339,8 @@ module Crystal
         mod_pass_manager
       end
     end
+
+    @pass_manager_builder : LLVM::PassManagerBuilder?
 
     private def pass_manager_builder
       @pass_manager_builder ||= begin
@@ -344,26 +370,19 @@ module Crystal
       Crystal.error msg, @color, exit_code
     end
 
-    private def timing(label)
-      Crystal.timing(label, @stats) do
-        yield
-      end
-    end
-
     private def colorize(obj)
       obj.colorize.toggle(@color)
     end
 
+    # An LLVM::Module with information to compile it.
     class CompilationUnit
-      getter compiler : Compiler
-      getter llvm_mod : LLVM::Module
+      getter compiler
+      getter llvm_mod
 
-      @name : String
-      @output_dir : String
-
-      def initialize(@compiler, type_name, @llvm_mod, @output_dir, bc_flags_md5)
-        type_name = "_main" if type_name == ""
-        @name = type_name.gsub do |char|
+      def initialize(@compiler : Compiler, @name : String, @llvm_mod : LLVM::Module,
+                     @output_dir : String, @bc_flags_md5 : Bool)
+        @name = "_main" if @name == ""
+        @name = @name.gsub do |char|
           case char
           when 'a'..'z', 'A'..'Z', '0'..'9', '_'
             char
@@ -426,10 +445,21 @@ module Crystal
 
       def compile
         can_skip_compile = compiler.emit ? false : true
-        # Do this before mem–allocation to keep mem total down (many concurrent,
+        # Do this before mem–allocation to keep mem total down (many n_concurrent,
         # and file–ops are rescheduling)
         can_skip_compile &&= File.exists?(object_name)
         can_skip_compile &&= File.exists?(bc_name)
+
+        # To compile a file we first generate a `.bc` file and then
+        # create an object file from it. These `.bc` files are stored
+        # in the cache directory.
+        #
+        # On a next compilation of the same project, and if the compile
+        # flags didn't change (a combination of the target triple, mcpu,
+        # release and link flags, amongst others), we check if the new
+        # `.bc` file is exactly the same as the old one. In that case
+        # the `.o` file will also be the same, so we simply reuse the
+        # old one. Generating an `.o` file is what takes most time.
 
         bc_buf_ref = LibLLVM.write_bitcode_to_memory_buffer(llvm_mod)
         bc_buf = buffer_to_slice bc_buf_ref
@@ -467,11 +497,11 @@ module Crystal
         when "asm"
           compiler.target_machine.emit_asm_to_file llvm_mod, "#{output_filename}.s"
         when "llvm-bc"
-          `cp #{bc_name} #{output_filename}.bc`
+          FileUtils.cp(bc_name, "#{output_filename}.bc")
         when "llvm-ir"
           llvm_mod.print_to_file "#{output_filename}.ll"
         when "obj"
-          `cp #{object_name} #{output_filename}.o`
+          FileUtils.cp(object_name, "#{output_filename}.o")
         end
       end
 

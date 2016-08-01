@@ -155,7 +155,7 @@ class NestingStack
    @stack : Array(Nesting)
 
    def initialize
-      @stack = [Nesting.new(:program, -1, "", Location.new(0, 0, ""), false, false)]
+      @stack = [Nesting.new(:program, -1, "", Location.new("", 0, 0), false, false)]
    end
 
    def add(kind : Symbol, indent : Int32, match_name, location, single_line, require_end_token)

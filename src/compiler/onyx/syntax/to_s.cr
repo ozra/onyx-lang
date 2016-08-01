@@ -400,7 +400,7 @@ class ToOnyxSVisitor < Visitor
       end
     call_args_need_parens = false
 
-    @str << "$." if node.global
+    @str << "$." if node.global?
 
     case
     when is_new
@@ -881,11 +881,11 @@ class ToOnyxSVisitor < Visitor
   end
 
   def visit(node : MacroExpression)
-    @str << (node.output ? "{=" : "{% ")
-    @str << " " if node.output
+    @str << (node.output? ? "{=" : "{% ")
+    @str << " " if node.output?
     node.exp.accept self
-    @str << " " if node.output
-    @str << (node.output ? "=}" : " %}")
+    @str << " " if node.output?
+    @str << (node.output? ? "=}" : " %}")
     false
   end
 
@@ -1020,7 +1020,7 @@ class ToOnyxSVisitor < Visitor
   def visit(node : Path)
     _dbg "onyx-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
 
-    @str << "$." if node.global
+    @str << "$." if node.global?
     node.names.each_with_index do |name, i|
       @str << "." if i > 0
       @str << name
@@ -1353,11 +1353,11 @@ class ToOnyxSVisitor < Visitor
         end
         arg.restriction.not_nil!.accept self
       end
-      if node.varargs
+      if node.varargs?
         @str << ", ..."
       end
       @str << ")"
-    elsif node.varargs
+    elsif node.varargs?
       @str << "(...)"
     end
     if node_return_type = node.return_type
@@ -1392,16 +1392,8 @@ class ToOnyxSVisitor < Visitor
     false
   end
 
-  def visit(node : StructDef)
-    visit_struct_or_union "struct", node
-  end
-
-  def visit(node : UnionDef)
-    visit_struct_or_union "union", node
-  end
-
-  def visit_struct_or_union(name, node)
-    @str << keyword(name)
+  def visit(node : CStructOrUnionDef)
+    @str << keyword(node.union? ? "union" : "struct")
     @str << " "
     @str << node.name.to_s
     newline
@@ -1445,7 +1437,7 @@ class ToOnyxSVisitor < Visitor
     # *TODO* org|"..."|"til"
     # *TODO* org|".."|"to"
 
-    if node.exclusive
+    if node.exclusive?
       @str << "..."
     else
       @str << ".."
@@ -1685,19 +1677,19 @@ class ToOnyxSVisitor < Visitor
         clobber.inspect(@str)
       end
     end
-    if node.volatile || node.alignstack || node.intel
+    if node.volatile? || node.alignstack? || node.intel?
       @str << " : "
       comma = false
-      if node.volatile
+      if node.volatile?
         @str << %("volatile")
         comma = true
       end
-      if node.alignstack
+      if node.alignstack?
         @str << ", " if comma
         @str << %("alignstack")
         comma = true
       end
-      if node.intel
+      if node.intel?
         @str << ", " if comma
         @str << %("intel")
         comma = true

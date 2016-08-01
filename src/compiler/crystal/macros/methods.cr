@@ -68,7 +68,7 @@ module Crystal
       if node.args.size == 1
         node.args[0].accept self
         flag = @last.to_macro_id
-        @last = BoolLiteral.new(@mod.has_flag?(flag))
+        @last = BoolLiteral.new(@program.has_flag?(flag))
       else
         node.wrong_number_of_arguments "macro call 'flag?'", node.args.size, 1
       end
@@ -144,7 +144,7 @@ module Crystal
       else
         begin
           relative_to = @location.try &.original_filename
-          found_filenames = @mod.find_in_path(filename, relative_to)
+          found_filenames = @program.find_in_path(filename, relative_to)
         rescue ex
           node.raise "error executing macro run: #{ex.message}"
         end
@@ -199,6 +199,31 @@ module Crystal
       when "raise"
         interpret_one_arg_method(method, args) do |arg|
           raise arg.to_s
+        end
+      when "filename"
+        interpret_argless_method("filename", args) do
+          filename = location.try &.original_filename
+          filename ? StringLiteral.new(filename) : NilLiteral.new
+        end
+      when "line_number"
+        interpret_argless_method("line_number", args) do
+          line_number = location.try &.original_location.try &.line_number
+          line_number ? NumberLiteral.new(line_number) : NilLiteral.new
+        end
+      when "column_number"
+        interpret_argless_method("column_number", args) do
+          column_number = location.try &.original_location.try &.column_number
+          column_number ? NumberLiteral.new(column_number) : NilLiteral.new
+        end
+      when "end_line_number"
+        interpret_argless_method("end_line_number", args) do
+          line_number = end_location.try &.original_location.try &.line_number
+          line_number ? NumberLiteral.new(line_number) : NilLiteral.new
+        end
+      when "end_column_number"
+        interpret_argless_method("end_column_number", args) do
+          column_number = end_location.try &.original_location.try &.column_number
+          column_number ? NumberLiteral.new(column_number) : NilLiteral.new
         end
       when "=="
         interpret_one_arg_method(method, args) do |arg|
@@ -432,7 +457,7 @@ module Crystal
             end
 
             from, to = from.to_number.to_i, to = to.to_number.to_i
-            range = Range.new(from, to, arg.exclusive)
+            range = Range.new(from, to, arg.exclusive?)
             StringLiteral.new(@value[range])
           else
             raise "wrong argument for StringLiteral#[] (#{arg.class_desc}): #{arg}"
@@ -761,7 +786,7 @@ module Crystal
       when "end"
         interpret_argless_method(method, args) { self.to }
       when "excludes_end?"
-        interpret_argless_method(method, args) { BoolLiteral.new(self.exclusive) }
+        interpret_argless_method(method, args) { BoolLiteral.new(self.exclusive?) }
       when "map"
         raise "map expects a block" unless block
 
@@ -806,7 +831,7 @@ module Crystal
       from = from.to_number.to_i
       to = to.to_number.to_i
 
-      self.exclusive ? (from...to) : (from..to)
+      self.exclusive? ? (from...to) : (from..to)
     end
   end
 
@@ -1156,27 +1181,13 @@ module Crystal
     end
 
     def self.instance_vars(type)
-      case type
-      when CStructType
-        is_struct = true
-      when CUnionType
-        return ArrayLiteral.new
-      when InstanceVarContainer
-        is_struct = false
-      else
-        return ArrayLiteral.new
-      end
-
-      all_ivars = type.all_instance_vars
-      ivars = Array(ASTNode).new(all_ivars.size)
-      all_ivars.each do |name, ivar|
-        # An instance var might not have a type, so we skip it
-        if ivar_type = ivar.type?
-          ivars.push MetaVar.new((is_struct ? name : name[1..-1]), ivar_type)
+      if type.is_a?(InstanceVarContainer) && !type.is_a?(CUnionType)
+        ArrayLiteral.map(type.all_instance_vars) do |name, ivar|
+          MetaVar.new(name[1..-1], ivar.type)
         end
+      else
+        ArrayLiteral.new
       end
-
-      ArrayLiteral.new(ivars)
     end
 
     def self.superclass(type)

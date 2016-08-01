@@ -509,7 +509,7 @@ USAGE
       end
 
       opts.on("-D FLAG", "--define FLAG", "Define a compile-time flag") do |flag|
-        compiler.add_flag flag
+        compiler.flags << flag
       end
 
       unless no_codegen

@@ -283,7 +283,7 @@ module Crystal
       need_parens = need_parens(node_obj)
       call_args_need_parens = false
 
-      @str << "::" if node.global
+      @str << "::" if node.global?
 
       if node_obj && (node.name == "[]" || node.name == "[]?")
         in_parenthesis(need_parens, node_obj)
@@ -329,7 +329,7 @@ module Crystal
           @str << "."
         end
         if node.name.ends_with?('=') && node.name[0].alpha?
-          @str << decorate_call(node, node.name[0..-2])
+          @str << decorate_call(node, node.name.chop)
           @str << " = "
           node.args.each_with_index do |arg, i|
             @str << ", " if i > 0
@@ -681,11 +681,11 @@ module Crystal
     end
 
     def visit(node : MacroExpression)
-      @str << (node.output ? "{{" : "{% ")
-      @str << " " if node.output
+      @str << (node.output? ? "{{" : "{% ")
+      @str << " " if node.output?
       node.exp.accept self
-      @str << " " if node.output
-      @str << (node.output ? "}}" : " %}")
+      @str << " " if node.output?
+      @str << (node.output? ? "}}" : " %}")
       false
     end
 
@@ -738,11 +738,6 @@ module Crystal
 
     def visit(node : MacroLiteral)
       @str << node.value
-      false
-    end
-
-    def visit(node : External)
-      node.fun_def?.try &.accept self
       false
     end
 
@@ -804,13 +799,13 @@ module Crystal
       _dbg "crystal-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
 
       if node.is_onyx
-        if node.is_foreign
+        if node.foreign?
           saved_name = node.names[0]
           node.names[0] = babelfish_reverse node.names[0]
         end
 
         node.names.each_with_index do |name, i|
-          @str << "::" if i > 0 || node.global
+          @str << "::" if i > 0 || node.global?
           @str << babelfish_ensure_croxtaint name
         end
 
@@ -820,7 +815,7 @@ module Crystal
 
       else
         node.names.each_with_index do |name, i|
-          @str << "::" if i > 0 || node.global
+          @str << "::" if i > 0 || node.global?
           @str << name
         end
       end
@@ -1115,11 +1110,11 @@ module Crystal
           end
           arg.restriction.not_nil!.accept self
         end
-        if node.varargs
+        if node.varargs?
           @str << ", ..."
         end
         @str << ")"
-      elsif node.varargs
+      elsif node.varargs?
         @str << "(...)"
       end
       if node_return_type = node.return_type
@@ -1154,16 +1149,8 @@ module Crystal
       false
     end
 
-    def visit(node : StructDef)
-      visit_struct_or_union "struct", node
-    end
-
-    def visit(node : UnionDef)
-      visit_struct_or_union "union", node
-    end
-
-    def visit_struct_or_union(name, node)
-      @str << keyword(name)
+    def visit(node : CStructOrUnionDef)
+      @str << keyword(node.union? ? "union" : "struct")
       @str << " "
       @str << node.name.to_s
       newline
@@ -1198,7 +1185,7 @@ module Crystal
 
     def visit(node : RangeLiteral)
       node.from.accept self
-      if node.exclusive
+      if node.exclusive?
         @str << "..."
       else
         @str << ".."
@@ -1446,19 +1433,19 @@ module Crystal
           clobber.inspect(@str)
         end
       end
-      if node.volatile || node.alignstack || node.intel
+      if node.volatile? || node.alignstack? || node.intel?
         @str << " : "
         comma = false
-        if node.volatile
+        if node.volatile?
           @str << %("volatile")
           comma = true
         end
-        if node.alignstack
+        if node.alignstack?
           @str << ", " if comma
           @str << %("alignstack")
           comma = true
         end
-        if node.intel
+        if node.intel?
           @str << ", " if comma
           @str << %("intel")
           comma = true
@@ -1472,14 +1459,6 @@ module Crystal
       @str << '('
       node.exp.accept self
       @str << ')'
-      false
-    end
-
-    def visit(node : FileNode)
-      @str.puts
-      @str << "# " << node.filename
-      @str.puts
-      node.node.accept self
       false
     end
 

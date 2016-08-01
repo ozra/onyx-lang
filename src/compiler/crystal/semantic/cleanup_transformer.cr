@@ -209,7 +209,7 @@ module Crystal
 
       if target.is_a?(Path)
         const = target.target_const.not_nil!
-        return node unless const.used
+        return node unless const.used?
       end
 
       node.value = node.value.transform self
@@ -220,12 +220,7 @@ module Crystal
 
       if target.is_a?(Path)
         const = const.not_nil!
-        const.initialized = true
         const.value = const.value.transform self
-      end
-
-      if target.is_a?(Global)
-        @program.initialized_global_vars.add target.name
       end
 
       if node.target == node.value
@@ -246,18 +241,6 @@ module Crystal
     def transform(node : Global)
       if expanded = node.expanded
         return expanded
-      end
-
-      node
-    end
-
-    def transform(node : EnumDef)
-      super
-
-      if node.created_new_type
-        node.resolved_type.types.each_value do |const|
-          const.as(Const).initialized = true
-        end
       end
 
       node
@@ -403,8 +386,6 @@ module Crystal
         node.named_args = nil
       end
 
-      # check_comparison_of_unsigned_integer_with_zero_or_negative_literal(node)
-
       node
     end
 
@@ -423,7 +404,7 @@ module Crystal
       end
 
       def visit(node : Var)
-        if @a_def.vars.try &.[node.name].closured
+        if @a_def.vars.try &.[node.name].closured?
           @vars << node
         end
       end
@@ -441,7 +422,7 @@ module Crystal
       node.args.each do |arg|
         case arg
         when ProcLiteral
-          if arg.def.closure
+          if arg.def.closure?
             vars = ClosuredVarsCollector.collect arg.def
             unless vars.empty?
               message += " (closured vars: #{vars.join ", "})"
@@ -531,22 +512,6 @@ module Crystal
       node
     end
 
-    # def check_comparison_of_unsigned_integer_with_zero_or_negative_literal(node)
-    #   if (node.name == :< || node.name == :<=) && node.obj && node.obj.type && node.obj.type.integer? && node.obj.type.unsigned?
-    #     arg = node.args[0]
-    #     if arg.is_a?(NumberLiteral) && arg.integer? && arg.value.to_i <= 0
-    #       node.raise "'#{node.name}' comparison of unsigned integer with zero or negative literal will always be false"
-    #     end
-    #   end
-
-    #   if (node.name == :> || node.name == :>=) && node.obj && node.obj.type && node.obj.is_a?(NumberLiteral) && node.obj.integer? && node.obj.value.to_i <= 0
-    #     arg = node.args[0]
-    #     if arg.type.integer? && arg.type.unsigned?
-    #       node.raise "'#{node.name}' comparison of unsigned integer with zero or negative literal will always be false"
-    #     end
-    #   end
-    # end
-
     def transform(node : While)
       super
 
@@ -604,7 +569,7 @@ module Crystal
 
       reset_last_status
 
-      if node.binary == :and
+      if node.and?
         @last_is_truthy = cond_is_truthy && then_is_truthy
         @last_is_falsey = cond_is_falsey || then_is_falsey
       end
@@ -812,7 +777,7 @@ module Crystal
 
     def transform(node : StructDef)
       type = node.type.as(CStructType)
-      if type.vars.empty?
+      if type.instance_vars.empty?
         node.raise "empty structs are disallowed"
       end
       node
@@ -820,7 +785,7 @@ module Crystal
 
     def transform(node : UnionDef)
       type = node.type.as(CUnionType)
-      if type.vars.empty?
+      if type.instance_vars.empty?
         node.raise "empty unions are disallowed"
       end
       node

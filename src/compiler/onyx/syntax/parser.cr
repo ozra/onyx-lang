@@ -5262,7 +5262,15 @@ class OnyxParser < OnyxLexer
     double_splat : Bool,
     mutability : Symbol = :auto
 
-  def parse_param(param_list, extra_assigns, parentheses, found_default_value, found_splat, found_double_splat, allow_restrictions)
+  def parse_param(
+                  param_list,
+                  extra_assigns,
+                  parentheses,
+                  found_default_value,
+                  found_splat,
+                  found_double_splat,
+                  allow_restrictions
+  )
     dbg "parse_param ->"
 
     if @token.type == :"~"
@@ -6479,7 +6487,7 @@ class OnyxParser < OnyxLexer
 
 
       if flag_as_nilish_first
-        call.is_nil_sugared = true
+        call.nil_sugared = true
         call.name = get_str call.name, "?"
       end
 

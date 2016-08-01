@@ -17,9 +17,9 @@ module Crystal
   end
 
   class ASTNode
-    property! dependencies : Dependencies
+    property! dependencies : Array(ASTNode)
     property freeze_type : Type?
-    property observers : Dependencies?
+    property observers : Array(ASTNode)?
     property input_observer : Call?
 
     @dirty = false
@@ -121,7 +121,7 @@ module Crystal
         raise_frozen_type freeze_type, from_type, from
       end
 
-      dependencies = @dependencies ||= Dependencies.new
+      dependencies = @dependencies ||= [] of ASTNode
 
       node = yield dependencies
 
@@ -130,6 +130,7 @@ module Crystal
       else
         new_type = Type.merge dependencies
       end
+
       return if @type.same? new_type
       return unless new_type
 
@@ -152,20 +153,13 @@ module Crystal
       node.remove_observer self
     end
 
-    def unbind_from(nodes : Array)
-      nodes.each do |node|
-        unbind_from node
-      end
-    end
-
-    def unbind_from(nodes : Dependencies)
-      nodes.each do |node|
-        unbind_from node
-      end
+    def unbind_from(nodes : Array(ASTNode))
+      @dependencies.try &.reject! { |dep| nodes.any? &.same?(dep) }
+      nodes.each &.remove_observer self
     end
 
     def add_observer(observer)
-      observers = (@observers ||= Dependencies.new)
+      observers = @observers ||= [] of ASTNode
       observers.push observer
     end
 
@@ -374,14 +368,26 @@ module Crystal
     property! original_owner : Type
     property vars : MetaVars?
     property yield_vars : Array(Var)?
-    getter raises = false
-    property closure = false
-    property self_closured = false
     property previous : DefWithMetadata?
     property next : Def?
     getter special_vars : Set(String)?
     property block_nest = 0
+    getter? raises = false
+    property? closure = false
+    property? self_closured = false
     property? captured_block = false
+
+    # `true` if this def has the `@[NoInline]` attribute
+    property? no_inline = false
+
+    # `true` if this def has the `@[AlwaysInline]` attribute
+    property? always_inline = false
+
+    # `true` if this def has the `@[ReturnsTwice]` attribute
+    property? returns_twice = false
+
+    # `true` if this def has the `@[Naked]` attribute
+    property? naked = false
 
     # Is this a `new` method that was expanded from an initialize?
     property? new = false
@@ -417,8 +423,12 @@ module Crystal
 
     def clone_specific_impl
       a_def = previous_def
-      a_def.raises = raises
       a_def.previous = previous
+      a_def.raises = raises?
+      a_def.no_inline = no_inline?
+      a_def.always_inline = always_inline?
+      a_def.returns_twice = returns_twice?
+      a_def.naked = naked?
       a_def
     end
 
@@ -449,6 +459,91 @@ module Crystal
       Splat.match(self, objects) do |arg, arg_index, object, object_index|
         yield arg, arg_index, object, object_index
       end
+    end
+
+    def matches?(call_args, named_args)
+      call_args_size = call_args.size
+      my_args_size = args.size
+      min_args_size = args.index(&.default_value) || my_args_size
+      max_args_size = my_args_size
+      splat_index = self.splat_index
+
+      if splat_index
+        if args[splat_index].external_name.empty?
+          min_args_size = max_args_size = splat_index
+        else
+          min_args_size -= 1
+          max_args_size = Int32::MAX
+        end
+      end
+
+      # If there are arguments past the splat index and no named args, there's no match,
+      # unless all args past it have default values
+      if splat_index && my_args_size > splat_index + 1 && !named_args
+        unless (splat_index + 1...args.size).all? { |i| args[i].default_value }
+          return false
+        end
+      end
+
+      # If there are more positional arguments than those required, there's no match
+      # (if there's less they might be matched with named arguments)
+      if call_args_size > max_args_size
+        return false
+      end
+
+      # If there are named args we must check that all mandatory args
+      # are covered by positional arguments or named arguments.
+      if named_args
+        mandatory_args = BitArray.new(my_args_size)
+      elsif call_args_size < min_args_size
+        # Otherwise, they must be matched by positional arguments
+        return false
+      end
+
+      self.match(call_args) do |my_arg, my_arg_index, call_arg, call_arg_index|
+        mandatory_args[my_arg_index] = true if mandatory_args
+      end
+
+      # Check named args
+      named_args.try &.each do |named_arg|
+        found_index = args.index { |arg| arg.external_name == named_arg.name }
+        if found_index
+          # A named arg can't target the splat index
+          if found_index == splat_index
+            return false
+          end
+
+          # Check whether the named arg refers to an argument that was already specified
+          if mandatory_args
+            if mandatory_args[found_index]
+              return false
+            end
+
+            mandatory_args[found_index] = true
+          else
+            if found_index < call_args_size
+              return false
+            end
+          end
+        else
+          # A double splat matches all named args
+          next if double_splat
+
+          return false
+        end
+      end
+
+      # Check that all mandatory args were specified
+      # (either with positional arguments or with named arguments)
+      if mandatory_args
+        self.args.each_with_index do |arg, index|
+          if index != splat_index && !arg.default_value && !mandatory_args[index]
+            return false
+          end
+        end
+      end
+
+      true
     end
   end
 
@@ -543,7 +638,7 @@ module Crystal
   end
 
   class TypeOf
-    property in_type_args = false
+    property? in_type_args = false
 
     def map_type(type)
       @in_type_args ? type : type.metaclass
@@ -569,19 +664,40 @@ module Crystal
     property? upcast = false
 
     def update(from = nil)
+      obj_type = obj.type?
       to_type = to.type
 
-      obj_type = obj.type?
+      if obj_type && !(obj_type.pointer? || to_type.pointer?)
+        filtered_type = obj_type.filter_by(to_type)
 
-      # If we don't know what type we are casting from, leave it as the to_type
-      unless obj_type
-        self.type = to_type.virtual_type
-        return
+        # If the filtered type didn't change it means that an
+        # upcast is being made, for example:
+        #
+        #   1 as Int32 | Float64
+        #   Bar.new as Foo # where Bar < Foo
+        if obj_type == filtered_type && obj_type != to_type && !to_type.is_a?(GenericClassType)
+          filtered_type = to_type
+          @upcast = true
+        end
       end
 
-      if obj_type.pointer? || to_type.pointer?
-        self.type = to_type
-      else
+      # If we don't have a matching type, leave it as the to_type:
+      # later (in cleanup) we will check again.
+      filtered_type ||= to_type
+
+      self.type = filtered_type.virtual_type
+    end
+  end
+
+  class NilableCast
+    property? upcast = false
+    getter! non_nilable_type : Type
+
+    def update(from = nil)
+      obj_type = obj.type?
+      to_type = to.type
+
+      if obj_type
         filtered_type = obj_type.filter_by(to_type)
 
         # If the filtered type didn't change it means that an
@@ -593,48 +709,12 @@ module Crystal
           filtered_type = to_type.virtual_type
           @upcast = true
         end
-
-        # If we don't have a matching type, leave it as the to_type:
-        # later (in after type inference) we will check again.
-        filtered_type ||= to_type.virtual_type
-
-        self.type = filtered_type
-      end
-    end
-  end
-
-  class NilableCast
-    property? upcast = false
-    getter! non_nilable_type : Type
-
-    def update(from = nil)
-      to_type = to.type
-
-      obj_type = obj.type?
-
-      # If we don't know what type we are casting from, leave it as nilable to_type
-      unless obj_type
-        @non_nilable_type = non_nilable_type = to_type.virtual_type
-
-        self.type = to_type.program.nilable(non_nilable_type)
-        return
-      end
-
-      filtered_type = obj_type.filter_by(to_type)
-
-      # If the filtered type didn't change it means that an
-      # upcast is being made, for example:
-      #
-      #   1 as Int32 | Float64
-      #   Bar.new as Foo # where Bar < Foo
-      if obj_type == filtered_type && obj_type != to_type && !to_type.is_a?(GenericClassType)
-        filtered_type = to_type.virtual_type
-        @upcast = true
       end
 
       # If we don't have a matching type, leave it as the to_type:
-      # later (in after type inference) we will check again.
-      filtered_type ||= to_type.virtual_type
+      # later (in cleanup) we will check again.
+      filtered_type ||= to_type
+      filtered_type = filtered_type.virtual_type
 
       @non_nilable_type = filtered_type
 
@@ -648,7 +728,7 @@ module Crystal
   end
 
   class ProcLiteral
-    property force_nil = false
+    property? force_nil = false
     property expected_return_type : Type?
 
     def update(from = nil)
@@ -676,7 +756,7 @@ module Crystal
   class Generic
     property! instance_type : GenericClassType
     property scope : Type?
-    property in_type_args = false
+    property? in_type_args = false
 
     def update(from = nil)
       instance_type = self.instance_type
@@ -774,14 +854,29 @@ module Crystal
     end
   end
 
+  class If
+    # This is set to `true` for an `If` that was created from an `&&` expression.
+    property? and = false
+
+    # This is set to `true` for an `If` that was created from an `||` expression.
+    property? or = false
+
+    def clone_specific_impl
+      a_if = previous_def
+      a_if.and = and?
+      a_if.or = or?
+      a_if
+    end
+  end
+
   class TupleLiteral
-    property! mod : Program
+    property! program : Program
 
     def update(from = nil)
       return unless elements.all? &.type?
 
       types = elements.map { |exp| exp.type.as(TypeVar) }
-      tuple_type = mod.tuple_of types
+      tuple_type = program.tuple_of types
 
       if generic_type_too_nested?(tuple_type.generic_nest)
         raise "tuple type too nested: #{tuple_type}"
@@ -792,7 +887,7 @@ module Crystal
   end
 
   class NamedTupleLiteral
-    property! mod : Program
+    property! program : Program
 
     def update(from = nil)
       return unless entries.all? &.value.type?
@@ -801,7 +896,7 @@ module Crystal
         NamedArgumentType.new(element.key, element.value.type)
       end
 
-      named_tuple_type = mod.named_tuple_of(entries)
+      named_tuple_type = program.named_tuple_of(entries)
 
       if generic_type_too_nested?(named_tuple_type.generic_nest)
         raise "named tuple type too nested: #{named_tuple_type}"
@@ -843,21 +938,21 @@ module Crystal
 
     property name : String
 
-    # True if we need to mark this variable as nilable
-    # if this variable is read.
-    property nil_if_read = false
-
     # This is the context of the variable: who allocates it.
     # It can either be the Program (for top level variables),
     # a Def or a Block.
     property context : ASTNode | NonGenericModuleType | Nil
 
+    # True if we need to mark this variable as nilable
+    # if this variable is read.
+    property? nil_if_read = false
+
     # A variable is closured if it's used in a ProcLiteral context
     # where it wasn't created.
-    property closured = false
+    property? closured = false
 
     # Is this metavar assigned a value?
-    property assigned_to = false
+    property? assigned_to = false
 
     def initialize(@name : String, @type : Type? = nil)
     end
@@ -865,7 +960,7 @@ module Crystal
     # True if this variable belongs to the given context
     # but must be allocated in a closure.
     def closure_in?(context)
-      closured && belongs_to?(context)
+      closured? && belongs_to?(context)
     end
 
     # True if this variable belongs to the given context.
@@ -887,9 +982,9 @@ module Crystal
         io << " : "
         type.to_s(io)
       end
-      io << " (nil-if-read)" if nil_if_read
-      io << " (closured)" if closured
-      io << " (assigned-to)" if assigned_to
+      io << " (nil-if-read)" if nil_if_read?
+      io << " (closured)" if closured?
+      io << " (assigned-to)" if assigned_to?
       io << " (object id: #{object_id})"
     end
   end
@@ -905,15 +1000,15 @@ module Crystal
     # error messages.
     property! owner : Type
 
+    # The (optional) initial value of a class variable
+    property initializer : ClassVarInitializer?
+
     # Is this variable thread local? Only applicable
     # to global and class variables.
     property? thread_local = false
 
-    # The (optional) initial value of a class variable
-    property initializer : ClassVarInitializer?
-
     # Is this variable "unsafe" (no need to check if it was initialized)?
-    property uninitialized = false
+    property? uninitialized = false
 
     def kind
       case name[0]
@@ -966,7 +1061,7 @@ module Crystal
   class YieldBlockBinder < ASTNode
     getter block
 
-    def initialize(@mod : Program, @block : Block)
+    def initialize(@program : Program, @block : Block)
       @yields = [] of {Yield, Array(Var)?}
     end
 
@@ -1035,7 +1130,7 @@ module Crystal
             types = block_arg_types[i] ||= [] of Type
             if i == splat_index
               tuple_types = exps_types[i, exps_types.size - (args_size - 1)]
-              types << @mod.tuple_of(tuple_types)
+              types << @program.tuple_of(tuple_types)
               j += tuple_types.size
             else
               types << exps_types[j]
@@ -1075,7 +1170,7 @@ module Crystal
       block.args.each_with_index do |arg, i|
         block_arg_type = block_arg_types[i]
         if block_arg_type
-          arg_type = Type.merge(block_arg_type) || @mod.nil
+          arg_type = Type.merge(block_arg_type) || @program.nil
           if i == splat_index && !arg_type.is_a?(TupleInstanceType)
             arg.raise "block splat argument must be a tuple type, not #{arg_type}"
           end
@@ -1092,13 +1187,13 @@ module Crystal
   end
 
   class Block
-    property visited = false
     property scope : Type?
     property vars : MetaVars?
     property after_vars : MetaVars?
     property context : Def | NonGenericModuleType | Nil
     property fun_literal : ASTNode?
     property binder : YieldBlockBinder?
+    property? visited = false
 
     def break
       @break ||= Var.new("%break")
@@ -1106,8 +1201,8 @@ module Crystal
   end
 
   class While
-    property has_breaks = false
     property break_vars : Array(MetaVars)?
+    property? has_breaks = false
   end
 
   class Break
@@ -1167,7 +1262,7 @@ module Crystal
     include RuntimeInitializable
 
     property! resolved_type : ClassType
-    property created_new_type = false
+    property? created_new_type = false
   end
 
   class ModuleDef
@@ -1194,15 +1289,45 @@ module Crystal
     include RuntimeInitializable
   end
 
-  class External
-    property dead = false
-    property used = false
+  class External < Def
+    property real_name : String
+    property! fun_def : FunDef
     property call_convention : LLVM::CallConvention?
+
+    property? dead = false
+    property? used = false
+    property? varargs = false
+
+    # An External is also used to represent external variables
+    # such as libc's `$errno`, which can be annotated with
+    # `@[ThreadLocal]`. This property is `true` in that case.
+    property? thread_local = false
+
+    def initialize(name : String, args : Array(Arg), body, @real_name : String)
+      super(name, args, body, nil, nil, nil)
+    end
+
+    def mangled_name(program, obj_type)
+      real_name
+    end
+
+    def compatible_with?(other)
+      return false if args.size != other.args.size
+      return false if varargs? != other.varargs?
+
+      args.each_with_index do |arg, i|
+        return false if arg.type != other.args[i].type
+      end
+
+      type == other.type
+    end
+
+    def_hash @real_name, @varargs, @fun_def
   end
 
   class EnumDef
     property! resolved_type : EnumType
-    property created_new_type = false
+    property? created_new_type = false
   end
 
   class Yield
@@ -1225,6 +1350,25 @@ module Crystal
 
   class Asm
     property ptrof : PointerOf?
+  end
+
+  # Fictitious node that means "all these nodes come from this file"
+  class FileNode < ASTNode
+    property node : ASTNode
+    property filename : String
+
+    def initialize(@node : ASTNode, @filename : String)
+    end
+
+    def accept_children(visitor)
+      @node.accept visitor
+    end
+
+    def clone_specific_impl
+      self
+    end
+
+    def_equals_and_hash node, filename
   end
 
   class Assign

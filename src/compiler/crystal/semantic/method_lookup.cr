@@ -337,8 +337,7 @@ module Crystal
   end
 
   class AliasType
-    delegate lookup_matches, to: aliased_type
-    delegate lookup_matches_without_parents, to: aliased_type
+    delegate lookup_matches, lookup_matches_without_parents, to: aliased_type
   end
 
   module VirtualTypeLookup
@@ -366,7 +365,7 @@ module Crystal
 
       # Traverse all subtypes
       instance_type.subtypes(base_type).each do |subtype|
-        unless subtype.value?
+        unless subtype.is_a?(PrimitiveType)
           subtype_lookup = virtual_lookup(subtype)
           subtype_virtual_lookup = virtual_lookup(subtype.virtual_type)
 
