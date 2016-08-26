@@ -127,24 +127,24 @@ module Crystal
     end
 
     def transform(node : Def)
-      node.runtime_initializers.try &.map! &.transform self
+      node.hook_expansions.try &.map! &.transform self
       node
     end
 
     def transform(node : ClassDef)
       super
 
-      node.runtime_initializers.try &.map! &.transform self
+      node.hook_expansions.try &.map! &.transform self
       node
     end
 
     def transform(node : Include)
-      node.runtime_initializers.try &.map! &.transform self
+      node.hook_expansions.try &.map! &.transform self
       node
     end
 
     def transform(node : Extend)
-      node.runtime_initializers.try &.map! &.transform self
+      node.hook_expansions.try &.map! &.transform self
       node
     end
 
@@ -330,10 +330,8 @@ module Crystal
         if target_defs.size == 1
           if target_defs[0].is_a?(External)
             check_args_are_not_closure node, "can't send closure to C function"
-          elsif obj_type.is_a?(CStructType) && node.name.ends_with?('=')
-            check_args_are_not_closure node, "can't set closure as C struct member"
-          elsif obj_type.is_a?(CUnionType) && node.name.ends_with?('=')
-            check_args_are_not_closure node, "can't set closure as C union member"
+          elsif obj_type && obj_type.extern? && node.name.ends_with?('=')
+            check_args_are_not_closure node, "can't set closure as C #{obj_type.type_desc} member"
           end
         end
 
@@ -775,19 +773,9 @@ module Crystal
       node
     end
 
-    def transform(node : StructDef)
-      type = node.type.as(CStructType)
-      if type.instance_vars.empty?
-        node.raise "empty structs are disallowed"
-      end
-      node
-    end
-
-    def transform(node : UnionDef)
-      type = node.type.as(CUnionType)
-      if type.instance_vars.empty?
-        node.raise "empty unions are disallowed"
-      end
+    def transform(node : CStructOrUnionDef)
+      type = node.resolved_type.as(NonGenericClassType)
+      node.raise "empty #{type.type_desc}s are disallowed" if type.instance_vars.empty?
       node
     end
 

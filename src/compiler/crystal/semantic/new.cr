@@ -1,22 +1,15 @@
 module Crystal
   class Program
-    # This is a recording of a `new` method (expanded) that
-    # was created from an `initialize` method (original)
-    record NewExpansion, original : Def, expanded : Def
-
-    @new_expansions = [] of NewExpansion
-    getter new_expansions
-
-    def define_new_methods
+    def define_new_methods(new_expansions)
       # Here we complete the body of `self.new` methods
       # created from `initialize` methods.
-      @new_expansions.each do |expansion|
-        expansion.expanded.fill_body_from_initialize(expansion.original.owner)
+      new_expansions.each do |expansion|
+        expansion[:expanded].fill_body_from_initialize(expansion[:original].owner)
       end
 
       # We also need to define empty `new` methods for types
       # that don't have any `initialize` methods.
-      define_default_new(@program)
+      define_default_new(self)
     end
 
     def define_default_new(type)
@@ -174,8 +167,8 @@ module Crystal
         new_vars << DoubleSplat.new(Var.new(double_splat.name))
       end
 
-      assign = Assign.new(obj, alloc)
-      init = Call.new(obj, "initialize", new_vars, named_args: named_args)
+      assign = Assign.new(obj.clone, alloc)
+      init = Call.new(obj.clone, "initialize", new_vars, named_args: named_args)
 
       # If the initialize yields, call it with a block
       # that yields those arguments.
@@ -188,7 +181,8 @@ module Crystal
       exps = Array(ASTNode).new(4)
       exps << assign
       exps << init
-      exps << Call.new(Path.global("GC"), "add_finalizer", obj) if instance_type.has_finalizer?
+      exps << If.new(RespondsTo.new(obj.clone, "finalize"),
+        Call.new(Path.global("GC"), "add_finalizer", obj.clone))
       exps << obj
 
       # Forward block argument if any
@@ -205,7 +199,7 @@ module Crystal
       #
       #    def new
       #      x = allocate
-      #      GC.add_finalizer x
+      #      GC.add_finalizer x if x.responds_to? :finalize
       #      x
       #    end
       var = Var.new("x")
@@ -214,8 +208,9 @@ module Crystal
 
       exps = Array(ASTNode).new(3)
       exps << assign
-      exps << Call.new(Path.global("GC"), "add_finalizer", var) if instance_type.has_finalizer?
-      exps << var
+      exps << If.new(RespondsTo.new(var.clone, "finalize"),
+        Call.new(Path.global("GC"), "add_finalizer", var.clone))
+      exps << var.clone
 
       Def.new("new", body: exps)
     end

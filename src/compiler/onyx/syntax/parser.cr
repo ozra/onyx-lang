@@ -250,13 +250,7 @@ class OnyxParser < OnyxLexer
     next_token_skip_statement_end
     skip_tokens :INDENT
 
-    if end_token? # "stop tokens" - not _nest_end tokens_ - unless explicit
-      dbg "An empty file!?".red
-      expressions = Nop.new
-    else
-      expressions = parse_expressions # .tap { check :EOF }
-    end
-
+    expressions = parse_expressions # .tap { check :EOF }
     expressions.tag_onyx true
 
     dbg "/parse - after program-body parse_expressions"
@@ -274,15 +268,6 @@ class OnyxParser < OnyxLexer
         # STDERR.flush
       end
     end
-    # ifdef !release
-    #   # *TODO* - debugga hela programstrukturen - gör med parse --ast nu
-    #   STDERR.puts "\n\n\nAST:\n\n\n"
-    #   expressions.dump_std
-    #   STDERR.puts "\n\n\n"
-
-    #   STDERR.puts "\n\n\nPROGRAM:\n\n\n" + expressions.to_s + "\n\n\n"
-
-    # end
 
     expressions
   end
@@ -291,18 +276,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_expressions ->".yellow
     dbginc
 
-    # *TODO* continue watching this
-    # happened one time: EMPTY FILE
-    # now added to "top parse"
-    #
-    # ALSO now happens in macros - so can perhaps be removed from top parse
-    # if kept here (re–analyze to move to colder paths)
-    #
-    if end_token? # "stop tokens" - not _nest_end tokens_ - unless explicit
-      # dbgtail_off!
-      # raise "parse_expressions - Does this happen?"
-      return Nop.new
-    end
+    return Nop.new if end_token? # "stop tokens" - not _nest_end tokens_ - unless explicit
 
     slash_is_regex!
 
@@ -2511,8 +2485,13 @@ class OnyxParser < OnyxLexer
   end
 
   def parse_flags_def : ASTNode
-    ret = parse_enum_def
-    ret.attributes = [Attribute.new "Flags", [] of ASTNode, nil]
+    enum_def = parse_enum_def
+    # ret.attributes = [Attribute.new "Flags", [] of ASTNode, nil]
+
+    ret = Expressions.from [
+      Attribute.new("Flags", [] of ASTNode, nil),
+      enum_def
+    ].as Array(ASTNode)
     ret
   end
 
@@ -4116,7 +4095,7 @@ class OnyxParser < OnyxLexer
 
   # *TODO* re-order functions a bit
   def named_tuple_start?
-    (@token.type == :IDENT || @token.type == :CONST) && current_char == ':' && peek_next_char != ':'
+    (@token.type == :IDFR || @token.type == :CONST) && current_char == ':' && peek_next_char != ':'
   end
 
   def string_literal_start?
@@ -4441,7 +4420,7 @@ class OnyxParser < OnyxLexer
     name_line_number = @token.line_number
     name_column_number = @token.column_number
 
-    if @token.type == :IDENT
+    if @token.type == :IDFR
       check_valid_def_name
       name = @token.value.to_s
     else
@@ -5552,8 +5531,8 @@ class OnyxParser < OnyxLexer
     if tok? :CONST
       case @token.value
       when "NumberLiteral" then name_prefix = nil
-      when "IntLiteral"   then name_prefix = "_suffix_int__"
-      when "RealLiteral"  then name_prefix = "_suffix_real__"
+      when "IntLiteral"   then name_prefix = "_suffix_intlit__"
+      when "RealLiteral"  then name_prefix = "_suffix_reallit__"
       else
         raise "suffix can be typed `NumberLiteral`, `IntLiteral` or `RealLiteral`. Don't know `#{@token.value}`", @token
       end
@@ -5588,8 +5567,8 @@ class OnyxParser < OnyxLexer
 
     else
       node2 = node.clone
-      node.name = get_str "_suffix_int__", name
-      node2.name = get_str "_suffix_real__", name
+      node.name = get_str "_suffix_intlit__", name
+      node2.name = get_str "_suffix_reallit__", name
 
       dbg "defines suffix '#{node.name}' and '#{node2.name}'"
 
@@ -5758,7 +5737,7 @@ class OnyxParser < OnyxLexer
     when :lib
       parse_lib_body_expressions
     when :struct_or_union
-      parse_struct_or_union_body_expressions
+      parse_c_struct_or_union_body_expressions
     when :TYPE_DEF, :ENUM_DEF, :TRAIT_DEF
       parse_type_def_body_expressions mode
     else
@@ -7229,12 +7208,12 @@ class OnyxParser < OnyxLexer
 
       when :struct
         @inside_c_struct = true
-        node = parse_struct_or_union StructDef
+        node = parse_c_struct_or_union false
         @inside_c_struct = false
         node
 
       when :union
-        parse_struct_or_union UnionDef
+        parse_c_struct_or_union true
 
       when :enum
         parse_cenum_def
@@ -7482,9 +7461,9 @@ class OnyxParser < OnyxLexer
 
 
 
-  def parse_struct_or_union(klass)
+  def parse_c_struct_or_union(union : Bool)
     indent_level = @indent
-    kind = (klass == StructDef ? :struct : :union)
+    kind = (union ? :union : :struct)
 
     next_token_skip_space_or_newline
     name = check_const
@@ -7496,19 +7475,19 @@ class OnyxParser < OnyxLexer
       raise "An empty #{kind} doesn't make any sense!"
     else
       add_nest kind, dedent_level, "", (nest_kind == :LINE_NEST), false
-      body = parse_struct_or_union_body_expressions
+      body = parse_c_struct_or_union_body_expressions
     end
 
-    klass.new name, Expressions.from(body)
+   CStructOrUnionDef.new name, Expressions.from(body), union: union
   end
 
-  def parse_struct_or_union_body
+  def parse_c_struct_or_union_body
     next_token_skip_statement_end
-    Expressions.from(parse_struct_or_union_body_expressions)
+    Expressions.from(parse_c_struct_or_union_body_expressions)
   end
 
-  private def parse_struct_or_union_body_expressions
-    dbg "parse_struct_or_union_body_expressions ->"
+  private def parse_c_struct_or_union_body_expressions
+    dbg "parse_c_struct_or_union_body_expressions ->"
     exps = [] of ASTNode
 
     while !handle_nest_end
@@ -7522,14 +7501,14 @@ class OnyxParser < OnyxLexer
             location = @token.location
             exps << parse_include_or_include_on.at(location)
           else
-            parse_struct_or_union_fields exps
+            parse_c_struct_or_union_fields exps
           end
         when :else
           break
         when :end
           break
         else
-          parse_struct_or_union_fields exps
+          parse_c_struct_or_union_fields exps
         end
       when MACRO_TOK_START_EXPR
         exps << parse_percent_macro_expression
@@ -7544,11 +7523,11 @@ class OnyxParser < OnyxLexer
 
     exps
   ensure
-    dbgtail "/parse_struct_or_union_body_expressions"
+    dbgtail "/parse_c_struct_or_union_body_expressions"
   end
 
-  def parse_struct_or_union_fields(exps)
-    dbg "parse_struct_or_union_fields ->"
+  def parse_c_struct_or_union_fields(exps)
+    dbg "parse_c_struct_or_union_fields ->"
     args = [Arg.new(@token.value.to_s).at(@token.location)]
 
     next_token_skip_space_or_newline
@@ -7570,7 +7549,7 @@ class OnyxParser < OnyxLexer
     end
 
   ensure
-    dbgtail "/parse_struct_or_union_fields"
+    dbgtail "/parse_c_struct_or_union_fields"
   end
 
 

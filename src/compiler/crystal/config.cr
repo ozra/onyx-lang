@@ -2,6 +2,8 @@ require "../onyx/version_number"
 
 module Crystal
   module Config
+    @@version_and_sha : Tuple(String, String?)?
+
     def self.path
       {{ env("ONYX_CONFIG_PATH") || env("CRYSTAL_CONFIG_PATH") || "" }}
     end
@@ -23,7 +25,7 @@ module Crystal
       @@version_and_sha ||= compute_version_and_sha
     end
 
-    private def self.compute_version_and_sha
+    private def self.compute_version_and_sha() : Tuple(String, String?)
       # Set explicitly: 0.0.0, ci, HEAD, whatever
       config_version = {{env("CRYSTAL_CONFIG_VERSION")}}
       return {config_version, nil} if config_version
@@ -32,11 +34,11 @@ module Crystal
 
       # Failed git and no explicit version set: ""
       # We inherit the version of the compiler building us for now.
-      return { {{ONYX_VERSION}}, nil } if git_version.empty?
+      return { ONYX_VERSION, nil } if git_version.empty?
 
       # Shallow clone with no tag in reach: abcd123
       # We assume being compiled with the latest released compiler
-      return {"#{{{ONYX_VERSION}}}+?", git_version} unless git_version.includes? '-'
+      return {"#{ONYX_VERSION}+?", git_version} unless git_version.includes? '-'
 
       # On release: 0.0.0-0-gabcd123
       # Ahead of last release: 0.0.0-42-gabcd123

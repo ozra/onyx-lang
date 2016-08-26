@@ -21,24 +21,6 @@ class Crystal::ASTNode
 end
 
 class Crystal::Call
-  def raise_matches_not_found(owner : CStructType, def_name, arg_types, named_args_types, matches = nil)
-    raise_struct_or_union_field_not_found owner, def_name
-  end
-
-  def raise_matches_not_found(owner : CUnionType, def_name, arg_types, named_args_types, matches = nil)
-    raise_struct_or_union_field_not_found owner, def_name
-  end
-
-  def raise_struct_or_union_field_not_found(owner, def_name)
-    def_name = def_name.chomp('=')
-    var = owner.instance_vars['@' + def_name]?
-    if var
-      args[0].raise "field '#{def_name}' of #{owner.type_desc} #{owner} has type #{var.type}, not #{args[0].type}"
-    else
-      raise "#{owner.type_desc} #{owner} has no field '#{def_name}'"
-    end
-  end
-
   def raise_matches_not_found(owner, def_name, arg_types, named_args_types, matches = nil)
     # Special case: Foo+:Class#new
     if owner.is_a?(VirtualMetaclassType) && def_name == "new"
@@ -437,7 +419,7 @@ class Crystal::Call
           # argument type have the same string representation
           res_to_s = res.to_s
           if (arg_type = arg_types.try &.[i]?) && arg_type.to_s == res_to_s &&
-             (matching_type = TypeLookup.lookup?(a_def.owner, res))
+             (matching_type = a_def.owner.lookup_type?(res))
             str << matching_type
           else
             str << res_to_s
@@ -597,24 +579,24 @@ class Crystal::Call
   end
 
   def in_same_namespace?(scope, target)
-    top_container(scope) == top_container(target) ||
+    top_namespace(scope) == top_namespace(target) ||
       scope.parents.try &.any? { |parent| in_same_namespace?(parent, target) }
   end
 
-  def top_container(type)
-    container = case type
+  def top_namespace(type)
+    namespace = case type
                 when NamedType
-                  type.container
+                  type.namespace
                 when GenericClassInstanceType
-                  type.container
+                  type.namespace
                 else
                   nil
                 end
-    case container
+    case namespace
     when Program
       type
     when NamedType, GenericClassInstanceType
-      top_container(container)
+      top_namespace(namespace)
     else
       type
     end
@@ -640,8 +622,15 @@ class Crystal::Call
     Call.full_name(owner, def_name)
   end
 
-  def self.full_name(owner, def_name = name)
-    owner.to_s_with_method_name(def_name)
+  def self.full_name(owner, method_name = name)
+    case owner
+    when Program
+      method_name
+    when .metaclass?
+      "#{owner.instance_type}.#{method_name}"
+    else
+      "#{owner}##{method_name}"
+    end
   end
 
   private def colorize(obj)

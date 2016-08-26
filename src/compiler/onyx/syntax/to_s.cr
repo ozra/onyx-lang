@@ -5,18 +5,18 @@ module Crystal
 class ToOnyxSVisitorsPool
   @@pool = [] of ToOnyxSVisitor
 
-  def self.borrow_tos_visitor(io) : ToOnyxSVisitor
+  def self.borrow_tos_visitor(io, emit_loc_pragma = false) : ToOnyxSVisitor
     if @@pool.size > 0
       visitor = @@pool.pop.not_nil!
-      visitor.re_init io
+      visitor.re_init io, emit_loc_pragma
       visitor.not_nil!
     else
-      ToOnyxSVisitor.new(io)
+      ToOnyxSVisitor.new(io, emit_loc_pragma)
     end
   end
 
-  def self.with_borrowed_tos_visitor(io, &block)
-    visitor = borrow_tos_visitor io
+  def self.with_borrowed_tos_visitor(io, emit_loc_pragma = false, &block)
+    visitor = borrow_tos_visitor io, emit_loc_pragma
     ret = yield visitor
     leave_tos_visitor visitor
     ret
@@ -31,18 +31,18 @@ end
 class ToSVisitorsPool
   @@pool = [] of ToSVisitor
 
-  def self.borrow_tos_visitor(io) : ToSVisitor
+  def self.borrow_tos_visitor(io, emit_loc_pragma = false) : ToSVisitor
     if @@pool.size > 0
       visitor = @@pool.pop.not_nil!
-      visitor.re_init io
+      visitor.re_init io, emit_loc_pragma
       visitor.not_nil!
     else
-      ToSVisitor.new(io)
+      ToSVisitor.new(io, emit_loc_pragma)
     end
   end
 
-  def self.with_borrowed_tos_visitor(io, &block)
-    visitor = borrow_tos_visitor io
+  def self.with_borrowed_tos_visitor(io, emit_loc_pragma = false, &block)
+    visitor = borrow_tos_visitor io, emit_loc_pragma
     ret = yield visitor
     leave_tos_visitor visitor
     ret
@@ -57,33 +57,38 @@ end
 
 class ASTNode
   def to_oxs()
-    to_s nil, :onyx
+    to_s nil, false, :onyx
   end
 
-  def to_s(io : Nil, as_kind = :auto)
+  def to_s(io : Nil, emit_loc_pragma : Bool = false, lang : Symbol = :auto)
     str = MemoryIO.new
-    to_s str, as_kind
+    to_s str, emit_loc_pragma, lang
     str.to_s # *TODO* needed?
   end
 
-  def to_s(io, as_kind = :auto)
+  # def to_s(io, emit_loc_pragma = false)
+  #   visitor = ToSVisitor.new(io, emit_loc_pragma: emit_loc_pragma)
+  #   self.accept visitor
+  # end
+
+  def to_s(io, emit_loc_pragma = false, lang = :auto)
     if OptTests.test_opt_mode_b == 1
-      if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-        visitor = ToOnyxSVisitor.new(io)
+      if (lang == :auto && @is_onyx) || lang == :onyx
+        visitor = ToOnyxSVisitor.new(io, emit_loc_pragma: emit_loc_pragma)
         self.accept visitor
       else
-        visitor = ToSVisitor.new(io)
+        visitor = ToSVisitor.new(io, emit_loc_pragma: emit_loc_pragma)
         self.accept visitor
       end
 
     else
-      # _dbg "ASTNode.to_s -> as_kind = #{as_kind}, self.class = #{self.class}"
-      if (as_kind == :auto && @is_onyx) || as_kind == :onyx
-        ToOnyxSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+      # _dbg "ASTNode.to_s -> lang = #{lang}, self.class = #{self.class}"
+      if (lang == :auto && @is_onyx) || lang == :onyx
+        ToOnyxSVisitorsPool.with_borrowed_tos_visitor io, emit_loc_pragma: emit_loc_pragma do |visitor|
           self.accept visitor
         end
       else
-        ToSVisitorsPool.with_borrowed_tos_visitor io do |visitor|
+        ToSVisitorsPool.with_borrowed_tos_visitor io, emit_loc_pragma: emit_loc_pragma do |visitor|
           self.accept visitor
         end
       end
@@ -95,16 +100,37 @@ end
 class ToOnyxSVisitor < Visitor
   @str : IO
 
-  def initialize(@str = MemoryIO.new)
+  def initialize(@str = MemoryIO.new, @emit_loc_pragma = false)
     @indent = 0
     @inside_macro = 0
     @inside_lib = false
   end
 
-  def re_init(str = MemoryIO.new)
-    initialize str
+  def re_init(str = MemoryIO.new, emit_loc_pragma = false)
+    initialize str, emit_loc_pragma
   end
 
+  def visit_any(node)
+    return true unless @emit_loc_pragma
+
+    location = node.location
+    return true unless location
+
+    filename = location.filename
+    return true unless filename.is_a?(String)
+
+    @str << "-- <loc:"
+    filename.inspect(@str)
+    @str << ","
+    @str << location.line_number
+    @str << ","
+    @str << location.column_number
+    @str << ">"
+
+    true
+  end
+
+  # *TODO* - missing in CR - verify action
   def visit(node : Primitive)
     @str << "-- primitive: "
     @str << node.name
@@ -292,6 +318,7 @@ class ToOnyxSVisitor < Visitor
       @str << keyword("extend")
       @str << " "
       @str << node.name.accept self
+      newline
       if body = node.body
         accept_with_indent body
       end

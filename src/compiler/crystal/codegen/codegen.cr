@@ -369,7 +369,7 @@ module Crystal
     end
 
     def visit(node : NumberLiteral)
-      case @mod.terminal_number_kind node.kind
+      case @program.terminal_number_kind node.kind
       when :i8
         @last = int8(node.value.to_i8)
       when :u8
@@ -588,7 +588,7 @@ module Crystal
     end
 
     def visit(node : ClassDef)
-      node.runtime_initializers.try &.each &.accept self
+      node.hook_expansions.try &.each &.accept self
       accept node.body
       @last = llvm_nil
       false
@@ -608,12 +608,7 @@ module Crystal
       false
     end
 
-    def visit(node : StructDef)
-      @last = llvm_nil
-      false
-    end
-
-    def visit(node : UnionDef)
+    def visit(node : CStructOrUnionDef)
       @last = llvm_nil
       false
     end
@@ -660,14 +655,14 @@ module Crystal
     end
 
     def visit(node : Include)
-      node.runtime_initializers.try &.each &.accept self
+      node.hook_expansions.try &.each &.accept self
 
       @last = llvm_nil
       false
     end
 
     def visit(node : Extend)
-      node.runtime_initializers.try &.each &.accept self
+      node.hook_expansions.try &.each &.accept self
 
       @last = llvm_nil
       false
@@ -905,6 +900,14 @@ module Crystal
             end
 
       @last = last
+      llvm_value = last
+
+      # When setting an instance variable of an extern type, if it's a Proc
+      # type we need to check that the value is not a closure and just get
+      # the function pointer
+      if target.is_a?(InstanceVar) && context.type.extern? && target.type.proc?
+        llvm_value = check_proc_is_not_closure(llvm_value, target.type)
+      end
 
       if target.is_a?(Var) && target.special_var? && !target_type.reference_like?
         # For special vars that are not reference-like, the function argument will
@@ -912,10 +915,10 @@ module Crystal
         # that type (without the pointer), load it, and store it in the argument.
         # If it's a reference-like then it's just a pointer and we can reuse the
         # logic in the other branch.
-        upcasted_value = upcast @last, target_type, value.type
-        store load(upcasted_value), ptr
+        llvm_value = upcast llvm_value, target_type, value.type
+        store load(llvm_value), ptr
       else
-        assign ptr, target_type, value.type, @last
+        assign ptr, target_type, value.type, llvm_value
       end
 
       false
@@ -1075,7 +1078,7 @@ module Crystal
       ivar = type.lookup_instance_var_with_owner(name).instance_var
       ivar_ptr = instance_var_ptr type, name, value
       @last = downcast ivar_ptr, node_type, ivar.type, false
-      if type.is_a?(CStructOrUnionType)
+      if type.extern?
         # When reading the instance variable of a C struct or union
         # we need to convert C functions to Crystal procs. This
         # can happen for example in Struct#to_s, where all fields
@@ -1236,7 +1239,7 @@ module Crystal
     end
 
     def visit(node : Def)
-      node.runtime_initializers.try &.each &.accept self
+      node.hook_expansions.try &.each &.accept self
 
       @last = llvm_nil
       false
@@ -1791,32 +1794,6 @@ module Crystal
       value
     end
 
-    def in_const_block(container)
-      old_llvm_mod = @llvm_mod
-      @llvm_mod = @main_mod
-
-      old_ensure_exception_handlers = @ensure_exception_handlers
-      old_rescue_block = @rescue_block
-      @ensure_exception_handlers = nil
-      @rescue_block = nil
-
-      with_cloned_context do
-        context.fun = @main
-
-        # "self" in a constant is the constant's container
-        context.type = container
-
-        # Start with fresh variables
-        context.vars = LLVMVars.new
-
-        yield
-      end
-
-      @llvm_mod = old_llvm_mod
-      @ensure_exception_handlers = old_ensure_exception_handlers
-      @rescue_block = old_rescue_block
-    end
-
     def printf(format, args = [] of LLVM::Value)
       call @program.printf(@llvm_mod), [builder.global_string_pointer(format)] + args
     end
@@ -1971,6 +1948,10 @@ module Crystal
     end
 
     def instance_var_ptr(type, name, pointer)
+      if type.extern_union?
+        return union_field_ptr(type.instance_vars[name].type, pointer)
+      end
+
       index = type.index_of_instance_var(name)
 
       unless type.struct?

@@ -252,7 +252,7 @@ USAGE
 
     file = File.expand_path(file)
 
-    result = yield Location.new(line.to_i, col.to_i, file), config, result
+    result = yield Location.new(file, line.to_i, col.to_i), config, result
 
     case format
     when "json"
@@ -347,12 +347,13 @@ USAGE
     do_link_flags_rationalism! compiler
 
     result = compiler.compile sources, output_filename
-    Crystal.generate_docs result.program, included_dirs
+    Doc::Generator.new(result.program, included_dirs).run
+    # Crystal.generate_docs result.program, included_dirs
   end
 
   private def types
     config, result = compile_no_codegen "tool types"
-    Crystal.print_types result.original_node
+    Crystal.print_types result.node # original_node
   end
 
 
@@ -396,7 +397,8 @@ USAGE
       parser.filename = source.filename
       parser.wants_doc = true
       node = parser.parse
-      node.stylize STDOUT, {"foo" => "bar"}, source.code
+      conf_later_on = {"foo" => "bar", "conf" => "here"}
+      node.stylize STDOUT, conf_later_on, source.code
     end
   end
 
@@ -417,7 +419,7 @@ USAGE
       parser.filename = source.filename
       parser.wants_doc = true
       node = parser.parse
-      node.to_s STDOUT, :onyx
+      node.to_s STDOUT, false, :onyx
     end
   end
 
@@ -473,8 +475,12 @@ USAGE
     cursor_location : String?,
     output_format : String?) do
     def compile(output_filename = self.output_filename)
-      compiler.original_output_filename = original_output_filename
+      compiler.emit_base_filename = original_output_filename
       compiler.compile sources, output_filename
+    end
+
+    def top_level_semantic
+      compiler.top_level_semantic sources
     end
   end
 

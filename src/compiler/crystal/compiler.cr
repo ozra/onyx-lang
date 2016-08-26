@@ -63,7 +63,7 @@ module Crystal
     # Default prelude file to use. This ends up adding a
     # `require "prelude"` (or whatever name is set here) to
     # the source file to compile.
-    property prelude = "prelude"
+    property prelude = "onyx_prelude"
 
     # If `true`, runs LLVM optimizations.
     property? release = false
@@ -226,7 +226,7 @@ module Crystal
       object_name = "#{output_filename}.o"
 
       if @release
-        timing("LLVM Optimizer") do
+        Crystal.timing("LLVM Optimizer", @stats) do
           optimize llvm_mod
         end
       end
@@ -235,7 +235,7 @@ module Crystal
       target_machine.emit_obj_to_file llvm_mod, object_name
 
       puts "\nUse the following command on the target platform to link the cross compiled object:"
-      puts "#{LD_ADD}  #{CC} #{o_name} -o #{output_filename} #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}".yellow
+      puts "#{LD_ADD}  #{CC} #{object_name} -o #{output_filename} #{@link_flags} #{lib_flags} #{DEFAULT_LIBBING}".yellow
     end
 
     private def codegen(program, units : Array(CompilationUnit), lib_flags, output_filename, output_dir)
@@ -275,7 +275,7 @@ module Crystal
 
     private def codegen_many_units(program, units, target_triple)
       jobs_count = 0
-      wait_channel = Channel(Nil).new(@n_n_concurrent)
+      wait_channel = Channel(Nil).new(@n_concurrent)
 
       perf_tmp = Time.now
 
@@ -283,7 +283,7 @@ module Crystal
         spawn_and_codegen_single_unit(program, unit, target_triple, wait_channel)
         jobs_count += 1
 
-        if jobs_count >= @n_n_concurrent
+        if jobs_count >= @n_concurrent
           wait_channel.receive
           jobs_count -= 1
         end
@@ -305,7 +305,7 @@ module Crystal
 
     private def codegen_single_unit(program, unit, target_triple)
       unit.llvm_mod.target = target_triple
-      unit.write_bitcode if multithreaded
+      # unit.write_bitcode if multithreaded
       unit.compile
     end
 
@@ -380,7 +380,7 @@ module Crystal
       getter llvm_mod
 
       def initialize(@compiler : Compiler, @name : String, @llvm_mod : LLVM::Module,
-                     @output_dir : String, @bc_flags_md5 : Bool)
+                     @output_dir : String, @bc_flags_md5 : String)
         @name = "_main" if @name == ""
         @name = @name.gsub do |char|
           case char

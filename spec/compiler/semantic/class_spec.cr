@@ -353,7 +353,7 @@ describe "Semantic: class" do
     mod.types["Foo"].types["Bar"].as(NonGenericClassType)
   end
 
-  it "doesn't lookup type in parents' containers, and lookups and in program" do
+  it "doesn't lookup type in parents' namespaces, and lookups and in program" do
     code = "
       class Bar
       end
@@ -1026,5 +1026,19 @@ describe "Semantic: class" do
       Bar.t
       ),
       "there's no self in this scope"
+  end
+
+  it "preserves order of instance vars (#3050)" do
+    result = semantic("
+      class Foo
+        @x = uninitialized Int32
+        @y : Int32
+
+        def initialize(@y)
+        end
+      end
+      ")
+    instance_vars = result.program.types["Foo"].instance_vars.to_a.map(&.[0])
+    instance_vars.should eq(%w(@x @y))
   end
 end

@@ -218,7 +218,7 @@ end
 
 def babelfish_mangling(node : Alias, scope) : Alias
   _dbg "babelfish_mangling(#{node.class}: #{node}, #{scope}) ->"
-  node.is_foreign, node.name = babelfish_mangling_raw node.is_foreign, node.is_onyx, node.name, scope
+  node.foreign, node.name = babelfish_mangling_raw node.foreign?, node.is_onyx, node.name, scope
   node.value = babelfish_mangling node.value, scope
   node
 end
@@ -247,15 +247,32 @@ def babelfish_mangling(node : Path, scope) : Path
     node.names.map! { |name| babelfish_detaint name }
   # end
 
-  unless scope.is_a?(Program | Nil)
+  if node.foreign?
+    _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
+    return node
+  end
+
+
+  # if node.names.size > 1
+  #   _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because path is... pathed [non single idfr])"
+  #   return node
+  # end
+
+
+  # # *TODO* temporary PoC test
+  # # If it's not found in toplevel, _and_ not in any other level, continue
+  # if !scope.program.types[node.names.first] &&
+  #    scope.namespace.lookup_type(node, allow_typeof: false)
+  #   _dbg "- babelfish_mangling - returns '#{node}' not found in root, but in lower level"
+  #   return node
+  # end
+
+  # *TODO* temporarily remove check entirely
+  unless  true  ||  scope.is_a?(Program | Nil)
     _dbg "- babelfish_mangling - returns '#{node}' non-foreigned because scope isn't Prog|Nil (#{scope.class})"
     return node
   end
 
-  if node.is_foreign
-    _dbg "- babelfish_mangling - returns '#{node}' because already foreigned"
-    return node
-  end
 
   # We could save the tried_as concept as optimization to avoid the hash–lookup
   # But as of now there are retry scenarios with forced foreign/non–foreign
@@ -264,7 +281,7 @@ def babelfish_mangling(node : Path, scope) : Path
 
   if (foreign = BabelData.types[node.names.first]?)
     # _dbg "- babelfish_mangling - found foreign name: #{foreign} for #{node}"
-    node.is_foreign = true
+    node.foreign = true
     node.names[0] = foreign
     return node
   else
@@ -289,7 +306,8 @@ def babelfish_mangling_raw(is_foreign : Bool, is_onyx : Bool, name : String, sco
 
   name = babelfish_detaint name
 
-  unless scope.is_a?(Program | Nil)
+  # *TODO* temporarily remove check entirely
+  unless  true  ||  scope.is_a?(Program | Nil)
     # _dbg "- babelfish_mangling_raw - returns '#{name}' un-foreigned because scope isn't Prog|Nil"
     return {is_foreign, name}
   end

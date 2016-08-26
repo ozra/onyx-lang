@@ -42,7 +42,7 @@ template dpp(...exps) =
   {% for exp in exps %}
     $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
   {% end %}
-end  -- dpp
+end -- dpp
   -- *TODO* above end, if no comment after, makes one line-no disappear
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -326,6 +326,8 @@ say foos
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+pp 471
+dpp 472
 dpp 1..2
 dpp 1 .. 2
 

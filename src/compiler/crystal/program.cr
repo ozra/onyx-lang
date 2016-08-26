@@ -146,7 +146,7 @@ module Crystal
 
       # Every crystal program comes with some predefined types that we initialize here,
       # like Object, Value, Reference, etc.
-      types = @types = {} of String => Type
+      types = self.types
 
       types["Object"] = object = @object = NonGenericClassType.new self, self, "Object", nil
       object.allowed_in_generics = false
@@ -161,8 +161,8 @@ module Crystal
       types["Number"] = number = @number = NonGenericClassType.new self, self, "Number", value
       abstract_value_type(number)
 
-      types["NoReturn"] = @no_return = NoReturnType.new self
-      types["Void"] = @void = VoidType.new self
+      types["NoReturn"] = @no_return = NoReturnType.new self, self, "NoReturn"
+      types["Void"] = @void = VoidType.new self, self, "Void"
       types["Nil"] = nil_t = @nil = NilType.new self, self, "Nil", value, 1
       types["Bool"] = @bool = BoolType.new self, self, "Bool", value, 1
       types["Char"] = @char = CharType.new self, self, "Char", value, 4
@@ -285,9 +285,6 @@ module Crystal
 
     # Returns a `CrystalPath` for this program.
     getter(crystal_path) { CrystalPath.new(target_triple: target_machine.triple) }
-
-    # Returns a `MacroExpander` to expand macro code into crystal code.
-    getter(macro_expander) { MacroExpander.new self }
 
     # Returns a `Var` that has `Nil` as a type.
     # This variable is bound to other nodes in the semantic phase for things
@@ -615,10 +612,6 @@ module Crystal
 
     def metaclass
       self
-    end
-
-    def passed_as_self?
-      false
     end
 
     def type_desc

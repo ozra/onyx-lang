@@ -330,7 +330,7 @@ module Crystal
 
     def needs_two_lines?(node)
       case node
-      when Def, ClassDef, ModuleDef, LibDef, StructOrUnionDef, Macro
+      when Def, ClassDef, ModuleDef, LibDef, CStructOrUnionDef, Macro
         true
       else
         false
@@ -1040,6 +1040,7 @@ module Crystal
       check_open_paren
 
       paren_count = @paren_count
+      column = @column
 
       node.types.each_with_index do |type, i|
         if @token.type == :"?"
@@ -1059,8 +1060,12 @@ module Crystal
           case @token.type
           when :"|"
             write " | "
-            next_token
-            skip_space_or_newline
+            next_token_skip_space
+            if @token.type == :NEWLINE
+              write_line
+              write_indent(column)
+              next_token_skip_space_or_newline
+            end
           when :")"
             if @paren_count > 0
               @paren_count -= 1
@@ -1897,15 +1902,6 @@ module Crystal
 
       if restriction
         skip_space_or_newline
-
-        # This is for a case like `x, y : Int32`
-        if @inside_struct_or_union && @token.type == :","
-          @exp_needs_indent = false
-          write ", "
-          next_token
-          return false
-        end
-
         write_token " ", :":", " "
         skip_space_or_newline
         accept restriction
@@ -2963,8 +2959,8 @@ module Crystal
       end
     end
 
-    def visit(node : StructOrUnionDef)
-      keyword = node.is_a?(StructDef) ? :struct : :union
+    def visit(node : CStructOrUnionDef)
+      keyword = node.union? ? :union : :struct
       write_keyword keyword, " "
 
       write node.name
@@ -3025,7 +3021,16 @@ module Crystal
 
     def visit(node : TypeDeclaration)
       accept node.var
-      skip_space
+      skip_space_or_newline
+
+      # This is for a case like `x, y : Int32`
+      if @inside_struct_or_union && @token.type == :","
+        @exp_needs_indent = false
+        write ", "
+        next_token
+        return false
+      end
+
       check :":"
       next_token_skip_space_or_newline
       write " : "

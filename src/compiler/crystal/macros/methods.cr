@@ -2,7 +2,7 @@ require "../semantic/ast"
 require "./macros"
 
 module Crystal
-  class MacroExpander::MacroVisitor
+  class MacroInterpreter
     def interpret_top_level_call(node)
       case node.name
       when "debug"
@@ -56,7 +56,7 @@ module Crystal
     def interpret_env(node)
       if node.args.size == 1
         node.args[0].accept self
-        cmd = @last.to_macro_id
+        cmd = @last.to_macro_id(lang: @lang)
         env_value = ENV[cmd]?
         @last = env_value ? StringLiteral.new(env_value) : NilLiteral.new
       else
@@ -67,7 +67,7 @@ module Crystal
     def interpret_flag?(node)
       if node.args.size == 1
         node.args[0].accept self
-        flag = @last.to_macro_id
+        flag = @last.to_macro_id(lang: @lang)
         @last = BoolLiteral.new(@program.has_flag?(flag))
       else
         node.wrong_number_of_arguments "macro call 'flag?'", node.args.size, 1
@@ -97,7 +97,7 @@ module Crystal
     def interpret_system(node)
       cmd = node.args.map do |arg|
         arg.accept self
-        @last.to_macro_id
+        @last.to_macro_id(lang: @lang)
       end
       cmd = cmd.join " "
 
@@ -114,7 +114,7 @@ module Crystal
     def interpret_raise(node)
       msg = node.args.map do |arg|
         arg.accept self
-        @last.to_macro_id
+        @last.to_macro_id(lang: @lang)
       end
       msg = msg.join " "
 
@@ -127,7 +127,7 @@ module Crystal
       end
 
       node.args.first.accept self
-      filename = @last.to_macro_id
+      filename = @last.to_macro_id lang: @lang
       original_filanme = filename
 
       # Support absolute paths
@@ -165,10 +165,10 @@ module Crystal
         next if i == 0
 
         arg.accept self
-        run_args << @last.to_macro_id
+        run_args << @last.to_macro_id(lang: @lang)
       end
 
-      success, result = @expander.run(filename, run_args)
+      success, result = @program.macro_run(filename, run_args)
       if success
         @last = MacroId.new(result)
       else
@@ -178,27 +178,34 @@ module Crystal
   end
 
   class ASTNode
-    def to_macro_id
-      to_s
+    def to_macro_id(lang = :crystal)
+      to_s nil, false, lang
     end
 
     def truthy?
-      true
+      case self
+      when NilLiteral, Nop
+        false
+      when BoolLiteral
+        self.value
+      else
+        true
+      end
     end
 
     def interpret(method, args, block, interpreter)
       case method
       when "id"
-        interpret_argless_method("id", args) { MacroId.new(to_macro_id) }
+        interpret_argless_method("id", args) { MacroId.new(to_macro_id lang: interpreter.lang) }
       when "stringify"
-        interpret_argless_method("stringify", args) { stringify }
+        interpret_argless_method("stringify", args) { stringify(interpreter.lang) }
       when "symbolize"
         interpret_argless_method("symbolize", args) { symbolize }
       when "class_name"
-        interpret_argless_method("class_name", args) { class_name }
+        interpret_argless_method("class_name", args) { class_name(interpreter.lang) }
       when "raise"
         interpret_one_arg_method(method, args) do |arg|
-          raise arg.to_s
+          raise arg.to_s nil, false, interpreter.lang
         end
       when "filename"
         interpret_argless_method("filename", args) do
@@ -265,42 +272,28 @@ module Crystal
       raise "can't compare #{self} to #{other}"
     end
 
-    def stringify
-      StringLiteral.new(to_s)
+    def stringify(lang = :crystal)
+      StringLiteral.new(to_s(nil, false, lang))
     end
 
-    def symbolize
-      SymbolLiteral.new(to_s)
+    def symbolize(lang = :crystal)
+      SymbolLiteral.new(to_s(nil, false, lang))
     end
 
-    def class_name
-      StringLiteral.new(class_desc)
-    end
-  end
-
-  class Nop
-    def truthy?
-      false
+    def class_name(lang = :crystal)
+      StringLiteral.new(class_desc) # *TODO* lang!
     end
   end
 
   class NilLiteral
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       "nil"
-    end
-
-    def truthy?
-      false
     end
   end
 
   class BoolLiteral
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @value ? "true" : "false"
-    end
-
-    def truthy?
-      @value
     end
   end
 
@@ -622,7 +615,7 @@ module Crystal
       value <=> other.value
     end
 
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @value
     end
   end
@@ -836,7 +829,7 @@ module Crystal
   end
 
   class MetaVar < ASTNode
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @name
     end
 
@@ -1181,7 +1174,7 @@ module Crystal
     end
 
     def self.instance_vars(type)
-      if type.is_a?(InstanceVarContainer) && !type.is_a?(CUnionType)
+      if type.is_a?(InstanceVarContainer)
         ArrayLiteral.map(type.all_instance_vars) do |name, ivar|
           MetaVar.new(name[1..-1], ivar.type)
         end
@@ -1231,13 +1224,13 @@ module Crystal
   end
 
   class SymbolLiteral
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @value
     end
   end
 
   class Var
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @name
     end
   end
@@ -1266,11 +1259,11 @@ module Crystal
       end
     end
 
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       if !obj && !block && args.empty?
         @name
       else
-        to_s
+        to_s nil, false, lang
       end
     end
   end
@@ -1330,7 +1323,7 @@ module Crystal
   end
 
   class InstanceVar
-    def to_macro_id
+    def to_macro_id(lang = :crystal)
       @name
     end
   end
@@ -1345,8 +1338,8 @@ module Crystal
       end
     end
 
-    def to_macro_id
-      @names.join "::"
+    def to_macro_id(lang = :crystal)
+      @names.join lang == :onyx ? "." : "::"  # *TODO* reverse–babeling
     end
   end
 
@@ -1446,7 +1439,7 @@ private def intepret_array_or_tuple_method(object, klass, method, args, block, i
     end
   when "join"
     object.interpret_one_arg_method(method, args) do |arg|
-      Crystal::StringLiteral.new(object.elements.map(&.to_macro_id).join arg.to_macro_id)
+      Crystal::StringLiteral.new(object.elements.map(&.to_macro_id(lang: interpreter.lang)).join arg.to_macro_id(lang: interpreter.lang))
     end
   when "last"
     object.interpret_argless_method(method, args) { object.elements.last? || Crystal::NilLiteral.new }

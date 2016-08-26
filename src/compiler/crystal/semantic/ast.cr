@@ -1249,18 +1249,7 @@ module Crystal
     end
   {% end %}
 
-  module RuntimeInitializable
-    getter runtime_initializers : Array(ASTNode)?
-
-    def add_runtime_initializer(node)
-      initializers = @runtime_initializers ||= [] of ASTNode
-      initializers << node
-    end
-  end
-
   class ClassDef
-    include RuntimeInitializable
-
     property! resolved_type : ClassType
     property? created_new_type = false
   end
@@ -1273,20 +1262,12 @@ module Crystal
     property! resolved_type : LibType
   end
 
-  class Include
-    include RuntimeInitializable
-
-    property! resolved_type
+  class CStructOrUnionDef
+    property! resolved_type : NonGenericClassType
   end
 
-  class Extend
-    include RuntimeInitializable
-
-    property! resolved_type
-  end
-
-  class Def
-    include RuntimeInitializable
+  class Alias
+    property! resolved_type : AliasType
   end
 
   class External < Def
@@ -1395,5 +1376,23 @@ module Crystal
     # end
     # ```
     property? discarded = false
+  end
+
+  # Fictitious node to represent an id inside a macro
+  class MacroId < ASTNode
+    property value : String
+
+    def initialize(@value)
+    end
+
+    def to_macro_id
+      @value
+    end
+
+    def clone_specific_impl
+      self
+    end
+
+    def_equals_and_hash value
   end
 end

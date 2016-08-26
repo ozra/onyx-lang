@@ -283,12 +283,12 @@ describe IO do
       io.read_char.should eq('界')
       io.read_char.should be_nil
 
-      io.write UInt8.slice(0xf8, 0xff, 0xff, 0xff)
+      io.write Bytes[0xf8, 0xff, 0xff, 0xff]
       expect_raises(InvalidByteSequenceError) do
         io.read_char
       end
 
-      io.write UInt8.slice(0x81)
+      io.write_byte 0x81_u8
       expect_raises(InvalidByteSequenceError) do
         io.read_char
       end
@@ -670,6 +670,18 @@ describe IO do
         expect_raises ArgumentError, "invalid encoding: FOO" do
           io.puts "a"
         end
+      end
+    end
+
+    describe "#encoding" do
+      it "returns \"UTF-8\" if the encoding is not manually set" do
+        SimpleMemoryIO.new.encoding.should eq("UTF-8")
+      end
+
+      it "returns the name of the encoding set via #set_encoding" do
+        io = SimpleMemoryIO.new
+        io.set_encoding("UTF-16LE")
+        io.encoding.should eq("UTF-16LE")
       end
     end
   end

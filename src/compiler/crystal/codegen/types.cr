@@ -1,5 +1,42 @@
 module Crystal
   class Type
+    # Returns `true` if this type is passed as a `self` argument
+    # in the codegen phase. For example a method whose receiver is
+    # the Program, or a Metaclass, doesn't have a `self` argument.
+    def passed_as_self?
+      case self
+      when Program, FileModule, LibType, MetaclassType
+        false
+      else
+        true
+      end
+    end
+
+    # Returns `true` if this type passed by value (if it's not a primitive type).
+    # In the codegen phase these types are passed as byval pointers.
+    def passed_by_value?
+      case self
+      when PrimitiveType, PointerInstanceType, ProcInstanceType
+        false
+      when TupleInstanceType, NamedTupleInstanceType, MixedUnionType
+        true
+      when VirtualType
+        self.struct?
+      when NonGenericModuleType
+        self.including_types.try &.passed_by_value?
+      when GenericClassInstanceType
+        self.generic_class.passed_by_value?
+      when TypeDefType
+        self.typedef.passed_by_value?
+      when AliasType
+        self.aliased_type.passed_by_value?
+      when ClassType
+        self.struct?
+      else
+        false
+      end
+    end
+
     def llvm_name
       String.build do |io|
         llvm_name io
@@ -24,16 +61,12 @@ module Crystal
     end
   end
 
-  class CStructType
+  class NonGenericClassType
     def llvm_name(io)
-      io << "struct."
-      to_s_with_options io, codegen: true
-    end
-  end
-
-  class CUnionType
-    def llvm_name(io)
-      io << "union."
+      if extern?
+        io << (extern_union? ? "union" : "struct")
+        io << "."
+      end
       to_s_with_options io, codegen: true
     end
   end

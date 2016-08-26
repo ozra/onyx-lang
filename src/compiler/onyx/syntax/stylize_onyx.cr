@@ -286,6 +286,7 @@ class StylizeOnyxVisitor < Visitor
          @str << keyword("extend")
          @str << " "
          @str << node.name.accept self
+         newline
          if body = node.body
             accept_with_indent body
          end
@@ -411,9 +412,9 @@ class StylizeOnyxVisitor < Visitor
       need_parens = !node_obj || (node_obj && node_obj.parenthesized)
       call_args_need_parens = false
 
-      @str << "$." if node.global
+      @str << "$." if node.global?
 
-      call_args_need_parens = node.has_parentheses
+      call_args_need_parens = node.has_parentheses?
 
       case
       when is_new
@@ -980,11 +981,11 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : MacroExpression)
-      @str << (node.output ? "{=" : "{% ")
-      @str << " " if node.output
+      @str << (node.output? ? "{=" : "{% ")
+      @str << " " if node.output?
       node.exp.accept self
-      @str << " " if node.output
-      @str << (node.output ? "=}" : " %}")
+      @str << " " if node.output?
+      @str << (node.output? ? "=}" : " %}")
       false
    end
 
@@ -1117,7 +1118,7 @@ class StylizeOnyxVisitor < Visitor
    end
 
    def visit(node : Path)
-      @str << "$." if node.global  # *TODO* only if explicitly set in source!
+      @str << "$." if node.global?  # *TODO* only if explicitly set in source!
       node.names.each_with_index do |name, i|
          @str << "." if i > 0
          @str << babelfish_detaint name
@@ -1441,11 +1442,11 @@ class StylizeOnyxVisitor < Visitor
             end
             arg.restriction.not_nil!.accept self
          end
-         if node.varargs
+         if node.varargs?
             @str << ", ..."
          end
          @str << ")"
-      elsif node.varargs
+      elsif node.varargs?
          @str << "(...)"
       end
       if node_return_type = node.return_type
@@ -1480,25 +1481,39 @@ class StylizeOnyxVisitor < Visitor
       false
    end
 
-   def visit(node : StructDef)
-      visit_struct_or_union "struct", node
-   end
 
-   def visit(node : UnionDef)
-      visit_struct_or_union "union", node
-   end
+   # def visit(node : StructDef)
+   #    visit_struct_or_union "struct", node
+   # end
 
-   def visit_struct_or_union(name, node)
-      @str << keyword(name)
-      @str << " "
-      @str << babelfish_detaint node.name.to_s
-      newline
-      @inside_struct_or_union = true
-      accept_with_indent node.body
-      @inside_struct_or_union = false
-      append_indent
-      @str << keyword("end")
-      false
+   # def visit(node : UnionDef)
+   #    visit_struct_or_union "union", node
+   # end
+
+   # def visit_struct_or_union(name, node)
+   #    @str << keyword(name)
+   #    @str << " "
+   #    @str << babelfish_detaint node.name.to_s
+   #    newline
+   #    @inside_struct_or_union = true
+   #    accept_with_indent node.body
+   #    @inside_struct_or_union = false
+   #    append_indent
+   #    @str << keyword("end")
+   #    false
+   # end
+
+   def visit(node : CStructOrUnionDef)
+       @str << keyword(node.union? ? "union" : "struct")
+       @str << " "
+       @str << babelfish_detaint node.name.to_s
+       newline
+       @inside_struct_or_union = true
+       accept_with_indent node.body
+       @inside_struct_or_union = false
+       append_indent
+       @str << keyword("end")
+       false
    end
 
    def visit(node : EnumDef)
@@ -1532,7 +1547,7 @@ class StylizeOnyxVisitor < Visitor
       # *TODO* org|"..."|"til"
       # *TODO* org|".."|"to"
 
-      if node.exclusive
+      if node.exclusive?
          @str << "..."
       else
          @str << ".."
@@ -1777,19 +1792,19 @@ class StylizeOnyxVisitor < Visitor
             clobber.inspect(@str)
          end
       end
-      if node.volatile || node.alignstack || node.intel
+      if node.volatile? || node.alignstack? || node.intel?
          @str << " : "
          comma = false
-         if node.volatile
+         if node.volatile?
             @str << %("volatile")
             comma = true
          end
-         if node.alignstack
+         if node.alignstack?
             @str << ", " if comma
             @str << %("alignstack")
             comma = true
          end
-         if node.intel
+         if node.intel?
             @str << ", " if comma
             @str << %("intel")
             comma = true

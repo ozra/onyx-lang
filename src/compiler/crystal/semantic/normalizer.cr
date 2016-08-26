@@ -7,18 +7,12 @@ module Crystal
     def normalize(node, inside_exp = false)
       # _dbg_overview "\nCompiler stage: Program.normalize\n\n".white
       # *TODO* add "normalize_count" to nodes, to keep track of (lack of) efficiency
-
-      normalizer = Normalizer.new(self)
-      normalizer.exp_nest = 1 if inside_exp
-      node = normalizer.normalize(node)
-      puts node if ENV["SSA"]? == "1"
-      node
+      node.transform Normalizer.new(self)
     end
   end
 
   class Normalizer < Transformer
     getter program : Program
-    property exp_nest : Int32
 
     @dead_code : Bool
     @current_def : Def?
@@ -26,23 +20,13 @@ module Crystal
     def initialize(@program)
       @dead_code = false
       @current_def = nil
-      @exp_nest = 0
-    end
-
-    def normalize(node)
-      _dbg "Normalizer.normalize(#{node.class}) -> where node.is_onyx = #{node.is_onyx}:\nnode: (#{node})"
-      node.transform(self)
     end
 
     def before_transform(node)
       @dead_code = false
-      @exp_nest += 1 if nesting_exp?(node)
-      nil
     end
 
     def after_transform(node)
-      @exp_nest -= 1 if nesting_exp?(node)
-
       case node
       when Return, Break, Next
         @dead_code = true
@@ -52,15 +36,6 @@ module Crystal
         @dead_code = false
       end
       nil
-    end
-
-    def nesting_exp?(node)
-      case node
-      when Expressions, VisibilityModifier, MacroFor, MacroIf, MacroExpression, Require, IfDef
-        false
-      else
-        true
-      end
     end
 
     def transform(node : Expressions)
@@ -111,7 +86,7 @@ module Crystal
           left = obj
           right = Call.new(middle.clone, node.name, node.args)
         else
-          temp_var = new_temp_var
+          temp_var = program.new_temp_var
           temp_assign = Assign.new(temp_var.clone, middle)
           left = Call.new(obj.obj, obj.name, temp_assign)
           right = Call.new(temp_var.clone, node.name, node.args)
@@ -353,10 +328,6 @@ module Crystal
       else
         node
       end
-    end
-
-    def new_temp_var
-      program.new_temp_var
     end
 
     def eval_flags(node)

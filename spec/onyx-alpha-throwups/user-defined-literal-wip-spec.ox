@@ -3,8 +3,10 @@ _debug_compiler_start_ = 1
 
 type Ohm
    init(@value Real) ->
+   -- init(@value Float64) ->
    to-s() -> "{@value}Ω"
 
+ohm = Ohm 3.14
 
 -- *TODO* suffix specific syntax - doesn't get prettier :-/ the important thing
 -- we want to get at is additional checks for non-ok suffix-identifiers
@@ -42,7 +44,7 @@ suffix (val)Ω =
    Ohm {=val=}_real
 
 
--- is (foo = Foo.new).@value legal crystal code!!??
+-- is `(foo = Foo.new).@value` legal crystal code!!??
 
 
 
@@ -66,16 +68,17 @@ say "create code via inline macro expr"
 {% end %}
 
 say "Try each suffix, no crystal macro surrounds"
+8
 9g
-0.47g
-0.47kg
-0.47Ω
+0.471g
+0.481kg
+0.491Ω
 
 say "Try each suffix, crystal macro wrapped"
 pp 11g
-pp 0.47g
-pp 0.47kg
-pp 0.47Ω
+pp 0.472g
+pp 0.482kg
+pp 0.492Ω
 
 say "First run through, no crystal macro surrounds"
 

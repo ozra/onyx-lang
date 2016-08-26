@@ -8,8 +8,8 @@ module Crystal
     end
 
     # Implemented in "compiler/onyx/syntax/to_s.cr"
-    # def to_s(io)
-    #   visitor = ToSVisitor.new(io)
+    # def to_s(io, emit_loc_pragma = false)
+    #   visitor = ToSVisitor.new(io, emit_loc_pragma: emit_loc_pragma)
     #   self.accept visitor
     # end
   end
@@ -17,15 +17,34 @@ module Crystal
   class ToSVisitor < Visitor
     @str : IO
 
-    def initialize(@str = MemoryIO.new)
+    def initialize(@str = MemoryIO.new, @emit_loc_pragma = false)
       @indent = 0
       @inside_macro = 0
       @inside_lib = false
-      @inside_struct_or_union = false
     end
 
-    def re_init(str = MemoryIO.new)
-      initialize str
+    def re_init(str = MemoryIO.new, emit_loc_pragma = false)
+      initialize str, emit_loc_pragma
+    end
+
+    def visit_any(node)
+      return true unless @emit_loc_pragma
+
+      location = node.location
+      return true unless location
+
+      filename = location.filename
+      return true unless filename.is_a?(String)
+
+      @str << "#<loc:"
+      filename.inspect(@str)
+      @str << ","
+      @str << location.line_number
+      @str << ","
+      @str << location.column_number
+      @str << ">"
+
+      true
     end
 
     def visit(node : Nop)
@@ -338,7 +357,7 @@ module Crystal
         else
           @str << decorate_call(node, node.name)
 
-          call_args_need_parens = !node.args.empty? || node.block_arg || node.named_args
+          call_args_need_parens = node.has_parentheses? || !node.args.empty? || node.block_arg || node.named_args
 
           @str << "(" if call_args_need_parens
 
@@ -374,14 +393,16 @@ module Crystal
             block_obj = block_body.obj
             if block_obj.is_a?(Var) && block_obj.name == first_block_arg.name
               if node.args.empty?
-                @str << "("
+                unless call_args_need_parens
+                  @str << "("
+                  call_args_need_parens = true
+                end
               else
                 @str << ", "
               end
               @str << "&."
               visit_call block_body, ignore_obj: true
-              @str << ")"
-              return false
+              block = nil
             end
           end
         end
@@ -442,11 +463,6 @@ module Crystal
       visit_named_arg_name(node.name)
       @str << ": "
       node.value.accept self
-      false
-    end
-
-    def visit(node : MacroId)
-      @str << node.value
       false
     end
 
@@ -1154,9 +1170,7 @@ module Crystal
       @str << " "
       @str << node.name.to_s
       newline
-      @inside_struct_or_union = true
       accept_with_indent node.body
-      @inside_struct_or_union = false
       append_indent
       @str << keyword("end")
       false

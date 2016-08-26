@@ -74,7 +74,7 @@ class Crystal::Doc::Type
   def parents_of?(type)
     return false unless type
 
-    while type = type.container
+    while type = type.namespace
       return true if type.full_name == full_name
     end
 
@@ -325,8 +325,10 @@ class Crystal::Doc::Type
         subclasses = [] of Type
         type.subclasses.each do |subclass|
           case subclass
-          when GenericClassInstanceType, CStructOrUnionType
+          when GenericClassInstanceType
             next
+          when NonGenericClassType
+            next if subclass.extern?
           end
 
           next unless @generator.must_include?(subclass)
@@ -365,19 +367,19 @@ class Crystal::Doc::Type
     including_types.uniq!.sort_by! &.full_name.downcase
   end
 
-  def container
+  def namespace
     case type = @type
     when NamedType
-      container = type.container
-      if container.is_a?(Program)
+      namespace = type.namespace
+      if namespace.is_a?(Program)
         nil
       else
-        @generator.to_doc_type(container)
+        @generator.to_doc_type(namespace)
       end
     when IncludedGenericModule
-      @generator.to_doc_type(type.module).container
+      @generator.to_doc_type(type.module).namespace
     when InheritedGenericClass
-      @generator.to_doc_type(type.extended_class).container
+      @generator.to_doc_type(type.extended_class).namespace
     else
       nil
     end
@@ -397,8 +399,8 @@ class Crystal::Doc::Type
   end
 
   def full_name_without_type_vars(io)
-    if container = container()
-      container.full_name_without_type_vars(io)
+    if namespace = self.namespace
+      namespace.full_name_without_type_vars(io)
       io << "."
     end
     io << name # + "__N"
@@ -407,8 +409,10 @@ class Crystal::Doc::Type
   def path
     if program?
       "toplevel/index.html"
-    elsif container = container()
-      "#{container.dir}/#{name}/index.html"
+
+    elsif namespace = self.namespace
+      "#{namespace.dir}/#{name}/index.html"
+
     else
       "#{name}/index.html"
     end
@@ -428,8 +432,8 @@ class Crystal::Doc::Type
 
   def path_to(type : Type)
     if type.const?
-      container = type.container || @generator.program_type
-      "#{path_to(container)}##{type.name}"
+      namespace = type.namespace || @generator.program_type
+      "#{path_to(namespace)}##{type.name}"
     else
       path_to(type.path)
     end
@@ -440,16 +444,16 @@ class Crystal::Doc::Type
   end
 
   def dir
-    if container = container()
-      "#{container.dir}/#{name}"
+    if namespace = self.namespace
+      "#{namespace.dir}/#{name}"
     else
       name.to_s
     end
   end
 
   def nesting
-    if container = container()
-      1 + container.nesting
+    if namespace = self.namespace
+      1 + namespace.nesting
     else
       0
     end
@@ -459,8 +463,8 @@ class Crystal::Doc::Type
     @type.doc
   end
 
-  def lookup_type(path_or_names)
-    match = @type.lookup_type(path_or_names)
+  def lookup_path(path_or_names)
+    match = @type.lookup_path(path_or_names)
     return unless match.is_a?(Crystal::Type)
 
     @generator.to_doc_type(match)
@@ -542,7 +546,7 @@ class Crystal::Doc::Type
     node.global = false
 
     begin
-      match = lookup_type(node)
+      match = lookup_path(node)
       if match
         type_to_html match, io, node.to_oxs, links: links
       else
@@ -554,7 +558,7 @@ class Crystal::Doc::Type
   end
 
   def node_to_html(node : Generic, io, links = true)
-    match = lookup_type(node.name)
+    match = lookup_path(node.name)
     if match
       if match.must_be_included?
         if links
@@ -741,8 +745,8 @@ class Crystal::Doc::Type
     "#{@generator.repository_name}/" + (
       if program?
         "toplevel"
-      elsif container = container()
-        "#{container.dir}/#{name}"
+      elsif namespace = self.namespace
+        "#{namespace.dir}/#{name}"
       else
         "#{name}"
       end
