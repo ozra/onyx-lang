@@ -107,7 +107,6 @@ describe "Parser" do
   it_parses "_ = 1", Assign.new(Underscore.new, 1.int32)
   it_parses "@foo/2", Call.new("@foo".instance_var, "/", 2.int32)
   it_parses "@@foo/2", Call.new("@@foo".class_var, "/", 2.int32)
-  it_parses "$foo/2", Call.new(Global.new("$foo"), "/", 2.int32)
   it_parses "1+2*3", Call.new(1.int32, "+", Call.new(2.int32, "*", 3.int32))
 
   it_parses "!1", Not.new(1.int32)
@@ -135,7 +134,6 @@ describe "Parser" do
 
   it_parses "@a, b = 1, 2", MultiAssign.new(["@a".instance_var, "b".var] of ASTNode, [1.int32, 2.int32] of ASTNode)
   it_parses "@@a, b = 1, 2", MultiAssign.new(["@@a".class_var, "b".var] of ASTNode, [1.int32, 2.int32] of ASTNode)
-  it_parses "$a, b = 1, 2", MultiAssign.new([Global.new("$a"), "b".var] of ASTNode, [1.int32, 2.int32] of ASTNode)
   it_parses "A, b = 1, 2", MultiAssign.new(["A".path, "b".var] of ASTNode, [1.int32, 2.int32] of ASTNode)
 
   assert_syntax_error "1 == 2, a = 4"
@@ -573,7 +571,7 @@ describe "Parser" do
     assert_syntax_error "1 if #{keyword}", "void value expression"
     assert_syntax_error "1 unless #{keyword}", "void value expression"
     assert_syntax_error "#{keyword}.foo", "void value expression"
-    assert_syntax_error "#{keyword} as Int32", "void value expression"
+    assert_syntax_error "#{keyword}.as(Int32)", "void value expression"
     assert_syntax_error "#{keyword}[]", "void value expression"
     assert_syntax_error "#{keyword}[0]", "void value expression"
     assert_syntax_error "#{keyword}[0]= 1", "void value expression"
@@ -725,7 +723,7 @@ describe "Parser" do
 
   it_parses "::A::B", Path.global(["A", "B"])
 
-  it_parses "$foo", Global.new("$foo")
+  assert_syntax_error "$foo", "$global_variables are not supported, use @@class_variables instead"
 
   it_parses "macro foo;end", Macro.new("foo", [] of Arg, Expressions.new)
   it_parses "macro [];end", Macro.new("[]", [] of Arg, Expressions.new)
@@ -831,8 +829,6 @@ describe "Parser" do
   it_parses "1.=~(2)", Call.new(1.int32, "=~", 2.int32)
   it_parses "def =~; end", Def.new("=~", [] of Arg)
 
-  it_parses "foo $a", Call.new(nil, "foo", Global.new("$a"))
-
   it_parses "$~", Global.new("$~")
   it_parses "$~.foo", Call.new(Global.new("$~"), "foo")
   it_parses "$1", Call.new(Global.new("$~"), "[]", 1.int32)
@@ -902,6 +898,12 @@ describe "Parser" do
   it_parses "case {1, 2}\nwhen foo\n5\nend", Case.new(TupleLiteral.new([1.int32, 2.int32] of ASTNode), [When.new(["foo".call] of ASTNode, 5.int32)])
   assert_syntax_error "case {1, 2}; when {3}; 4; end", "wrong number of tuple elements (given 1, expected 2)", 1, 19
 
+  it_parses "select\nwhen foo\n2\nend", Select.new([Select::When.new("foo".call, 2.int32)])
+  it_parses "select\nwhen foo\n2\nwhen bar\n4\nend", Select.new([Select::When.new("foo".call, 2.int32), Select::When.new("bar".call, 4.int32)])
+  it_parses "select\nwhen foo\n2\nelse\n3\nend", Select.new([Select::When.new("foo".call, 2.int32)], 3.int32)
+
+  assert_syntax_error "select\nwhen 1\n2\nend", "invalid select when expression: must be an assignment or call"
+
   it_parses "def foo(x); end; x", [Def.new("foo", ["x".arg]), "x".call]
   it_parses "def foo; / /; end", Def.new("foo", body: regex(" "))
 
@@ -924,17 +926,14 @@ describe "Parser" do
   it_parses "@a : Foo", TypeDeclaration.new("@a".instance_var, "Foo".path)
   it_parses "@a : Foo | Int32", TypeDeclaration.new("@a".instance_var, Crystal::Union.new(["Foo".path, "Int32".path] of ASTNode))
   it_parses "@@a : Foo", TypeDeclaration.new("@@a".class_var, "Foo".path)
-  it_parses "$x : Foo", TypeDeclaration.new(Global.new("$x"), "Foo".path)
 
   it_parses "a : Foo = 1", TypeDeclaration.new("a".var, "Foo".path, 1.int32)
   it_parses "@a : Foo = 1", TypeDeclaration.new("@a".instance_var, "Foo".path, 1.int32)
   it_parses "@@a : Foo = 1", TypeDeclaration.new("@@a".class_var, "Foo".path, 1.int32)
-  it_parses "$x : Foo = 1", TypeDeclaration.new(Global.new("$x"), "Foo".path, 1.int32)
 
   it_parses "a = uninitialized Foo; a", [UninitializedVar.new("a".var, "Foo".path), "a".var]
   it_parses "@a = uninitialized Foo", UninitializedVar.new("@a".instance_var, "Foo".path)
   it_parses "@@a = uninitialized Foo", UninitializedVar.new("@@a".class_var, "Foo".path)
-  it_parses "$a = uninitialized Foo", UninitializedVar.new(Global.new("$a"), "Foo".path)
 
   it_parses "()", NilLiteral.new
   it_parses "(1; 2; 3)", [1.int32, 2.int32, 3.int32] of ASTNode
@@ -997,10 +996,8 @@ describe "Parser" do
 
   it_parses "def foo\n1\nend\nif 1\nend", [Def.new("foo", body: 1.int32), If.new(1.int32)] of ASTNode
 
-  it_parses "1 as Bar", Cast.new(1.int32, "Bar".path)
-  it_parses "foo as Bar", Cast.new("foo".call, "Bar".path)
-  it_parses "foo.bar as Bar", Cast.new(Call.new("foo".call, "bar"), "Bar".path)
-  it_parses "call(foo as Bar, Baz)", Call.new(nil, "call", args: [Cast.new("foo".call, "Bar".path), "Baz".path])
+  assert_syntax_error "1 as Bar"
+  assert_syntax_error "1 as? Bar"
 
   it_parses "1.as Bar", Cast.new(1.int32, "Bar".path)
   it_parses "1.as(Bar)", Cast.new(1.int32, "Bar".path)
@@ -1146,6 +1143,11 @@ describe "Parser" do
 
   it_parses "<<-FOO\n1\nFOO.bar", Call.new("1".string, "bar")
   it_parses "<<-FOO\n1\nFOO + 2", Call.new("1".string, "+", 2.int32)
+
+  it_parses "<<-FOO\n\t1\n\tFOO", StringLiteral.new("1")
+  it_parses "<<-FOO\n \t1\n \tFOO", StringLiteral.new("1")
+  it_parses "<<-FOO\n \t 1\n \t FOO", StringLiteral.new("1")
+  it_parses "<<-FOO\n\t 1\n\t FOO", StringLiteral.new("1")
 
   it_parses "enum Foo; A\nB, C\nD = 1; end", EnumDef.new("Foo".path, [Arg.new("A"), Arg.new("B"), Arg.new("C"), Arg.new("D", 1.int32)] of ASTNode)
   it_parses "enum Foo; A = 1, B; end", EnumDef.new("Foo".path, [Arg.new("A", 1.int32), Arg.new("B")] of ASTNode)
@@ -1419,6 +1421,8 @@ describe "Parser" do
   assert_syntax_error "require 1", "expected string literal for require"
   assert_syntax_error %(def foo("bar \#{1} qux" y); y; end), "interpolation not allowed in external name"
 
+  assert_syntax_error "def Foo(Int32).bar;end"
+
   describe "end locations" do
     assert_end_location "nil"
     assert_end_location "false"
@@ -1448,7 +1452,6 @@ describe "Parser" do
     assert_end_location "@foo"
     assert_end_location "foo.@foo"
     assert_end_location "@@foo"
-    assert_end_location "$foo"
     assert_end_location "a && b"
     assert_end_location "a || b"
     assert_end_location "def foo; end"
@@ -1475,7 +1478,7 @@ describe "Parser" do
     assert_end_location "yield 1"
     assert_end_location "include Foo"
     assert_end_location "extend Foo"
-    assert_end_location "1 as Int32"
+    assert_end_location "1.as(Int32)"
     assert_end_location "puts obj.foo"
 
     it "gets corrects of ~" do

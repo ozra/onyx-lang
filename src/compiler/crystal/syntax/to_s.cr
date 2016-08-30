@@ -985,6 +985,7 @@ module Crystal
       @str << "i" if node.options.includes? Regex::Options::IGNORE_CASE
       @str << "m" if node.options.includes? Regex::Options::MULTILINE
       @str << "x" if node.options.includes? Regex::Options::EXTENDED
+      false
     end
 
     def visit(node : TupleLiteral)
@@ -1312,6 +1313,25 @@ module Crystal
       end
       newline
       accept_with_indent node.body
+      false
+    end
+
+    def visit(node : Select)
+      @str << keyword("select")
+      newline
+      node.whens.each do |a_when|
+        @str << "when "
+        a_when.condition.accept self
+        newline
+        accept_with_indent a_when.body
+      end
+      if a_else = node.else
+        @str << "else"
+        newline
+        accept_with_indent a_else
+      end
+      @str << keyword("end")
+      newline
       false
     end
 

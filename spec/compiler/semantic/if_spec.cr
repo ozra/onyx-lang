@@ -78,7 +78,7 @@ describe "Semantic: if" do
         n
       end
       n
-      )) { int32 }
+      )) { union_of(int32, float64) }
   end
 
   it "restricts the type of the right hand side of an || when using is_a? (#1728)" do
@@ -100,5 +100,104 @@ describe "Semantic: if" do
       a = 1 == 1 ? 1 : nil
       !a.is_a?(Int32) || a + 2
       )) { union_of bool, int32 }
+  end
+
+  it "restricts with || (#2464)" do
+    assert_type(%(
+      struct Int32
+        def foo
+          1
+        end
+      end
+
+      struct Char
+        def foo
+          1
+        end
+      end
+
+      a = 1 || "" || 'a'
+      if a.is_a?(Int32) || a.is_a?(Char)
+        a.foo
+      else
+        1
+      end
+      )) { int32 }
+  end
+
+  it "doesn't restrict with || on different vars" do
+    assert_error %(
+      struct Int32
+        def foo
+          1
+        end
+      end
+
+      struct Char
+        def bar
+          1
+        end
+      end
+
+      a = 1 || "" || 'a'
+      b = a
+      if a.is_a?(Int32) || b.is_a?(Char)
+        a.foo + b.bar
+      end
+      ),
+      "undefined method"
+  end
+
+  it "doesn't restrict with || on var and non-restricting condition" do
+    assert_error %(
+      struct Int32
+        def foo
+          1
+        end
+      end
+
+      a = 1 || "" || 'a'
+      if a.is_a?(Int32) || 1 == 2
+        a.foo
+      end
+      ),
+      "undefined method"
+  end
+
+  it "restricts with || but doesn't unify types to base class" do
+    assert_type(%(
+      class Foo
+      end
+
+      class Bar < Foo
+        def foo
+          1
+        end
+      end
+
+      class Baz < Foo
+        def foo
+          'a'
+        end
+      end
+
+      a = Bar.new.as(Foo)
+      if a.is_a?(Bar) || a.is_a?(Baz)
+        a.foo
+      else
+        nil
+      end
+      )) { union_of(nil_type, int32, char) }
+  end
+
+  it "restricts with && always falsey" do
+    assert_type(%(
+      x = 1
+      if (x.is_a?(String) && x.is_a?(String)) && x.is_a?(String)
+        true
+      else
+        2
+      end
+      )) { union_of(bool, int32) }
   end
 end

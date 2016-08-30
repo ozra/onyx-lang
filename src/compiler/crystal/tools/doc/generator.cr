@@ -109,19 +109,11 @@ class Crystal::Doc::Generator
     must_include? type.type
   end
 
-  def must_include?(type : Crystal::IncludedGenericModule)
-    must_include? type.module
-  end
-
-  def must_include?(type : Crystal::InheritedGenericClass)
-    must_include? type.extended_class
-  end
-
   def must_include?(type : Crystal::Type)
     return false if nodoc?(type)
     return true if crystal_builtin?(type)
 
-    type.locations.any? do |type_location|
+    type.locations.try &.any? do |type_location|
       must_include? type_location
     end
   end

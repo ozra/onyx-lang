@@ -30,6 +30,8 @@ module Crystal
               end
 
       if check
+        type = type.as(ModuleType)
+
         self_initialize_methods = type.lookup_defs_without_parents("initialize")
         self_new_methods = type.metaclass.lookup_defs_without_parents("new")
 
@@ -41,7 +43,7 @@ module Crystal
         if !has_new_or_initialize
           # Add self.new
           new_method = Def.argless_new(type)
-          type.metaclass.add_def(new_method)
+          type.metaclass.as(ModuleType).add_def(new_method)
 
           # Also add `initialize`, so `super` in a subclass
           # inside an `initialize` will find this one
@@ -57,7 +59,7 @@ module Crystal
         has_self_initialize_methods = !self_initialize_methods.empty?
         if !has_self_initialize_methods
           is_generic = type.is_a?(GenericClassType)
-          inherits_from_generic = type.ancestors.any?(&.is_a?(InheritedGenericClass))
+          inherits_from_generic = type.ancestors.any?(&.is_a?(GenericClassInstanceType))
           if is_generic || inherits_from_generic
             has_default_self_new = self_new_methods.any? do |a_def|
               a_def.args.empty? && !a_def.yields
@@ -71,7 +73,7 @@ module Crystal
             if initialize_methods.empty?
               # If the type has `self.new()`, don't override it
               unless has_default_self_new
-                type.metaclass.add_def(Def.argless_new(type))
+                type.metaclass.as(ModuleType).add_def(Def.argless_new(type))
                 type.add_def(Def.argless_initialize)
               end
             else
@@ -82,11 +84,11 @@ module Crystal
                 end
 
                 new_method = initialize.expand_new_from_initialize(type)
-                type.metaclass.add_def(new_method)
+                type.metaclass.as(ModuleType).add_def(new_method)
               end
             end
           else
-            type.lookup_new_in_ancestors = true
+            type.as(ClassType).lookup_new_in_ancestors = true
           end
         end
       end

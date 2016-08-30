@@ -5,25 +5,6 @@ module Crystal
     ONE_ARG = [Arg.new("a1")]
 
     def check_method_missing(signature)
-      false
-    end
-
-    def lookup_method_missing
-      # method_missing is actually stored in the metaclass
-      method_missing = metaclass.lookup_macro("method_missing", ONE_ARG, nil)
-      return method_missing if method_missing
-
-      parents.try &.each do |parent|
-        method_missing = parent.lookup_method_missing
-        return method_missing if method_missing
-      end
-
-      nil
-    end
-  end
-
-  module MatchesLookup
-    def check_method_missing(signature)
       if !metaclass? && signature.name != "initialize"
         # Make sure to define method missing in the whole hierarchy
         virtual_type = virtual_type()
@@ -39,6 +20,19 @@ module Crystal
       end
 
       false
+    end
+
+    def lookup_method_missing
+      # method_missing is actually stored in the metaclass
+      method_missing = metaclass.lookup_macro("method_missing", ONE_ARG, nil)
+      return method_missing if method_missing
+
+      parents.try &.each do |parent|
+        method_missing = parent.lookup_method_missing
+        return method_missing if method_missing
+      end
+
+      nil
     end
 
     def define_method_from_method_missing(method_missing, signature)
@@ -77,12 +71,18 @@ module Crystal
 
       owner = self
       owner = owner.base_type if owner.is_a?(VirtualType)
-      owner.add_def(a_def) if owner.is_a?(DefContainer)
+
+      if owner.is_a?(ModuleType)
+        owner.add_def(a_def)
+        true
+      else
+        false
+      end
     end
   end
 
-  class GenericClassInstanceType
-    delegate check_method_missing, to: @generic_class
+  class GenericInstanceType
+    delegate check_method_missing, to: @generic_type
   end
 
   class VirtualType
@@ -101,7 +101,7 @@ module Crystal
       defined = false
 
       base_type.subclasses.each do |subclass|
-        next unless subclass.is_a?(DefContainer)
+        next unless subclass.is_a?(ModuleType)
 
         # First check if we can find the method
         existing_def = subclass.lookup_first_def(signature.name, signature.block)

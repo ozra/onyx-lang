@@ -76,6 +76,13 @@ struct Char
 end
 
 
+# *TODO* move from here
+def fatal(msg : String)
+  LibC.printf msg
+  CallStack.print_backtrace
+  LibC.exit(1)
+end
+
 # *TODO* make this a more generic macro as part of `Any`(AnyRef/Reference rather) or such
 macro reinit_pool(typ, *params)
    class {{typ}}Pool

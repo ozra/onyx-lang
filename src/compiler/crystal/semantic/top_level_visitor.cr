@@ -108,24 +108,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   def visit(node : ClassDef, is_type_extend = false)
     check_outside_exp node, "declare class"
 
-    node_superclass = node.superclass
-
-    if node_superclass
-      superclass = lookup_type_name(node_superclass)
-    else
-      superclass = node.struct? ? program.struct : program.reference
-    end
-
-    if node_superclass.is_a?(Generic)
-      unless superclass.is_a?(GenericClassType)
-        node_superclass.raise "#{superclass} is not a generic class, it's a #{superclass.type_desc}"
-      end
-
-      if node_superclass.type_vars.size != superclass.type_vars.size
-        node_superclass.wrong_number_of "type vars", superclass, node_superclass.type_vars.size, superclass.type_vars.size
-      end
-    end
-
     scope, name = lookup_type_def_name(node.name)
 
 
@@ -142,16 +124,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     type = scope.types[name]?
 
-    if !type && superclass
-      if node.struct? != superclass.struct?
-        node.raise "can't make #{node.struct? ? "struct" : "class"} '#{node.name}' inherit #{superclass.type_desc} '#{superclass.to_s}'"
-      end
-
-      if superclass.struct? && !superclass.abstract?
-        node.raise "can't extend non-abstract struct #{superclass}"
-      end
-    end
-
     created_new_type = false
 
     if type
@@ -163,10 +135,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
       if node.struct? != type.struct?
         node.raise "#{name} is not a #{node.struct? ? "struct" : "class"}, it's a #{type.type_desc}"
-      end
-
-      if node.superclass && type.superclass != superclass
-        node.raise "superclass mismatch for class #{type} (#{superclass} for #{type.superclass})"
       end
 
       if type_vars = node.type_vars
@@ -184,52 +152,70 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
         end
       end
     else
-      case superclass
-      when NonGenericClassType
-        # OK
-      when GenericClassType
-        if node_superclass.is_a?(Generic)
-          mapping = Hash.zip(superclass.type_vars, node_superclass.type_vars)
-          superclass = InheritedGenericClass.new(@program, superclass, mapping)
-        else
-          node_superclass.not_nil!.wrong_number_of "type vars", superclass, 0, superclass.type_vars.size
-        end
-      else
-        node_superclass.not_nil!.raise "#{superclass} is not a class, it's a #{superclass.type_desc}"
-      end
-
       created_new_type = true
       if type_vars = node.type_vars
-        type = GenericClassType.new @program, scope, name, superclass, type_vars, false
+        type = GenericClassType.new @program, scope, name, nil, type_vars, false
         type.splat_index = node.splat_index
       else
-        type = NonGenericClassType.new @program, scope, name, superclass, false
+        type = NonGenericClassType.new @program, scope, name, nil, false
       end
       type.abstract = node.abstract?
       type.struct = node.struct?
-
-      if superclass.is_a?(InheritedGenericClass)
-        superclass.extending_class = type
-        superclass.extended_class.as(GenericClassType).add_inherited(type)
-      end
-
-      scope.types[name] = type
     end
 
+    node_superclass = node.superclass
+    if node_superclass
+      if type_vars = node.type_vars
+        free_vars = {} of String => TypeVar
+        type_vars.each do |type_var|
+          free_vars[type_var] = TypeParameter.new(program, type.as(GenericType), type_var)
+        end
+      else
+        free_vars = nil
+      end
+
+      superclass = lookup_type(node_superclass, free_vars: free_vars)
+      case superclass
+      when GenericClassType
+        node_superclass.raise "wrong number of type vars for #{superclass} (given 0, expected #{superclass.type_vars.size})"
+      when NonGenericClassType, GenericClassInstanceType
+        # OK
+      else
+        node_superclass.raise "#{superclass} is not a class, it's a #{superclass.type_desc}"
+      end
+    else
+      superclass = node.struct? ? program.struct : program.reference
+    end
+
+    if node.superclass && !created_new_type && type.superclass != superclass
+      node.raise "superclass mismatch for class #{type} (#{superclass} for #{type.superclass})"
+    end
+
+    if created_new_type && superclass
+      if node.struct? != superclass.struct?
+        node.raise "can't make #{node.struct? ? "struct" : "class"} '#{node.name}' inherit #{superclass.type_desc} '#{superclass.to_s}'"
+      end
+
+      if superclass.struct? && !superclass.abstract?
+        node.raise "can't extend non-abstract struct #{superclass}"
+      end
+    end
+
+    if created_new_type
+      type.superclass = superclass
+    end
+
+    scope.types[name] = type if created_new_type
     node.resolved_type = type
 
     attach_doc type, node
 
     pushing_type(type) do
-      if created_new_type
-        run_hooks(superclass.metaclass, type, :inherited, node)
-      end
-
+      run_hooks(superclass.metaclass, type, :inherited, node) if created_new_type
       node.body.accept self
     end
 
     if created_new_type
-      raise "Bug" unless type.is_a?(InheritableClass)
       type.force_add_subclass
     else
       if node.is_onyx && is_type_extend == false
@@ -258,6 +244,8 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       unless type.module?
         node.raise "#{type} is not a module, it's a #{type.type_desc}"
       end
+
+      type = type.as(ModuleType)
     else
       if type_vars = node.type_vars
         type = GenericModuleType.new @program, scope, name, type_vars
@@ -306,7 +294,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     check_outside_exp node, "declare macro"
 
     begin
-      current_type.metaclass.add_macro node
+      current_type.metaclass.as(ModuleType).add_macro node
     rescue ex : Crystal::Exception
       node.raise ex.message
     end
@@ -334,10 +322,18 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
                     end
                     current_type.metaclass
                   else
-                    type = lookup_type(receiver).metaclass
-                    node.raise "can't define 'def' for lib" if type.is_a?(LibType)
-                    type
+                    type = lookup_type(receiver)
+                    metaclass = type.metaclass
+                    case metaclass
+                    when LibType
+                      receiver.raise "can't define method in lib #{metaclass}"
+                    when GenericClassInstanceMetaclassType
+                      receiver.raise "can't define method in generic instance #{metaclass}"
+                    end
+                    metaclass
                   end
+
+    target_type = target_type.as(ModuleType)
 
     process_def_attributes node, attributes
 
@@ -390,7 +386,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       # to find this method.
       if node.name == "initialize"
         new_method = node.expand_new_signature_from_initialize(target_type)
-        target_type.metaclass.add_def(new_method)
+        target_type.metaclass.as(ModuleType).add_def(new_method)
 
         # And we register it to later complete it
         new_expansions << {original: node, expanded: new_method}
@@ -570,7 +566,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       end
 
       scope.types[name] = enum_type
-      node.created_new_type = true
     end
 
     false
@@ -632,7 +627,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       check_ditto const_member
 
       if member_location = member.location
-        const_member.locations << member_location
+        const_member.add_location(member_location)
       end
 
       const_value.type = enum_type
@@ -811,56 +806,19 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
   def include_in(current_type, node, kind)
     node_name = node.name
-    type = lookup_type_name(node_name)
 
-    unless type.module?
+    type = lookup_type(node_name)
+    case type
+    when GenericModuleType
+      node.raise "wrong number of type vars for #{type} (given 0, expected #{type.type_vars.size})"
+    when .module?
+      # OK
+    else
       node_name.raise "#{type} is not a module, it's a #{type.type_desc}"
     end
 
-    if node_name.is_a?(Generic)
-      unless type.is_a?(GenericModuleType)
-        node_name.raise "#{type} is not a generic module"
-      end
-
-      if !type.splat_index && type.type_vars.size != node_name.type_vars.size
-        node_name.wrong_number_of "type vars", type, node_name.type_vars.size, type.type_vars.size
-      end
-
-      node_name_type_vars = node_name.type_vars
-
-      if splat_index = type.splat_index
-        new_type_vars = Array(ASTNode).new(node_name_type_vars.size)
-        type_var_index = 0
-        type.type_vars.each_index do |index|
-          if index == splat_index
-            tuple_elements = [] of ASTNode
-            (node_name_type_vars.size - (type.type_vars.size - 1)).times do
-              tuple_elements << node_name_type_vars[type_var_index]
-              type_var_index += 1
-            end
-            new_type_vars << TupleLiteral.new(tuple_elements)
-          else
-            new_type_vars << node_name_type_vars[type_var_index]
-            type_var_index += 1
-          end
-        end
-        node_name_type_vars = new_type_vars
-      end
-
-      mapping = Hash.zip(type.type_vars, node_name_type_vars)
-      module_to_include = IncludedGenericModule.new(@program, type, current_type, mapping)
-
-      type.add_inherited(current_type)
-    else
-      if type.is_a?(GenericModuleType)
-        node_name.raise "#{type} is a generic module"
-      else
-        module_to_include = type
-      end
-    end
-
     begin
-      current_type.as(ModuleType).include module_to_include
+      current_type.as(ModuleType).include type
       run_hooks type.metaclass, current_type, kind, node
     rescue ex : TypeException
       node.raise "at '#{kind}' hook", ex
@@ -868,21 +826,18 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   end
 
   def run_hooks(type_with_hooks, current_type, kind, node, call = nil)
-    hooks = type_with_hooks.hooks
-    if hooks
-      hooks.each do |hook|
-        next if hook.kind != kind
+    type_with_hooks.as?(ModuleType).try &.hooks.try &.each do |hook|
+      next if hook.kind != kind
 
-        expansion = expand_macro(hook.macro, node) do
-          if call
-            @program.expand_macro hook.macro, call, current_type.instance_type
-          else
-            @program.expand_macro hook.macro.body, current_type.instance_type
-          end
+      expansion = expand_macro(hook.macro, node) do
+        if call
+          @program.expand_macro hook.macro, call, current_type.instance_type
+        else
+          @program.expand_macro hook.macro.body, current_type.instance_type
         end
-
-        node.add_hook_expansion(expansion)
       end
+
+      node.add_hook_expansion(expansion)
     end
 
     if kind == :inherited && (superclass = type_with_hooks.instance_type.superclass)
@@ -930,7 +885,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     end
 
     if node_location = node.location
-      type.locations << node_location
+      type.add_location(node_location)
     end
   end
 
@@ -971,12 +926,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       scope = lookup_type_def_name_creating_modules path
     end
 
-    {scope, name}
-  end
-
-  def lookup_type_name(node)
-    node = node.name if node.is_a?(Generic)
-    lookup_type(node)
+    {scope.as(ModuleType), name}
   end
 
   def lookup_type_def_name_creating_modules(path : Path)
@@ -992,9 +942,9 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
             path.raise "execpted #{name} to be a type"
           end
         else
-          next_type = NonGenericModuleType.new(@program, base_type, name)
+          next_type = NonGenericModuleType.new(@program, base_type.as(ModuleType), name)
           if (location = path.location)
-            next_type.locations << location
+            next_type.add_location(location)
           end
           base_type.types[name] = next_type
         end
@@ -1003,6 +953,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       target_type = next_type
     end
 
-    target_type
+    target_type.as(NamedType)
   end
 end

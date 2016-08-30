@@ -49,8 +49,8 @@ end -- dpp
 
 say "Lambda Type as value"
 
--- lambda-type = '(Int, Bool) -> Int  -- FUCKS UP HIGHLIGHT IN ATOM ONLY
--- lambda-type = (Int, Bool) -> Int  -- NOT ALLOWED YET
+-- lambda-type = '(Ind, Bool) -> Ind  -- FUCKS UP HIGHLIGHT IN ATOM ONLY
+-- lambda-type = (Ind, Bool) -> Ind  -- NOT ALLOWED YET
 -- pp lambda-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -116,7 +116,7 @@ say "remove me for crash"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- suffix (v IntegerLiteral) = Int _
+-- suffix (v IntegerLiteral) = Ind _
 -- suffix (real)     = Real _
 -- suffix (number)r  = Real _
 -- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
@@ -259,7 +259,7 @@ a1 = String
 b1 = "fdsaf"
 
 say "a ~~ b == {a1 ~~ b1}"
-say "Int !~~ b == {Int !~~ b1}"
+say "Ind !~~ b == {Ind !~~ b1}"
 say "a !~~ b == {a1 !~~ b1}"
 
 x = /x/
@@ -374,7 +374,10 @@ my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
    -- magic-port = opts:magic_port as I64? || 47
    -- p x, y, host, magic-port
 end
-my-foo 1, 2, Map<Str, Str|I64|Nil>{
+
+type Droogs = Map  -- test multi-level alias resolution
+
+my-foo 1, 2, Droogs<Str, Str|I64|Nil>{
    "my_name_is": "Totally irrelevant"
    "host_name": "da_host.yo"
    --   "x": 1
@@ -462,7 +465,7 @@ dpp 65536 == horribly-formatted-pow2-round-up 4097, 65536
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- '!Int=I64
+-- '!Ind=I64
 -- '!Real=Float32
 
 -- '!literal-int = I64
@@ -537,16 +540,16 @@ Djur:
       @@foo’ = 1
       @@bar  = 2
 
-      @foo     Int
-      @bar     Int
-      @foo’    Int  = 47
+      @foo     Ind  -- Idt
+      @bar     Ind  -- Ist
+      @foo’    Ind  = 47
       @bar’         = 47
-      @foo’’   Int
-      @bar’’   Int
+      @foo’’   Ind
+      @bar’’   Ind
 
-      @foo3    'Int
-      @bar3    ^Int
-      @qwo3    ~Int
+      @foo3    'Ind
+      @bar3    ^Ind
+      @qwo3    ~Ind
 
       init() ->
          @foo   = 47
@@ -557,8 +560,8 @@ Djur:
          @bar3  = 47
          @qwo3  = 47
 
-      -- xfoo! Int = 47  -- should fail, and does
-      -- xbar? Int = 42  -- should fail, and does
+      -- xfoo! Ind = 47  -- should fail, and does
+      -- xbar? Ind = 42  -- should fail, and does
 
       Self.my-def() -> say "Hit the spot! { @@foo’ }, { @@bar }"
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
@@ -712,13 +715,13 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
 
    -- -- *TODO* after all basic control structs are implemented
 
-   -- zar2 ^Int
+   -- zar2 ^Ind
    -- zar4 'Real
    -- zar3 ~Str
 
-   -- -- zar4 'Int = 1
-   -- -- zar5 ~Int = 1
-   -- -- zar6 ^Int = 1
+   -- -- zar4 'Ind = 1
+   -- -- zar5 ~Ind = 1
+   -- -- zar6 ^Ind = 1
    -- -- zar7 '= 1
    -- -- zar8 '*= 1
    -- -- zar9 'auto = 1
@@ -795,7 +798,7 @@ say ""
 
 -- '!literal-int=I64
 
-foo-named(awol=>my-awol Int, foo: my-foo = 47, bar = "fds") ->!
+foo-named(awol=>my-awol Ind, foo: my-foo = 47, bar = "fds") ->!
    say "foo-named: (awol): {my-awol}, foo: {my-foo}, bar: {bar}"
 
 foo-named 1, "blarg", "qwö qwö"
@@ -808,11 +811,12 @@ list = List<Str>()
 list << "foo"
 list << "yaa"
 
-v = list.map((x, y) ~> x + "1")
-w = list.map (x, y) ~> "{x} 47"
+-- v = list.map((x, y) ~> x + "1")  -- should fail: to many args to block
+v = list.map((x) ~> x + "1")
+w = list.map (x) ~> "{x} 47"
 
-i = list.map (x, y) ~> "{x} 13"
--- i = list.map (x, y) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
+i = list.map (x) ~> "{x} 13"
+-- i = list.map (x) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
 
 j = list.map \ "{_1} 13"
 
@@ -821,23 +825,23 @@ puts "{v}, {w}"
 list = [47, 13, 42, 11]
 
 list.each (v, i) ~> say "each: v: {v}, i: {i}"
-list.each_ (v, i) ~> say "each-value: v: {v}, i: {i}"
+list.each_ (v) ~> say "each-value: v: {v}"
 
 say " x:"
 x = list.each((v) ~> p v).map(~> _1 * 2)
 say " y:"
-y = ( ( list.each((v) \\ p v) ).map(\\ _1 * 2) )
+y = ( ( list.each((v) ~> p v) ).map(~> _1 * 2) )
 say " z:"
-z = list.each((v) \\ p v).map \\ _1 * 2
+z = list.each((v) ~> p v).map ~> _1 * 2
 say " u:"
-u = list.each((v) \\ p v).map \\ _1 * 2
+u = list.each((v) ~> p v).map ~> _1 * 2
 say " v:"
-v = ( ( list.each((v) \\ p v) ).map \.* 2 )
+v = ( ( list.each((v) ~> p v) ).map \.* 2 )
 say " w:"
-w = ( ( list.each((v) \\ p v) ).map(\\.* 2))
+w = ( ( list.each((v) ~> p v) ).map(~.* 2))
 say " pw:"
 
-pw = (list.each \\p _1).map \.* 2
+pw = (list.each ~>p _1).map \.* 2
 
 
 say "All lists should equal [94, 26, 84, 22]"
@@ -887,30 +891,30 @@ g(y ()->) -> nil
 
 --   -- (Seq<I32>()).flat_map ~>
 f () ->
-   ([] of Int).flat-map ~>
-      [] of Int
+   ([] of Ind).flat-map ~>
+      [] of Ind
 
 f(() ->
-   ([] of Int).flat-map(~>
-      [] of Int
+   ([] of Ind).flat-map(~>
+      [] of Ind
    )
 )
 
 (f () ->
-   (([] of Int).flat-map ~>
-      [] of Int
+   (([] of Ind).flat-map ~>
+      [] of Ind
    )
 )
 
 -- f(() ->
---    ([0 x Int]).flat-map(~>
---       [0 x Int]
+--    ([0 x Ind]).flat-map(~>
+--       [0 x Ind]
 --    )
 -- )
 
 -- (f () ->
---    ((['Int]).flat-map ~>
---       ['Int]
+--    ((['Ind]).flat-map ~>
+--       ['Ind]
 --    )
 -- )
 
@@ -1011,8 +1015,8 @@ if likely true =>
          -- for i in 0..6 => p i.to–s; say "."
          if 47 => say "7"
 
-   end–while -- -while
-end–if
+   end -- end–while -- -while
+end -- end–if
 -- if (a == 47
 --    && a != 48
 -- )
@@ -1043,8 +1047,8 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
--- zoo*(a; b; ...c 'Int) -> Str  'pure  # *TODO* variation two (type after arrow)
-zoo*(a; b; ...c 'Int) Str ->  'pure
+-- zoo*(a; b; ...c 'Ind) -> Str  'pure  # *TODO* variation two (type after arrow)
+zoo*(a; b; ...c 'Ind) Str ->  'pure
    if true:
       i = 1
 
@@ -1090,14 +1094,14 @@ zoo*(a; b; ...c 'Int) Str ->  'pure
       end
       -- end–while -- -while
 
-   end–if
+   end -- end–if
 
 
    qwo = "{(a + b)} {c.to–s}"
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
 
--- 'literal-int=Int
+-- 'literal-int=Ind
 
 p zoo 1, 2, 47, 42
 
@@ -1113,14 +1117,14 @@ say "m2 = " + m2.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-qwo(a 'Int, b ~Int) ->
+qwo(a 'Ind, b ~Ind) ->
 end
 
-qwo2(a ^Int, b 'Int) -> end
+qwo2(a ^Ind, b 'Ind) -> end
 
-qwo3(a 'Int, b mut Int) -> Str -- Str
+qwo3(a 'Ind, b mut Ind) -> Str -- Str
 
-qwo4(a Int; b Int) ->
+qwo4(a Ind; b Ind) ->
 end
 
 qwo2 1, 2
@@ -1320,7 +1324,7 @@ branch
          say "19"
    * =>
       say "NO " + n.to–s
-end–branch
+end -- end–branch  -- revisit end-handling
 
 -- onyx style 2 `switch ref`
 match n
@@ -1347,7 +1351,7 @@ match n
    1 => say "is 1"
    2 => say "is 2"
    * => if false => say "NO" else say "20: " + n.to–s
-end–branch
+end -- end–branch
 
 -- onyx style 3 `case`
 branch
@@ -1392,7 +1396,7 @@ match n
    1: say "is 1"
    2: say "is 2"
    *: if false => say "NO" else say "20: " + n.to–s
-end–match
+end -- end–match
 
 -- onyx style 6 `case`
 branch
@@ -1420,12 +1424,12 @@ end
 
 x = foo a, 2, "1"
 
-a = (a Int, b Int) -> (a + b).to–s; end
-b = (a Str, _ Int, b 'Bool; c Real) ->
+a = (a Ind, b Ind) -> (a + b).to–s; end
+b = (a Str, _ Ind, b 'Bool; c Real) ->
    "{a} {x}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Int, b 'Str, c 'Int) -> a.to–s + b + c.to–s
+c = (a ~Ind, b 'Str, c 'Ind) -> a.to–s + b + c.to–s
 
 -- '!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
@@ -1435,7 +1439,7 @@ pp typeof(b), b.class
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-type Fn = Lambda
+-- type Fn = Lambda  -- in default type layer now
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
@@ -1635,7 +1639,7 @@ for val[ix] in ["c", "b", "a"] -- by 2
 
 trait TheTrait
    is–cool–traited?() -> true
-end–trait
+end -- end–trait
 
 -- *TODO* - should really be able to add data, props, etc. EVERYTHING as in type!
 trait AnotherTrait<S1>
@@ -1651,11 +1655,11 @@ end
 
 type Qwa 'abstract
    mixin TheTrait
-end–type
+end -- end–type
 
 type Bar < Qwa
    @@my–foo I64 = 47i64
-   @@some–other–foo 'Int = 42
+   @@some–other–foo 'Ind = 42
    @@yet–a-foo = 42
 
    -- '!literal-int=I32
@@ -1668,7 +1672,7 @@ type Bar < Qwa
    GreenBar = 8
 
    @foo–a Str = ""
-   @foo–b Int = 0_i64
+   @foo–b Ind = 0_i64
    @foo–c I64 = 0_i64
    @foo-ya I32 = 0i32
 
@@ -1692,7 +1696,7 @@ type Foo<S1> < Bar
    @foo–x I64 = 47_i64  'get 'set
    @foo–y = 48
    @foo–z = "bongo"  'get
-   @foo–u Int = 47  'get 'set
+   @foo–u Ind = 47  'get 'set
 
    -- *TODO* WTF!
    @foo-w = 474242       'set
@@ -1706,7 +1710,7 @@ type Foo<S1> < Bar
 
    @bar–y        = 48
    @bar–z        = "bongo"  'get
-   @bar–u  Int = 47  'get 'set
+   @bar–u  Ind = 47  'get 'set
    @bar–w       = 47  'get
 
    ifdef x86_64
@@ -1763,18 +1767,18 @@ type Foo<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}" 'pure
 
-   fn–b(a S1, b Int) -> -- fdsa
+   fn–b(a S1, b Ind) -> -- fdsa
       "b: {a}, {b}"
 
    -- fn–c*(a, b S1) -> S1 'redef 'inline
    fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
 
-   end–def
+   end -- end–def
 
    --# protected
    -- fn–c(a, b I32) redef protected ->
-   fn–c**(a, b Int) -> 'redef
+   fn–c**(a, b Ind) -> 'redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1783,7 +1787,7 @@ type Foo<S1> < Bar
       fn–e
    end
 
-   fn–d2(a S1, b Int) ->
+   fn–d2(a S1, b Ind) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1802,7 +1806,7 @@ type Foo<S1> < Bar
 
    [](i) -> @foo–b + i
 
-end–type
+end -- end–type
 
 -- *TODO* type level 'pure'/'mepure' spec - should be possible to "make" the
 -- type that (all monkey patches obey it), and also a LEXICAL variant which
@@ -1818,7 +1822,7 @@ type FooStyle2<S1> < Bar
    @foo–x I64 = 47_i64  'get 'set
    @foo–y = 48
    @foo–z = "bongo"  'get
-   @foo–u Int = 47  'get 'set
+   @foo–u Ind = 47  'get 'set
    @foo–w = 47       'set
 
    -- at-notation at declaration too?
@@ -1829,7 +1833,7 @@ type FooStyle2<S1> < Bar
 
    @bar–y = 48
    @bar–z = "bongo"  'get
-   @bar–u Int = 47  'get 'set
+   @bar–u Ind = 47  'get 'set
    -- getter @bar–w = 47
    @bar–w = 47       'get
 
@@ -1888,17 +1892,17 @@ type FooStyle2<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}"
 
-   -- fn–b(a S1, b Int) -- fdsa
-   fn–b(a S1, b Int) -> -- fdsa
+   -- fn–b(a S1, b Ind) -- fdsa
+   fn–b(a S1, b Ind) -> -- fdsa
       "b: {a}, {b}"
 
    -- fn–c*(a, b S1) -> S1 'redef 'inline
    fn–c*(a, b S1) S1 -> 'redef 'inline
       "c: {a}, {b}"
-   end–def
+   end -- end–def
    -- end fn–c
 
-   fn–c**(a, b Int) -> 'redef
+   fn–c**(a, b Ind) -> 'redef
       "c: {a}, {b}"
 
    -- fn–d1(a, b)
@@ -1908,8 +1912,8 @@ type FooStyle2<S1> < Bar
       fn–e
    end
 
-   -- fn–d2(a S1, b Int)
-   fn–d2(a S1, b Int) ->
+   -- fn–d2(a S1, b Ind)
+   fn–d2(a S1, b Ind) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1921,7 +1925,7 @@ type FooStyle2<S1> < Bar
 
    [](i) -> @foo–b + i
 
-end–type
+end -- end–type
 -- *TODO* Anonymous types!
 -- anon-typed = new Bar
 --    mixin AnotherTrait<I64>
@@ -1941,14 +1945,18 @@ pp foo.implements? Foo
 pp foo.implements? Bar
 pp foo.implements? AnotherTrait
 pp foo.implements? Any
-pp foo.implements? Record
+pp foo.implements? Struct -- Record
 pp foo.implements? Value
-pp foo.implements? Int
+pp foo.implements? Ind
+
+pp 1_u32.implements? Ind
+pp 1_u64.implements? Ind
+
 pp 1_u8.implements? Any
 pp 1_u8.implements? Value
-pp 1_u8.implements? Record
-pp 1_u8.implements? Int
-pp 1_u8.implements? AnyInt
+pp 1_u8.implements? Struct -- Record
+pp 1_u8.implements? Ind
+pp 1_u8.implements? Int -- AnyInt
 pp 1_u8.implements? I32
 say 1_u8.implements? I32
 pp 1_u8.implements? U8
@@ -2066,7 +2074,7 @@ api MyLibGmp
       _mp_alloc I32
       _mp_size  I32
 
-      -- Just testing ifdef in all contexts
+      -- Just testing `ifdef` in all contexts
       ifdef x86_64
          _mp_d     Ptr<ULong>
       else
@@ -2151,8 +2159,23 @@ add-as-big-ints(a, b) ->
       MyLibGmp.init-set-si pointerof(bigv1), a
    end
 
+   -- if b.of? Str
+   --    MyLibGmp.init-set-str out bigv2, b, 10
+   -- else
+   --    -- Catch 22:
+
+   --    -- WILL FAIL, because it's already "outed" above:
+   --    -- MyLibGmp.init-set-si out bigv2, b
+
+   --    -- WILL FAIL, because above "doesn't happen" when non-Str-path is taken:
+   --    -- MyLibGmp.init-set-si pointerof(bigv2), b  -- used to (falsely) work - now fails - ORC/160830
+
+   -- end
+
+   --# Temporarily until above is sorted out:
+   bigv2 = raw MyLibGmp.Mpz
    if b.of? Str
-      MyLibGmp.init-set-str out bigv2, b, 10
+      MyLibGmp.init-set-str pointerof(bigv2), b, 10
    else
       MyLibGmp.init-set-si pointerof(bigv2), b
    end
@@ -2177,7 +2200,7 @@ add-as-big-ints(
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 -- Reaching, scopes and visibility:
 
--- Onyx cleaner hierarchical access syntax handles all Crystal constructables
+-- Onyx, arguebly cleaner, hierarchical access syntax handles all Crystal constructables
 
 -- # Should work:
 say "Non self-extended:".white

@@ -705,10 +705,14 @@ describe "Semantic: class" do
           1
         end
 
-        $x = self.foo as Int32
+        @@x = self.foo.as(Int32)
+
+        def self.x
+          @@x
+        end
       end
 
-      $x
+      Foo.x
       )) { int32 }
   end
 
@@ -1040,5 +1044,16 @@ describe "Semantic: class" do
       ")
     instance_vars = result.program.types["Foo"].instance_vars.to_a.map(&.[0])
     instance_vars.should eq(%w(@x @y))
+  end
+
+  it "errors if inherits from module" do
+    assert_error %(
+      module Moo
+      end
+
+      class Foo < Moo
+      end
+      ),
+      "Moo is not a class, it's a module"
   end
 end

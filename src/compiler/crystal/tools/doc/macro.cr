@@ -31,7 +31,7 @@ class Crystal::Doc::Macro
 
   def id
     String.build do |io|
-      io << to_s.gsub(' ', "")
+      io << to_s.gsub(/<.+?>/, "").gsub(' ', "")
       io << "-template"
     end
   end

@@ -47,10 +47,13 @@ end
 # require "../../crystal/semantic/ast"
 include Crystal
 
-BABELFISH_TAINT_TOKEN = "__X__"
-BABELFISH_CROSSTAINT_TOKEN = "__OX_TAINT__"
 
-ifdef !release
+BABELFISH_TAINT_TOKEN = "__X__"
+BABELFISH_TAINT_TOKEN_REDUCTION = -6
+BABELFISH_CROSSTAINT_TOKEN = "__CROX_TAINT__"
+BABELFISH_CROSSTAINT_TOKEN_REDUCTION = -15
+
+ifdef   false  #  !release
   @[AlwaysInline]
   def babelfish_tainted?(name : String) : Bool
     name.ends_with? BABELFISH_TAINT_TOKEN
@@ -69,7 +72,7 @@ ifdef !release
   @[AlwaysInline]
   def babelfish_detaint(name : String) : String
     # _dbg "- babelfish_detaint - '#{name}"
-    babelfish_tainted?(name) ? BabelData.get_str(name[0..-6]) : name
+    babelfish_tainted?(name) ? BabelData.get_str(name[0..BABELFISH_TAINT_TOKEN_REDUCTION]) : name
   end
 
   class String
@@ -126,17 +129,19 @@ end
 @[AlwaysInline]
 def babelfish_croxdetaint(name : String) : String
   # _dbg "- babelfish_detaint - '#{name}"
-  babelfish_croxtainted?(name) ? BabelData.get_str(name[0..-13]) : name
+  babelfish_croxtainted?(name) ? BabelData.get_str(name[0..BABELFISH_CROSSTAINT_TOKEN_REDUCTION]) : name
 end
 
 class String
+  @[AlwaysInline]
   def babelfish_croxtainted?() : Bool
     babelfish_croxtainted? self
   end
 end
 
 def babelfish_reverse(name : String) : String
-  BabelData.reverse[name]? || name
+  # BabelData.reverse[name]? || name
+  name
 end
 
 def babelfish_mangling(node : ASTNode, scope) : ASTNode
@@ -331,44 +336,44 @@ end
 
 
 
-babel_type  Any,    Object,      true
-babel_type  Kind,   Class,       true
-babel_type  Record, Struct,      true
-babel_type  AnyInt, Int,         false
+# babel_type  Any,    Object,      true
+# babel_type  Kind,   Class,       true
+# babel_type  Record, Struct,      true
+# babel_type  AnyInt, Int,         false
 
 
-babel_type  Int,    StdInt,      false
-babel_type  Real,   StdReal,     false
+# babel_type  Int,    StdInt,      false
+# babel_type  Real,   StdReal,     false
 
-babel_type  Tag,    Symbol,      true
-babel_type  Ptr,    Pointer,     true
+# babel_type  Tag,    Symbol,      true
+# babel_type  Ptr,    Pointer,     true
 
-# babel_type Str,    String,      false  -- added as alias instead currently
-babel_type  List,   Array,       true
-# Make an alias: Li => List
+# # babel_type Str,    String,      false  -- added as alias instead currently
+# babel_type  List,   Array,       true
+# # Make an alias: Li => List
 
-babel_type  Tup,    Tuple,       false
-babel_type  TTup,   NamedTuple,  false # "TaggedTuple"
+# babel_type  Tup,    Tuple,       false
+# babel_type  TTup,   NamedTuple,  false # "TaggedTuple"
 
-babel_type  Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
+# babel_type  Map,    Hash,        true  # *TODO* Map should be a generic _interface_ choice which uses Hash by default.
 
-babel_type  Lambda, Proc,        true
+# babel_type  Lambda, Proc,        true
 
-# babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
-# babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+# # babel_type Arr,    StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
+# # babel_type Array,  StaticArray, true  # This is not _really_ the fixed array we want.. Hmm, the val/ref disconnection from type!
 
-babel_type  I8,     Int8,        true
-babel_type  I16,    Int16,       true
-babel_type  I32,    Int32,       true
-babel_type  I64,    Int64,       true
+# babel_type  I8,     Int8,        true
+# babel_type  I16,    Int16,       true
+# babel_type  I32,    Int32,       true
+# babel_type  I64,    Int64,       true
 
-babel_type  U8,     UInt8,       true
-babel_type  U16,    UInt16,      true
-babel_type  U32,    UInt32,      true
-babel_type  U64,    UInt64,      true
+# babel_type  U8,     UInt8,       true
+# babel_type  U16,    UInt16,      true
+# babel_type  U32,    UInt32,      true
+# babel_type  U64,    UInt64,      true
 
-babel_type  F32,    Float32,     true
-babel_type  F64,    Float64,     true
+# babel_type  F32,    Float32,     true
+# babel_type  F64,    Float64,     true
 
 
 babel_func  init,        initialize,         true

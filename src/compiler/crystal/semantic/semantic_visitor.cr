@@ -1,6 +1,13 @@
+# Base visitor for semantic analysis. It traveses the whole
+# ASTNode tree, keeping a `current_type` in context, which corresponds
+# to the type being visited according to class/module/lib definitions.
 abstract class Crystal::SemanticVisitor < Crystal::Visitor
   getter program : Program
-  property current_type : Type
+
+  # At every point there's a current type.
+  # In the beginnig this is the `Program` (top-level), but when
+  # a class definition is visited this changes to that type, and so on.
+  property current_type : ModuleType
 
   @free_vars : Hash(String, TypeVar)?
   @path_lookup : Type?
@@ -214,8 +221,8 @@ abstract class Crystal::SemanticVisitor < Crystal::Visitor
     end
   end
 
-  def lookup_type(node : ASTNode)
-    current_type.lookup_type(node, allow_typeof: false)
+  def lookup_type(node : ASTNode, free_vars = nil)
+    current_type.lookup_type(node, free_vars: free_vars, allow_typeof: false)
   end
 
   def check_outside_exp(node, op)
@@ -441,7 +448,7 @@ abstract class Crystal::SemanticVisitor < Crystal::Visitor
     @exp_nest > 0
   end
 
-  def pushing_type(type)
+  def pushing_type(type : ModuleType)
     old_type = @current_type
     @current_type = type
     yield

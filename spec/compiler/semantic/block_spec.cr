@@ -826,30 +826,6 @@ describe "Block inference" do
       )) { array_of int32 }
   end
 
-  it "passed bug included generic module and typeof" do
-    assert_type(%(
-      module Moo(U)
-        def moo
-          U
-        end
-      end
-
-      class Foo(T)
-        include Moo(typeof(self.foo))
-
-        def initialize(@foo : T)
-        end
-
-        def foo
-          @foo
-        end
-      end
-
-      Foo.new(1).moo
-      Foo.new('a').moo
-      )) { char.metaclass }
-  end
-
   it "errors if invoking new with block when no initialize is defined" do
     assert_error %(
       class Foo
@@ -957,24 +933,6 @@ describe "Block inference" do
       yield
       ),
       "can't use `yield` outside a method"
-  end
-
-  it "rebinds yield -> block arguments" do
-    assert_type(%(
-      def foo(x)
-        buffer = Pointer(typeof(x)).malloc(1_u64)
-        yield buffer
-      end
-
-      $a = 1
-      x = nil
-      foo($a) do |buffer|
-        buffer.value = $a
-        x = buffer
-      end
-      $a = 1.1
-      x
-      )) { nilable(pointer_of(union_of(int32, float64))) }
   end
 
   it "errors on recursive yield" do
@@ -1152,7 +1110,7 @@ describe "Block inference" do
       )) { bool }
   end
 
-  ["Object", "Foo(Object)", "Bar | Object", "(Object ->)", "( -> Object)"].each do |string|
+  ["Object", "Bar | Object", "(Object ->)", "( -> Object)"].each do |string|
     it "errors if using #{string} as block return type (#2358)" do
       assert_error %(
         class Foo(T)

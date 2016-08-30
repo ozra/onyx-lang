@@ -963,27 +963,6 @@ module Crystal
       name.size
     end
 
-    def min_max_args_sizes
-      max_size = args.size
-      default_value_index = args.index(&.default_value)
-      min_size = default_value_index || max_size
-      splat_index = self.splat_index
-      if splat_index
-        if args[splat_index].name.empty?
-          min_size = {default_value_index || splat_index, splat_index}.min
-          max_size = splat_index
-        else
-          min_size -= 1 unless default_value_index && default_value_index < splat_index
-          max_size = Int32::MAX
-        end
-      end
-      {min_size, max_size}
-    end
-
-    def has_default_arguments?
-      args.size > 0 && args.last.default_value
-    end
-
     def clone_specific_impl
       a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat.clone)
       a_def.calls_super = calls_super?
@@ -1182,6 +1161,30 @@ module Crystal
     end
 
     def_equals_and_hash @cond, @whens, @else
+  end
+
+  class Select < ASTNode
+    record When, condition : ASTNode, body : ASTNode
+
+    property whens : Array(When)
+    property else : ASTNode?
+
+    def initialize(@whens, @else = nil)
+    end
+
+    def accept_children(visitor)
+      @whens.each do |select_when|
+        select_when.condition.accept visitor
+        select_when.body.accept visitor
+      end
+      @else.try &.accept visitor
+    end
+
+    def clone_specific_impl
+      Select.new(@whens.clone, @else.clone)
+    end
+
+    def_equals_and_hash @whens, @else
   end
 
   # Node that represents an implicit obj in:

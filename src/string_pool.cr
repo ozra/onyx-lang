@@ -172,7 +172,7 @@ class StringPool
     bucket_ix = h & @bucket_mask
     # _dbg "- get - calced bucket ix to #{bucket_ix}"
 
-    bucket = @buckets.at_unsafe(bucket_ix) # *TODO* -> .at_unsafe()
+    bucket = @buckets.unsafe_at(bucket_ix)
 
     if bucket
       entry = find_entry_in_bucket(bucket, *string_parts)

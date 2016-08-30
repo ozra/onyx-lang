@@ -1718,14 +1718,14 @@ module Crystal
             if mnc?('l','a','s','s')
               return check_const_or_token(:Class, start)
             end
-          when 'I'
-            if mnc?('n','t')
-              return check_const_or_token(:Int, start)
-            end
-          when 'R'
-            if mnc?('e','a','l')
-              return check_const_or_token(:Real, start)
-            end
+          # when 'I'
+          #   if mnc?('n','t')
+          #     return check_const_or_token(:Int, start)
+          #   end
+          # when 'R'
+          #   if mnc?('e','a','l')
+          #     return check_const_or_token(:Real, start)
+          #   end
           when 'S'
             if mnc?('e','l','f')
               if peekch == '?'

@@ -42,12 +42,12 @@ module Crystal
 
       if format
         begin
-          puts Crystal::Formatter.format(@str.to_s)
+          @program.stdout.puts Crystal::Formatter.format(@str.to_s)
         rescue
-          puts @str
+          @program.stdout.puts @str
         end
       else
-        puts @str
+        @program.stdout.puts @str
       end
 
       @last = Nop.new
@@ -77,7 +77,7 @@ module Crystal
     def interpret_puts(node)
       node.args.each do |arg|
         arg.accept self
-        puts @last
+        @program.stdout.puts @last
       end
 
       @last = Nop.new
@@ -88,7 +88,7 @@ module Crystal
         arg.accept self
         print arg
         print " = "
-        puts @last
+        @program.stdout.puts @last
       end
 
       @last = Nop.new
@@ -724,6 +724,8 @@ module Crystal
             key = key.value
           when MacroId
             key = key.value
+          when StringLiteral
+            key = key.value
           else
             return NilLiteral.new
           end
@@ -742,6 +744,8 @@ module Crystal
           when SymbolLiteral
             key = key.value
           when MacroId
+            key = key.value
+          when StringLiteral
             key = key.value
           else
             raise "expected 'NamedTupleLiteral#[]=' first argument to be a SymbolLiteral or MacroId, not #{key.class_desc}"

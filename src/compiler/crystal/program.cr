@@ -31,9 +31,7 @@ module Crystal
   # can also include other modules (this happens when you do `include Module`
   # at the top-level).
   class Program < NonGenericModuleType
-    include DefContainer
     include DefInstanceContainer
-    include MatchesLookup
 
     # All symbols (:foo, :bar) found in the program
     getter symbols = Set(String).new
@@ -123,6 +121,9 @@ module Crystal
 
     # The constant for ARGV_UNSAFE
     getter! argv : Const
+
+    # Default standard output to use in a program, while compiling.
+    property stdout : IO = STDOUT
 
     def initialize
       super(self, self, "main")
@@ -257,15 +258,15 @@ module Crystal
       types["Union"] = @union = GenericUnionType.new self, self, "Union", value, ["T"]
       types["Crystal"] = @crystal = NonGenericModuleType.new self, self, "Crystal"
 
-      types["ARGC_UNSAFE"] = @argc = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", Primitive.new(:argc, int32)
-      types["ARGV_UNSAFE"] = @argv = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", Primitive.new(:argv, pointer_of(pointer_of(uint8)))
+      types["ARGC_UNSAFE"] = @argc = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", Primitive.new("argc", int32)
+      types["ARGV_UNSAFE"] = @argv = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", Primitive.new("argv", pointer_of(pointer_of(uint8)))
 
       # Make sure to initialize ARGC and ARGV as soon as the program starts
       class_var_and_const_initializers << argc_unsafe
       class_var_and_const_initializers << argv_unsafe
 
       types["GC"] = gc = NonGenericModuleType.new self, self, "GC"
-      gc.metaclass.add_def Def.new("add_finalizer", [Arg.new("object")], Nop.new)
+      gc.metaclass.as(ModuleType).add_def Def.new("add_finalizer", [Arg.new("object")], Nop.new)
 
       # @literal_expander = LiteralExpander.new self
       # @macro_expander = MacroExpander.new self
@@ -605,10 +606,6 @@ module Crystal
     end
 
     # Next come overrides for the type system
-
-    def program
-      self
-    end
 
     def metaclass
       self

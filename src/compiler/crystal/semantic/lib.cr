@@ -1,13 +1,16 @@
 class Crystal::Call
   def recalculate_lib_call(obj_type)
+    _dbg "Call#recalculate_lib_call #{name}"
+
     replace_splats
 
     old_target_defs = @target_defs
 
     external = obj_type.lookup_first_def(name, false).as(External?)
 
+
     # # # # # # # # # # #
-    # Onyx Babelfishing
+    # Onyx Hardcoded Babelfishing
     if ! external
       if name == "initialize"
         name = "init"

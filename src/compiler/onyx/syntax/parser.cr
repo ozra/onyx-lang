@@ -1605,7 +1605,6 @@ class OnyxParser < OnyxLexer
       dbg "took IDFR branch"
 
       case @token.value
-      # when "self" then raise "`self` is a reserved word. Did you perhaps mean `Self` or `this`?"
       when :try, :do then parse_try
       when :nil then node_and_next_token NilLiteral.new
       when :true then node_and_next_token BoolLiteral.new(true)
@@ -1808,6 +1807,13 @@ class OnyxParser < OnyxLexer
     start_line = location.line_number
     start_column = location.column_number
     name_indent = @indent
+
+
+    # *TODO* Where the fuck to get this in (to also handle Self(x, y), etc.)
+    # if const? :Self
+    #   return Self.new
+    # end
+
 
     names = [] of String
     names << check_const # @token.value.to_s
@@ -7526,16 +7532,16 @@ class OnyxParser < OnyxLexer
     dbgtail "/parse_c_struct_or_union_body_expressions"
   end
 
-  def parse_c_struct_or_union_fields(exps)
+  def parse_c_struct_or_union_fields(exps) : Nil
     dbg "parse_c_struct_or_union_fields ->"
-    args = [Arg.new(@token.value.to_s).at(@token.location)]
+    vars = [Var.new(@token.value.to_s).at(@token.location)]
 
     next_token_skip_space_or_newline
 
     # *TODO* possibly dump this possibility!
     while @token.type == :","
       next_token_skip_space_or_newline
-      args << Arg.new(check_idfr).at(@token.location)
+      vars << Var.new(check_idfr).at(@token.location)
       next_token_skip_space_or_newline
     end
 
@@ -7543,9 +7549,8 @@ class OnyxParser < OnyxLexer
 
     # skip_statement_end
 
-    args.each do |an_arg|
-      an_arg.restriction = type
-      exps << an_arg
+    vars.each do |var|
+      exps << TypeDeclaration.new(var, type).at(var).at_end(type)
     end
 
   ensure

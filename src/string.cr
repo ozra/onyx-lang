@@ -1218,7 +1218,7 @@ class String
 
   # Returns a new string _tr_anslating characters using *from* and *to* as a
   # map. If *to* is shorter than *from*, the last character in *to* is used for
-  # the rest.
+  # the rest. If *to* is empty, this acts like `String#delete`.
   #
   # ```
   # "aabbcc".tr("abc", "xyz") # => "xxyyzz"
@@ -1226,6 +1226,7 @@ class String
   # "aabbcc".tr("a", "xyz")   # => "xxbbcc"
   # ```
   def tr(from : String, to : String)
+    return delete(from) if to.empty?
     multi = nil
     table = StaticArray(Int32, 256).new(-1)
     reader = Char::Reader.new(to)
@@ -1718,7 +1719,7 @@ class String
   # # but "o" is not and so is not included
   # "hello".gsub(/(he|l|o)/, {"he": "ha", "l": "la"}) # => "halala"
   # ```
-  def gsub(pattern : Regex, hash : Hash(String, _))
+  def gsub(pattern : Regex, hash : Hash(String, _) | NamedTuple)
     gsub(pattern) do |match|
       hash[match]?
     end
@@ -1778,6 +1779,18 @@ class String
   def gsub(hash : Hash(Char, _))
     gsub do |char|
       hash[char]? || char
+    end
+  end
+
+  # Returns a string where all chars in the given hash are replaced
+  # by the corresponding *tuple* values.
+  #
+  # ```
+  # "hello".gsub({'e' => 'a', 'l' => 'd'}) # => "haddo"
+  # ```
+  def gsub(tuple : NamedTuple)
+    gsub do |char|
+      tuple[char.to_s]? || char
     end
   end
 
@@ -2118,6 +2131,11 @@ class String
   # "Hello, World".index("H", 2) # => nil
   # ```
   def index(search : Char, offset = 0)
+    # If it's ASCII we can delegate to slice
+    if search.ascii?
+      return to_slice.index(search.ord.to_u8, offset)
+    end
+
     offset += size if offset < 0
     return nil if offset < 0
 
@@ -2162,18 +2180,13 @@ class String
   # "Hello, World".rindex("H", 2) # => nil
   # ```
   def rindex(search : Char, offset = size - 1)
+    # If it's ASCII we can delegate to slice
+    if search.ascii?
+      return to_slice.rindex(search.ord.to_u8, offset)
+    end
+
     offset += size if offset < 0
     return nil if offset < 0
-
-    # If it's ASCII we can search from the end
-    if search.ord < 0x80
-      offset.downto(0) do |i|
-        if to_unsafe[i] == search.ord
-          return i
-        end
-      end
-      return nil
-    end
 
     last_index = nil
 
@@ -3086,7 +3099,7 @@ class String
   def ends_with?(char : Char)
     return false unless bytesize > 0
 
-    if char.ord < 0x80 || ascii_only?
+    if char.ascii? || ascii_only?
       return to_unsafe[bytesize - 1] == char.ord
     end
 

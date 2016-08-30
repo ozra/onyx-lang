@@ -154,6 +154,181 @@ describe "Semantic: instance var" do
       )) { int32 }
   end
 
+  it "declares instance var of generic type, with no type parameter" do
+    assert_type(%(
+      class Foo(T)
+        @x : Int32
+
+        def initialize(@x : Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Char).new(1).x
+      )) { int32 }
+  end
+
+  it "declares instance var of generic type, with generic type" do
+    assert_type(%(
+      class Gen(T)
+      end
+
+      class Foo(T)
+        @x : Gen(T)
+
+        def initialize(@x : Gen(T))
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new(Gen(Int32).new).x
+      )) { generic_class "Gen", int32 }
+  end
+
+  it "declares instance var of generic type, with union" do
+    assert_type(%(
+      class Foo(T)
+        @x : T | Char
+
+        def initialize(@x)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Int32).new(1).x
+      )) { union_of int32, char }
+  end
+
+  it "declares instance var of generic type, with proc" do
+    assert_type(%(
+      class Foo(T)
+        @x : T, T -> Int32
+
+        def initialize(@x : T, T -> Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Char).new(->(x : Char, y : Char) { 1 }).x
+      )) { proc_of([char, char, int32]) }
+  end
+
+  it "declares instance var of generic type, with tuple" do
+    assert_type(%(
+      class Foo(T)
+        @x : {T, Int32, T}
+
+        def initialize(@x : {T, Int32, T})
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Char).new({'a', 1, 'b'}).x
+      )) { tuple_of([char, int32, char]) }
+  end
+
+  it "declares instance var of generic type, with metaclass" do
+    assert_type(%(
+      class Foo(T)
+        @x : T.class
+
+        def initialize(@x : T.class)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Int32).new(Int32).x
+      )) { int32.metaclass }
+  end
+
+  it "declares instance var of generic type, with virtual metaclass" do
+    assert_type(%(
+      class Bar; end
+      class Baz < Bar; end
+
+      class Foo(T)
+        @x : T.class
+
+        def initialize(@x : T.class)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Bar).new(Bar).x
+      )) { types["Bar"].virtual_type!.metaclass }
+  end
+
+  it "declares instance var of generic type, with static array" do
+    assert_type(%(
+      class Foo(T)
+        @x : UInt8[T]
+
+        def initialize(@x : UInt8[T])
+        end
+
+        def x
+          @x
+        end
+      end
+
+      z = uninitialized UInt8[3]
+      Foo(3).new(z).x
+      )) { static_array_of(uint8, 3) }
+  end
+
+  it "declares instance var with self, on generic" do
+    assert_type(%(
+      class Foo(T)
+        @x : self | Nil
+
+        def x
+          @x
+        end
+      end
+
+      Foo(Int32).new.x
+      )) { nilable generic_class("Foo", int32) }
+  end
+
+  it "errors if declaring variable with number" do
+    assert_error %(
+      class Foo(T)
+        @x : T
+
+        def initialize(@x : T)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo(3).new(3).x
+      ),
+      "can't declare variable with NumberLiteral"
+  end
+
   it "declares instance var of generic type through module" do
     assert_type(%(
       module Moo
@@ -220,10 +395,36 @@ describe "Semantic: instance var" do
       )) { int32 }
   end
 
+  it "declares instance var of generic module (2)" do
+    assert_type(%(
+      module Moo(U)
+        @x : U
+
+        def x
+          @x
+        end
+      end
+
+      class Foo(T)
+        include Moo(T)
+
+        def initialize
+          a = 1
+          @x = a
+        end
+      end
+
+      Foo(Int32).new.x
+      )) { int32 }
+  end
+
   it "declares instance var of generic module from non-generic module" do
     assert_type(%(
       module Moo
         @x : Int32
+
+        def initialize(@x)
+        end
 
         def x
           @x
@@ -238,6 +439,7 @@ describe "Semantic: instance var" do
         include Moo2(T)
 
         def initialize
+          super(1)
           a = 1
           @x = a
         end
@@ -247,7 +449,7 @@ describe "Semantic: instance var" do
       )) { int32 }
   end
 
-  it "infers type from literal" do
+  it "infers type from number literal" do
     assert_type(%(
       class Foo
         def initialize
@@ -261,6 +463,785 @@ describe "Semantic: instance var" do
 
       Foo.new.x
       )) { int32 }
+  end
+
+  it "infers type from char literal" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 'a'
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { char }
+  end
+
+  it "infers type from bool literal" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = true
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { bool }
+  end
+
+  it "infers type from string literal" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = "hi"
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { string }
+  end
+
+  it "infers type from string interpolation" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = "foo\#{1}"
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { string }
+  end
+
+  it "infers type from symbol literal" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = :hi
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { symbol }
+  end
+
+  it "infers type from array literal with of" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = [] of Int32
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { array_of int32 }
+  end
+
+  it "infers type from array literal with of metaclass" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = [] of Int32.class
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { array_of int32.metaclass }
+  end
+
+  it "infers type from array literal from its literals" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = [1, 'a']
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { array_of union_of(int32, char) }
+  end
+
+  it "infers type from hash literal with of" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = {} of Int32 => String
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { hash_of int32, string }
+  end
+
+  it "infers type from hash literal from elements" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = {1 => "foo", 'a' => true}
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { hash_of(union_of(int32, char), union_of(string, bool)) }
+  end
+
+  it "infers type from range literal" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = 1..'a'
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { range_of(int32, char) }
+  end
+
+  it "infers type from regex literal" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = /foo/
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Regex"] }
+  end
+
+  it "infers type from regex literal with interpolation" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = /foo\#{1}/
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Regex"] }
+  end
+
+  it "infers type from tuple literal" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = {1, "foo"}
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { tuple_of([int32, string]) }
+  end
+
+  it "infers type from named tuple literal" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = {x: 1, y: "foo"}
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { named_tuple_of({"x": int32, "y": string}) }
+  end
+
+  it "infers type from new expression" do
+    assert_type(%(
+      class Bar
+      end
+
+      class Foo
+        def initialize
+          @x = Bar.new
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Bar"] }
+  end
+
+  it "infers type from as" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = (1 + 2).as(Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers type from as?" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = (1 + 2).as?(Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable int32 }
+  end
+
+  it "infers type from argument restriction" do
+    assert_type(%(
+      class Foo
+        def x=(@x : Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable int32 }
+  end
+
+  it "infers type from argument default value" do
+    assert_type(%(
+      class Foo
+        def set(@x = 1)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable int32 }
+  end
+
+  it "infers type from lib fun call" do
+    assert_type(%(
+      lib LibFoo
+        struct Bar
+          x : Int32
+        end
+
+        fun foo : Bar
+      end
+
+      class Foo
+        def initialize
+          @x = LibFoo.foo
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["LibFoo"].types["Bar"] }
+  end
+
+  it "infers type from lib variable" do
+    assert_type(%(
+      lib LibFoo
+        struct Bar
+          x : Int32
+        end
+
+        $foo : Bar
+      end
+
+      class Foo
+        def initialize
+          @x = LibFoo.foo
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["LibFoo"].types["Bar"] }
+  end
+
+  it "infers type from ||" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 1 || true
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(int32, bool) }
+  end
+
+  it "infers type from &&" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 1 && true
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(int32, bool) }
+  end
+
+  it "infers type from ||=" do
+    assert_type(%(
+      class Foo
+        def x
+          @x ||= 1
+        end
+      end
+
+      Foo.new.@x
+      )) { nilable int32 }
+  end
+
+  it "infers type from ||= inside another assignemnt" do
+    assert_type(%(
+      class Foo
+        def x
+          x = @x ||= 1
+        end
+      end
+
+      Foo.new.@x
+      )) { nilable int32 }
+  end
+
+  it "infers type from if" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 1 == 1 ? 1 : true
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(int32, bool) }
+  end
+
+  it "infers type from case" do
+    assert_type(%(
+      require "prelude"
+
+      class Foo
+        def initialize
+          @x = case 1
+               when 2
+                 'a'
+               else
+                 true
+               end
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(char, bool) }
+  end
+
+  it "infers type from unless" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = unless 1 == 1
+                 1
+               else
+                 true
+               end
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(int32, bool) }
+  end
+
+  it "infers type from begin" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = begin
+            'a'
+            1
+          end
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers type from assign (1)" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = @y = 1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers type from assign (2)" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = @y = 1
+        end
+
+        def y
+          @y
+        end
+      end
+
+      Foo.new.y
+      )) { int32 }
+  end
+
+  it "infers type from block argument" do
+    assert_type(%(
+      class Foo
+        def set(&@x : Int32 -> Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable proc_of(int32, int32) }
+  end
+
+  it "infers type from block argument without restriction" do
+    assert_type(%(
+      class Foo
+        def set(&@x)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable proc_of(void) }
+  end
+
+  it "infers type from !" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = !1
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { bool }
+  end
+
+  it "infers type from is_a?" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 1.is_a?(Char)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { bool }
+  end
+
+  it "infers type from responds_to?" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = 1.responds_to?(:foo)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { bool }
+  end
+
+  it "infers type from sizeof" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = sizeof(Int32)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers type from instance_sizeof" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x = instance_sizeof(Foo)
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "infers type from path that is a type" do
+    assert_type(%(
+      class Bar; end
+      class Baz < Bar; end
+
+      class Foo
+        def initialize
+          @x = Bar
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Bar"].virtual_type!.metaclass }
+  end
+
+  it "infers type from path that is a constant" do
+    assert_type(%(
+      CONST = 1
+
+      class Foo
+        def initialize
+          @x = CONST
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "doesn't infer type from redefined method" do
+    assert_type(%(
+      class Foo
+        def foo
+          @x = 1
+        end
+
+        def foo
+          @x = 'a'
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { nilable char }
+  end
+
+  it "infers type from redefined method if calls previous_def" do
+    assert_type(%(
+      class Foo
+        def foo
+          @x = 1
+        end
+
+        def foo
+          previous_def
+          @x = 'a'
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { union_of(nil_type, int32, char) }
+  end
+
+  it "infers type in multi assign" do
+    assert_type(%(
+      class Foo
+        def initialize
+          @x, @y = 1, 'a'
+        end
+
+        def x
+          @x
+        end
+
+        def y
+          @y
+        end
+      end
+
+      {Foo.new.x, Foo.new.y}
+      )) { tuple_of([int32, char]) }
+  end
+
+  it "infers type from enum member" do
+    assert_type(%(
+      enum Color
+        Red, Green, Blue
+      end
+
+      class Foo
+        def initialize
+          @x = Color::Red
+        end
+
+        def x
+          @x
+        end
+      end
+
+      Foo.new.x
+      )) { types["Color"] }
   end
 
   it "infers type from two literals" do
@@ -1046,7 +2027,7 @@ describe "Semantic: instance var" do
         end
       end
       ),
-      "this 'initialize' doesn't initialize instance variable '@x', rendering it nilable"
+      "this 'initialize' doesn't initialize instance variable '@x' of Foo(T), with Bar(T) < Foo(T), rendering it nilable"
   end
 
   it "doesn't error if not calling super but initializing all variables" do
@@ -2023,9 +3004,6 @@ describe "Semantic: instance var" do
   it "doesn't infer generic type without type argument inside generic" do
     assert_error %(
       class Bar(T)
-        def self.new
-          1
-        end
       end
 
       class Foo(T)
@@ -2040,7 +3018,7 @@ describe "Semantic: instance var" do
 
       Foo(Int32).new.bar
       ),
-      "Can't infer the type of instance variable '@bar' of Foo"
+      "can't use Bar(T) as the type of instance variable @bar of Foo(T), use a more specific type"
   end
 
   it "doesn't crash on missing var on subclass, with superclass not specifying a type" do
@@ -2647,6 +3625,7 @@ describe "Semantic: instance var" do
         end
 
         def initialize(@arg : T)
+          @foo = [bar]
           yield 3
         end
 

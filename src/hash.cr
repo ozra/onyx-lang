@@ -85,6 +85,20 @@ class Hash(K, V)
     !!find_entry(key)
   end
 
+  # Returns `true` when value given by *value* exists, otherwise `false`.
+  #
+  # ```
+  # h = {"foo" => "bar"}
+  # h.has_value?("foo") # => false
+  # h.has_value?("bar") # => true
+  # ```
+  def has_value?(val)
+    each_value do |value|
+      return true if value == val
+    end
+    false
+  end
+
   # Returns the value for the key given by *key*.
   # If not found, returns the default value given by `Hash.new`, otherwise raises `KeyError`.
   #
@@ -338,8 +352,8 @@ class Hash(K, V)
   #
   # ```
   # h = {"foo" => "bar"}
-  # h.each_value do |key|
-  #   key # => "bar"
+  # h.each_value do |value|
+  #   value # => "bar"
   # end
   # ```
   def each_value
@@ -526,7 +540,7 @@ class Hash(K, V)
   end
 
   def select(*keys)
-    select(keys)
+    self.select(keys)
   end
 
   # Removes every element except the given ones.

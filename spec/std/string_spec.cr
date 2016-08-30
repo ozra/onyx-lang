@@ -1069,9 +1069,19 @@ describe "String" do
       str.gsub({'e' => 'a', 'l' => 'd'}).should eq("haddo")
     end
 
+    it "gsubs with char named tuple" do
+      str = "hello"
+      str.gsub({e: 'a', l: 'd'}).should eq("haddo")
+    end
+
     it "gsubs with regex and hash" do
       str = "hello"
       str.gsub(/(he|l|o)/, {"he" => "ha", "l" => "la"}).should eq("halala")
+    end
+
+    it "gsubs with regex and named tuple" do
+      str = "hello"
+      str.gsub(/(he|l|o)/, {he: "ha", l: "la"}).should eq("halala")
     end
 
     it "gsubs using $~" do
@@ -1391,18 +1401,26 @@ describe "String" do
     s.bytesize.should eq(3)
   end
 
-  it "tr" do
-    "bla".tr("a", "h").should eq("blh")
-    "bla".tr("a", "⊙").should eq("bl⊙")
-    "bl⊙a".tr("⊙", "a").should eq("blaa")
-    "bl⊙a".tr("⊙", "ⓧ").should eq("blⓧa")
-    "bl⊙a⊙asdfd⊙dsfsdf⊙⊙⊙".tr("a⊙", "ⓧt").should eq("bltⓧtⓧsdfdtdsfsdfttt")
-    "hello".tr("aeiou", "*").should eq("h*ll*")
-    "hello".tr("el", "ip").should eq("hippo")
-    "Lisp".tr("Lisp", "Crys").should eq("Crys")
-    "hello".tr("helo", "1212").should eq("12112")
-    "this".tr("this", "ⓧ").should eq("ⓧⓧⓧⓧ")
-    "über".tr("ü", "u").should eq("uber")
+  describe "tr" do
+    it "translates" do
+      "bla".tr("a", "h").should eq("blh")
+      "bla".tr("a", "⊙").should eq("bl⊙")
+      "bl⊙a".tr("⊙", "a").should eq("blaa")
+      "bl⊙a".tr("⊙", "ⓧ").should eq("blⓧa")
+      "bl⊙a⊙asdfd⊙dsfsdf⊙⊙⊙".tr("a⊙", "ⓧt").should eq("bltⓧtⓧsdfdtdsfsdfttt")
+      "hello".tr("aeiou", "*").should eq("h*ll*")
+      "hello".tr("el", "ip").should eq("hippo")
+      "Lisp".tr("Lisp", "Crys").should eq("Crys")
+      "hello".tr("helo", "1212").should eq("12112")
+      "this".tr("this", "ⓧ").should eq("ⓧⓧⓧⓧ")
+      "über".tr("ü", "u").should eq("uber")
+    end
+
+    context "given no replacement characters" do
+      it "acts as #delete" do
+        "foo".tr("o", "").should eq("foo".delete("o"))
+      end
+    end
   end
 
   describe "compare" do
@@ -1765,10 +1783,16 @@ describe "String" do
     it "substitutes one placeholder" do
       res = "change %{this}" % {"this" => "nothing"}
       res.should eq "change nothing"
+
+      res = "change %{this}" % {this: "nothing"}
+      res.should eq "change nothing"
     end
 
     it "substitutes multiple placeholder" do
       res = "change %{this} and %{more}" % {"this" => "nothing", "more" => "something"}
+      res.should eq "change nothing and something"
+
+      res = "change %{this} and %{more}" % {this: "nothing", more: "something"}
       res.should eq "change nothing and something"
     end
 
@@ -1776,10 +1800,14 @@ describe "String" do
       expect_raises KeyError do
         "change %{this}" % {"that" => "wrong key"}
       end
+
+      expect_raises KeyError do
+        "change %{this}" % {that: "wrong key"}
+      end
     end
 
-    it "raises if expecting hash but not given" do
-      expect_raises(ArgumentError, "one hash required") do
+    it "raises if expecting hash or named tuple but not given" do
+      expect_raises(ArgumentError, "one hash or named tuple required") do
         "change %{this}" % "this"
       end
     end
@@ -1792,6 +1820,9 @@ describe "String" do
 
     it "applies formatting to %<...> placeholder" do
       res = "change %<this>.2f" % {"this" => 23.456}
+      res.should eq "change 23.46"
+
+      res = "change %<this>.2f" % {this: 23.456}
       res.should eq "change 23.46"
     end
   end

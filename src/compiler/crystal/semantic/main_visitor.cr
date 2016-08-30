@@ -627,7 +627,11 @@ module Crystal
     end
 
     def end_visit(node : Expressions)
-      node.bind_to node.last unless node.empty?
+      if node.empty?
+        node.set_type(@program.nil)
+      else
+        node.bind_to node.last
+      end
     end
 
     def visit(node : Assign)
@@ -1070,9 +1074,10 @@ module Crystal
         # It can happen that this call is inside an ArrayLiteral or HashLiteral,
         # was expanded but isn't bound to the expansion because the call (together
         # with its expantion) was cloned.
-        if (expanded = node.expanded) && !node.dependencies?
+        if (expanded = node.expanded) && (!node.dependencies? || !node.type?)
           node.bind_to(expanded)
         end
+
         return false
       end
 
@@ -1106,10 +1111,10 @@ module Crystal
         named_args.try &.each &.value.accept self
       end
 
-      obj.try &.add_input_observer(node)
-      args.each &.add_input_observer(node)
-      block_arg.try &.add_input_observer node
-      named_args.try &.each &.value.add_input_observer(node)
+      obj.try &.set_enclosing_call(node)
+      args.each &.set_enclosing_call(node)
+      block_arg.try &.set_enclosing_call node
+      named_args.try &.each &.value.set_enclosing_call(node)
 
       check_super_in_initialize node
 
@@ -1286,10 +1291,25 @@ module Crystal
 
     # Fill function literal argument types for C functions
     def check_lib_call(node, obj_type)
+      _dbg "check_lib_call #{node.name}"
+
       return unless obj_type.is_a?(LibType)
 
       # Error quickly if we can't find a fun
       method = obj_type.lookup_first_def(node.name, false)
+
+
+      # # # # # # # # # # #
+      # Onyx Hardcoded Babelfishing
+      if ! method
+        if node.name == "initialize"
+          node.name = "init"
+          method = obj_type.lookup_first_def(node.name, false).as(External?)
+        end
+      end
+      # # # # # # # # # # #
+
+
       node.raise "undefined fun '#{node.name}' for #{obj_type}" unless method
 
       node.args.each_with_index do |arg, index|
@@ -1702,11 +1722,11 @@ module Crystal
       merge_if_vars node, cond_vars, then_vars, else_vars, then_unreachable, else_unreachable
 
       if needs_type_filters?
-        if node.and?
+        case node
+        when .and?
           @type_filters = TypeFilters.and(cond_type_filters, then_type_filters, else_type_filters)
-          # TODO: or type filters
-          # elsif node.or?
-          #   node.type_filters = or_type_filters(node.then.type_filters, node.else.type_filters)
+        when .or?
+          @type_filters = TypeFilters.or(cond_type_filters, then_type_filters, else_type_filters)
         end
       end
 
@@ -1988,7 +2008,6 @@ module Crystal
         bind_vars @vars, block.after_vars, block.args
       elsif target_while = @while_stack.last?
         node.target = target_while
-        target_while.has_breaks = true
 
         break_vars = (target_while.break_vars ||= [] of MetaVars)
         break_vars.push @vars.dup
@@ -2054,9 +2073,7 @@ module Crystal
         # Already typed
       when "argv"
         # Already typed
-      when "struct_set"
-        visit_struct_or_union_set node
-      when "union_set"
+      when "struct_or_union_set"
         visit_struct_or_union_set node
       when "external_var_set"
         # Nothing to do
@@ -2090,7 +2107,7 @@ module Crystal
       when "+", "-", "*", "/", "unsafe_div"
         t1 = scope.remove_typedef
         t2 = typed_def.args[0].type
-        node.type = t1.integer? && t2.float? ? t2 : scope
+        node.type = t1.is_a?(IntegerType) && t2.is_a?(FloatType) ? t2 : scope
       when "==", "<", "<=", ">", ">=", "!="
         node.type = @program.bool
       when "%", "unsafe_shl", "unsafe_shr", "|", "&", "^", "unsafe_mod"
@@ -2245,6 +2262,7 @@ module Crystal
               node_exp.raise "can't take address of #{node_exp}"
             end
       node.bind_to var
+      true
     end
 
     def visit(node : TypeOf)
@@ -2309,7 +2327,7 @@ module Crystal
         types = node_types.map do |type|
           type.accept self
           instance_type = type.type.instance_type
-          unless instance_type.subclass_of?(@program.exception)
+          unless instance_type.implements?(@program.exception)
             type.raise "#{type} is not a subclass of Exception"
           end
           instance_type
@@ -2639,6 +2657,11 @@ module Crystal
     end
 
     def visit(node : Case)
+      expand(node)
+      false
+    end
+
+    def visit(node : Select)
       expand(node)
       false
     end

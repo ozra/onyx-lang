@@ -201,11 +201,11 @@ describe "Code gen: struct" do
       FOO = Foo.new(1)
 
       if 1 == 2
-        $foo = Foo.new(1)
+        foo = Foo.new(1)
       else
-        $foo = FOO
+        foo = FOO
       end
-      $foo.x
+      foo.x
       ").to_i.should eq(1)
   end
 
@@ -404,8 +404,7 @@ describe "Code gen: struct" do
       struct Baz < Foo
       end
 
-      (Bar.new as Foo).x
-      # (Bar || Baz).new.x
+      Bar.new.as(Foo).x
       )).to_i.should eq(42)
   end
 
@@ -426,7 +425,7 @@ describe "Code gen: struct" do
       struct Baz < Foo
       end
 
-      (Bar.new as Foo).@x
+      Bar.new.as(Foo).@x
       )).to_i.should eq(42)
   end
 
@@ -451,7 +450,7 @@ describe "Code gen: struct" do
       struct Baz < Foo
       end
 
-      (Bar.new as Foo).x
+      Bar.new.as(Foo).x
       )).to_i.should eq(42)
   end
 
@@ -505,7 +504,7 @@ describe "Code gen: struct" do
       struct Baz < Foo
       end
 
-      foo = Bar.new as Foo
+      foo = Bar.new.as(Foo)
       foo.x = 84
       foo.x
       )).to_i.should eq(84)
@@ -539,8 +538,8 @@ describe "Code gen: struct" do
         end
       end
 
-      foo = Bar.new as Foo
-      foo2 = Bar2.new as Foo2
+      foo = Bar.new.as(Foo)
+      foo2 = Bar2.new.as(Foo2)
 
       f = foo || foo2
       f.x
@@ -575,8 +574,8 @@ describe "Code gen: struct" do
         end
       end
 
-      foo = Bar.new as Foo
-      foo2 = Bar2.new as Foo2
+      foo = Bar.new.as(Foo)
+      foo2 = Bar2.new.as(Foo2)
 
       f = foo2 || foo
       f.x

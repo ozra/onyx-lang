@@ -118,6 +118,8 @@ class URI
   # Sets the opaque component of the URI.
   setter opaque : String?
 
+  def_equals_and_hash scheme, host, port, path, query, user, password, fragment, opaque
+
   def initialize(@scheme = nil, @host = nil, @port = nil, @path = nil, @query = nil, @user = nil, @password = nil, @fragment = nil, @opaque = nil)
   end
 
@@ -262,7 +264,7 @@ class URI
       char = byte.unsafe_chr
       if char == ' ' && space_to_plus
         io.write_byte '+'.ord.to_u8
-      elsif byte < 0x80 && yield(byte) && (!space_to_plus || char != '+')
+      elsif char.ascii? && yield(byte) && (!space_to_plus || char != '+')
         io.write_byte byte
       else
         io.write_byte '%'.ord.to_u8

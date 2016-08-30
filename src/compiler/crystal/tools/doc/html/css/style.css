@@ -408,16 +408,8 @@ h1.type-name.ghosted {
   background-color: #f8f8f8;
 }
 
-.tooltip > span {
-  position: absolute;
-  opacity: 0;
-  display: none;
-  pointer-events: none;
-}
-
-.tooltip:hover > span {
-  display: inline-block;
-  opacity: 0.95;
+.methods-inherited .tooltip * {
+    color: #47266E;
 }
 
 pre {
@@ -445,6 +437,18 @@ pre {
 
 code {
   font-family: Consolas, 'Courier New', Courier, Monaco, monospace;
+}
+
+.tooltip>span {
+  position: absolute;
+  opacity: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.tooltip:hover>span {
+  display: inline-block;
+  opacity: 0.95;
 }
 
 .c {

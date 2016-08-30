@@ -168,9 +168,9 @@ describe "Code gen: proc" do
       end
 
       ary = [3, 1, 4, 2]
-      LibC.qsort((ary.to_unsafe as Void*), LibC::SizeT.new(ary.size), LibC::SizeT.new(sizeof(Int32)), ->(a : Void*, b : Void*) {
-        a = a as Int32*
-        b = b as Int32*
+      LibC.qsort(ary.to_unsafe.as(Void*), LibC::SizeT.new(ary.size), LibC::SizeT.new(sizeof(Int32)), ->(a : Void*, b : Void*) {
+        a = a.as(Int32*)
+        b = b.as(Int32*)
         a.value <=> b.value
       })
       ary[0]
@@ -219,15 +219,24 @@ describe "Code gen: proc" do
 
   it "automatically casts proc that returns something to proc that returns void" do
     run("
-      $a = 0
+      class Global
+        @@x = 0
+
+        def self.x=(@@x)
+        end
+
+        def self.x
+          @@x
+        end
+      end
 
       def foo(x : ->)
         x.call
       end
 
-      foo ->{ $a = 1 }
+      foo ->{ Global.x = 1 }
 
-      $a
+      Global.x
       ").to_i.should eq(1)
   end
 
@@ -664,27 +673,37 @@ describe "Code gen: proc" do
         end
       end
 
-      $x = 0
+      class Global
+        @@x = 0
+
+        def self.x=(@@x)
+        end
+
+        def self.x
+          @@x
+        end
+      end
 
       Foo.add("foo") do |a|
-        $x = a.foo
+        Global.x = a.foo
       end
 
       Foo.call
 
-      $x
+      Global.x
       )).to_i.should eq(2)
   end
 
   it "doesn't crash on #2196" do
     run(%(
       x = 42
-      if x.is_a?(Int32)
+      z = if x.is_a?(Int32)
         x
       else
         y = x
         ->{ y }
       end
+      z.is_a?(Int32) ? z : 0
       )).to_i.should eq(42)
   end
 
@@ -712,5 +731,18 @@ describe "Code gen: proc" do
 
       Foo.new.@f.call
       )).to_i.should eq(42)
+  end
+
+  it "codegens proc of generic type" do
+    codegen(%(
+      class Gen(T)
+      end
+
+      class Foo < Gen(Int32)
+      end
+
+      f = ->(x : Gen(Int32)) {}
+      f.call(Foo.new)
+      ))
   end
 end

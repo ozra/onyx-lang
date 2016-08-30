@@ -1,20 +1,28 @@
 
 _debug_compiler_start_ = 1
 
+template dpp(...exps) =
+   _debug_compiler_start_ = true
+  {% for exp in exps %}
+    $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
+  {% end %}
+end -- dpp
 
-FooMod: @@val Int = 0 'get 'set
+
+
+FooMod: @@val Ind = 0 'get 'set
 FooMod: set-v(v Int) -> @@val = v
 FooMod:
    set-v2(@@val Int) ->
    v=(@@val Int) ->
-   v = (val Int) -> say "lambda: {val}"
+   v = (val Ind) -> say "lambda: {val}"
    v 13
 
 FooMod: type SubFoo: foo() -> true
 
 My.Nested:
    type Foo
-      @@t-var Int = 11  'get 'set
+      @@t-var Ind = 11  'get 'set
 
       @str Str
       @foo = 47
@@ -60,12 +68,13 @@ pp My.Nested.Foo().foo
 fuu = My.Nested.Foo "Foul"
 pp fuu.xoo
 pp fuu.foo
+dpp fuu.foo2
 pp fuu.foo2
 pp fuu.foo3
 pp fuu.action
 pp faa = fuu.dup?
 x = faa?action
-fii = faa.some!.dup
+fii = faa.is!.dup
 pp fii.action
 
 say FooMod.val
