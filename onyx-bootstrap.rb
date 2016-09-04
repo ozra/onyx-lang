@@ -200,9 +200,9 @@ def main!
 		begin
 			crystal = (Pathname(Dir.glob($tempdir + 'crystal-*')[0]) + 'bin/crystal').to_s
 			execute "echo 'puts' | #{crystal} >/dev/null 2>/dev/null eval"
-			puts "  Yes it does. Will wonders never cease?"
+			puts "  Sure do."
 		rescue
-			puts "  Of course not. That would be too easy."
+			puts "  Unfortunately not. Let's try fixing up some Crystal deps."
 			tasks.unshift ["Installing Crystal prerequisites", ->{
 				workingdir = Pathname(Dir.mktmpdir "crystal-env")
 				begin
@@ -237,7 +237,7 @@ def main!
 								rm_f "/usr/lib/libgc.so*"
 								puts "  Deleted /usr/lib/libgc.so*"
 							else
-								puts "  You have elected not to delete these files. Therefore this installation will probably fail.\n  If we didn't need it, we wouldn't have asked for it."
+								puts "  You have elected not to delete these files. Therefore this installation will probably fail.\n  You can do it manually if you change your mind."
 							end
 						end
 						# begin
@@ -303,7 +303,7 @@ def main!
 			execute "echo 'say' | onyx"
 			puts "  Yes it does. Hooray!"
 		rescue
-			puts "  Nope, still buggered.", "", "== PROCESS FAILED =="
+			puts "  Nope, it's buggered.", "", "== PROCESS FAILED =="
 			puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include the logfile at #{$logfile}."
  			raise GracefulFailure
 		end
