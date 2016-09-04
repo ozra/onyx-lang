@@ -110,34 +110,66 @@ else
 
 end
 
-
-@[AlwaysInline]
-def babelfish_croxtainted?(name : String) : Bool
-  name.ends_with? BABELFISH_CROSSTAINT_TOKEN
-end
-
-@[AlwaysInline]
-def babelfish_croxtaint(name : String) : String
-  BabelData.get_str name + BABELFISH_CROSSTAINT_TOKEN
-end
-
-@[AlwaysInline]
-def babelfish_ensure_croxtaint(name : String) : String
-  babelfish_croxtaint babelfish_detaint name
-end
-
-@[AlwaysInline]
-def babelfish_croxdetaint(name : String) : String
-  # _dbg "- babelfish_detaint - '#{name}"
-  babelfish_croxtainted?(name) ? BabelData.get_str(name[0..BABELFISH_CROSSTAINT_TOKEN_REDUCTION]) : name
-end
-
-class String
+ifdef   false  #  !release
   @[AlwaysInline]
-  def babelfish_croxtainted?() : Bool
-    babelfish_croxtainted? self
+  def babelfish_croxtainted?(name : String) : Bool
+    name.ends_with? BABELFISH_CROSSTAINT_TOKEN
   end
+
+  @[AlwaysInline]
+  def babelfish_croxtaint(name : String) : String
+    BabelData.get_str name + BABELFISH_CROSSTAINT_TOKEN
+  end
+
+  @[AlwaysInline]
+  def babelfish_ensure_croxtaint(name : String) : String
+    babelfish_croxtaint babelfish_detaint name
+  end
+
+  @[AlwaysInline]
+  def babelfish_croxdetaint(name : String) : String
+    # _dbg "- babelfish_detaint - '#{name}"
+    babelfish_croxtainted?(name) ? BabelData.get_str(name[0..BABELFISH_CROSSTAINT_TOKEN_REDUCTION]) : name
+  end
+
+  class String
+    @[AlwaysInline]
+    def babelfish_croxtainted?() : Bool
+      babelfish_croxtainted? self
+    end
+  end
+
+else
+  @[AlwaysInline]
+  def babelfish_croxtainted?(name : String) : Bool
+    false
+  end
+
+  @[AlwaysInline]
+  def babelfish_croxtaint(name : String) : String
+    name
+  end
+
+  @[AlwaysInline]
+  def babelfish_ensure_croxtaint(name : String) : String
+    name
+  end
+
+  @[AlwaysInline]
+  def babelfish_croxdetaint(name : String) : String
+    name
+  end
+
+  class String
+    @[AlwaysInline]
+    def babelfish_croxtainted?() : Bool
+      false
+    end
+  end
+
 end
+
+
 
 def babelfish_reverse(name : String) : String
   # BabelData.reverse[name]? || name

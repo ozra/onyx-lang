@@ -157,7 +157,9 @@ class Exception
   end
 
   def to_s(io : IO)
-    if mess = @message
+    # Onyx–mod: the colour escape codes - this is of course not a clean way of
+    # doing whigns, using shell colour codes here. But it'll be here for now.
+    if mess = message
       io << "\e[31m"
       io << mess  # don't put this in interpolation - that calls to_s, and then we're dependency fucked
       io << "\e[39m"
@@ -171,8 +173,8 @@ class Exception
   end
 
   def inspect_with_backtrace(io : IO)
-    io << @message << " (" << self.class << ")\n"
-    backtrace.try &.each do |frame|
+    io << message << " (" << self.class << ")\n"
+    backtrace?.try &.each do |frame|
       io.puts frame
     end
     io.flush

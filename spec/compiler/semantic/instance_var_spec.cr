@@ -1959,6 +1959,52 @@ describe "Semantic: instance var" do
       )) { int32 }
   end
 
+  it "doesn't error if not initializing variables but calling previous_def (#3210)" do
+    assert_type(%(
+      class Some
+        def initialize
+          @a = 1
+        end
+
+        def initialize
+          previous_def
+        end
+
+        def a
+          @a
+        end
+      end
+
+      Some.new.a
+      )) { int32 }
+  end
+
+  it "doesn't error if not initializing variables but calling previous_def (2) (#3210)" do
+    assert_type(%(
+      class Some
+        def initialize
+          @a = 1
+          @b = 2
+        end
+
+        def initialize
+          previous_def
+          @b = @a
+        end
+
+        def a
+          @a
+        end
+
+        def b
+          @b
+        end
+      end
+
+      Some.new.a + Some.new.b
+      )) { int32 }
+  end
+
   it "errors if not initializing super variables" do
     assert_error %(
       class Foo
@@ -2134,7 +2180,7 @@ describe "Semantic: instance var" do
 
   it "ignores redefined initialize (#456)" do
     assert_type(%(
-      class A
+      class Foo
         def initialize
           @a = 1
         end
@@ -2153,21 +2199,21 @@ describe "Semantic: instance var" do
         end
       end
 
-      a = A.new
+      a = Foo.new
       a.a + a.b
       )) { int32 }
   end
 
   it "ignores super module initialize (#456)" do
     assert_type(%(
-      module B
+      module Moo
         def initialize
           @a = 1
         end
       end
 
-      class A
-        include B
+      class Foo
+        include Moo
 
         def initialize
           @a = 1
@@ -2183,14 +2229,14 @@ describe "Semantic: instance var" do
         end
       end
 
-      a = A.new
+      a = Foo.new
       a.a + a.b
       )) { int32 }
   end
 
   it "obeys super module initialize (#456)" do
     assert_type(%(
-      module A
+      module Moo
         def initialize
           @a = 1
         end
@@ -2200,8 +2246,8 @@ describe "Semantic: instance var" do
         end
       end
 
-      class B
-        include A
+      class Foo
+        include Moo
 
         def initialize
           @b = 2
@@ -2213,7 +2259,7 @@ describe "Semantic: instance var" do
         end
       end
 
-      b = B.new
+      b = Foo.new
       b.a + b.b
       )) { int32 }
   end
@@ -2805,7 +2851,7 @@ describe "Semantic: instance var" do
 
       Foo.new.x
       ),
-      "Can't infer the type of instance variable '@x' of Foo"
+      "instance variable @x of Foo was inferred to be Nil, but Nil alone provides no information"
   end
 
   it "says can't infer type if only nil was assigned, in generic type" do
@@ -2822,7 +2868,7 @@ describe "Semantic: instance var" do
 
       Foo(Int32).new.x
       ),
-      "Can't infer the type of instance variable '@x' of Foo"
+      "instance variable @x of Foo(T) was inferred to be Nil, but Nil alone provides no information"
   end
 
   it "allows nil instance var because it's a generic type" do
@@ -3619,7 +3665,7 @@ describe "Semantic: instance var" do
     assert_error %(
       require "prelude"
 
-      class A(T)
+      class Foo(T)
         def initialize(@arg : T)
           @foo = [bar]
         end
@@ -3634,9 +3680,9 @@ describe "Semantic: instance var" do
         end
       end
 
-      A.new(3).foo
+      Foo.new(3).foo
       ),
-      "Can't infer the type of instance variable '@foo' of A(Int32)"
+      "Can't infer the type of instance variable '@foo' of Foo(Int32)"
   end
 
   it "doesn't crash when inferring from new without matches (#2538)" do
@@ -4244,5 +4290,124 @@ describe "Semantic: instance var" do
 
       Foo.new.foo
       )) { types["Foo"] }
+  end
+
+  it "guesses from array literal with of, with subclass" do
+    assert_type(%(
+      class Foo(T)
+      end
+
+      class Bar < Foo(Int32)
+      end
+
+      class Some
+        @some = [] of Foo(Int32)
+
+        def some
+          @some
+        end
+      end
+
+      Some.new.some
+      )) { array_of(generic_class("Foo", int32).virtual_type!) }
+  end
+
+  it "guesses from hash literal with of, with subclass" do
+    assert_type(%(
+      class Foo(T)
+      end
+
+      class Bar < Foo(Int32)
+      end
+
+      class Some
+        @some = {} of Foo(Int32) => Foo(Int32)
+
+        def some
+          @some
+        end
+      end
+
+      Some.new.some
+      )) { hash_of(generic_class("Foo", int32).virtual_type!, generic_class("Foo", int32).virtual_type!) }
+  end
+
+  it "guesses from splat (#3149)" do
+    assert_type(%(
+      class Args(*T)
+        def initialize(*@args : *T)
+        end
+      end
+
+      Args.new(1, 'a')
+      )) { generic_class "Args", int32, char }
+  end
+
+  it "guesses from splat (2) (#3149)" do
+    assert_type(%(
+      class Args(*T)
+        def initialize(*@args : *T)
+        end
+
+        def args
+          @args
+        end
+      end
+
+      Args.new(1, 'a').args
+      )) { tuple_of([int32, char]) }
+  end
+
+  it "transfers initializer from generic module to class" do
+    assert_type(%(
+      module Moo(T)
+        @x = 1
+
+        def x
+          @x
+        end
+      end
+
+      class Foo
+        include Moo(Int32)
+      end
+
+      Foo.new.x
+      )) { int32 }
+  end
+
+  it "transfers initializer from module to generic class" do
+    assert_type(%(
+      module Moo
+        @x = 1
+
+        def x
+          @x
+        end
+      end
+
+      class Foo(T)
+        include Moo
+      end
+
+      Foo(Int32).new.x
+      )) { int32 }
+  end
+
+  it "doesn't consider self.initialize as initializer (#3239)" do
+    assert_error %(
+      class Foo
+        def self.initialize
+          @d = 5
+        end
+
+        def test
+          @d
+        end
+      end
+
+      Foo.new.test
+      ),
+      "@instance_vars are not yet allowed in metaclasses: use @@class_vars instead"
   end
 end

@@ -1,7 +1,7 @@
 require "./semantic_visitor"
 
 module Crystal
-  # Guess the type of global, class and instance variables
+  # Guess the type of class and instance variables
   # from assignments to them.
   class TypeGuessVisitor < SemanticVisitor
     alias TypeDeclarationWithLocation = TypeDeclarationProcessor::TypeDeclarationWithLocation
@@ -9,7 +9,6 @@ module Crystal
     alias InstanceVarTypeInfo = TypeDeclarationProcessor::InstanceVarTypeInfo
     alias Error = TypeDeclarationProcessor::Error
 
-    getter globals
     getter class_vars
     getter initialize_infos
     getter errors
@@ -42,7 +41,6 @@ module Crystal
                    @errors : Hash(Type, Hash(String, Error)))
       super(mod)
 
-      @globals = {} of String => TypeInfo
       @class_vars = {} of ClassVarContainer => Hash(String, TypeInfo)
 
       # Was `self` access found? If so, instance variables assigned after it
@@ -65,6 +63,7 @@ module Crystal
       @methods_being_checked = [] of Def
 
       @outside_def = true
+      @inside_class_method = false
     end
 
     def visit(node : Var)
@@ -85,6 +84,10 @@ module Crystal
     def visit(node : UninitializedVar)
       var = node.var
       if var.is_a?(InstanceVar)
+        if @inside_class_method
+          node.raise "@instance_vars are not yet allowed in metaclasses: use @@class_vars instead"
+        end
+
         @error = nil
 
         add_to_initialize_info(var.name)
@@ -185,11 +188,13 @@ module Crystal
 
       result =
         case target
-        when Global
-          process_assign_global(target, value)
         when ClassVar
           process_assign_class_var(target, value)
         when InstanceVar
+          if @inside_class_method
+            target.raise "@instance_vars are not yet allowed in metaclasses: use @@class_vars instead"
+          end
+
           process_assign_instance_var(target, value)
         when Path
           # Don't guess anything from constant values
@@ -222,6 +227,10 @@ module Crystal
 
         node.targets.each do |target|
           if target.is_a?(InstanceVar)
+            if @inside_class_method
+              target.raise "@instance_vars are not yet allowed in metaclasses: use @@class_vars instead"
+            end
+
             add_to_initialize_info(target.name)
           end
         end
@@ -251,28 +260,11 @@ module Crystal
 
                 owner_vars = @class_vars[owner] ||= {} of String => TypeInfo
                 add_type_info(owner_vars, target.name, tuple_type, target)
-              when Global
-                next if @program.global_vars[target.name]?
-
-                add_type_info(@globals, target.name, tuple_type, target)
               end
             end
           end
         end
       end
-    end
-
-    def process_assign_global(target, value)
-      # If the global variable already exists no need to guess its type
-      if global = @program.global_vars[target.name]?
-        return global.type
-      end
-
-      type = guess_type(value)
-      if type
-        add_type_info(@globals, target.name, type, target)
-      end
-      type
     end
 
     def process_assign_class_var(target, value)
@@ -408,7 +400,6 @@ module Crystal
         _dbg_overview "TypeGuessVisitor.guess_type(#{node}  #{node.class}) ->"
       end
 
-      # *CRYSTAL* *FIX*
       program.type_from_literal_kind node.kind
     end
 
@@ -450,7 +441,7 @@ module Crystal
       elsif node_of = node.of
         type = lookup_type?(node_of)
         if type
-          return program.array_of(type)
+          return program.array_of(type.virtual_type)
         end
       else
         element_types = guess_array_literal_element_types(node)
@@ -492,7 +483,7 @@ module Crystal
         value_type = lookup_type?(node_of.value)
         return nil unless value_type
 
-        return program.hash_of(key_type, value_type)
+        return program.hash_of(key_type.virtual_type, value_type.virtual_type)
       else
         key_types, value_types = guess_hash_literal_key_value_types(node)
         if key_types && value_types
@@ -1036,11 +1027,15 @@ module Crystal
       @args = node.args
       @block_arg = node.block_arg
 
-      if node.name == "initialize" && !current_type.is_a?(Program)
+      if !node.receiver && node.name == "initialize" && !current_type.is_a?(Program)
         initialize_info = @initialize_info = InitializeInfo.new(node)
       end
 
+      @inside_class_method = !!node.receiver
+
       node.body.accept self
+
+      @inside_class_method = false
 
       if initialize_info
         @initialize_infos[current_type] << initialize_info

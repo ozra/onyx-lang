@@ -77,14 +77,30 @@ module Crystal
                 type.add_def(Def.argless_initialize)
               end
             else
+              initialize_owner = nil
+
               initialize_methods.each do |initialize|
                 # If the type has `self.new()`, don't override it
                 if initialize.args.empty? && !initialize.yields && has_default_self_new
                   next
                 end
 
+                # Only copy initialize methods from the first ancestor that has them
+                if initialize_owner && initialize.owner != initialize_owner
+                  break
+                end
+
+                initialize_owner = initialize.owner
+
                 new_method = initialize.expand_new_from_initialize(type)
                 type.metaclass.as(ModuleType).add_def(new_method)
+              end
+
+              # Copy non-generated `new` methods from parent to child
+              new_methods.each do |new_method|
+                next if new_method.new?
+
+                type.metaclass.as(ModuleType).add_def(new_method.clone)
               end
             end
           else
@@ -214,7 +230,9 @@ module Crystal
         Call.new(Path.global("GC"), "add_finalizer", var.clone))
       exps << var.clone
 
-      Def.new("new", body: exps)
+      a_def = Def.new("new", body: exps)
+      a_def.new = true
+      a_def
     end
 
     def self.argless_initialize

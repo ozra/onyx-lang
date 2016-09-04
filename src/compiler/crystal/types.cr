@@ -1,4 +1,3 @@
-require "levenshtein"
 require "./syntax/ast"
 
 module Crystal
@@ -146,7 +145,9 @@ module Crystal
 
     def metaclass?
       case self
-      when MetaclassType, GenericClassInstanceMetaclassType, VirtualMetaclassType
+      when MetaclassType,
+           GenericClassInstanceMetaclassType, GenericModuleInstanceMetaclassType,
+           VirtualMetaclassType
         true
       else
         false
@@ -217,17 +218,6 @@ module Crystal
       false
     end
 
-    def allows_instance_vars?
-      case self
-      when program.object, program.value,
-           program.number, program.int, program.float,
-           PrimitiveType, program.reference
-        false
-      else
-        true
-      end
-    end
-
     # Should `new` be looked up in ancestors?
     #
     # This is `true` if this type doesn't define any
@@ -254,7 +244,7 @@ module Crystal
       when VirtualMetaclassType
         implements?(other_type.base_type.metaclass)
       else
-        self == other_type
+        parents.try &.any? &.implements?(other_type)
       end
     end
 
@@ -283,8 +273,13 @@ module Crystal
       raise "Bug: #{self} doesn't implement add_instance_var_initializer"
     end
 
-    def declare_instance_var(name, type_var)
-      raise "Bug: #{self} doesn't implement declare_instance_var"
+    def declare_instance_var(name, type : Type)
+      var = MetaTypeVar.new(name)
+      var.owner = self
+      var.type = type
+      var.bind_to var
+      var.freeze_type = type
+      instance_vars[name] = var
     end
 
     def types
@@ -315,21 +310,6 @@ module Crystal
     # Returns this type's superclass, or `nil` if it doesn't have one
     def superclass : Type?
       nil
-    end
-
-    def append_to_expand_union_types(types)
-      types << self
-    end
-
-    def solve_type_vars(type_vars : Array(TypeVar))
-      types = type_vars.map do |type_var|
-        if type_var.is_a?(ASTNode)
-          self.lookup_type(type_var).virtual_type
-        else
-          type_var
-        end
-      end
-      Type.merge!(types)
     end
 
     def lookup_defs(name : String, lookup_ancestors_for_new : Bool = false)
@@ -383,6 +363,10 @@ module Crystal
       defs.try &.[name]?.try &.find(&.yields.==(block)).try &.def
     end
 
+    def has_def?(name)
+      defs.try(&.has_key?(name)) || parents.try(&.any?(&.has_def?(name)))
+    end
+
     def lookup_macro(name, args : Array, named_args)
       if macros = self.macros.try &.[name]?
         match = macros.find &.matches?(args, named_args)
@@ -418,48 +402,73 @@ module Crystal
       raise "Bug: #{self} doesn't implement including_types"
     end
 
+    # Returns `true` if this type can have instance vars.
+    # Primitive types, and types like Reference and Object,
+    # can't have instance vars.
+    def allows_instance_vars?
+      case self
+      when program.object, program.value, program.struct,
+           program.number, program.int, program.float,
+           PrimitiveType, program.reference
+        false
+      else
+        true
+      end
+    end
+
     def instance_vars
       raise "Bug: #{self} doesn't implement instance_vars"
     end
 
     def all_instance_vars
-      raise "Bug: #{self} doesn't implement all_instance_vars"
+      if superclass = self.superclass
+        superclass.all_instance_vars.merge(instance_vars)
+      else
+        instance_vars
+      end
     end
 
     def index_of_instance_var(name)
-      raise "Bug: #{self} doesn't implement index_of_instance_var"
+      if superclass = self.superclass
+        index = superclass.index_of_instance_var(name)
+        if index
+          index
+        else
+          index = instance_vars.key_index(name)
+          if index
+            superclass.all_instance_vars_count + index
+          else
+            nil
+          end
+        end
+      else
+        instance_vars.key_index(name)
+      end
     end
 
-    def index_of_instance_var?(name)
-      raise "Bug: #{self} doesn't implement index_of_instance_var?"
+    def lookup_instance_var(name)
+      lookup_instance_var?(name).not_nil!
     end
 
-    def lookup_instance_var(name, create = true)
-      raise "Bug: #{self} doesn't implement lookup_instance_var"
+    def lookup_instance_var?(name)
+      superclass.try(&.lookup_instance_var?(name)) ||
+        instance_vars[name]?
     end
 
-    def lookup_instance_var?(name, create = false)
-      raise "Bug: #{self} doesn't implement lookup_instance_var?"
+    def lookup_class_var?(name)
+      nil
     end
 
-    def lookup_instance_var_with_owner(name)
-      lookup_instance_var_with_owner?(name).not_nil!
-    end
-
-    def lookup_instance_var_with_owner?(name)
-      raise "Bug: #{self} doesn't implement lookup_instance_var_with_owner?"
+    def lookup_class_var(name)
+      raise "Bug: #{self} doesn't implement lookup_class_var"
     end
 
     def has_instance_var_initializer?(name)
       false
     end
 
-    def has_def?(name)
-      defs.try(&.has_key?(name)) || parents.try(&.any?(&.has_def?(name)))
-    end
-
     def all_instance_vars_count
-      raise "Bug: #{self} doesn't implement all_instance_vars_count"
+      (superclass.try(&.all_instance_vars_count) || 0) + instance_vars.size
     end
 
     def add_subclass(subclass)
@@ -494,6 +503,22 @@ module Crystal
 
     def generic_nest
       0
+    end
+
+    def double_variadic?
+      false
+    end
+
+    def splat_index
+      nil
+    end
+
+    def type_vars
+      raise "Bug: #{self} doesn't implement type_vars"
+    end
+
+    def unbound?
+      false
     end
 
     def inspect(io)
@@ -694,17 +719,14 @@ module Crystal
     def include(mod)
       if mod == self
         raise TypeException.new "cyclic include detected"
+      elsif mod.ancestors.includes?(self)
+        raise TypeException.new "cyclic include detected"
       else
         unless parents.includes?(mod)
           parents.insert 0, mod
           mod.add_including_type(self)
         end
       end
-    end
-
-    def implements?(other_type)
-      other_type = other_type.remove_alias
-      super || parents.any? &.implements?(other_type)
     end
 
     def covariant?(other_type)
@@ -790,8 +812,27 @@ module Crystal
 
     def add_instance_var_initializer(name, value, meta_vars)
       initializers = @instance_vars_initializers ||= [] of InstanceVarInitializer
+
+      # No meta vars means this initializer came from a generic type,
+      # so we must type it now that we are defining it in a concrete type
+      unless meta_vars
+        meta_vars = MetaVars.new
+        visitor = MainVisitor.new(program, vars: meta_vars, meta_vars: meta_vars)
+        visitor.scope = self
+        value = value.clone
+        value.accept visitor
+      end
+
+      unless self.is_a?(GenericType)
+        instance_var = lookup_instance_var(name)
+        instance_var.bind_to(value)
+      end
+
       initializer = InstanceVarInitializer.new(name, value, meta_vars)
       initializers << initializer
+
+      program.after_inference_types << self
+
       initializer
     end
 
@@ -804,77 +845,6 @@ module Crystal
   # A type that can have instance variables.
   module InstanceVarContainer
     getter(instance_vars) { {} of String => MetaTypeVar }
-
-    def lookup_instance_var(name, create = true)
-      lookup_instance_var?(name, create).not_nil!
-    end
-
-    def lookup_instance_var?(name, create = false)
-      if var = superclass.try &.lookup_instance_var?(name, false)
-        return var
-      end
-
-      ivar = instance_vars[name]?
-      if !ivar && create
-        ivar = MetaTypeVar.new(name)
-        ivar.owner = self
-        instance_vars[name] = ivar
-      end
-      ivar
-    end
-
-    record InstanceVarWithOwner, instance_var : MetaTypeVar, owner : Type
-
-    def lookup_instance_var_with_owner?(name)
-      if result = superclass.try &.lookup_instance_var_with_owner?(name)
-        return result
-      end
-
-      ivar = instance_vars[name]?
-      if ivar
-        InstanceVarWithOwner.new(ivar, self)
-      else
-        nil
-      end
-    end
-
-    def index_of_instance_var(name)
-      index_of_instance_var?(name).not_nil!
-    end
-
-    def index_of_instance_var?(name)
-      if sup = superclass
-        index = sup.index_of_instance_var?(name)
-        if index
-          index
-        else
-          index = instance_vars.key_index(name)
-          if index
-            sup.all_instance_vars_count + index
-          else
-            nil
-          end
-        end
-      else
-        instance_vars.key_index(name)
-      end
-    end
-
-    def all_instance_vars
-      if sup = superclass
-        sup.all_instance_vars.merge(instance_vars)
-      else
-        instance_vars
-      end
-    end
-
-    def all_instance_vars_count
-      if sup = superclass
-        sup.all_instance_vars_count + instance_vars.size
-      else
-        instance_vars.size
-      end
-    end
   end
 
   # A non generic module type, like IO.
@@ -884,6 +854,8 @@ module Crystal
     include SubclassObservable
 
     def add_including_type(type)
+      return if type.unbound?
+
       including_types = @including_types ||= [] of Type
       including_types.push type
 
@@ -906,34 +878,12 @@ module Crystal
       @including_types
     end
 
-    def append_to_expand_union_types(types)
-      if including_types = @including_types
-        including_types.each &.append_to_expand_union_types(types)
-      else
-        types << self
-      end
-    end
-
     def remove_indirection
       if including_types = self.including_types
         including_types.remove_indirection
       else
         self
       end
-    end
-
-    def add_to_including_types(type : GenericType, all_types)
-      type.generic_types.each_value do |generic_type|
-        all_types << generic_type unless all_types.includes?(generic_type)
-      end
-      type.subclasses.each do |subclass|
-        add_to_including_types subclass, all_types
-      end
-    end
-
-    def add_to_including_types(type, all_types)
-      virtual_type = type.virtual_type
-      all_types << virtual_type unless all_types.includes?(virtual_type)
     end
 
     def filter_by_responds_to(name)
@@ -944,30 +894,8 @@ module Crystal
       true
     end
 
-    def declare_instance_var(name, var_type : Type)
-      @including_types.try &.each do |type|
-        case type
-        when Program, FileModule
-          # skip
-        when NonGenericModuleType
-          type.declare_instance_var(name, var_type)
-        when NonGenericClassType
-          type.declare_instance_var(name, var_type)
-        end
-      end
-    end
-
     def add_instance_var_initializer(name, value, meta_vars)
-      @including_types.try &.each do |type|
-        case type
-        when Program, FileModule
-          # skip
-        when NonGenericModuleType
-          type.add_instance_var_initializer(name, value, meta_vars)
-        when NonGenericClassType
-          type.add_instance_var_initializer(name, value, meta_vars)
-        end
-      end
+      add_instance_var_initializer @including_types, name, value, meta_vars
     end
   end
 
@@ -1015,6 +943,8 @@ module Crystal
     end
 
     def add_subclass(subclass)
+      return if subclass.unbound?
+
       subclasses << subclass
       notify_subclass_added
 
@@ -1079,34 +1009,9 @@ module Crystal
       true
     end
 
-    def declare_instance_var(name, type : Type)
-      ivar = lookup_instance_var(name)
-      ivar.type = type
-      ivar.bind_to ivar
-      ivar.freeze_type = type
-    end
-
-    def declare_instance_var(name, type_vars : Array(TypeVar))
-      type = solve_type_vars(type_vars)
-
-      ivar = lookup_instance_var(name, create: true)
-      ivar.type = type
-      ivar.bind_to ivar
-      ivar.freeze_type = type
-    end
-
     def covariant?(other_type)
       other_type = other_type.base_type if other_type.is_a?(VirtualType)
       implements?(other_type) || super
-    end
-
-    def add_instance_var_initializer(name, value, meta_vars)
-      super
-
-      var = lookup_instance_var(name, true)
-      var.bind_to(value)
-
-      program.after_inference_types << self
     end
   end
 
@@ -1260,13 +1165,20 @@ module Crystal
       end
 
       self.instance_vars.each do |name, ivar|
-        instance_var_type = ivar.type.replace_type_parameters(instance)
+        ivar_type = ivar.type
+        if ivar_type.is_a?(TypeSplat)
+          # Consider the case of @x : *T
+          instance_var_type = ivar_type.splatted_type.replace_type_parameters(instance)
+          unless instance_var_type.is_a?(TupleInstanceType)
+            raise TypeException.new "expected splatted type to be a tuple type, not #{instance_var_type}"
+          end
+        else
+          instance_var_type = ivar_type.replace_type_parameters(instance)
+        end
         instance.declare_instance_var(name, instance_var_type)
       end
 
       run_instance_vars_initializers self, self, instance
-
-      initialize_instance instance
 
       instance.after_initialize
 
@@ -1337,10 +1249,6 @@ module Crystal
       # Nothing
     end
 
-    def initialize_instance(instance)
-      # Nothing
-    end
-
     def instantiated_generic_superclass(instance)
       superclass = self.superclass.not_nil!
       if superclass.is_a?(GenericClassInstanceType)
@@ -1406,6 +1314,10 @@ module Crystal
       ancestor.type_vars[name]
     end
 
+    def unbound?
+      true
+    end
+
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
       io << @name
     end
@@ -1469,23 +1381,12 @@ module Crystal
       @including_types
     end
 
-    getter declared_instance_vars : Hash(String, Array(TypeVar))?
-
-    def declare_instance_var(name, type_var : TypeVar)
-      declare_instance_var(name, [type_var] of TypeVar)
-    end
-
-    def declare_instance_var(name, type_vars : Array(TypeVar))
-      declared_instance_vars = (@declared_instance_vars ||= {} of String => Array(TypeVar))
-      declared_instance_vars[name] = type_vars
-
-      @inherited.try &.each do |inherited|
-        inherited.declare_instance_var(name, type_vars)
-      end
-    end
-
     def new_generic_instance(program, generic_type, type_vars)
       GenericModuleInstanceType.new program, generic_type, type_vars
+    end
+
+    def add_instance_var_initializer(name, value, meta_vars)
+      add_instance_var_initializer @including_types, name, value, meta_vars
     end
 
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
@@ -1519,39 +1420,6 @@ module Crystal
 
     def new_generic_instance(program, generic_type, type_vars)
       GenericClassInstanceType.new program, generic_type, nil, type_vars
-    end
-
-    getter declared_instance_vars : Hash(String, Array(TypeVar))?
-
-    def declare_instance_var(name, type_var : TypeVar)
-      declare_instance_var(name, [type_var] of TypeVar)
-    end
-
-    def declare_instance_var(name, type_vars : Array(TypeVar))
-      declared_instance_vars = (@declared_instance_vars ||= {} of String => Array(TypeVar))
-      declared_instance_vars[name] = type_vars
-
-      generic_types.each do |key, instance|
-        instance.declare_instance_var(name, type_vars)
-      end
-
-      @inherited.try &.each do |inherited|
-        inherited.declare_instance_var(name, type_vars)
-      end
-    end
-
-    def initialize_instance(instance)
-      if decl_ivars = @declared_instance_vars
-        decl_ivars.each do |name, type_vars|
-          type = instance.solve_type_vars(type_vars)
-
-          ivar = MetaTypeVar.new(name, type)
-          ivar.owner = instance
-          ivar.bind_to ivar
-          ivar.freeze_type = type
-          instance.instance_vars[name] = ivar
-        end
-      end
     end
 
     protected def initialize_metaclass(metaclass)
@@ -1597,6 +1465,29 @@ module Crystal
   end
 
   # An instantiated generic type (like Array(String) or Enumerable(Int32)).
+  #
+  # To represent generic superclasses and generic included modules,
+  # GenericInstanceType is also used. For example, in:
+  #
+  # ```
+  # class Foo(T); end
+  #
+  # class Bar(T) < Foo(T); end
+  # ```
+  #
+  # The GenericClassType `Bar(T)` will have a GenericClassInstanceType
+  # `Foo(T)` as a superclass, with `T` being a `TypeParameter`. We can't
+  # simply have the generic type `Foo(T)` be the superclass (maybe in this
+  # particular example yes) but we could also have:
+  #
+  # ```
+  # class Foo(X, Y); end
+  #
+  # class Bar(T) < Foo(Int32, T); end
+  # ```
+  #
+  # In that case `Foo(X, Y)` is not quite the superclass, because
+  # the superclass has a fixed type `Int32` as the first parameter.
   abstract class GenericInstanceType < Type
     getter generic_type : GenericType
     getter type_vars : Hash(String, ASTNode)
@@ -1670,11 +1561,17 @@ module Crystal
 
     def has_in_type_vars?(type)
       type_vars.each_value do |type_var|
-        case type_var
-        when Var
+        if type_var.is_a?(Var)
           return true if type_var.type.includes_type?(type) || type_var.type.has_in_type_vars?(type)
-        when Type
-          return true if type_var.includes_type?(type) || type_var.has_in_type_vars?(type)
+        end
+      end
+      false
+    end
+
+    def unbound?
+      type_vars.each_value do |type_var|
+        if type_var.is_a?(Var)
+          return true if type_var.type.unbound?
         end
       end
       false
@@ -1712,8 +1609,8 @@ module Crystal
   class GenericClassInstanceType < GenericInstanceType
     include InstanceVarContainer
     include InstanceVarInitializerContainer
-    include ClassVarContainer
     include DefInstanceContainer
+    include SubclassObservable
 
     property superclass : Type?
     getter subclasses = [] of Type
@@ -1725,37 +1622,44 @@ module Crystal
     end
 
     def after_initialize
-      @generic_type.superclass.not_nil!.add_subclass(self)
+      superclass.not_nil!.add_subclass(self)
+      ancestors.each do |ancestor|
+        ancestor.add_including_type(self) if ancestor.is_a?(GenericModuleInstanceType)
+      end
     end
 
     def add_subclass(subclass)
+      return if subclass.unbound?
+
       subclasses << subclass
+      notify_subclass_added
+
+      superclass = superclass()
+      while superclass.is_a?(SubclassObservable)
+        superclass.notify_subclass_added
+        superclass = superclass.superclass
+      end
     end
 
     def virtual_type
-      self
+      if leaf? && !abstract?
+        self
+      elsif struct? && abstract? && !leaf?
+        virtual_type!
+      elsif struct?
+        self
+      else
+        virtual_type!
+      end
     end
 
-    delegate leaf?, depth, defs, superclass, macros, abstract?, struct?,
+    def virtual_type!
+      @virtual_type ||= VirtualType.new(program, self)
+    end
+
+    delegate depth, defs, superclass, macros, abstract?, struct?,
       type_desc, namespace, lookup_new_in_ancestors?,
       splat_index, double_variadic?, to: @generic_type
-
-    def declare_instance_var(name, type : Type)
-      ivar = lookup_instance_var(name)
-      ivar.type = type
-      ivar.bind_to ivar
-      ivar.freeze_type = type
-    end
-
-    def declare_instance_var(name, type_vars : Array(TypeVar))
-      type = solve_type_vars(type_vars)
-
-      ivar = MetaTypeVar.new(name, type)
-      ivar.owner = self
-      ivar.bind_to ivar
-      ivar.freeze_type = type
-      self.instance_vars[name] = ivar
-    end
 
     def filter_by_responds_to(name)
       @generic_type.filter_by_responds_to(name) ? self : nil
@@ -1766,12 +1670,6 @@ module Crystal
     end
 
     getter(metaclass) { GenericClassInstanceMetaclassType.new(self.program, self) }
-
-    def add_instance_var_initializer(name, value, meta_vars)
-      super
-
-      program.after_inference_types << self
-    end
   end
 
   # An instantiated genric module, like Enumerable(Int32).
@@ -1779,16 +1677,13 @@ module Crystal
     include InstanceVarContainer
     include InstanceVarInitializerContainer
     include DefInstanceContainer
+    include SubclassObservable
 
     getter generic_nest : Int32
 
     def initialize(program, generic_type, type_vars, generic_nest = nil)
       super(program, generic_type, type_vars)
       @generic_nest = generic_nest || (1 + @type_vars.values.max_of { |node| node.type?.try(&.generic_nest) || 0 })
-    end
-
-    def add_including_type(type)
-      @generic_type.add_including_type(type)
     end
 
     def after_initialize
@@ -1803,11 +1698,43 @@ module Crystal
       type_desc, namespace, lookup_new_in_ancestors?,
       splat_index, double_variadic?, to: @generic_type
 
-    def declare_instance_var(name, type : Type)
-      ivar = lookup_instance_var(name)
-      ivar.type = type
-      ivar.bind_to ivar
-      ivar.freeze_type = type
+    def add_including_type(type)
+      return if type.unbound?
+
+      @generic_type.add_including_type(type)
+
+      including_types = @including_types ||= [] of Type
+      including_types.push type
+
+      notify_subclass_added
+    end
+
+    def including_types
+      if including_types = @including_types
+        all_types = Array(Type).new(including_types.size)
+        including_types.each do |including_type|
+          add_to_including_types(including_type, all_types)
+        end
+        program.type_merge_union_of(all_types)
+      else
+        nil
+      end
+    end
+
+    def raw_including_types
+      @including_types
+    end
+
+    def remove_indirection
+      if including_types = self.including_types
+        including_types.remove_indirection
+      else
+        self
+      end
+    end
+
+    def filter_by_responds_to(name)
+      including_types.try &.filter_by_responds_to(name)
     end
 
     def filter_by_responds_to(name)
@@ -1819,12 +1746,6 @@ module Crystal
     end
 
     getter(metaclass) { GenericModuleInstanceMetaclassType.new(self.program, self) }
-
-    def add_instance_var_initializer(name, value, meta_vars)
-      super
-
-      program.after_inference_types << self
-    end
   end
 
   # The non-instantiated Pointer(T) type.
@@ -1907,7 +1828,6 @@ module Crystal
       return_type = types.pop
       instance = ProcInstanceType.new(program, types, return_type)
       generic_types[type_vars] = instance
-      initialize_instance instance
       instance.after_initialize
       instance
     end
@@ -1986,7 +1906,6 @@ module Crystal
       end
       instance = TupleInstanceType.new(program, types)
       generic_types[type_vars] = instance
-      initialize_instance instance
       instance.after_initialize
       instance
     end
@@ -2062,6 +1981,10 @@ module Crystal
     def replace_type_parameters(instance)
       new_tuple_types = tuple_types.map &.replace_type_parameters(instance)
       program.tuple_of(new_tuple_types)
+    end
+
+    def unbound?
+      tuple_types.any? &.unbound?
     end
 
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
@@ -2167,6 +2090,10 @@ module Crystal
         NamedArgumentType.new(entry.name, entry.type.replace_type_parameters(instance))
       end
       program.named_tuple_of(new_entries)
+    end
+
+    def unbound?
+      entries.any? &.type.unbound?
     end
 
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
@@ -2604,16 +2531,6 @@ module Crystal
       end
     end
 
-    def expand_union_types
-      if union_types.any?(&.is_a?(NonGenericModuleType))
-        types = [] of Type
-        union_types.each &.append_to_expand_union_types(types)
-        types
-      else
-        union_types
-      end
-    end
-
     def implements?(other_type : Type)
       other_type = other_type.remove_alias
       self == other_type || union_types.all?(&.implements?(other_type))
@@ -2628,14 +2545,14 @@ module Crystal
           if replacement.is_a?(Var)
             new_union_types << replacement.type
           else
-            raise "expected type, not #{replacement.class_desc}"
+            raise TypeException.new "expected type, not #{replacement.class_desc}"
           end
         when TypeSplat
           type_var = type.splatted_type.replace_type_parameters(instance)
           if type_var.is_a?(TupleInstanceType)
             new_union_types.concat(type_var.tuple_types)
           else
-            raise "expected tuple type, not #{type_var}"
+            raise TypeException.new "expected tuple type, not #{type_var}"
           end
         else
           new_union_types << type.replace_type_parameters(instance)
@@ -2759,7 +2676,7 @@ module Crystal
 
     def collect_filtered_by_responds_to(name, type, result)
       type.subclasses.each do |subclass|
-        unless subclass.is_a?(GenericClassType)
+        unless subclass.is_a?(GenericType) || subclass.unbound?
           filtered = virtual_lookup(subclass).filter_by_responds_to(name)
           if filtered
             result << virtual_lookup(subclass).virtual_type
@@ -2800,7 +2717,7 @@ module Crystal
     include InstanceVarContainer
     include ClassVarContainer
 
-    getter base_type : NonGenericClassType
+    getter base_type : Type
 
     def initialize(program, @base_type)
       super(program)
@@ -2808,7 +2725,6 @@ module Crystal
 
     delegate leaf?, superclass, lookup_first_def, lookup_defs,
       lookup_defs_with_modules, lookup_instance_var, lookup_instance_var?,
-      lookup_instance_var_with_owner, lookup_instance_var_with_owner?,
       index_of_instance_var, lookup_macro, lookup_macros, all_instance_vars,
       abstract?, implements?, covariant?, ancestors, struct?, to: base_type
 
@@ -2845,9 +2761,7 @@ module Crystal
     end
 
     def collect_subtypes(type, subtypes)
-      unless type.is_a?(GenericClassType)
-        subtypes << type
-      end
+      subtypes << type unless type.is_a?(GenericType) || type.unbound?
       type.subclasses.each do |subclass|
         collect_subtypes subclass, subtypes
       end
@@ -2869,6 +2783,10 @@ module Crystal
       end
 
       nil
+    end
+
+    def replace_type_parameters(instance)
+      base_type.replace_type_parameters(instance).virtual_type
     end
 
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
@@ -2933,6 +2851,37 @@ module Crystal
     def to_s_with_options(io : IO, skip_union_parens : Bool = false, generic_args : Bool = true, codegen = false)
       instance_type.to_s_with_options(io, codegen: codegen)
       io << ":Class"
+    end
+  end
+end
+
+private def add_to_including_types(type : Crystal::GenericType, all_types)
+  type.generic_types.each_value do |generic_type|
+    all_types << generic_type unless all_types.includes?(generic_type)
+  end
+  type.subclasses.each do |subclass|
+    add_to_including_types subclass, all_types
+  end
+end
+
+private def add_to_including_types(type, all_types)
+  virtual_type = type.virtual_type
+  all_types << virtual_type unless all_types.includes?(virtual_type)
+end
+
+private def add_instance_var_initializer(including_types, name, value, meta_vars)
+  including_types.try &.each do |type|
+    case type
+    when Crystal::Program, Crystal::FileModule
+      # skip
+    when Crystal::NonGenericModuleType
+      type.add_instance_var_initializer(name, value, meta_vars)
+    when Crystal::NonGenericClassType
+      type.add_instance_var_initializer(name, value, meta_vars)
+    when Crystal::GenericClassType
+      type.add_instance_var_initializer(name, value, meta_vars)
+    when Crystal::GenericModuleType
+      type.add_instance_var_initializer(name, value, meta_vars)
     end
   end
 end

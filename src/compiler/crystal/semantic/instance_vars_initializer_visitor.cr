@@ -32,7 +32,8 @@ class Crystal::InstanceVarsInitializerVisitor < Crystal::SemanticVisitor
       node.target.is_a?(InstanceVar)
     when TypeDeclaration
       node.var.is_a?(InstanceVar)
-    when FileNode, Expressions, ClassDef, ModuleDef, Alias, Include, Extend, LibDef, Def, Macro, Call, Require
+    when FileNode, Expressions, ClassDef, ModuleDef, Alias, Include, Extend, LibDef, Def, Macro, Call, Require,
+         MacroExpression, MacroIf, MacroFor
       true
     else
       false
@@ -67,11 +68,11 @@ class Crystal::InstanceVarsInitializerVisitor < Crystal::SemanticVisitor
         value.accept ivar_visitor
       end
 
-      unless current_type.lookup_instance_var_with_owner?(target.name)
+      unless current_type.lookup_instance_var?(target.name)
         ivar_visitor.undefined_instance_variable(current_type, target)
       end
 
-      current_type.add_instance_var_initializer(target.name, value, meta_vars)
+      current_type.add_instance_var_initializer(target.name, value, current_type.is_a?(GenericType) ? nil : meta_vars)
       node.type = @program.nil
       return
     end

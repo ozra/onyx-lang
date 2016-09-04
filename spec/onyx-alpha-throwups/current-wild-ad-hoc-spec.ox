@@ -21,7 +21,7 @@ require "wild_colors"
 'std-real-width = 64
 
 
--- '!literal-int = I64
+-- '!literal-int = Int64
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -49,8 +49,8 @@ end -- dpp
 
 say "Lambda Type as value"
 
--- lambda-type = '(Ind, Bool) -> Ind  -- FUCKS UP HIGHLIGHT IN ATOM ONLY
--- lambda-type = (Ind, Bool) -> Ind  -- NOT ALLOWED YET
+-- lambda-type = '(Intp, Bool) -> Intp  -- FUCKS UP HIGHLIGHT IN ATOM ONLY
+-- lambda-type = (Intp, Bool) -> Intp  -- NOT ALLOWED YET
 -- pp lambda-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -111,12 +111,12 @@ nfoo.internal
 -- say ((nfoo.try ~.foo.try ~.bar?.try ~.qwo) || 0) + 300
 -- nfoo.internal
 
--- '!literal-int = I64
+-- '!literal-int = Int64
 say "remove me for crash"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- suffix (v IntegerLiteral) = Ind _
+-- suffix (v IntegerLiteral) = Intp _
 -- suffix (real)     = Real _
 -- suffix (number)r  = Real _
 -- suffix (number)f  = _f32    -- here mapping to other "lower level" suffixes those turn into actual AST-flags and further on actual op-codes
@@ -259,7 +259,7 @@ a1 = String
 b1 = "fdsaf"
 
 say "a ~~ b == {a1 ~~ b1}"
-say "Ind !~~ b == {Ind !~~ b1}"
+say "Intp !~~ b == {Intp !~~ b1}"
 say "a !~~ b == {a1 !~~ b1}"
 
 x = /x/
@@ -356,7 +356,7 @@ FDSA
 >.downcase
 
 
-the-function(a I64? = nil, b I64? = nil) -> true
+the-function(a Int64? = nil, b Int64? = nil) -> true
 the-function         -- a is nil, #b is nil
 the-function 1       -- a is 1, #b is nil
 the-function b: 2  -- a is nil, #b is 2
@@ -366,18 +366,18 @@ if the-function a: 1, b: 2: say "the-function says yes!"
 if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
-my-foo(x, y, opts Map<Str, Str|I64|Nil>) ->
+my-foo(x, y, opts Map<Str, Str|Int64|Nil>) ->
    say "csx { opts:magic_port?.class }"
    say "csx { opts:x?.class }"
    say "csx { typeof(opts:x?) }"
    -- host = opts:host_name as Str? || "default_host"
-   -- magic-port = opts:magic_port as I64? || 47
+   -- magic-port = opts:magic_port as Int64? || 47
    -- p x, y, host, magic-port
 end
 
 type Droogs = Map  -- test multi-level alias resolution
 
-my-foo 1, 2, Droogs<Str, Str|I64|Nil>{
+my-foo 1, 2, Droogs<Str, Str|Int64|Nil>{
    "my_name_is": "Totally irrelevant"
    "host_name": "da_host.yo"
    --   "x": 1
@@ -465,18 +465,18 @@ dpp 65536 == horribly-formatted-pow2-round-up 4097, 65536
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- '!Ind=I64
+-- '!Intp=Int64
 -- '!Real=Float32
 
--- '!literal-int = I64
+-- '!literal-int = Int64
 -- '!literal-real = Float32
 
 
 
-type MoreInt = I32 | I64 | I8
+type MoreInt = Int32 | Int64 | Int8
 say MoreInt
 
-flags SomeFacts < U8
+flags SomeFacts < UInt8
    AppleLover
    PearLover
    CoolDude
@@ -517,14 +517,14 @@ pp $.MY_CONST
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- -- *TODO* ' should not be needed before I32!
--- -- '!literal-int = I32
+-- -- *TODO* ' should not be needed before Int32!
+-- -- '!literal-int = Int32
 Glob: @@my-global = 47_i32 'get 'set
--- -- '!literal-int = I64
+-- -- '!literal-int = Int64
 
-Glob: @@my-typed-global 'I32|Nil 'get 'set
--- -- '!literal-int=I32
-Glob: @@my-typed-and-assigned-global 'I32 = 47i32 'get 'set
+Glob: @@my-typed-global 'Int32|Nil 'get 'set
+-- -- '!literal-int=Int32
+Glob: @@my-typed-and-assigned-global 'Int32 = 47i32 'get 'set
 Glob.my-global = Glob.my-typed-and-assigned-global
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -535,21 +535,21 @@ Djur:
    APA = 47
 
    type Apa
-      -- '!literal-int=I64
+      -- '!literal-int=Int64
 
       @@foo’ = 1
       @@bar  = 2
 
-      @foo     Ind  -- Idt
-      @bar     Ind  -- Ist
-      @foo’    Ind  = 47
+      @foo     Intp  -- Idt
+      @bar     Intp  -- Ist
+      @foo’    Intp  = 47
       @bar’         = 47
-      @foo’’   Ind
-      @bar’’   Ind
+      @foo’’   Intp
+      @bar’’   Intp
 
-      @foo3    'Ind
-      @bar3    ^Ind
-      @qwo3    ~Ind
+      @foo3    'Intp
+      @bar3    ^Intp
+      @qwo3    ~Intp
 
       init() ->
          @foo   = 47
@@ -560,8 +560,8 @@ Djur:
          @bar3  = 47
          @qwo3  = 47
 
-      -- xfoo! Ind = 47  -- should fail, and does
-      -- xbar? Ind = 42  -- should fail, and does
+      -- xfoo! Intp = 47  -- should fail, and does
+      -- xbar? Intp = 42  -- should fail, and does
 
       Self.my-def() -> say "Hit the spot! { @@foo’ }, { @@bar }"
       inst-def() -> say "Hit the spot! { @foo’ }, { @bar }"
@@ -706,7 +706,7 @@ say("fdaf" + "fdsf" << "aaasd" << 47.13 << " - yippie!")
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-fun-with-various-local-vars(a I32|I64|Real = 0) ->!
+fun-with-various-local-vars(a Int32|Int64|Real = 0) ->!
    say "a type = {typeof(a)}"
 
    -- declare assign with type inference
@@ -715,13 +715,13 @@ fun-with-various-local-vars(a I32|I64|Real = 0) ->!
 
    -- -- *TODO* after all basic control structs are implemented
 
-   -- zar2 ^Ind
+   -- zar2 ^Intp
    -- zar4 'Real
    -- zar3 ~Str
 
-   -- -- zar4 'Ind = 1
-   -- -- zar5 ~Ind = 1
-   -- -- zar6 ^Ind = 1
+   -- -- zar4 'Intp = 1
+   -- -- zar5 ~Intp = 1
+   -- -- zar6 ^Intp = 1
    -- -- zar7 '= 1
    -- -- zar8 '*= 1
    -- -- zar9 'auto = 1
@@ -796,9 +796,9 @@ say ""
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
--- '!literal-int=I64
+-- '!literal-int=Int64
 
-foo-named(awol=>my-awol Ind, foo: my-foo = 47, bar = "fds") ->!
+foo-named(awol=>my-awol Intp, foo: my-foo = 47, bar = "fds") ->!
    say "foo-named: (awol): {my-awol}, foo: {my-foo}, bar: {bar}"
 
 foo-named 1, "blarg", "qwö qwö"
@@ -858,7 +858,7 @@ say pw
 -- say(s) -> puts s
 
 
--- '!literal-int=I32
+-- '!literal-int=Int32
 
 
 DEBUG–SEPARATOR = 47
@@ -866,15 +866,15 @@ DEBUG–SEPARATOR = 47
 
 -- Change array literal notation for typed arr (thus empty arr)!?
 
--- a = [32, 47 'I32]
+-- a = [32, 47 'Int32]
 --  or
--- a = [I32: 32, 47]
+-- a = [Int32: 32, 47]
 
--- a = [I32:]
+-- a = [Int32:]
 --  or
--- a = [] I32
+-- a = [] Int32
 
--- a = [200 x I32]  -- static array literal
+-- a = [200 x Int32]  -- static array literal
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -889,32 +889,32 @@ f(y ()->) -> nil
 g(y ()->) -> nil
 g(y ()->) -> nil
 
---   -- (Seq<I32>()).flat_map ~>
+--   -- (Seq<Int32>()).flat_map ~>
 f () ->
-   ([] of Ind).flat-map ~>
-      [] of Ind
+   ([] of Intp).flat-map ~>
+      [] of Intp
 
 f(() ->
-   ([] of Ind).flat-map(~>
-      [] of Ind
+   ([] of Intp).flat-map(~>
+      [] of Intp
    )
 )
 
 (f () ->
-   (([] of Ind).flat-map ~>
-      [] of Ind
+   (([] of Intp).flat-map ~>
+      [] of Intp
    )
 )
 
 -- f(() ->
---    ([0 x Ind]).flat-map(~>
---       [0 x Ind]
+--    ([0 x Intp]).flat-map(~>
+--       [0 x Intp]
 --    )
 -- )
 
 -- (f () ->
---    ((['Ind]).flat-map ~>
---       ['Ind]
+--    ((['Intp]).flat-map ~>
+--       ['Intp]
 --    )
 -- )
 
@@ -1025,7 +1025,7 @@ end -- end–if
 -- zoo( \
 --    a, \
 --    b, \
---    c I32 \
+--    c Int32 \
 -- ) ->
 --    Str.new(a + b) + c.to–s
 -- end
@@ -1047,8 +1047,8 @@ DEBUG–SEPARATOR
 
 -- -#pure -#private
 -- # private
--- zoo*(a; b; ...c 'Ind) -> Str  'pure  # *TODO* variation two (type after arrow)
-zoo*(a; b; ...c 'Ind) Str ->  'pure
+-- zoo*(a; b; ...c 'Intp) -> Str  'pure  # *TODO* variation two (type after arrow)
+zoo*(a; b; ...c 'Intp) Str ->  'pure
    if true:
       i = 1
 
@@ -1101,7 +1101,7 @@ zoo*(a; b; ...c 'Ind) Str ->  'pure
    (a + b).to–s + " " + c.to–s + " == " + qwo
 end
 
--- 'literal-int=Ind
+-- 'literal-int=Intp
 
 p zoo 1, 2, 47, 42
 
@@ -1117,14 +1117,14 @@ say "m2 = " + m2.to–s
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 
-qwo(a 'Ind, b ~Ind) ->
+qwo(a 'Intp, b ~Intp) ->
 end
 
-qwo2(a ^Ind, b 'Ind) -> end
+qwo2(a ^Intp, b 'Intp) -> end
 
-qwo3(a 'Ind, b mut Ind) -> Str -- Str
+qwo3(a 'Intp, b mut Intp) -> Str -- Str
 
-qwo4(a Ind; b Ind) ->
+qwo4(a Intp; b Intp) ->
 end
 
 qwo2 1, 2
@@ -1236,9 +1236,9 @@ say "with to_s after: {json-hash:neat-literal?to-s}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- type TradeSide < Enum<I8>
--- enum TradeSide I8
-enum TradeSide < I8
+-- type TradeSide < Enum<Int8>
+-- enum TradeSide Int8
+enum TradeSide < Int8
    Unknown
    Buy
    Sell
@@ -1424,12 +1424,12 @@ end
 
 x = foo a, 2, "1"
 
-a = (a Ind, b Ind) -> (a + b).to–s; end
-b = (a Str, _ Ind, b 'Bool; c Real) ->
+a = (a Intp, b Intp) -> (a + b).to–s; end
+b = (a Str, _ Intp, b 'Bool; c Real) ->
    "{a} {x}" -- t"{a} {x}"
 
 say "23.4 def lambda c"
-c = (a ~Ind, b 'Str, c 'Ind) -> a.to–s + b + c.to–s
+c = (a ~Intp, b 'Str, c 'Intp) -> a.to–s + b + c.to–s
 
 -- '!real-literal=Float64
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
@@ -1443,16 +1443,16 @@ pp typeof(b), b.class
 
 -- two funcs with each two params taking lambdas, declared with canonical type
 -- syntax and lambda-style type syntax respectively
-booze1(f1 Fn<I32,List<*>,List<List<Ptr<I32>>>>, f2 Lambda<Str, Nil, List<Bool>>) ->
-booze2(f1 (List<*>, List<List<Ptr<I32>>>) -> I32, f2 (Nil, List<Bool>) -> Str) ->
+booze1(f1 Fn<Int32,List<*>,List<List<Ptr<Int32>>>>, f2 Lambda<Str, Nil, List<Bool>>) ->
+booze2(f1 (List<*>, List<List<Ptr<Int32>>>) -> Int32, f2 (Nil, List<Bool>) -> Str) ->
 
-say "List<List<Ptr<I32>>> => " + List<List<Ptr<I32>>>.to–s
--- say "Li<Li<Ptr<I32>>> => " + Li<Li<Ptr<I32>>>.to–s
+say "List<List<Ptr<Int32>>> => " + List<List<Ptr<Int32>>>.to–s
+-- say "Li<Li<Ptr<Int32>>> => " + Li<Li<Ptr<Int32>>>.to–s
 
-booze2(f1 (I32,auto) -> Nil; f2 (Str) -> Nil) ->
+booze2(f1 (Int32,auto) -> Nil; f2 (Str) -> Nil) ->
 
 -- This notation of Lambdas-Type has been depreceated
--- booze3(f1 (I32, * -> Nil); f2 (Str -> Nil)) ->
+-- booze3(f1 (Int32, * -> Nil); f2 (Str -> Nil)) ->
 end
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -1658,11 +1658,11 @@ type Qwa 'abstract
 end -- end–type
 
 type Bar < Qwa
-   @@my–foo I64 = 47i64
-   @@some–other–foo 'Ind = 42
+   @@my–foo Int64 = 47i64
+   @@some–other–foo 'Intp = 42
    @@yet–a-foo = 42
 
-   -- '!literal-int=I32
+   -- '!literal-int=Int32
 
    -- *TODO* use-switch for this?
    -- Self.RedFoo = 5
@@ -1672,9 +1672,9 @@ type Bar < Qwa
    GreenBar = 8
 
    @foo–a Str = ""
-   @foo–b Ind = 0_i64
-   @foo–c I64 = 0_i64
-   @foo-ya I32 = 0i32
+   @foo–b Intp = 0_i64
+   @foo–c Int64 = 0_i64
+   @foo-ya Int32 = 0i32
 
    Self.set–foo(v) ->
       @@my–foo = v
@@ -1693,10 +1693,10 @@ type Foo<S1> < Bar
    -- < AnotherTrait<S1>
 
    -- "free" notation at member declaration
-   @foo–x I64 = 47_i64  'get 'set
+   @foo–x Int64 = 47_i64  'get 'set
    @foo–y = 48
    @foo–z = "bongo"  'get
-   @foo–u Ind = 47  'get 'set
+   @foo–u Intp = 47  'get 'set
 
    -- *TODO* WTF!
    @foo-w = 474242       'set
@@ -1704,13 +1704,13 @@ type Foo<S1> < Bar
 
    -- at-notation at declaration too?
    ifdef x86_64
-    @bar–x  I64  = 47_i64  'get 'set
+    @bar–x  Int64  = 47_i64  'get 'set
    else
-    @bar–x I32  = 47_i32  'get 'set
+    @bar–x Int32  = 47_i32  'get 'set
 
    @bar–y        = 48
    @bar–z        = "bongo"  'get
-   @bar–u  Ind = 47  'get 'set
+   @bar–u  Intp = 47  'get 'set
    @bar–w       = 47  'get
 
    ifdef x86_64
@@ -1767,7 +1767,7 @@ type Foo<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}" 'pure
 
-   fn–b(a S1, b Ind) -> -- fdsa
+   fn–b(a S1, b Intp) -> -- fdsa
       "b: {a}, {b}"
 
    -- fn–c*(a, b S1) -> S1 'redef 'inline
@@ -1777,8 +1777,8 @@ type Foo<S1> < Bar
    end -- end–def
 
    --# protected
-   -- fn–c(a, b I32) redef protected ->
-   fn–c**(a, b Ind) -> 'redef
+   -- fn–c(a, b Int32) redef protected ->
+   fn–c**(a, b Intp) -> 'redef
       "c: {a}, {b}"
 
    fn–d1(a, b) ->
@@ -1787,7 +1787,7 @@ type Foo<S1> < Bar
       fn–e
    end
 
-   fn–d2(a S1, b Ind) ->
+   fn–d2(a S1, b Intp) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1819,21 +1819,21 @@ type FooStyle2<S1> < Bar
    mixin AnotherTrait<S1>
 
    -- "free" notation at member declaration
-   @foo–x I64 = 47_i64  'get 'set
+   @foo–x Int64 = 47_i64  'get 'set
    @foo–y = 48
    @foo–z = "bongo"  'get
-   @foo–u Ind = 47  'get 'set
+   @foo–u Intp = 47  'get 'set
    @foo–w = 47       'set
 
    -- at-notation at declaration too?
    ifdef x86_64
-      @bar–x I64 = 47_i64  'get 'set
+      @bar–x Int64 = 47_i64  'get 'set
    else
-      @bar–x I32 = 47_i32  'get 'set
+      @bar–x Int32 = 47_i32  'get 'set
 
    @bar–y = 48
    @bar–z = "bongo"  'get
-   @bar–u Ind = 47  'get 'set
+   @bar–u Intp = 47  'get 'set
    -- getter @bar–w = 47
    @bar–w = 47       'get
 
@@ -1892,8 +1892,8 @@ type FooStyle2<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}"
 
-   -- fn–b(a S1, b Ind) -- fdsa
-   fn–b(a S1, b Ind) -> -- fdsa
+   -- fn–b(a S1, b Intp) -- fdsa
+   fn–b(a S1, b Intp) -> -- fdsa
       "b: {a}, {b}"
 
    -- fn–c*(a, b S1) -> S1 'redef 'inline
@@ -1902,7 +1902,7 @@ type FooStyle2<S1> < Bar
    end -- end–def
    -- end fn–c
 
-   fn–c**(a, b Ind) -> 'redef
+   fn–c**(a, b Intp) -> 'redef
       "c: {a}, {b}"
 
    -- fn–d1(a, b)
@@ -1912,8 +1912,8 @@ type FooStyle2<S1> < Bar
       fn–e
    end
 
-   -- fn–d2(a S1, b Ind)
-   fn–d2(a S1, b Ind) ->
+   -- fn–d2(a S1, b Intp)
+   fn–d2(a S1, b Intp) ->
       @foo–a = a
       @foo–b = b
       fn–e
@@ -1928,7 +1928,7 @@ type FooStyle2<S1> < Bar
 end -- end–type
 -- *TODO* Anonymous types!
 -- anon-typed = new Bar
---    mixin AnotherTrait<I64>
+--    mixin AnotherTrait<Int64>
 
 --    fn-x(x) -> "I am Anon"
 
@@ -1945,22 +1945,25 @@ pp foo.implements? Foo
 pp foo.implements? Bar
 pp foo.implements? AnotherTrait
 pp foo.implements? Any
-pp foo.implements? Struct -- Record
+pp foo.implements? Struct
 pp foo.implements? Value
-pp foo.implements? Ind
+pp foo.implements? Intp
 
-pp 1_u32.implements? Ind
-pp 1_u64.implements? Ind
+pp 1_i32.implements? Intp
+pp 1_i64.implements? Intp
+
+pp 1_u32.implements? Intp
+pp 1_u64.implements? Intp
 
 pp 1_u8.implements? Any
 pp 1_u8.implements? Value
-pp 1_u8.implements? Struct -- Record
-pp 1_u8.implements? Ind
+pp 1_u8.implements? Struct
+pp 1_u8.implements? Intp
 pp 1_u8.implements? Int -- AnyInt
-pp 1_u8.implements? I32
-say 1_u8.implements? I32
-pp 1_u8.implements? U8
-say 1_u8.implements? U8
+pp 1_u8.implements? Int32
+say 1_u8.implements? Int32
+pp 1_u8.implements? UInt8
+say 1_u8.implements? UInt8
 
 pp foo.foo-x
 
@@ -2051,7 +2054,7 @@ say ".~. 12 == { .~. 12 }"
 
 -- NOTE! This is already available wrapped in the BigInt-type - which implements
 -- all operators so it can be used like any other number type. This example is
--- just to show how c-lib interfacing works.
+-- just to show how c-lib interfacing is written in Onyx.
 
 'link("gmp")
 
@@ -2065,14 +2068,14 @@ api MyLibGmp
    alias Double = LibC.Double
 
    ifdef x86_64
-      alias TestT = U64
+      alias TestT = UInt64
    else
-      alias TestT = U32
+      alias TestT = UInt32
    end
 
    struct Mpz
-      _mp_alloc I32
-      _mp_size  I32
+      _mp_alloc Int32
+      _mp_size  Int32
 
       -- Just testing `ifdef` in all contexts
       ifdef x86_64
@@ -2086,20 +2089,20 @@ api MyLibGmp
 
    -- init = __gmpz_init(x MpzP) -> Void
    -- init_set_si = __gmpz_init_set_si(rop MpzP, op Long) -> Void
-   -- init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) -> Void
+   -- init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<UInt8>, base Int) -> Void
    --
    -- get_si = __gmpz_get_si(op MpzP) -> Long
-   -- get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) -> Ptr<U8>
+   -- get_str = __gmpz_get_str(str Ptr<UInt8>, base Int, op MpzP) -> Ptr<UInt8>
    --
    -- add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
    -- set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
 
    init = __gmpz_init(x MpzP) Void
    init_set_si = __gmpz_init_set_si(rop MpzP, op Long) Void
-   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<U8>, base Int) Void
+   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<UInt8>, base Int) Void
 
    get_si = __gmpz_get_si(op MpzP) Long
-   get_str = __gmpz_get_str(str Ptr<U8>, base Int, op MpzP) Ptr<U8>
+   get_str = __gmpz_get_str(str Ptr<UInt8>, base Int, op MpzP) Ptr<UInt8>
 
    add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) Void
    set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) Void
