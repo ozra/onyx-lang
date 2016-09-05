@@ -817,7 +817,7 @@ class ToOnyxSVisitor < Visitor
 
     if node_receiver = node.receiver
       if node_receiver.to_s == "self"
-        @str << "Type"
+        @str << "Self"
       else
         node_receiver.accept self
       end
@@ -825,6 +825,8 @@ class ToOnyxSVisitor < Visitor
     end
 
     case node.name
+
+    # *TODO* not entirely correct - must discern that we're on a typedef!
     when "initialize"
       @str << func_name("init", :snake)
 
@@ -988,7 +990,7 @@ class ToOnyxSVisitor < Visitor
   def visit(node : Arg)
     if node.external_name != node.name
       visit_named_arg_name(node.external_name)
-      @str << " "
+      @str << " => "
     end
 
     if node.name

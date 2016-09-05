@@ -397,20 +397,20 @@ class Crystal::Call
     printed = false
     a_def.args.each_with_index do |arg, i|
       str << ", " if printed
-      str << '*' if a_def.splat_index == i
+      str << "..." if a_def.splat_index == i # onyx–mod
 
       if arg.external_name != arg.name
-        str << (arg.external_name.empty? ? "_" : arg.external_name)
-        str << " "
+        str << (arg.external_name.empty? ? "_" : arg.external_name.tr("_", "-")) # onyx–mod
+        str << " => " # onyx–mod
       end
 
-      str << arg.name
+      str << arg.name.tr("_", "-") # onyx–mod
 
       if arg_type = arg.type?
-        str << " : "
+        str << " "
         str << arg_type
       elsif res = arg.restriction
-        str << " : "
+        str << " "
         if owner.is_a?(GenericClassInstanceType) && res.is_a?(Path) && res.names.size == 1 &&
            (type_var = owner.type_vars[res.names[0]]?)
           str << type_var.type
@@ -435,16 +435,16 @@ class Crystal::Call
 
     if a_def.double_splat
       str << ", " if printed
-      str << "**" << a_def.double_splat
+      str << "..:" << a_def.double_splat # onyx–mod
       printed = true
     end
 
     if block_arg = a_def.block_arg
       str << ", " if printed
-      str << "&" << block_arg.name
+      str << "~" << block_arg.name # onyx–mod
     elsif a_def.yields
       str << ", " if printed
-      str << "&block"
+      str << "~block" # onyx–mod–mod
     end
     str << ")"
   end
@@ -623,6 +623,7 @@ class Crystal::Call
   end
 
   def self.full_name(owner, method_name = name)
+    method_name = method_name.tr("_", "-") # onyx–mod
     case owner
     when Program
       method_name

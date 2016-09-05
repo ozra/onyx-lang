@@ -22,7 +22,7 @@ require "wild_colors"
 
 
 -- '!literal-int = Int64
-
+-- comment specials like TODO, todo, fixme, FIXME and such
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -39,9 +39,10 @@ say "\nLet's ROCK\n".red
 
 template dpp(...exps) =
    _debug_compiler_start_ = true
-  {% for exp in exps %}
-    $.puts "{ {=exp.stringify=} } = { ({=exp=}).inspect }"
-  {% end %}
+
+   {% for exp in exps %}
+      $.puts " string here { {=exp.stringify=} } and here too = { ({=exp=}).inspect }"
+   {% end %}
 end -- dpp
   -- *TODO* above end, if no comment after, makes one line-no disappear
 
@@ -798,12 +799,15 @@ say ""
 
 -- '!literal-int=Int64
 
-foo-named(awol=>my-awol Intp, foo: my-foo = 47, bar = "fds") ->!
+foo-named(awol => my-awol Intp, foo: my-foo = 47, bar = "fds") ->!
    say "foo-named: (awol): {my-awol}, foo: {my-foo}, bar: {bar}"
+   -- say "foo-named: (awol): {awol}, foo: {my-foo}, bar: {bar}" -- should fail
 
 foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, bar: "yo"
 foo-named 3, foo: 11, bar: "yo"
+foo-named awol: 4, foo: 11, bar: "yo"
+foo-named my-awol: 4, foo: 11, bar: "yo" -- should fail
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -965,6 +969,13 @@ say "the 2nd broken str: {yet-a-str}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+pp (true && false) is (true and false)
+pp (true || false) is (true or false)
+pp !true is not true
+pp (false isnt true) is (false != true)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
 -- '!literal-int=StdInt
 
 -- first comment
@@ -1075,7 +1086,7 @@ zoo*(a; b; ...c 'Intp) Str ->  'pure
             if 47 => say "NO"
          else
             say "11"
-            for val[ix] in <"c", "b", "a"> by 2
+            for val[ix] in <["c", "b", "a"]> by 2
                p "{val}, {ix}"
 
          if true
@@ -1690,7 +1701,6 @@ say "declare a Foo type"
 --| The "normal" Foo which is expressed with arrow function syntax
 type Foo<S1> < Bar
    mixin AnotherTrait<S1>
-   -- < AnotherTrait<S1>
 
    -- "free" notation at member declaration
    @foo–x Int64 = 47_i64  'get 'set
@@ -1740,7 +1750,6 @@ type Foo<S1> < Bar
    fn–1ab(x) Nil -> nil  'pure -- 'public   -- should this be legal? - looks very confusing!
    -- fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
 
-   -- \ private inline
    'inline 'pure
    fn–1ba*(x) ->! nil
    fn–1ca(x) ->!  'pure
