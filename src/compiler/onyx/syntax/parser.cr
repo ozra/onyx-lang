@@ -1265,6 +1265,8 @@ class OnyxParser < OnyxLexer
       when :"="
         # Rewrite 'f.x = arg' as f.x=(arg)
         next_token
+
+        # *TODO* - conflict with paren–tuples! verify this.
         if tok? :"("
           next_token_skip_space
           arg = parse_single_arg
@@ -1519,7 +1521,7 @@ class OnyxParser < OnyxLexer
       dbg "- parse_expression - tries pre-emptive def parse".white
 
       ret = try_parse_def
-      return ret as ASTNode if ret
+      return ret.as ASTNode if ret
 
       dbg "- parse_expression - after pre-emptive def parse, tries expr".white
       # atomic = parse_op_assign
@@ -1541,7 +1543,7 @@ class OnyxParser < OnyxLexer
     # when :"->"
     #  parse_fun_literal
     when :NUMBER then parse_number
-    when :CHAR then node_and_next_token CharLiteral.new(@token.value as Char)
+    when :CHAR then node_and_next_token CharLiteral.new(@token.value.as Char)
     when :STRING, :DELIMITER_START then parse_delimiter
     when :STRING_ARRAY_START then parse_string_array
     when :TAG_ARRAY_START then parse_symbol_array
@@ -2060,13 +2062,13 @@ class OnyxParser < OnyxLexer
     # case pragma.name
     # when "lit_int", "int_lit", "literal_int", "int_literal"
     #   pragma.name = "!int_literal"
-    #   dbg "sets int type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-    #   @nesting_stack.last.int_type_mapping = (pragma.args.first as Arg).name.to_s
+    #   dbg "sets int type mapping to: #{(pragma.args.first.as Arg).name.to_s}"
+    #   @nesting_stack.last.int_type_mapping = (pragma.args.first.as Arg).name.to_s
 
     # when "lit_real", "real_lit", "literal_real", "real_literal"
     #   pragma.name = "!real_literal"
-    #   dbg "sets real type mapping to: #{(pragma.args.first as Arg).name.to_s}"
-    #   @nesting_stack.last.real_type_mapping = (pragma.args.first as Arg).name.to_s
+    #   dbg "sets real type mapping to: #{(pragma.args.first.as Arg).name.to_s}"
+    #   @nesting_stack.last.real_type_mapping = (pragma.args.first.as Arg).name.to_s
     # end
   end
 
@@ -4224,7 +4226,7 @@ class OnyxParser < OnyxLexer
         while true
           if cond && @token.type == :"."
             next_token
-            call = parse_var_or_call(force_call: true) as Call
+            call = parse_var_or_call(force_call: true).as Call
             call.obj = ImplicitObj.new
             when_conds << call
           else
@@ -4357,7 +4359,7 @@ class OnyxParser < OnyxLexer
 
     begin
       ret = parse_def(supplied_receiver, is_macro_def, doc)
-      return ret # as ASTNode
+      return ret # .as ASTNode
 
     # rescue e  # this means it _can_ be a legitimate func-def error, and not wrong-parse-error
     #   dbg "failed try_parse_def, still uncertain status on parse".white
@@ -6468,7 +6470,7 @@ class OnyxParser < OnyxLexer
         raise "Bug: #{call} should be a call"
       end
 
-      call = call as Call
+      call = call.as Call
 
 
       if flag_as_nilish_first
@@ -6694,7 +6696,7 @@ class OnyxParser < OnyxLexer
     if tok?(:"(")
       dbg "is '('"
       next_token_skip_space_or_newline
-      return parse_type_lambdatype_or_grouping(location, allow_primitives, allow_splat) as ASTNode # needed to not muck up inference
+      return parse_type_lambdatype_or_grouping(location, allow_primitives, allow_splat).as ASTNode # needed to not muck up inference
     else
       dbg "is not '('"
       ret = parse_uniontype allow_primitives
@@ -8098,7 +8100,7 @@ class OnyxParser < OnyxLexer
   def parse_explicit_end_statement : {Symbol, String}
     dbg "parse_explicit_end_statement"
 
-    end_token = @token.value as Symbol
+    end_token = @token.value.as Symbol
     next_token
 
     # *TODO* `=` should not be needed, just do `end Name`, `end type Name` etc.

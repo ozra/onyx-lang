@@ -35,7 +35,7 @@ module Crystal
           node.raise "pragma `std_int_width` can only be specified once in a program"
         end
 
-        @std_int_width = (node.args[0]? as Arg).name.to_i
+        @std_int_width = (node.args[0]?.as Arg).name.to_i
 
         case @std_int_width
         when 8
@@ -65,7 +65,7 @@ module Crystal
           node.raise "pragma `std_real_width` or `std_real_type` can only be specified once in a program"
         end
 
-        @std_real_width = (node.args[0]? as Arg).name.to_i
+        @std_real_width = (node.args[0]?.as Arg).name.to_i
 
         case @std_real_width
         when 32
@@ -84,7 +84,7 @@ module Crystal
         end
 
         @std_real_width = -1
-        real_type = (node.args[0]? as Arg).name.to_s
+        real_type = (node.args[0]?.as Arg).name.to_s
 
         # *TODO* make .real -> TypeAlias ?
 

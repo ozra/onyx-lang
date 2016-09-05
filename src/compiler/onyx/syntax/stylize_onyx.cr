@@ -95,7 +95,7 @@ class StylizeOnyxVisitor < Visitor
     else                  "\""#:quoted
     end
 
-    reader = Char::Reader.new(node.value as String)
+    reader = Char::Reader.new(node.value.as String)
     while reader.has_next?
       current_char = reader.current_char
       case current_char
@@ -1393,7 +1393,7 @@ class StylizeOnyxVisitor < Visitor
     @str << " "
 
     right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions) ||
-                  node.right.is_a?(Call) && (node.right as Call).name == "[]="
+                  node.right.is_a?(Call) && (node.right.as Call).name == "[]="
     in_parenthesis(right_needs_parens, node.right)
 
     @str << ")" if node.parenthesized

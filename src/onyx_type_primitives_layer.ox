@@ -19,7 +19,11 @@ type Fn = Proc 'official-name
 
 type Str = String
 
-
+-- This defeats the possibility of the "standard int" pragma. Consider allowing
+-- the pragma even though it's defined as "platform int". Iff we define it as
+-- "pointer width int" on the other hand - which would be more reasonable - it
+-- should not be redefinable.
+--
 ifdef x86_64
    type Intp = Int64
    type Real = Float64

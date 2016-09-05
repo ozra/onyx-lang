@@ -1394,7 +1394,7 @@ module Crystal
         next_token_skip_space_or_newline
 
         if @token.keyword?(:elsif)
-          sub_if = node.else as MacroIf
+          sub_if = node.else.as MacroIf
           next_token_skip_space_or_newline
           write "{% elsif "
           outside_macro { indent(@column, sub_if.cond) }
@@ -1765,7 +1765,7 @@ module Crystal
                 # This is the case of `x[y] op= value`
                 write_token " ", @token.type
                 skip_space
-                accept_assign_value_after_equals (last_arg as Call).args.last
+                accept_assign_value_after_equals (last_arg.as Call).args.last
                 return false
               end
 
@@ -1856,7 +1856,7 @@ module Crystal
           write @token.type
           next_token_skip_space
 
-          assign_arg = (node.args.last as Call).args.last
+          assign_arg = (node.args.last.as Call).args.last
           accept_assign_value_after_equals assign_arg
           @dot_column = current_dot_column
           return false
@@ -2301,7 +2301,7 @@ module Crystal
         write " "
         write @token.type
         next_token_skip_space
-        value = (node.value as Call).args.last
+        value = (node.value.as Call).args.last
         accept_assign_value_after_equals value
       end
 

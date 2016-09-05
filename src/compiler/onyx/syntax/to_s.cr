@@ -1334,7 +1334,7 @@ class ToOnyxSVisitor < Visitor
     @str << " "
 
     right_needs_parens = node.right.is_a?(Assign) || node.right.is_a?(Expressions) ||
-                  node.right.is_a?(Call) && (node.right as Call).name == "[]="
+                  node.right.is_a?(Call) && (node.right.as Call).name == "[]="
     in_parenthesis(right_needs_parens, node.right)
     false
   end
