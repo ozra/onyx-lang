@@ -113,7 +113,6 @@ nfoo.internal
 -- nfoo.internal
 
 -- '!literal-int = Int64
-say "remove me for crash"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -169,11 +168,30 @@ say typeof(good-ole-set)
 say good-ole-set.class
 
 
-
 -- OTHER SYNTAX ALTERNATIVES
 
 -- a = ⦉1, 2, 3⦊
 -- a = ⦉1, 2, a[0] > 5⦊
+
+
+say "<\{...\}> NAMED TUPLE SYNTAX"
+
+ntup = <{forty: 47, thirteen: 13, yo: "yo"}>
+say ntup, typeof(ntup), ntup.class
+
+-- is allowed for named also, currently:
+ntup = <[forty: 47, thirteen: 13, yo: "yo"]>
+say ntup, typeof(ntup), ntup.class
+
+ntup = ‹forty: 47, thirteen: 13, yo: "yo"›
+say ntup, typeof(ntup), ntup.class
+
+ntup = (forty: 47, thirteen: 13, yo: "yo")
+say ntup, typeof(ntup), ntup.class
+
+-- Parenthesized namedtuple shouldn't require trailing comma
+ntup = (forty: 47)
+say ntup, typeof(ntup), ntup.class
 
 
 say "<[...]> TUPLE SYNTAX"
@@ -203,18 +221,12 @@ tup6 = do-tup <[
 
 tup7 = <[a < b, b > c]>
 tup8 = <[true, a < b > c, false]>
-
-
 do-tup <[1, 2]>
 do-tup(<[1, 2]>)
-
 if do-tup <[1]> => say "tup tup yeay {do-tup <[1]>}"
-
 bzz = do-tup <[that]> if true
 
-
-
-say "PAREN TUPLE SYNTAX"
+say "(...) TUPLE SYNTAX"
 
 tup1 = ( 47, 13, "yo" )
 tup2 = (#exacto, that)
@@ -242,16 +254,119 @@ tup6 = do-tup (
 
 tup7 = (a < b, b > c)
 tup8 = (true, a < b > c, false)
-
-
 do-tup (1, 2)
 do-tup((1, 2))
-
-if do-tup (1,) => say "tup tup yeay"
-
+if do-tup (1,) => say "tup tup yeay {do-tup (1,)}"
 bzz = do-tup (that,) if true
 
 -- say tup1, tup2, tup3, tup4, tup5, tup6, tup7, tup8
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
+say "tag–hash: {tag–hash}"
+
+json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
+say "json–correct–hash: {json–hash}"
+
+js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
+say "perhaps to be js–hash: {js–hash}"
+
+apa = #apa
+katt = "katt"
+panter = 947735
+
+arrow–hash = {apa => "Apa", katt => "Katt", panter => "Panter"}
+say "arrow–hash: {arrow–hash}"
+
+tag–hash–2 = {
+   #apa: "Apa",
+   #katt: "Katt", #panter: "Panter",
+   #filurer: [
+      "Filur"
+      "Kappo",
+      "Nugetto"
+   ]
+   #tuple1: <
+      "47",
+      13,
+      3.1415
+      "yep"
+      #Boo
+   >
+   #tuple2: ‹
+      "47",
+      13,
+      3.1415
+      "yep"
+      #Boo
+   ›
+   #tuple3: <[
+      "47",
+      13,
+      3.1415
+      "yep"
+      #Boo
+   ]>
+   #tuple4: (
+      "47",
+      13,
+      3.1415
+      "yep"
+      #Boo
+   )
+   #bastard: "Bastard"
+}
+say "tag–hash–2 type is {typeof(tag–hash–2)}"
+say "tag–hash–2 value is {tag–hash–2}"
+
+
+
+tuple1a = <13, 32, 47, 2>
+tuple2a = <"foo", 1, {1, 2, 3}, 4>
+
+tuple1b = (13, 32, 47, 2)
+tuple2b = ("foo", 1, {1, 2, 3})
+
+-- tuple1c = 〈13, 32, 47, 2〉
+-- tuple2c = 〈"foo", 1, {1, 2, 3}〉
+
+-- tuple1d = ‹13, 32, 47, 2›
+-- tuple2d = ‹"foo", 1, {1, 2, 3}›
+
+-- tuple1e = «13, 32, 47, 2»
+-- tuple2e = «"foo", 1, {1, 2, 3}»
+
+-- tuple1f = （13, 32, 47, 2）
+-- tuple2f = （"foo", 1, {1, 2, 3}）
+
+-- tuple1g = ⦅13, 32, 47, 2⦆
+-- tuple2g = ⦅"foo", 1, {1, 2, 3}⦆
+
+
+set1 = {1, 2, 3, 5}
+set2 = {"foo", 47, "mine", 13}
+
+list = [47, 13, 42, 11]
+
+say "- - ACCESS TERSECUTS! - -".yellow
+
+say list.1, list.2?, list.4?
+say "With to-s: {list.1}, {list.2?to-s.+ "X"}, {list.4?to-s.+ "X"}"
+
+say tag-hash-2#katt
+say "with to_s: '{tag-hash-2#katt?to-s}'"
+
+say json-hash:katt, json-hash:panter
+
+if json-hash:katt: say "Yeeeaaaah"  -- syntactic test for the colon discrepancy
+
+say json-hash:neat-literal?
+say "with to_s: {json-hash:neat-literal?to-s}"
+
+json-hash:neat-literal = "47777777"
+say json-hash:neat-literal
+say "with to_s after: {json-hash:neat-literal?to-s}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -807,13 +922,13 @@ foo-named 1, "blarg", "qwö qwö"
 foo-named 2, 42, bar: "yo"
 foo-named 3, foo: 11, bar: "yo"
 foo-named awol: 4, foo: 11, bar: "yo"
-foo-named my-awol: 4, foo: 11, bar: "yo" -- should fail
+-- foo-named my-awol: 4, foo: 11, bar: "yo" -- should fail
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-list = List<Str>()
+list = Li<Str>()
 list << "foo"
-list << "yaa"
+list << "yaa" << "dbl"
 
 -- v = list.map((x, y) ~> x + "1")  -- should fail: to many args to block
 v = list.map((x) ~> x + "1")
@@ -882,16 +997,10 @@ DEBUG–SEPARATOR = 47
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
--- *TODO*
--- f(y ()->) nil - func general def (context determined / analyzed mode)
--- fu f(y ()->) nil - pure function (NO s-fx
--- fx f(y ()->) nil - explicitly procedural func, any s-fx
--- fi f(y ()->) nil - member function, instance mutating s-fx only
--- mf f(y ()->) nil - member function, instance mutating s-fx only
 
 f(y ()->) -> nil
 g(y ()->) -> nil
-g(y ()->) -> nil
+g(y ()->) -> nil -- redefines exactly the same
 
 --   -- (Seq<Int32>()).flat_map ~>
 f () ->
@@ -969,6 +1078,7 @@ say "the 2nd broken str: {yet-a-str}"
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+say "literal and symbolic boolean operator styles"
 pp (true && false) is (true and false)
 pp (true || false) is (true or false)
 pp !true is not true
@@ -1152,97 +1262,6 @@ m <<= 1
 say "n = " + n.to–s + " from " + 4747.to–s
 -- say "n = " + $n + " from " + $4747
 
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
-tag–hash = {#apa: "Apa", #katt: "Katt", #panter: "Panter"}
-say "tag–hash: {tag–hash}"
-
-json–hash = {"apa": "Apa", "katt": "Katt", "panter": "Panter"}
-say "json–correct–hash: {json–hash}"
-
-js–hash = {apa: "Apa", katt: "Katt", panter: "Panter"}
-say "perhaps to be js–hash: {js–hash}"
-
-apa = #apa
-katt = "katt"
-panter = 947735
-
-arrow–hash = {apa => "Apa", katt => "Katt", panter => "Panter"}
-say "arrow–hash: {arrow–hash}"
-
-tag–hash–2 = {
-   #apa: "Apa",
-   #katt: "Katt", #panter: "Panter",
-   #filurer: [
-      "Filur"
-      "Kappo",
-      "Nugetto"
-   ]
-   #tuple: <"47",
-      13,
-      3.1415
-      "yep"
-      #Boo
-   >
-   #tuple2: <
-      "47",
-      13,
-      3.1415
-      "yep"
-      #Boo
-   >
-   #bastard: "Bastard"
-}
-say "tag–hash–2 type is {typeof(tag–hash–2)}"
-say "tag–hash–2 value is {tag–hash–2}"
-
-
-
-tuple1a = <13, 32, 47, 2>
-tuple2a = <"foo", 1, {1, 2, 3}>
-
-tuple1b = (13, 32, 47, 2)
-tuple2b = ("foo", 1, {1, 2, 3})
-
--- tuple1c = 〈13, 32, 47, 2〉
--- tuple2c = 〈"foo", 1, {1, 2, 3}〉
-
--- tuple1d = ‹13, 32, 47, 2›
--- tuple2d = ‹"foo", 1, {1, 2, 3}›
-
--- tuple1e = «13, 32, 47, 2»
--- tuple2e = «"foo", 1, {1, 2, 3}»
-
--- tuple1f = （13, 32, 47, 2）
--- tuple2f = （"foo", 1, {1, 2, 3}）
-
--- tuple1g = ⦅13, 32, 47, 2⦆
--- tuple2g = ⦅"foo", 1, {1, 2, 3}⦆
-
-
-set1 = {1, 2, 3, 5}
-set2 = {"foo", 47, "mine", 13}
-
-list = [47, 13, 42, 11]
-
-say "- - ACCESS TERSECUTS! - -".yellow
-
-say list.1, list.2?, list.4?
-say "With to-s: {list.1}, {list.2?to-s.+ "X"}, {list.4?to-s.+ "X"}"
-
-say tag-hash-2#katt
-say "with to_s: '{tag-hash-2#katt?to-s}'"
-
-say json-hash:katt, json-hash:panter
-
-if json-hash:katt: say "Yeeeaaaah"  -- syntactic test for the colon discrepancy
-
-say json-hash:neat-literal?
-say "with to_s: {json-hash:neat-literal?to-s}"
-
-json-hash:neat-literal = "47777777"
-say json-hash:neat-literal
-say "with to_s after: {json-hash:neat-literal?to-s}"
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -

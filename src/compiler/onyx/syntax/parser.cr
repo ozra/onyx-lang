@@ -292,9 +292,9 @@ class OnyxParser < OnyxLexer
         break
       end
 
-      exps << parse_expression # parse_multi_assign
+      exps << parse_expression_and_suffix # parse_multi_assign
 
-      dbg "- parse_expressions() - after parse_expression"
+      dbg "- parse_expressions() - after parse_expression_and_suffix"
 
       if handle_nest_end
         dbg "- parse_expressions() break after handle_nest_end"
@@ -312,13 +312,13 @@ class OnyxParser < OnyxLexer
     dbgtail "/parse_expressions".yellow
   end
 
-  def parse_expression
-    dbg "parse_expression ->"
+  def parse_expression_and_suffix
+    dbg "parse_expression_and_suffix ->"
     dbginc
     location = @token.location
-    atomic = parse_op_assign
+    atomic = parse_expression_statement
 
-    dbg "- parse_expression - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
+    dbg "- parse_expression_and_suffix - after atomic - before suffix - @was_just_nest_end = #{@was_just_nest_end}"
 
     if @was_just_nest_end == false
       parse_expression_suffix atomic, location
@@ -330,7 +330,7 @@ class OnyxParser < OnyxLexer
 
   ensure
     dbgdec
-    dbgtail "/parse_expression"
+    dbgtail "/parse_expression_and_suffix"
   end
 
   def parse_expression_suffix(atomic, location)
@@ -368,7 +368,7 @@ class OnyxParser < OnyxLexer
 
         when :rescue
           next_token_skip_space
-          rescue_body = parse_expression
+          rescue_body = parse_expression_and_suffix
           rescues = [Rescue.new(rescue_body)] of Rescue
           if atomic.is_a?(Assign)
             atomic.value = ExceptionHandler.new(atomic.value, rescues).at(location)
@@ -378,7 +378,7 @@ class OnyxParser < OnyxLexer
 
         when :ensure
           next_token_skip_space
-          ensure_body = parse_expression
+          ensure_body = parse_expression_and_suffix
           if atomic.is_a?(Assign)
             atomic.value = ExceptionHandler.new(atomic.value, ensure: ensure_body).at(location)
           else
@@ -430,41 +430,26 @@ class OnyxParser < OnyxLexer
 
   def parse_expression_suffix(location)
     next_token_skip_statement_end
-    exp = parse_op_assign_no_control
+    exp = parse_pure_expression
     (yield exp).at(location).at_end(exp)
   end
 
-  def parse_op_assign_no_control(allow_ops = true, allow_suffix = true)
-    check_void_expression_keyword
-    parse_op_assign(allow_ops, allow_suffix)
+  def parse_pure_expression(allow_ops = true, allow_suffix = true)
+    ensure_not_void_expression_keyword
+    parse_expression_statement(allow_ops, allow_suffix)
   end
 
-  def maybe_mutate_gt_op_to_bigger_op
-    # Check if we're gonna mutate the token to a "larger one"
-    if tok? :">"
-      if current_char == '>'
-        next_token
-        if current_char == '='
-          next_token
-          @token.type = :">>="
-        else
-          @token.type = :">>"
-        end
-      end
-    end
-  end
+  def parse_expression_statement(allow_ops = true, allow_suffix = true)
+    dbg "parse_expression_statement ->"
 
-  def parse_op_assign(allow_ops = true, allow_suffix = true)
-    dbg "parse_op_assign ->"
-
-    @was_just_nest_end = false  # *TODO* even deeper in then this? (was parse_expression)
+    @was_just_nest_end = false  # *TODO* even deeper in then this? (was parse_expression_and_suffix)
 
     doc = @token.doc
     location = @token.location
 
     # atomic = parse_question_colon
     atomic = parse_range
-    dbg "- parse_op_assign after parse_range"
+    dbg "- parse_expression_statement after parse_range"
 
     while true
       maybe_mutate_gt_op_to_bigger_op
@@ -472,7 +457,7 @@ class OnyxParser < OnyxLexer
       case @token.type
 
       when :SPACE
-        dbg "- parse_op_assign - got SPACE - next!"
+        dbg "- parse_expression_statement - got SPACE - next!"
         next_token
         next
 
@@ -490,7 +475,7 @@ class OnyxParser < OnyxLexer
 
           atomic.name = "[]="
           atomic.name_size = 0
-          atomic.args << parse_op_assign_no_control
+          atomic.args << parse_pure_expression
         else
           break unless can_be_assigned?(atomic)
 
@@ -532,7 +517,7 @@ class OnyxParser < OnyxLexer
             atomic = UninitializedVar.new(atomic, type).at(location)
             return atomic
           else
-            value = parse_op_assign_no_control
+            value = parse_pure_expression
             pop_scope if needs_new_scope
             add_var atomic
 
@@ -604,7 +589,7 @@ class OnyxParser < OnyxLexer
 
         next_token_skip_space_or_newline
 
-        value = parse_op_assign_no_control
+        value = parse_pure_expression
 
         if atomic.is_a?(Call) && atomic.name == "[]"
           obj = atomic.obj
@@ -651,7 +636,22 @@ class OnyxParser < OnyxLexer
 
     atomic
   ensure
-    dbgtail "/parse_op_assign"
+    dbgtail "/parse_expression_statement"
+  end
+
+  def maybe_mutate_gt_op_to_bigger_op
+    # Check if we're gonna mutate the token to a "larger one"
+    if tok? :">"
+      if current_char == '>'
+        next_token
+        if current_char == '='
+          next_token
+          @token.type = :">>="
+        else
+          @token.type = :">>"
+        end
+      end
+    end
   end
 
   def parse_range
@@ -674,9 +674,9 @@ class OnyxParser < OnyxLexer
   end
 
   def new_range(exp, location, exclusive)
-    check_void_value exp, location
+    ensure_not_void_value exp, location
     next_token_skip_space_or_newline
-    check_void_expression_keyword
+    ensure_not_void_expression_keyword
     right = parse_or
     RangeLiteral.new(exp, right, exclusive).at(location).at_end(right)
   end
@@ -699,7 +699,7 @@ class OnyxParser < OnyxLexer
           end
 
           scan_next_as_continuation
-          check_void_value left, location
+          ensure_not_void_value left, location
 
           method = @token.type.to_s
           method_column_number = @token.column_number
@@ -766,82 +766,8 @@ class OnyxParser < OnyxLexer
     dbg "- parse_possible_angular_tuple - ret if spaced ' < '".cyan
     return parse_equality if surrounded_by_space?
 
-    return parse_tuple_alt :">"
-    # try_parse parse_tuple, parse_equality
-  end
-
-  def parse_paren_tuple
-    dbg "parse_paren_tuple".white
-    location = @token.location
-
-    next_token; skip_space
-
-    if tok? :INDENT, :NEWLINE
-      skip_tokens :INDENT, :NEWLINE, :SPACE
-    end
-
-    exps = [] of ASTNode
-    end_location = nil
-
-    until tok?(:")")
-      dbg "- parse_paren_tuple - parse an element as expr"
-      exps << parse_expression unless tok? :","
-
-      if tok? :",", :NEWLINE, :INDENT, :DEDENT
-        dbg "- parse_paren_tuple - parse separator"
-        parse_literal_item_separator
-      end
-    end
-
-    if exps.size < 2 && !(prev_tok?(:","))
-      Crystal.raise_wrong_parse_path "Less than two elements and no trailing \"is–a-tuple\" comma. Indicates expression grouping"
-    end
-
-    end_location = token_end_location
-    next_token_skip_space
-
-    if tok? :"->"
-      Crystal.raise_wrong_parse_path "Found parentheses suffix indicating lambda"
-    end
-    if tok? :"~>", :"\\"
-      Crystal.raise_wrong_parse_path "Found parentheses suffix indicating soft-lambda"
-    end
-
-    TupleLiteral.new(exps).at_end(end_location)
-
-  ensure
-    dbgtail "parse_tuple"
-  end
-
-  def parse_tuple_alt(end_delimiter : Symbol)
-    dbg "parse_tuple".white
-    location = @token.location
-    next_token
-
-    if tok? :INDENT, :NEWLINE
-      skip_tokens :INDENT, :NEWLINE, :SPACE
-    end
-
-    exps = [] of ASTNode
-    end_location = nil
-
-    until tok?(end_delimiter) && !surrounded_by_space?
-      dbg "- parse_tuple - parse an element as expr"
-      exps << parse_expression # unless tok? :","
-
-      if tok? :",", :NEWLINE, :INDENT, :DEDENT
-        dbg "- parse_tuple - parse separator"
-        parse_literal_item_separator
-      end
-    end
-
-    end_location = token_end_location
-    next_token_skip_space
-
-    TupleLiteral.new(exps).at_end(end_location)
-
-  ensure
-    dbgtail "parse_tuple_alt"
+    return parse_tuple_literal :">"
+    # try_parse parse_tuple_literal, parse_equality
   end
 
 
@@ -860,7 +786,7 @@ class OnyxParser < OnyxLexer
       when :SPACE
         next_token
       when :"+", :"-"
-        check_void_value left, location
+        ensure_not_void_value left, location
 
         method = @token.type.to_s
         method_column_number = @token.column_number
@@ -902,7 +828,7 @@ class OnyxParser < OnyxLexer
 
       location = @token.location
       next_token_skip_space_or_newline
-      check_void_expression_keyword
+      ensure_not_void_expression_keyword
       arg = parse_prefix
       if token_type == :"!"
         Not.new(arg).at(location).at_end(arg)
@@ -989,7 +915,7 @@ class OnyxParser < OnyxLexer
         atomic = parse_atomic_suffix_dot atomic, location
 
       when :"[]"
-        check_void_value atomic, location
+        ensure_not_void_value atomic, location
 
         column_number = @token.column_number
         next_token_skip_space
@@ -1000,7 +926,7 @@ class OnyxParser < OnyxLexer
         atomic
 
       when :"["
-        check_void_value atomic, location
+        ensure_not_void_value atomic, location
 
         column_number = @token.column_number
         next_token_skip_space_or_newline
@@ -1062,7 +988,7 @@ class OnyxParser < OnyxLexer
 
     dbg "parse_atomic_suffix_terse_literal_subscript"
 
-    # check_void_value atomic, location
+    # ensure_not_void_value atomic, location
     column_number = @token.column_number
     key = @token.value.to_s
 
@@ -1126,7 +1052,7 @@ class OnyxParser < OnyxLexer
 
   def parse_atomic_suffix_dot(atomic : ASTNode, location : Location?)
     dbg "parse_atomic_suffix_dot".green
-    check_void_value atomic, location
+    ensure_not_void_value atomic, location
 
     @wants_regex = false
 
@@ -1175,7 +1101,7 @@ class OnyxParser < OnyxLexer
     #   next_token
     #   method = @token.type.to_s.byte_slice(0, @token.type.to_s.size - 1)
     #   next_token_skip_space
-    #   value = parse_op_assign
+    #   value = parse_expression_statement
 
     #   return Call.new(
     #     atomic,
@@ -1283,13 +1209,13 @@ class OnyxParser < OnyxLexer
         # Rewrite 'f.x += value' as 'f.x=(f.x + value)'
         method = @token.type.to_s.byte_slice(0, @token.type.to_s.size - 1)
         next_token_skip_space
-        value = parse_op_assign
+        value = parse_expression_statement
         return Call.new(atomic, "#{name}=", [Call.new((Call.new(atomic.clone, name, name_column_number: name_column_number)), method, [value] of ASTNode, name_column_number: name_column_number)] of ASTNode, name_column_number: name_column_number).at(location)
 
       when :"||="
         # Rewrite 'f.x ||= value' as 'f.x || f.x=(value)'
         next_token_skip_space
-        value = parse_op_assign
+        value = parse_expression_statement
         return Or.new(
           (Call.new(atomic, name)).at(location),
           (Call.new(atomic.clone, "#{name}=", value)).at(location)
@@ -1298,7 +1224,7 @@ class OnyxParser < OnyxLexer
       when :"&&="
         # Rewrite 'f.x &&= value' as 'f.x && f.x=(value)'
         next_token_skip_space
-        value = parse_op_assign
+        value = parse_expression_statement
         return And.new(
           (Call.new(atomic, name)).at(location),
           (Call.new(atomic.clone, "#{name}=", value)).at(location)
@@ -1377,10 +1303,10 @@ class OnyxParser < OnyxLexer
   def parse_single_arg
     if @token.type == :"..."
       next_token_skip_space
-      arg = parse_op_assign_no_control
+      arg = parse_pure_expression
       Splat.new(arg)
     else
-      parse_op_assign_no_control
+      parse_pure_expression
     end
   end
 
@@ -1518,24 +1444,26 @@ class OnyxParser < OnyxLexer
     )
 
     if possible_func_def_context && possible_func_def?
-      dbg "- parse_expression - tries pre-emptive def parse".white
+      dbg "- parse_expression_and_suffix - tries pre-emptive def parse".white
 
       ret = try_parse_def
       return ret.as ASTNode if ret
 
-      dbg "- parse_expression - after pre-emptive def parse, tries expr".white
-      # atomic = parse_op_assign
+      dbg "- parse_expression_and_suffix - after pre-emptive def parse, tries expr".white
+      # atomic = parse_expression_statement
       # return atomic
     end
 
 
     ret = case @token.type
     when :"("  then parse_parenthetical_unknown
-    when :"'"  then next_token; parse_single_type
-    when :"<[" then parse_tuple_alt :"]>"
-    when :"[]" then parse_empty_array_literal
     when :"["  then parse_array_literal_or_multi_assign
     when :"{"  then parse_hash_or_set_literal
+    when :"<[" then parse_tuple_literal :"]>"
+    when :"‹" then parse_tuple_literal :"›"
+    when :"<{" then parse_tuple_literal :"}>"
+    when :"[]" then parse_empty_array_literal
+    when :"'"  then next_token; parse_single_type
     when MACRO_TOK_START_EXPR
       parse_percent_macro_expression
     when MACRO_TOK_START_CONTROL
@@ -1747,7 +1675,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_constish_or_type_tied_literal ->"
 
     if @token.type == :"{"
-      return parse_constish_tied_listish_literal constish
+      return parse_usertype_tied_collection_literal constish
     end
 
     dbg "/parse_constish_or_type_tied_literal - found nothing special - pass along"
@@ -1889,29 +1817,6 @@ class OnyxParser < OnyxLexer
     const
   ensure
     dbgtail "/parse_constish_after_colons"
-  end
-
-  def parse_constish_tied_listish_literal(idfr)
-    # usertype literal
-    tuple_or_hash = parse_hash_or_set_literal allow_of: false
-
-    skip_space
-
-    if kwd?(:"of")
-      unexpected_token "got `of` keyword in an unexpected place when parsing user-typed collection literal"
-    end
-
-    case tuple_or_hash
-    when TupleLiteral
-      ary = ArrayLiteral.new(tuple_or_hash.elements, name: idfr).at(tuple_or_hash.location)
-      return ary
-    when HashLiteral
-      tuple_or_hash.name = idfr
-      return tuple_or_hash
-    else
-      dbgtail_off!
-      raise "Bug: tuple_or_hash should be tuple or hash, not #{tuple_or_hash}"
-    end
   end
 
   def parse_constish_type_new_call_sugar(idfr, curr_indent)
@@ -2289,30 +2194,30 @@ class OnyxParser < OnyxLexer
     when :in
       next_token_skip_space
       dbg "parse iterable expression"
-      iterable = parse_op_assign_no_control allow_suffix: false
+      iterable = parse_pure_expression allow_suffix: false
       dbg "got iterable expression"
 
     when :to
       next_token_skip_space
       dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
+      range_end_expr = parse_pure_expression allow_suffix: false
       iterable = RangeLiteral.new new_numeric_literal("0"), range_end_expr, false
 
     when :til
       next_token_skip_space
       dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
+      range_end_expr = parse_pure_expression allow_suffix: false
       iterable = RangeLiteral.new new_numeric_literal("0"), range_end_expr, true
 
     when :from
       next_token_skip_space
       dbg "parse range begin expression"
-      range_begin_expr = parse_op_assign_no_control allow_suffix: false
+      range_begin_expr = parse_pure_expression allow_suffix: false
       kwd = @token.value
       # *TODO* should get tokens position for the possible raise also
       next_token_skip_space
       dbg "parse range end expression"
-      range_end_expr = parse_op_assign_no_control allow_suffix: false
+      range_end_expr = parse_pure_expression allow_suffix: false
       if kwd == :til
         iterable = RangeLiteral.new range_begin_expr, range_end_expr, true
       elsif kwd == :to
@@ -2332,7 +2237,7 @@ class OnyxParser < OnyxLexer
 
     if kwd? :step, :by
       next_token_skip_space
-      stepping = parse_op_assign_no_control allow_suffix: false
+      stepping = parse_pure_expression allow_suffix: false
     else
       stepping = nil
     end
@@ -2372,7 +2277,7 @@ class OnyxParser < OnyxLexer
     slash_is_regex!
     next_token_skip_space_or_newline
 
-    cond = parse_op_assign_no_control allow_suffix: false
+    cond = parse_pure_expression allow_suffix: false
 
     @control_construct_parsing -= 1  # for "indent is call" syntax excemption
 
@@ -2940,7 +2845,7 @@ class OnyxParser < OnyxLexer
       if tok? :"="
         dbg "found assign to const"
         next_token_skip_space_or_newline
-        value = parse_op_assign
+        value = parse_expression_statement
         rets << Assign.new(constvar, value).at(constvar)
 
       else
@@ -2975,7 +2880,7 @@ class OnyxParser < OnyxLexer
       if tok? :"="
         dbg "found assign to idfr"
         next_token_skip_space_or_newline
-        assign_value = parse_op_assign
+        assign_value = parse_expression_statement
         dbg "/found assign to idfr"
       else
         assign_value = nil
@@ -3199,8 +3104,8 @@ class OnyxParser < OnyxLexer
         restore_full backed
 
         begin
-          dbg "parse_parenthetical_unknown - TRY parse_paren_tuple".magenta
-          ret = parse_paren_tuple
+          dbg "parse_parenthetical_unknown - TRY parse_tuple_literal with parenthesis".magenta
+          ret = parse_tuple_literal closing_token: :")"
           return ret
 
         # Not that either? Let's go for (common) Lambda
@@ -3283,9 +3188,9 @@ class OnyxParser < OnyxLexer
     exps = [] of ASTNode
 
     while true
-      dbg "parse_parenthesized_expression - before 'parse_expression'"
-      exps << parse_expression
-      dbg "parse_parenthesized_expression - after 'parse_expression'"
+      dbg "parse_parenthesized_expression - before 'parse_expression_and_suffix'"
+      exps << parse_expression_and_suffix
+      dbg "parse_parenthesized_expression - after 'parse_expression_and_suffix'"
 
       # *TODO* this (`)` vs `\n   )`) should be handled with a better LPAR|(DEDENT+LPAR) checking..
       case @token.type
@@ -3701,7 +3606,7 @@ class OnyxParser < OnyxLexer
       else
         delimiter_state = @token.delimiter_state
         next_token_skip_space_or_newline
-        exp = parse_expression
+        exp = parse_expression_and_suffix
 
         if exp.is_a?(StringLiteral)
           pieces << exp.value
@@ -3767,72 +3672,6 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  def parse_string_array
-    parse_string_or_symbol_array StringLiteral, "String"
-  end
-
-  def parse_symbol_array
-    parse_string_or_symbol_array TagLiteral, "Symbol"
-  end
-
-  def parse_string_or_symbol_array(klass, elements_type)
-    strings = [] of ASTNode
-
-    next_string_array_token
-    while true
-      case @token.type
-      when :STRING
-        strings << klass.new(@token.value.to_s)
-        next_string_array_token
-      when :STRING_ARRAY_END
-        next_token
-        break
-      when :EOF
-        dbgtail_off!
-        raise "Unterminated symbol array literal"
-      end
-    end
-
-    ArrayLiteral.new strings, Path.global(elements_type)
-  end
-
-  def parse_empty_array_literal
-    dbg "parse_empty_array_literal"
-    line = @line_number
-    column = @token.column_number
-
-    next_token_skip_space
-
-    dbg "parse_empty_array_literal - check for 'of', #{kwd?(:of)}"
-
-    if kwd?(:of)
-      next_token_skip_space_or_newline
-      of = parse_single_type
-      ArrayLiteral.new(of: of).at_end(of)
-    else
-      dbgtail_off!
-      raise "for empty arrays use '[] of ElementType'", line, column
-    end
-  end
-
-  def parse_array_literal_or_multi_assign
-    dbg "parse_array_literal_or_multi_assign"
-    node = parse_array_literal
-
-    dbg "after parse_array_literal"
-    if tok? :"="
-      dbg "got '='"
-      if node.of
-        dbgtail_off!
-        raise "Multi assign or array literal? Can't figure out."
-      end
-      parse_multi_assign node
-    else
-      dbg "didn't get '='"
-      node
-    end
-  end
-
   def parse_multi_assign(assignees)
     dbg "parse_multi_assign - get location"
     location = assignees.location.not_nil!
@@ -3849,7 +3688,7 @@ class OnyxParser < OnyxLexer
 
     exps = assignees.elements
 
-    if (source = parse_expression).is_a? ArrayLiteral
+    if (source = parse_expression_and_suffix).is_a? ArrayLiteral
       values = source.elements
     else
       values = [source]
@@ -3893,202 +3732,444 @@ class OnyxParser < OnyxLexer
     exp
   end
 
-  def parse_array_literal
-    slash_is_regex!
 
-    location = @token.location
 
-    exps = [] of ASTNode
-    end_location = nil
+   #####  ####### #       #       #######  #####  ####### ### ####### #     #
+  #     # #     # #       #       #       #     #    #     #  #     # ##    #
+  #       #     # #       #       #       #          #     #  #     # # #   #
+  #       #     # #       #       #####   #          #     #  #     # #  #  #
+  #       #     # #       #       #       #          #     #  #     # #   # #
+  #     # #     # #       #       #       #     #    #     #  #     # #    ##
+   #####  ####### ####### ####### #######  #####     #    ### ####### #     #
 
-    open("array literal") do
-      next_token
-      skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-      while @token.type != :"]"
-        exps << parse_expression
-        end_location = token_end_location
-        # skip_statement_end *TODO* verify
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          next_token if tok? :","
-          skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
-          if tok? :","
-            dbgtail_off!
-            raise "got one comma too much!"
-          end
-          # *TODO* two commas during the separation should raise!!!
-          slash_is_regex!
-        end
+  ##       #### ######## ######## ########     ###    ##        ######
+  ##        ##     ##    ##       ##     ##   ## ##   ##       ##    ##
+  ##        ##     ##    ##       ##     ##  ##   ##  ##       ##
+  ##        ##     ##    ######   ########  ##     ## ##        ######
+  ##        ##     ##    ##       ##   ##   ######### ##             ##
+  ##        ##     ##    ##       ##    ##  ##     ## ##       ##    ##
+  ######## ####    ##    ######## ##     ## ##     ## ########  ######
+
+  def parse_array_literal_or_multi_assign
+    dbg "parse_array_literal_or_multi_assign"
+    node = parse_array_literal
+
+    if tok? :"="
+      dbg "got '='"
+      if node.of
+        dbgtail_off!
+        raise "Multi assign or array literal? Can't figure this out."
       end
-      next_token_skip_space
+      parse_multi_assign node
+    else
+      dbg "- parse_array_literal_or_multi_assign - was an array"
+      node
+    end
+  end
+
+  def parse_string_array
+    parse_string_or_symbol_array StringLiteral, "String"
+  end
+
+  def parse_symbol_array
+    parse_string_or_symbol_array TagLiteral, "Tag"
+  end
+
+  def parse_string_or_symbol_array(klass, elements_type)
+    elements = [] of ASTNode
+
+    next_string_array_token
+    while true
+      case @token.type
+      when :STRING
+        elements << klass.new(@token.value.to_s)
+        next_string_array_token
+      when :STRING_ARRAY_END
+        next_token
+        break
+      when :EOF
+        dbgtail_off!
+        raise "Unterminated symbol array literal"
+      end
     end
 
-    of = nil
-    if kwd?(:of)
-      next_token_skip_space_or_newline
-      of = parse_single_type
+    ArrayLiteral.new elements, Path.global(elements_type)
+  end
+
+  def parse_array_literal
+    return parse_empty_array_literal if tok? :"[]"
+
+    location = @token.location
+    next_token_skip_space_or_indent
+    elements, end_location = parse_literal_list_elements nil, closing_token: :"]"
+
+    if of = parse_possible_literal_of_suffix
       end_location = of.end_location
     end
 
-    ArrayLiteral.new(exps, of).at(location).at_end(end_location)
+    ArrayLiteral.new(elements, of).at(location).at_end(end_location)
+  end
+
+  def parse_empty_array_literal
+    # *TODO* Try to unify with generic parse func (we cannot get rid of `[]` token)
+    dbg "parse_empty_array_literal"
+    line = @line_number
+    column = @token.column_number
+
+    next_token_skip_space
+
+    dbg "parse_empty_array_literal - check for 'of', #{kwd?(:of)}"
+
+    if of = parse_possible_literal_of_suffix
+      ArrayLiteral.new(of: of).at_end(of)
+    else
+      dbgtail_off!
+      raise "for empty arrays use '[] of ElementType'", line, column
+    end
   end
 
   def parse_hash_or_set_literal(allow_of = true)
-    dbg "parse_hash_or_set_literal"
-
-    location = @token.location
     line = @line_number
     column = @token.column_number
 
-    slash_is_regex!
-    next_token
-    skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+    hash_or_array = parse_keyval_or_list_literal closing_token: :"}", allow_of: allow_of
 
-    if @token.type == :"}"
-      end_location = token_end_location
-      next_token_skip_space
-      new_hash_literal([] of HashLiteral::Entry, line, column, end_location)
+
+    # *TODO* - Map for empty literal? `{} of Int` => Map<Int>
+
+
+    if hash_or_array.is_a? HashLiteral
+      return hash_or_array
     else
-      if tok?(:IDFR) && (parser_peek_non_ws_char == ':')
-        first_key = StringLiteral.new @token.value.to_s
-        next_token_skip_space_or_newline
-        slash_is_regex!
-        next_token_skip_space_or_newline  # skips :":"
-        return parse_hash_literal first_key, location, allow_of
+      return new_set_literal hash_or_array[0], line, column, hash_or_array[1], allow_of
+    end
+  end
 
+  def new_set_literal(entries, line, column, end_location, allow_of)
+    # *TODO* fuck. The of–type need to be put into `Set<OfType>` - below won't
+    # work out.
+
+    if allow_of
+      if of = parse_possible_literal_of_suffix
+        end_location = of.end_location
       else
-        first_key = parse_op_assign
-        case @token.type
-        when :":", :"=>"
-          slash_is_regex!
-          next_token_skip_space_or_newline
-          return parse_hash_literal first_key, location, allow_of
-
-        when :",", :NEWLINE, :INDENT, :DEDENT
-          parse_literal_item_separator
-          slash_is_regex!
-          # next_token_skip_space_or_newline
-          return parse_set first_key, location
-
-        when :"}"
-          return parse_set first_key, location
-        else
-          raise "expected to parse hash or tuple literal - but now I'm lost"
-          # check :":"
+        if entries.empty?
+          dbgtail_off!
+          raise "for empty sets use '{} of Type'", line, column
         end
       end
     end
-  end
 
-  def parse_hash_literal(first_key, location, allow_of)
-    slash_is_regex!
-
-    line = @line_number
-    column = @token.column_number
-    end_location = nil
-
-    entries = [] of HashLiteral::Entry
-
-    open("hash literal", location) do
-      entries << HashLiteral::Entry.new(first_key, parse_op_assign)
-
-      skip_statement_end
-
-      if tok? :",", :NEWLINE, :INDENT, :DEDENT
-        parse_literal_item_separator
-        slash_is_regex!
-        # next_token_skip_space_or_newline
-      end
-
-      while @token.type != :"}"
-        dbg "HASH: key token is?"
-
-        if tok?(:IDFR) && (parser_peek_non_ws_char == ':')
-          key = StringLiteral.new @token.value.to_s
-          next_token_skip_space_or_newline
-        else
-          key = parse_op_assign
-        end
-
-        slash_is_regex!
-
-        dbg "HASH: value token is?"
-
-        next_token_skip_space_or_newline  # skips :":" | :"=>"
-
-        entries << HashLiteral::Entry.new(key, parse_op_assign)
-
-        # Not parsing as continuation works fine since the braces regulate it
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          parse_literal_item_separator
-          slash_is_regex!
-          # next_token_skip_space_or_newline
-        end
-      end
-      end_location = token_end_location
-      next_token_skip_space
+    if of
+      raise "implement me for fucks sake!"
+    else
+      # *TODO* *9* *FIXME* - make use of `of`
+      ArrayLiteral.new(entries, name: Path.global("Set")).at(end_location)
     end
-
-    new_hash_literal entries, line, column, end_location, allow_of: allow_of
   end
 
-  # def hash_symbol_key?
-  #   (@token.type == :IDFR || @token.type == :CONST) && current_char == '#'
-  # end
-
-  def parse_set(first_exp, location)
-    exps = [] of ASTNode
-    end_location = nil
-
-    open("tuple literal", location) do
-      exps << first_exp
-      while @token.type != :"}"
-        exps << parse_expression
-        # skip_statement_end
-
-        # if @token.type == :","
-        #   next_token_skip_space_or_newline
-        # end
-
-        if tok? :",", :NEWLINE, :INDENT, :DEDENT
-          parse_literal_item_separator
-        end
-      end
-      end_location = token_end_location
-      next_token_skip_space
-    end
-
-    tupish_pre_set = TupleLiteral.new(exps).at_end(end_location)
-    ary = ArrayLiteral.new(exps, name: Path.global("Set")).at(tupish_pre_set.location)
-    ary
-  end
-
-  def new_hash_literal(entries, line, column, end_location, allow_of = true)
+  def new_hash_literal(entries, line, column, end_location, allow_of)
     of = nil
 
     if allow_of
-      if kwd?(:of)
-        next_token_skip_space_or_newline
-        of_key = parse_single_type
+      if of_key = parse_possible_literal_of_suffix
         # *TODO* syntax for typing the hash–literal!??
         check :"=>", "new_hash_literal"
-        # check :":", "new_hash_literal"
         next_token_skip_space_or_newline
         of_value = parse_single_type
         of = HashLiteral::Entry.new(of_key, of_value)
         end_location = of_value.end_location
-      end
-
-      if entries.empty? && !of
-        dbgtail_off!
-        raise "for empty hashes use '{} of KeyType => ValueType'", line, column
+      else
+        if entries.empty?
+          dbgtail_off!
+          raise "for empty hashes use '{} of KeyType => ValueType'", line, column
+        end
       end
     end
 
     HashLiteral.new(entries, of).at_end(end_location)
   end
 
-  def parse_literal_item_separator
+  def parse_usertype_tied_collection_literal(usertype)
+    array_or_hash = parse_keyval_or_list_literal closing_token: :"}", allow_of: false
+    # skip_space
+
+    if kwd? :of
+      unexpected_token "`of` makes no sense for user-typed collection literal"
+    end
+
+    case array_or_hash
+    when ArrayLiteral, HashLiteral
+      array_or_hash.name = usertype
+      return array_or_hash
+
+    else
+      dbgtail_off!
+      raise "Bug: array_or_hash should be tuple or hash, not #{array_or_hash}"
+    end
+  end
+
+  def parse_tuple_literal(closing_token : Symbol)
+    dbg "parse_tuple_literal".white
+    location = @token.location
+
+    next_token_skip_space_or_indent
+
+    if named_tuple_key?
+      items, end_location = parse_tuple_keyval_elements closing_token: closing_token
+      tup = NamedTupleLiteral.new(items)
+
+    else
+      # Parenthesis syntax? Check for empty–tuple special
+      if closing_token == :")"
+        if tok? :","
+          parse_literal_collection_elements_separator
+          check :")"
+          next_token_skip_space
+          items = [] of ASTNode
+          end_location = token_end_location
+          trailing_comma = true
+        else
+          items, end_location, trailing_comma = parse_literal_list_elements nil, closing_token: closing_token
+        end
+      else
+        items, end_location, trailing_comma = parse_literal_list_elements nil, closing_token: closing_token
+      end
+
+      # Parenthesis syntax? Do additional checks!
+      if closing_token == :")" && (items.size < 2 && !trailing_comma)
+        Crystal.raise_wrong_parse_path "Less than two elements and no trailing \"it-really-is–a-tuple\"-comma. Indicates expression grouping"
+      end
+
+      tup = TupleLiteral.new(items)
+    end
+
+    # Parenthesis syntax? Do additional checks!
+    if closing_token == :")"
+      if tok? :"->"
+        Crystal.raise_wrong_parse_path "Found parentheses suffix indicating lambda"
+      elsif tok? :"~>", :"\\"
+        Crystal.raise_wrong_parse_path "Found parentheses suffix indicating fragment"
+      end
+    end
+
+    tup.at(location).at_end(end_location)
+  end
+
+  def named_tuple_key?
+    tok?(:IDFR, :CONST) && parser_peek_non_ws_char == ':' # && peek_next_char != ':'
+  end
+
+  def string_literal_start?
+    @token.type == :DELIMITER_START && @token.delimiter_state.kind == :string
+  end
+
+
+  alias KeyValListRetType = HashLiteral | Tuple(Array(ASTNode), Location?) | Tuple(Array(ASTNode), Location?, Bool)
+
+  def parse_keyval_or_list_literal(closing_token, allow_of) : KeyValListRetType
+    dbg "parse_keyval_or_list_literal"
+
+    line = @line_number
+    column = @token.column_number
+    slash_is_regex!
+    next_token
+    skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+
+    # Empty literal?
+    if tok? closing_token
+      dbg "- parse_keyval_or_list_literal - empty literal"
+      end_location = token_end_location
+      next_token_skip_space
+      return new_hash_literal([] of HashLiteral::Entry, line, column, end_location, allow_of)
+    end
+
+    # literal–keys hash?
+    if named_tuple_key?
+      dbg "- parse_keyval_or_list_literal - named tuple key"
+      first_part = StringLiteral.new @token.value.to_s
+      next_token_skip_space_or_indent
+    else
+      dbg "- parse_keyval_or_list_literal - any kind of key"
+      first_part = parse_expression_statement
+    end
+
+    case @token.type
+    when closing_token
+      dbg "- parse_keyval_or_list_literal - single element list"
+      return parse_literal_list_elements first_part, closing_token
+
+    when :",", :NEWLINE, :INDENT, :DEDENT
+      dbg "- parse_keyval_or_list_literal - list"
+      parse_literal_collection_elements_separator
+      return parse_literal_list_elements first_part, closing_token
+
+    when :":"
+      dbg "- parse_keyval_or_list_literal - literal-key map"
+      slash_is_regex!
+      next_token_skip_space_or_newline
+      key_type = first_part.is_a?(SymbolLiteral) ? SymbolLiteral : StringLiteral
+      return parse_keyval_literal_tail first_part, closing_token, allow_of, key_type: key_type
+
+    when :"=>"
+      dbg "- parse_keyval_or_list_literal - dynamic arrow map"
+      slash_is_regex!
+      next_token_skip_space_or_newline
+      return parse_keyval_literal_tail first_part, closing_token, allow_of, key_type: nil
+
+    else
+      raise "expected '#{closing_token}', ',', ':' or '=>' to parse hash, set or user-typed literal. Got '#{token}'"
+      # check :":"
+    end
+  end
+
+
+
+  def parse_tuple_keyval_elements(closing_token)
+    dbg "parse_tuple_keyval_elements ->"
+    slash_is_regex!
+    end_location = nil
+
+    entries = [] of NamedTupleLiteral::Entry
+
+    # *TODO* senseless defensive code
+    if literal_collection_elements_separator?
+      parse_literal_collection_elements_separator
+      slash_is_regex!
+    end
+
+    while !tok?(closing_token)
+      if named_tuple_key?
+        key = @token.value.to_s
+        next_token
+      elsif string_literal_start?
+        key = parse_string_without_interpolation("named tuple name")
+      else
+        raise "expected tuple key or #{closing_token}, not #{@token}", @token
+      end
+
+      check :":"
+
+      if entries.any? { |entry| entry.key == key }
+        raise "duplicated key: #{key}", @token
+      end
+
+      slash_is_regex!
+      next_token_skip_space
+
+      value = parse_expression_statement
+      skip_space
+
+      entries << NamedTupleLiteral::Entry.new(key, value)
+
+      if literal_collection_elements_separator?
+        parse_literal_collection_elements_separator
+        slash_is_regex!
+      else
+        break
+      end
+    end
+
+    skip_space_or_newline
+    check closing_token
+    end_location = token_end_location
+    next_token_skip_space
+
+    {entries, end_location}
+  end
+
+  def parse_keyval_literal_tail(first_key, closing_token, allow_of, key_type = nil)
+    dbg "parse_keyval_literal_tail"
+
+    line = @line_number
+    column = @token.column_number
+    end_location = nil
+
+    entries = [] of HashLiteral::Entry
+    val = parse_expression_statement
+    entries << HashLiteral::Entry.new(first_key, val)
+
+    slash_is_regex!
+    parse_possible_literal_collection_elements_separator
+
+    while @token.type != :"}"
+      dbg "HASH: key token is?"
+
+      if named_tuple_key?
+        key = StringLiteral.new @token.value.to_s
+        next_token_skip_space_or_newline
+      else
+        key = parse_expression_statement
+      end
+
+      check (key_type != nil) ? :":" : :"=>"
+
+      dbg "HASH: value token is?"
+      slash_is_regex!
+      next_token_skip_space_or_newline  # skips :":" | :"=>"
+
+      val = parse_expression_statement
+      entries << HashLiteral::Entry.new(key, val)
+
+      # Not parsing as continuation works fine since the braces regulate it
+      parse_possible_literal_collection_elements_separator
+    end
+
+    skip_space
+    check :"}"
+    end_location = token_end_location
+    next_token_skip_space
+
+    new_hash_literal entries, line, column, end_location, allow_of: allow_of
+  end
+
+  def parse_literal_list_elements(first_item, closing_token : Symbol)
+    dbg "parse_literal_list_elements ->"
+
+    items = [] of ASTNode
+    end_location = nil
+
+    if first_item
+      dbg "- parse_literal_list_elements - got first item passed"
+      items << first_item
+      trailing_comma = parse_possible_literal_collection_elements_separator
+    else
+      dbg "- parse_literal_list_elements - we parse first item too"
+      skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
+      trailing_comma = false
+    end
+
+    while @token.type != closing_token
+      dbg "- parse_literal_list_elements - loop head"
+      slash_is_regex!
+      items << parse_expression_statement # parse_expression_and_suffix
+      trailing_comma = parse_possible_literal_collection_elements_separator
+    end
+
+    dbg "- parse_literal_list_elements - after loop"
+
+    end_location = token_end_location
+
+    next_token_skip_space
+
+    {items, end_location, trailing_comma}
+  end
+
+  def parse_possible_literal_collection_elements_separator
+    if literal_collection_elements_separator?
+      parse_literal_collection_elements_separator
+      true
+    else
+      false
+    end
+  end
+
+  def literal_collection_elements_separator?
+    tok? :",", :NEWLINE, :INDENT, :DEDENT
+  end
+
+  def parse_literal_collection_elements_separator
+    dbg "parse_literal_collection_elements_separator ->"
     skip_tokens :NEWLINE, :INDENT, :DEDENT, :SPACE
     if tok? :","
       next_token
@@ -4100,30 +4181,23 @@ class OnyxParser < OnyxLexer
     end
   end
 
-
-  # *TODO* re-order functions a bit
-  def named_tuple_start?
-    (@token.type == :IDFR || @token.type == :CONST) && current_char == ':' && peek_next_char != ':'
+  def parse_possible_literal_of_suffix
+    if kwd?(:of)
+      next_token_skip_space_or_newline
+      parse_single_type
+    else
+      nil
+    end
   end
 
-  def string_literal_start?
-    @token.type == :DELIMITER_START && @token.delimiter_state.kind == :string
-  end
 
-
-
-  def parse_require
-    raise "can't require inside def", @token if @def_nest > 0
-    raise "can't require inside type declarations", @token if @type_nest > 0
-
-    next_token_skip_space
-    check :DELIMITER_START
-    string = parse_string_without_interpolation "interpolation not allowed in require"
-
-    skip_space
-
-    Require.new string
-  end
+   ######  ##      ## #### ########  ######  ##     ## ####  ######  ##     ##
+  ##    ## ##  ##  ##  ##     ##    ##    ## ##     ##  ##  ##    ## ##     ##
+  ##       ##  ##  ##  ##     ##    ##       ##     ##  ##  ##       ##     ##
+   ######  ##  ##  ##  ##     ##    ##       #########  ##   ######  #########
+        ## ##  ##  ##  ##     ##    ##       ##     ##  ##        ## ##     ##
+  ##    ## ##  ##  ##  ##     ##    ##    ## ##     ##  ##  ##    ## ##     ##
+   ######   ###  ###  ####    ##     ######  ##     ## ####  ######  ##     ##
 
   def parse_switcheroo
     dbg "parse_switcheroo"
@@ -4138,7 +4212,7 @@ class OnyxParser < OnyxLexer
 
     unless tok?(:NEWLINE, :INDENT, :DEDENT)
       @significant_newline = true
-      cond = parse_op_assign_no_control
+      cond = parse_pure_expression
       skip_statement_end
     end
 
@@ -4199,7 +4273,7 @@ class OnyxParser < OnyxLexer
         if nest_kind  == :NIL_NEST
           a_else = Expressions.new([Nop.new] of ASTNode)
         else
-          if whens.size == 0
+          if whens.empty?
             unexpected_token "expecting when, not catch all"
           end
           slash_is_regex!
@@ -4230,7 +4304,7 @@ class OnyxParser < OnyxLexer
             call.obj = ImplicitObj.new
             when_conds << call
           else
-            when_conds << parse_op_assign_no_control
+            when_conds << parse_pure_expression
           end
 
           dbg "parse_switcheroo - parsed when_conds"
@@ -4292,6 +4366,21 @@ class OnyxParser < OnyxLexer
     handle_definite_nest_end_ force: true # *TODO* force can be purged from the codebase
 
     Case.new(cond, whens, a_else)
+  end
+
+
+
+  def parse_require
+    raise "can't require inside def", @token if @def_nest > 0
+    raise "can't require inside type declarations", @token if @type_nest > 0
+
+    next_token_skip_space
+    check :DELIMITER_START
+    string = parse_string_without_interpolation "interpolation not allowed in require"
+
+    skip_space
+
+    Require.new string
   end
 
   # def parse_include
@@ -4800,11 +4889,11 @@ class OnyxParser < OnyxLexer
 
     macro_if_indent = @indent
 
-    dbg "- parse_macro_if - before parse_op_assign"
+    dbg "- parse_macro_if - before parse_expression_statement"
     @in_macro_expression = true
-    cond = parse_op_assign
+    cond = parse_expression_statement
     @in_macro_expression = false
-    dbg "- parse_macro_if - after parse_op_assign"
+    dbg "- parse_macro_if - after parse_expression_statement"
 
     skip_tokens :NEWLINE, :DEDENT, :INDENT, :SPACE
 
@@ -4867,10 +4956,10 @@ class OnyxParser < OnyxLexer
 
     if @token.type == :"..."
       next_token_skip_space
-      exp = parse_expression
+      exp = parse_expression_and_suffix
       exp = Splat.new(exp).at(exp.location)
     else
-      exp = parse_expression
+      exp = parse_expression_and_suffix
     end
 
     dbg "- parse_expression_inside_macro - after main code".red
@@ -5354,7 +5443,7 @@ class OnyxParser < OnyxLexer
         next_token
       else
         # @no_type_declaration += 1
-        default_value = parse_op_assign
+        default_value = parse_expression_statement
         # @no_type_declaration -= 1
       end
 
@@ -5506,7 +5595,7 @@ class OnyxParser < OnyxLexer
 
     dbg "check_if_ternary_if condition"
     @control_construct_parsing += 1  # for "indent is call" syntax excemption
-    cond = parse_op_assign_no_control allow_suffix: false
+    cond = parse_pure_expression allow_suffix: false
     @control_construct_parsing -= 1
 
     dbg "check_if_ternary_if - test if '?'"
@@ -5598,7 +5687,7 @@ class OnyxParser < OnyxLexer
 
     dbg "parse_if condition"
     @control_construct_parsing += 1  # for "indent is call" syntax excemption
-    cond = parse_op_assign_no_control allow_suffix: false
+    cond = parse_pure_expression allow_suffix: false
     @control_construct_parsing -= 1
     dbg "parse_if code block"
     parse_if_after_condition If, if_indent, cond #, check_end
@@ -5674,7 +5763,7 @@ class OnyxParser < OnyxLexer
     end
 
     dbg "parse_if condition"
-    cond = parse_op_assign_no_control allow_suffix: false
+    cond = parse_pure_expression allow_suffix: false
     dbg "parse_if code block"
     parse_if_after_condition Unless, if_indent, cond #, check_end
 
@@ -6158,7 +6247,7 @@ class OnyxParser < OnyxLexer
         :GLOBAL_MATCH_DATA_INDEX,
         MACRO_TOK_START_EXPR, :__LINE__, :__FILE__,
         :__DIR__, :UNDERSCORE,  :"~>", :"~.", :"\\", :"\\.",
-        :REGEX, :"!", :not, :"(", :"[", :"{", :"<[", :"[]",
+        :REGEX, :"!", :not, :"(", :"[", :"{", :"<[", :"<{", :"‹", :"[]",
         :".~.", :"&", :"->"
         # *TODO* these conflicts with when below (which normally has precedance - both routes can never take:  :"+", :"-",
       dbg "- parse_call_args_spaced_any_non_call_hints? - one of the WANTED token.types "
@@ -6188,7 +6277,7 @@ class OnyxParser < OnyxLexer
 
     when :"<"
       dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '<' check if it's a tuple or it's the operator"
-      return surrounded_by_space? # test_parse parse_tuple
+      return surrounded_by_space? # test_parse parse_tuple_literal
 
     else
       dbg "- parse_call_args_spaced_any_non_call_hints? - token.type 'other' - return true"
@@ -6315,9 +6404,9 @@ class OnyxParser < OnyxLexer
 
       dbg "- parse_named_args - parse the value"
 
-      value = parse_op_assign
+      value = parse_expression_statement
 
-      dbg "- parse_named_args - after parse_op_assign"
+      dbg "- parse_named_args - after parse_expression_statement"
 
       named_args << NamedArgument.new(name, value).at(location)
 
@@ -6355,8 +6444,8 @@ class OnyxParser < OnyxLexer
           next_token
         end
       end
-      arg = parse_op_assign  # changed to support ternary–if in arg
-      # arg = parse_op_assign_no_control
+      arg = parse_expression_statement  # changed to support ternary–if in arg
+      # arg = parse_pure_expression
       arg = Splat.new(arg).at(arg.location) if splat
       arg
     end
@@ -6415,7 +6504,7 @@ class OnyxParser < OnyxLexer
   #     block = parse_oneletter_fragment
   #   # atm. we can't handle this because '~' will be handle as the operator then. so we might have to either use '.~.' for operator (again!) or change the notation for one–char-fragment
   #   # else
-  #   #   pass_on_arg_fragment = parse_op_assign - carried out with `&block_name` *TODO* revisit this
+  #   #   pass_on_arg_fragment = parse_expression_statement - carried out with `&block_name` *TODO* revisit this
   #   # end
 
   #   end_location = token_end_location
@@ -6459,7 +6548,7 @@ class OnyxParser < OnyxLexer
 
       if @token.type == :"=" && call.is_a?(Call)
         next_token_skip_space
-        exp = parse_op_assign
+        exp = parse_expression_statement
         call.name = "#{call.name}="
         call.args << exp
       end
@@ -6485,14 +6574,14 @@ class OnyxParser < OnyxLexer
         next_token_skip_space
         if @token.type == :"("
           next_token_skip_space
-          exp = parse_op_assign
+          exp = parse_expression_statement
           check_closing_paren
           next_token_skip_space
           call.name = "#{call.name}="
           call.args = [exp] of ASTNode
           call = parse_atomic_suffix call, location
         else
-          exp = parse_op_assign
+          exp = parse_expression_statement
           call.name = "#{call.name}="
           call.args = [exp] of ASTNode
         end
@@ -6501,7 +6590,7 @@ class OnyxParser < OnyxLexer
 
         if @token.type == :"=" && call.is_a?(Call) && call.name == "[]"
           next_token_skip_space
-          exp = parse_op_assign
+          exp = parse_expression_statement
           call.name = "#{call.name}="
           call.args << exp
         end
@@ -6631,7 +6720,7 @@ class OnyxParser < OnyxLexer
 
     if allow_assign && tok?(:"=")
       next_token_skip_space_or_newline
-      assign_value = parse_op_assign_no_control # *TODO* really ..._no_control?
+      assign_value = parse_pure_expression # *TODO* really ..._no_control?
     end
 
     # *TODO* "mutability" and "storage" should go into `var` instead(!?!
@@ -6906,7 +6995,7 @@ class OnyxParser < OnyxLexer
     end_location = token_end_location
 
     loop do
-      exps << parse_op_assign
+      exps << parse_expression_statement
       end_location = token_end_location
 
       if @token.type == :","
@@ -6949,7 +7038,7 @@ class OnyxParser < OnyxLexer
   #   doc = @token.doc
 
   #   next_token_skip_space
-  #   exp = parse_op_assign
+  #   exp = parse_expression_statement
 
   #   modifier = VisibilityModifier.new(modifier, exp)
   #   modifier.doc = doc
@@ -7032,7 +7121,7 @@ class OnyxParser < OnyxLexer
     text = parse_string_without_interpolation "interpolation not allowed in constraint"
     check :"("
     next_token_skip_space_or_newline
-    exp = parse_expression
+    exp = parse_expression_and_suffix
     check :")"
     next_token_skip_space_or_newline
     AsmOperand.new(text, exp)
@@ -7083,7 +7172,7 @@ class OnyxParser < OnyxLexer
     next_token_skip_space
     @stop_on_yield += 1
     @yields ||= 1
-    scope = parse_op_assign
+    scope = parse_expression_statement
     @stop_on_yield -= 1
     skip_space
     check_idfr :yield
@@ -7244,7 +7333,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space
       check :"="
       next_token_skip_space_or_newline
-      value = parse_expression
+      value = parse_expression_and_suffix
       skip_statement_end
       Assign.new(idfr, value)
 
@@ -7419,7 +7508,7 @@ class OnyxParser < OnyxLexer
       raise "can't take pointerof(self)", @token.line_number, @token.column_number
     end
 
-    exp = parse_op_assign
+    exp = parse_expression_statement
     skip_space
 
     end_location = token_end_location
@@ -7638,7 +7727,7 @@ class OnyxParser < OnyxLexer
     when Var, InstanceVar, ClassVar, Path, Global, Underscore
       true
     when Call
-      (node.obj.nil? && node.args.size == 0 && node.block.nil?) || node.name == "[]"
+      (node.obj.nil? && node.args.empty? && node.block.nil?) || node.name == "[]"
     else
       false
     end
@@ -8218,19 +8307,21 @@ class OnyxParser < OnyxLexer
     false
   end
 
-  def check_void_value(exp, location)
+  def ensure_not_void_value(exp, location)
     if exp.is_a?(ControlExpression)
       raise "void value expression", location
     end
   end
 
-  def check_void_expression_keyword
-    # dbg "check_void_expression_keyword"
+  def ensure_not_void_expression_keyword
+    # dbg "ensure_not_void_expression_keyword"
     case @token.type
     when :IDFR
       case @token.value
       when :break, :next, :return
-        raise "void value expression", @token, @token.value.to_s.size
+        unless parser_peek_non_ws_char == ':' # next_comes_colon_space?
+          raise "void value expression", @token, @token.value.to_s.size
+        end
       end
     end
   end
@@ -8278,13 +8369,12 @@ class OnyxParser < OnyxLexer
   end
 
   def parser_peek_non_ws_char(n = 1) : Char
-    # *TODO* should skip comments too, and newlines - MAKE ANOTHER FOR THAT
     backed_pos = current_pos || 1
-    while current_char == ' '
-      next_char
+    while current_char.whitespace?
+      nextc_noinc
     end
     while n > 1
-      next_char; n -= 1
+      nextc_noinc; n -= 1
     end
     ch = current_char
     set_pos backed_pos
