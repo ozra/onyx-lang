@@ -396,7 +396,7 @@ module Crystal
       end
 
       unless matched_type
-        node.raise "undefined constant #{node}"
+        node.raise_undefined_constant(@path_lookup)
       end
 
       case matched_type

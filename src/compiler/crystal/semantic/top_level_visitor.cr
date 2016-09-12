@@ -108,7 +108,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   def visit(node : ClassDef, is_type_extend = false)
     check_outside_exp node, "declare class"
 
-    scope, name = lookup_type_def_name(node.name)
+    scope, name = lookup_type_def_name(node)
 
 
     # *TODO* the chicken or the egg dilemma again - we must check both foreigned and not up the chain!
@@ -165,6 +165,8 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       type.struct = node.struct?
     end
 
+    type.private = true if node.visibility.private?
+
     node_superclass = node.superclass
     if node_superclass
       if type_vars = node.type_vars
@@ -213,13 +215,13 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       end
     end
 
-    scope.types[name] = type if created_new_type
+    scope.types[name] = type
     node.resolved_type = type
 
     attach_doc type, node
 
     pushing_type(type) do
-      run_hooks(superclass.metaclass, type, :inherited, node) if created_new_type
+      run_hooks(hook_type(superclass), type, :inherited, node) if created_new_type
       node.body.accept self
     end
 
@@ -237,7 +239,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   def visit(node : ModuleDef)
     check_outside_exp node, "declare module"
 
-    scope, name = lookup_type_def_name(node.name)
+    scope, name = lookup_type_def_name(node)
 
 
     if node.type_vars
@@ -265,6 +267,8 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       end
       scope.types[name] = type
     end
+
+    type.private = true if node.visibility.private?
 
     node.resolved_type = type
 
@@ -296,6 +300,8 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     alias_type = AliasType.new(@program, current_type, node.name, node.value)
     attach_doc alias_type, node
     current_type.types[node.name] = alias_type
+
+    alias_type.private = true if node.visibility.private?
 
     node.resolved_type = alias_type
 
@@ -453,17 +459,21 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     node.name = babelfish_detaint node.name
 
 
-    type = current_type.types[node.name]?
+    scope = current_type_scope(node)
+
+    type = scope.types[node.name]?
+
     if type
       node.raise "#{node.name} is not a lib" unless type.is_a?(LibType)
     else
-      check_not_free_var_name(current_type, node.name, node)
+      check_not_free_var_name(scope, node.name, node)
 
-      type = LibType.new @program, current_type, node.name
-      current_type.types[node.name] = type
+      type = LibType.new @program, scope, node.name
+      scope.types[node.name] = type
     end
     node.resolved_type = type
 
+    type.private = true if node.visibility.private?
     type.add_link_attributes(link_attributes)
 
     pushing_type(type) do
@@ -525,7 +535,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     attributes = check_valid_attributes node, ValidEnumDefAttributes, "enum"
     attributes_doc = attributes_doc()
 
-    scope, name = lookup_type_def_name(node.name)
+    scope, name = lookup_type_def_name(node)
 
     enum_type = scope.types[name]?
     if enum_type
@@ -553,6 +563,8 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       check_not_free_var_name(scope, name, node.name)
       EnumType.new(@program, scope, name, enum_base_type, is_flags)
     end
+
+    enum_type.private = true if node.visibility.private?
 
     node.resolved_type = enum_type
     attach_doc enum_type, node
@@ -685,17 +697,20 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     target = babelfish_mangling target, current_type
 
-    type = current_type.types[target.names.first]?
+    scope = current_type_scope(target)
+
+    type = scope.types[target.names.first]?
     if type
       target.raise "already initialized constant #{type}"
     end
 
-    check_not_free_var_name(current_type, target.names.first, target)
+    check_not_free_var_name(scope, target.names.first, target)
 
-    const = Const.new(@program, current_type, target.names.first, value)
+    const = Const.new(@program, scope, target.names.first, value)
+    const.private = true if target.visibility.private?
     attach_doc const, node
 
-    current_type.types[target.names.first] = const
+    scope.types[target.names.first] = const
 
     target.target_const = const
   end
@@ -709,8 +724,22 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     node.exp.visibility = node.modifier
     node.exp.accept self
 
-    # Can only apply visibility modifier to def, macro or a macro call
+    # Can only apply visibility modifier to def, type, macro or a macro call
     case exp = node.exp
+    when ClassDef, ModuleDef, EnumDef, Alias, LibDef
+      if node.modifier.private?
+        return false
+      else
+        node.raise "can only use 'private' for types"
+      end
+    when Assign
+      if (target = exp.target).is_a?(Path)
+        if node.modifier.private?
+          return false
+        else
+          node.raise "can only use 'private' for constants"
+        end
+      end
     when Def
       return false
     when Macro
@@ -840,7 +869,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     begin
       current_type.as(ModuleType).include type
-      run_hooks type.metaclass, current_type, kind, node
+      run_hooks hook_type(type), current_type, kind, node
     rescue ex : TypeException
       node.raise "at '#{kind}' hook", ex
     end
@@ -864,6 +893,11 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     if kind == :inherited && (superclass = type_with_hooks.instance_type.superclass)
       run_hooks(superclass.metaclass, current_type, kind, node)
     end
+  end
+
+  private def hook_type(type)
+    type = type.generic_type if type.is_a?(GenericInstanceType)
+    type.metaclass
   end
 
   def check_call_convention_attributes(node)
@@ -935,8 +969,15 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     end
   end
 
-  def lookup_type_def_name(path)
-    # _dbg "lookup_typedef_name #{path} (global == #{path.global})"
+  def lookup_type_def_name(node : ASTNode)
+    scope, name = lookup_type_def_name(node.name)
+    if current_type.is_a?(Program)
+      scope = program.check_private(node) || scope
+    end
+    {scope, name}
+  end
+
+  def lookup_type_def_name(path : Path)
     if path.names.size == 1 && !path.global?
       scope = current_type
       path = babelfish_mangling path, scope
@@ -957,7 +998,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     unless target_type
       next_type = base_type
       path.names.each do |name|
-        next_type = base_type.lookup_path_item(name, lookup_in_namespace: false)
+        next_type = base_type.lookup_path_item(name, lookup_in_namespace: false, include_private: true, location: path.location)
         if next_type
           if next_type.is_a?(ASTNode)
             path.raise "execpted #{name} to be a type"
@@ -982,5 +1023,13 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     if target_type.is_a?(Program) && Parser.free_var_name?(name)
       node.raise "can't use #{name} as a top-level type name: it's reserved for type arguments and free variables"
     end
+  end
+
+  def current_type_scope(node)
+    scope = current_type
+    if scope.is_a?(Program) && node.visibility.private?
+      scope = program.check_private(node) || scope
+    end
+    scope
   end
 end

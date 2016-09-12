@@ -700,6 +700,10 @@ module Crystal
     def initialize(@target, @value)
     end
 
+    def visibility=(visibility)
+      target.visibility = visibility
+    end
+
     def accept_children(visitor)
       @target.accept visitor
       @value.accept visitor
@@ -1216,6 +1220,7 @@ module Crystal
     property names : Array(String)
     property? global : Bool
     property name_size = 0
+    property visibility = Visibility::Public
 
     def initialize(@names : Array, @global = false)
     end
@@ -1289,6 +1294,7 @@ module Crystal
     property splat_index : Int32?
     property? abstract : Bool
     property? struct : Bool
+    property visibility = Visibility::Public
 
     def initialize(@name, body = nil, @superclass = nil, @type_vars = nil, @abstract = false, @struct = false, @name_column_number = 0, @splat_index = nil)
       @body = Expressions.from body
@@ -1319,6 +1325,7 @@ module Crystal
     property splat_index : Int32?
     property name_column_number : Int32
     property doc : String?
+    property visibility = Visibility::Public
 
     def initialize(@name, body = nil, @type_vars = nil, @name_column_number = 0, @splat_index = nil)
       @body = Expressions.from body
@@ -1737,6 +1744,7 @@ module Crystal
     property name : String
     property body : ASTNode
     property name_column_number : Int32
+    property visibility = Visibility::Public
 
     def initialize(@name, body = nil, @name_column_number = 0)
       @body = Expressions.from body
@@ -1837,6 +1845,7 @@ module Crystal
     property members : Array(ASTNode)
     property base_type : ASTNode?
     property doc : String?
+    property visibility = Visibility::Public
 
     def initialize(@name, @members = [] of ASTNode, @base_type = nil)
     end
@@ -1878,6 +1887,7 @@ module Crystal
     property name : String
     property value : ASTNode
     property doc : String?
+    property visibility = Visibility::Public
 
     def initialize(@name : String, @value : ASTNode)
     end

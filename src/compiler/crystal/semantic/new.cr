@@ -10,6 +10,9 @@ module Crystal
       # We also need to define empty `new` methods for types
       # that don't have any `initialize` methods.
       define_default_new(self)
+      file_modules.each_value do |file_module|
+        define_default_new(file_module)
+      end
     end
 
     def define_default_new(type)
@@ -129,6 +132,8 @@ module Crystal
       new_def.yields = yields
       new_def.visibility = Visibility::Private if visibility.private?
       new_def.new = true
+      new_def.location = location
+      new_def.doc = doc
 
       # Forward block argument if any
       if uses_block_arg?

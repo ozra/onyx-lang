@@ -224,6 +224,18 @@ module Crystal
       other.types.any? { |o| self.restriction_of?(o, owner) }
     end
 
+    def restriction_of?(other : Generic, owner)
+      self_type = owner.lookup_path(self)
+      if self_type
+        other_type = owner.lookup_type?(other)
+        if other_type
+          return self_type.restriction_of?(other_type, owner)
+        end
+      end
+
+      false
+    end
+
     def restriction_of?(other, owner)
       false
     end
@@ -240,6 +252,18 @@ module Crystal
   end
 
   class Generic
+    def restriction_of?(other : Path, owner)
+      other_type = owner.lookup_type?(self)
+      if other_type
+        self_type = owner.lookup_path(other)
+        if self_type
+          return self_type.restriction_of?(other_type, owner)
+        end
+      end
+
+      false
+    end
+
     def restriction_of?(other : Generic, owner)
       return true if self == other
       return false unless name == other.name && type_vars.size == other.type_vars.size
@@ -337,18 +361,21 @@ module Crystal
         ident_type = context.get_free_var(other.names.first)
       end
 
+      had_ident_type = !!ident_type
       ident_type ||= context.defining_type.lookup_path other
 
       if ident_type
-        restrict ident_type, context
-      elsif single_name
-        if Parser.free_var_name?(other.names.first)
-          context.set_free_var(other.names.first, self)
-        else
-          other.raise "undefined constant #{other}"
-        end
-      else
+        return restrict ident_type, context
+      end
+
+      if single_name && Parser.free_var_name?(other.names.first)
+        return context.set_free_var(other.names.first, self)
+      end
+
+      if had_ident_type
         other.raise "undefined constant #{other}"
+      else
+        other.raise_undefined_constant(context.defining_type)
       end
     end
 
@@ -806,7 +833,7 @@ module Crystal
           if Parser.free_var_name?(other.names.first)
             return context.set_free_var(other.names.first, self)
           else
-            other.raise "undefined constant #{other}"
+            other.raise_undefined_constant(context.defining_type)
           end
         end
       end

@@ -134,8 +134,8 @@ module Crystal
       @abi = @program.target_machine.abi
       @llvm_typer = @program.llvm_typer
       @llvm_id = LLVMId.new(@program)
-      @main_ret_type = node.type
-      ret_type = @llvm_typer.llvm_return_type(node.type)
+      @main_ret_type = node.type? || @program.nil_type
+      ret_type = @llvm_typer.llvm_return_type(@main_ret_type)
       @main = @llvm_mod.functions.add(MAIN_NAME, [LLVM::Int32, LLVM::VoidPointer.pointer], ret_type)
       @main.linkage = LLVM::Linkage::Internal unless expose_crystal_main
 
@@ -1732,17 +1732,6 @@ module Crystal
 
       initializers.each do |init|
         ivar = real_type.lookup_instance_var(init.name)
-        value = init.value
-
-        # Don't need to initialize false
-        if ivar.type == @program.bool && value.false?
-          next
-        end
-
-        # Don't need to initialize zero
-        if ivar.type == @program.int32 && value.zero?
-          next
-        end
 
         with_cloned_context do
           # Instance var initializers must run with "self"
@@ -1752,10 +1741,10 @@ module Crystal
           context.vars["self"] = LLVMVar.new(type_ptr, real_type)
           alloca_vars init.meta_vars
 
-          value.accept self
+          init.value.accept self
 
           ivar_ptr = instance_var_ptr real_type, init.name, type_ptr
-          assign ivar_ptr, ivar.type, value.type, @last
+          assign ivar_ptr, ivar.type, init.value.type, @last
         end
       end
     end

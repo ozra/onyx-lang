@@ -128,7 +128,7 @@ class Crystal::Type
         if node.names.size == 1
           return free_var
         elsif free_var.is_a?(Type)
-          type = free_var.lookup_path(node.names[1..-1], lookup_in_namespace: false)
+          type = free_var.lookup_path(node.names[1..-1], lookup_in_namespace: false, location: node.location)
         end
       else
         type = @root.lookup_path(node)
@@ -255,7 +255,17 @@ class Crystal::Type
           # Check the case of T resolving to a number
           if type_var.is_a?(Path) && type_var.names.size == 1
             type = @root.lookup_path(type_var)
-            if type.is_a?(ASTNode)
+            case type
+            when Const
+              interpreter = MathInterpreter.new(@root)
+              begin
+                num = interpreter.interpret(type.value)
+                type_vars << NumberLiteral.new(num)
+              rescue ex : Crystal::Exception
+                type_var.raise "expanding constant value for a number value", inner: ex
+              end
+              next
+            when ASTNode
               type_vars << type
               next
             end
@@ -397,12 +407,7 @@ class Crystal::Type
     def raise_undefined_constant(node)
       _dbg "def raise_undefined_constant(node)"
       check_cant_infer_generic_type_parameter(@root, node)
-      similar_name = @root.lookup_similar_path(node)
-      if similar_name
-        node.raise("undefined constant #{node} #{@root.program.colorize("(did you mean '#{similar_name}')").yellow.bold}")
-      else
-        node.raise("undefined constant #{node}")
-      end
+      node.raise_undefined_constant(@root)
     end
 
     def check_cant_infer_generic_type_parameter(scope, node)
