@@ -149,7 +149,7 @@ module Crystal
       # like Object, Value, Reference, etc.
       types = self.types
 
-      types["Object"] = object = @object = NonGenericClassType.new self, self, "Object", nil
+      types["Any"] = object = @object = NonGenericClassType.new self, self, "Any", nil
       object.allowed_in_generics = false
       object.abstract = true
 
@@ -214,15 +214,15 @@ module Crystal
       end
 
 
-      types["Symbol"] = @symbol = SymbolType.new self, self, "Symbol", value, 4
-      types["Pointer"] = pointer = @pointer = PointerType.new self, self, "Pointer", value, ["T"]
+      types["Tag"] = @symbol = SymbolType.new self, self, "Tag", value, 4
+      types["Ptr"] = pointer = @pointer = PointerType.new self, self, "Ptr", value, ["T"]
       pointer.struct = true
       pointer.allowed_in_generics = false
 
-      types["Tuple"] = tuple = @tuple = TupleType.new self, self, "Tuple", value, ["T"]
+      types["Tup"] = tuple = @tuple = TupleType.new self, self, "Tup", value, ["T"]
       tuple.allowed_in_generics = false
 
-      types["NamedTuple"] = named_tuple = @named_tuple = NamedTupleType.new self, self, "NamedTuple", value, ["T"]
+      types["TTup"] = named_tuple = @named_tuple = NamedTupleType.new self, self, "TTup", value, ["T"]
       named_tuple.allowed_in_generics = false
 
       types["StaticArray"] = static_array = @static_array = StaticArrayType.new self, self, "StaticArray", value, ["T", "N"]
@@ -230,12 +230,12 @@ module Crystal
       static_array.declare_instance_var("@buffer", TypeParameter.new(self, static_array, "T"))
       static_array.allowed_in_generics = false
 
-      types["String"] = string = @string = NonGenericClassType.new self, self, "String", reference
+      types["Str"] = string = @string = NonGenericClassType.new self, self, "Str", reference
       string.declare_instance_var("@bytesize", int32)
       string.declare_instance_var("@length", int32)
       string.declare_instance_var("@c", uint8)
 
-      types["Class"] = klass = @class = MetaclassType.new(self, object, value, "Class")
+      types["Kind"] = klass = @class = MetaclassType.new(self, object, value, "Kind")
       object.metaclass = klass
       klass.metaclass = klass
       klass.allowed_in_generics = false
@@ -243,8 +243,8 @@ module Crystal
       types["Struct"] = struct_t = @struct_t = NonGenericClassType.new self, self, "Struct", value
       abstract_value_type(struct_t)
 
-      types["Array"] = @array = GenericClassType.new self, self, "Array", reference, ["T"]
-      types["Hash"] = @hash_type = GenericClassType.new self, self, "Hash", reference, ["K", "V"]
+      types["List"] = @array = GenericClassType.new self, self, "List", reference, ["T"]
+      types["Map"] = @hash_type = GenericClassType.new self, self, "Map", reference, ["K", "V"]
       types["Regex"] = @regex = NonGenericClassType.new self, self, "Regex", reference
       types["Range"] = range = @range = GenericClassType.new self, self, "Range", struct_t, ["B", "E"]
       range.struct = true
@@ -254,7 +254,7 @@ module Crystal
       types["Enum"] = enum_t = @enum = NonGenericClassType.new self, self, "Enum", value
       abstract_value_type(enum_t)
 
-      types["Proc"] = @proc = ProcType.new self, self, "Proc", value, ["T", "R"]
+      types["Fn"] = @proc = ProcType.new self, self, "Fn", value, ["T", "R"]
       types["Union"] = @union = GenericUnionType.new self, self, "Union", value, ["T"]
       types["Crystal"] = @crystal = NonGenericModuleType.new self, self, "Crystal"
 

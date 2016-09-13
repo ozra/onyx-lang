@@ -7,6 +7,8 @@
 # to also add them to `docs_main.cr` if their content need to
 # appear in the API docs.
 
+require "onyx_prelude_intro"
+
 # This list requires ordered statements
 require "lib_c"
 require "macros"

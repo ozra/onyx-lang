@@ -1,23 +1,30 @@
 
-type Any = Object 'official-name
-type Kind = Class 'official-name
 
-type Tag = Symbol 'official-name
-type Ptr = Pointer
 
-type List = Array 'official-name
-type Li = List
 
-type Tup = Tuple
 
-type TaggedTuple = NamedTuple  'official-name
-type TTup = NamedTuple
+-- -- The old way, staying on Crystal naming ball court side -- --
 
-type Map = Hash 'official-name
+-- type Any = Object 'official-name
+-- type Kind = Class 'official-name
 
-type Fn = Proc 'official-name
+-- type Tag = Symbol 'official-name
+-- type Ptr = Pointer
 
-type Str = String
+-- type List = Array 'official-name
+-- type Li = List
+
+-- type Tup = Tuple
+
+-- type TaggedTuple = NamedTuple  'official-name
+-- type TTup = NamedTuple
+
+-- type Map = Hash 'official-name
+
+-- type Fn = Proc 'official-name
+
+-- type Str = String
+
 
 -- This defeats the possibility of the "standard int" pragma. Consider allowing
 -- the pragma even though it's defined as "platform int". Iff we define it as
