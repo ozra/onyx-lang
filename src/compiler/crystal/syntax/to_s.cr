@@ -814,26 +814,9 @@ module Crystal
     def visit(node : Path)
       _dbg "crystal-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
 
-      if node.is_onyx
-        if node.foreign?
-          saved_name = node.names[0]
-          node.names[0] = babelfish_reverse node.names[0]
-        end
-
-        node.names.each_with_index do |name, i|
-          @str << "::" if i > 0 || node.global?
-          @str << babelfish_ensure_croxtaint name
-        end
-
-        if saved_name
-          node.names[0] = saved_name
-        end
-
-      else
-        node.names.each_with_index do |name, i|
-          @str << "::" if i > 0 || node.global?
-          @str << name
-        end
+      node.names.each_with_index do |name, i|
+        @str << "::" if i > 0 || node.global?
+        @str << name
       end
     end
 
@@ -1148,15 +1131,6 @@ module Crystal
       false
     end
 
-    # def visit(node : BabelDef)
-    #   @str << keyword("babel")
-    #   @str << " "
-    #   @str << node.given_name.to_s
-    #   @str << " <== "
-    #   @str << node.foreign_name.to_s
-    #   false
-    # end
-
     def visit(node : TypeDef)
       @str << keyword("type")
       @str << " "
@@ -1393,11 +1367,7 @@ module Crystal
     def visit(node : Alias)
       @str << keyword("alias")
       @str << " "
-      if node.is_onyx
-        @str << babelfish_ensure_croxtaint node.name
-      else
-        @str << node.name
-      end
+      @str << node.name
       @str << " = "
       node.value.accept self
       false

@@ -1,7 +1,6 @@
 require "set"
 require "../../crystal/syntax/parser"
 require "./lexer"
-require "../semantic/babelfish_translations"
 
 require "../../debug_utils/global_pollution"
 require "../../debug_utils/ast_dump"
@@ -5179,7 +5178,7 @@ class OnyxParser < OnyxLexer
 
     rescue e
       dbg "parse_def_helper failed in func-header section - probably not func".red
-      raise_wrong_parse_path
+      Crystal.raise_wrong_parse_path
     end
 
     end_location = token_end_location
@@ -8383,7 +8382,7 @@ class OnyxParser < OnyxLexer
 
   def check_const
     check :CONST
-    babelfish_taint @token.value.to_s  # *TODO* *DEBUG* *TEMP*
+    @token.value.to_s
   end
 
   def unexpected_token(msg, token = @token.to_s)
@@ -8425,9 +8424,6 @@ class OnyxParser < OnyxLexer
   # end
 
   def self.free_var_name?(name)
-    name = babelfish_detaint name # *TODO* *TEMP*
-    # _dbg_on
-    # _dbg "self.free_var_name? '#{name}'"
     name.size == 1 || (name.size == 2 && name[1].digit?)
   end
 

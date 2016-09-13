@@ -12,7 +12,7 @@ class Crystal::Doc::Method
   end
 
   def name
-    @def.name.gsub(/_/, '-') # + "__M" # *TODO* reverse-babeling if needed!
+    @def.name.gsub(/_/, '-')
   end
 
   def args

@@ -1348,7 +1348,7 @@ module Crystal
     end
 
     def to_macro_id(lang = :crystal)
-      @names.join lang == :onyx ? "." : "::"  # *TODO* reverse–babeling
+      @names.join lang == :onyx ? "." : "::"
     end
   end
 

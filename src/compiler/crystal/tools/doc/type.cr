@@ -34,7 +34,7 @@ class Crystal::Doc::Type
     when Program
       "Top Level Namespace"
     when NamedType
-      babelfish_reverse(type.name) # + "__G"  # *TODO* checks that it is deffed in Program level!
+      type.name
     when NoReturnType
       "NoReturn"
     when VoidType
@@ -643,22 +643,18 @@ class Crystal::Doc::Type
         io << %(">)
       end
       if text
-        io << babelfish_reverse text
-        # io << "__U"
+        io << text
       else
         type.full_name(io)
-        # io << "__X"
       end
       if links
         io << "</a>"
       end
     else
       if text
-        io << text # babelfish_reverse text
-        # io << "__Y"
+        io << text
       else
         type.full_name(io)
-        # io << "__Z"
       end
     end
   end

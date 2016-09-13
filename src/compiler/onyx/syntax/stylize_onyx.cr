@@ -306,7 +306,7 @@ class StylizeOnyxVisitor < Visitor
       @str << "<"
       type_vars.each_with_index do |type_var, i|
         @str << ", " if i > 0
-        @str << babelfish_detaint type_var.to_s
+        @str << type_var.to_s
       end
       @str << ">"
     end
@@ -350,7 +350,7 @@ class StylizeOnyxVisitor < Visitor
       @str << "<"
       type_vars.each_with_index do |type_var, i|
         @str << ", " if i > 0
-        @str << babelfish_detaint type_var
+        @str << type_var
       end
       @str << ">"
     end
@@ -1121,7 +1121,7 @@ class StylizeOnyxVisitor < Visitor
     @str << "$." if node.global?  # *TODO* only if explicitly set in source!
     node.names.each_with_index do |name, i|
       @str << "." if i > 0
-      @str << babelfish_detaint name
+      @str << name
     end
   end
 
@@ -1408,7 +1408,7 @@ class StylizeOnyxVisitor < Visitor
   def visit(node : LibDef)
     @str << keyword("lib")
     @str << " "
-    @str << babelfish_detaint node.name
+    @str << node.name
     newline
     @inside_lib = true
     accept_with_indent(node.body)
@@ -1463,50 +1463,19 @@ class StylizeOnyxVisitor < Visitor
     false
   end
 
-  # def visit(node : BabelDef)
-  #   @str << keyword("babel")
-  #   @str << " "
-  #   @str << node.given_name.to_s
-  #   @str << " <== "
-  #   @str << node.foreign_name.to_s
-  #   false
-  # end
-
   def visit(node : TypeDef)
     @str << keyword("ctype")
     @str << " "
-    @str << babelfish_detaint node.name.to_s
+    @str << node.name.to_s
     @str << " = "
     node.type_spec.accept self
     false
   end
 
-
-  # def visit(node : StructDef)
-  #   visit_struct_or_union "struct", node
-  # end
-
-  # def visit(node : UnionDef)
-  #   visit_struct_or_union "union", node
-  # end
-
-  # def visit_struct_or_union(name, node)
-  #   @str << keyword(name)
-  #   @str << " "
-  #   @str << babelfish_detaint node.name.to_s
-  #   newline
-  #   @inside_struct_or_union = true
-  #   accept_with_indent node.body
-  #   @inside_struct_or_union = false
-  #   append_indent
-  #   @str << keyword("end")
-  #   false
-  # end
-
   def visit(node : CStructOrUnionDef)
      @str << keyword(node.union? ? "union" : "struct")
      @str << " "
-     @str << babelfish_detaint node.name.to_s
+     @str << node.name.to_s
      newline
      @inside_struct_or_union = true
      accept_with_indent node.body
@@ -1519,7 +1488,7 @@ class StylizeOnyxVisitor < Visitor
   def visit(node : EnumDef)
     @str << keyword("type")
     @str << " "
-    @str << babelfish_detaint node.name.to_s
+    @str << node.name.to_s
     @str << " < "
     @str << keyword("enum")
     if base_type = node.base_type
@@ -1740,7 +1709,7 @@ class StylizeOnyxVisitor < Visitor
   def visit(node : Alias)
     @str << keyword("alias")
     @str << " "
-    @str << babelfish_detaint node.name
+    @str << node.name
     @str << " = "
     node.value.accept self
     false

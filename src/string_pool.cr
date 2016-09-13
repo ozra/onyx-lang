@@ -130,79 +130,80 @@ class StringPool
   # pool.empty? # => false
   # ```
   def get(*string_parts : String)
-    if OptTests.test_opt_mode_c == 2
+
+    if   true  # *TODO* *TEST* *OPT* OptTests.test_opt_mode_c == 2
 
 
-    h = 0
-    string_parts.each do |str|
-      str_ptr = str.to_unsafe
+      h = 0
+      string_parts.each do |str|
+        str_ptr = str.to_unsafe
 
-      case str.bytesize
-      when 1
-        h = (31 * h) + str_ptr[0]
-      # when 2
-      #   h = (31 * h) + str_ptr[0]
-      #   h = (31 * h) + str_ptr[1]
-      # when 3
-      #   h = (31 * h) + str_ptr[0]
-      #   h = (31 * h) + str_ptr[1]
-      #   h = (31 * h) + str_ptr[2]
-      # when 4
-      #   h = (31 * h) + str_ptr[0]
-      #   h = (31 * h) + str_ptr[1]
-      #   h = (31 * h) + str_ptr[2]
-      #   h = (31 * h) + str_ptr[3]
-      else
-        size = str.bytesize
-        h = (31 * h) + str_ptr[0]
-        h = (31 * h) + str_ptr[size - 2]
-        h = (31 * h) + str_ptr[1]
-        h = (31 * h) + str_ptr[size - 1]
-        h = (31 * h) + str_ptr[size >> 2]
+        case str.bytesize
+        when 1
+          h = (31 * h) + str_ptr[0]
+        # when 2
+        #   h = (31 * h) + str_ptr[0]
+        #   h = (31 * h) + str_ptr[1]
+        # when 3
+        #   h = (31 * h) + str_ptr[0]
+        #   h = (31 * h) + str_ptr[1]
+        #   h = (31 * h) + str_ptr[2]
+        # when 4
+        #   h = (31 * h) + str_ptr[0]
+        #   h = (31 * h) + str_ptr[1]
+        #   h = (31 * h) + str_ptr[2]
+        #   h = (31 * h) + str_ptr[3]
+        else
+          size = str.bytesize
+          h = (31 * h) + str_ptr[0]
+          h = (31 * h) + str_ptr[size - 2]
+          h = (31 * h) + str_ptr[1]
+          h = (31 * h) + str_ptr[size - 1]
+          h = (31 * h) + str_ptr[size >> 2]
+        end
+
+        # full, linear, hashing
+        # str.to_slice.each do |c|
+        #   h = (31 * h) + c
+        # end
+
       end
-
-      # full, linear, hashing
-      # str.to_slice.each do |c|
-      #   h = (31 * h) + c
       # end
 
-    end
-    # end
+      bucket_ix = h & @bucket_mask
+      # _dbg "- get - calced bucket ix to #{bucket_ix}"
 
-    bucket_ix = h & @bucket_mask
-    # _dbg "- get - calced bucket ix to #{bucket_ix}"
+      bucket = @buckets.unsafe_at(bucket_ix)
 
-    bucket = @buckets.unsafe_at(bucket_ix)
-
-    if bucket
-      entry = find_entry_in_bucket(bucket, *string_parts)
-      if entry
-        return entry
-      end
-    else
-      @buckets.set_unsafe(bucket_ix, bucket = Array(String).new(5))
-    end
-
-    @size += 1
-    if string_parts.size == 1
-      entry = string_parts.first
-
-    else
-      total_size = string_parts.sum {|str| str.size}
-
-      entry = String.build total_size do |io|
-        string_parts.each_with_index do |part, i|
-          io << part
+      if bucket
+        entry = find_entry_in_bucket(bucket, *string_parts)
+        if entry
+          return entry
         end
+      else
+        @buckets.set_unsafe(bucket_ix, bucket = Array(String).new(5))
       end
 
-      _dbg "Adds entry: '#{entry}' to #{bucket}".white
+      @size += 1
+      if string_parts.size == 1
+        entry = string_parts.first
 
-    end
+      else
+        total_size = string_parts.sum {|str| str.size}
 
-    bucket << entry
-    rehash if @size > 2 * @buckets.size # avoid doing check every time
-    return entry
+        entry = String.build total_size do |io|
+          string_parts.each_with_index do |part, i|
+            io << part
+          end
+        end
+
+        _dbg "Adds entry: '#{entry}' to #{bucket}".white
+
+      end
+
+      bucket << entry
+      rehash if @size > 2 * @buckets.size # avoid doing check every time
+      return entry
 
 
     else

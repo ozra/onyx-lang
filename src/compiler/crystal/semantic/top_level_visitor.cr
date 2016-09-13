@@ -47,9 +47,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     scope, name = lookup_type_def_name(node.name)
 
-    # *TODO* the chicken or the egg dilemma again - we must check both foreigned, and not, up the chain!
-    babelfish_mangling node, scope # *TODO* for the type_vars - if any
-    # *TODO* will be double mangled cause of specific visit below:
     type = scope.types[name]?
 
     if !type
@@ -110,17 +107,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     scope, name = lookup_type_def_name(node)
 
-
-    # *TODO* the chicken or the egg dilemma again - we must check both foreigned and not up the chain!
-    babelfish_mangling node, scope # *TODO* for the type_vars - if any
-
-    _dbg_on # if node.name == "Gimp"
-    _dbg "TopLevelVisitor : visit ClassDef #{node.name} #{node.is_onyx ? "(is onyx)" : "(is crystal)"}"
-    _dbg_off if node.name == "BoogleGoo"
-
-
     _dbg "TopLevelVisitor : visit ClassDef #{scope}, #{name} - after process_type_name"
-
 
     type = scope.types[name]?
 
@@ -241,12 +228,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     scope, name = lookup_type_def_name(node)
 
-
-    if node.type_vars
-      node = babelfish_mangling node, scope # *TODO* for the type_vars
-    end
-
-
     type = scope.types[name]?
     if type
       type = type.remove_alias
@@ -283,8 +264,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
   def visit(node : Alias)
     check_outside_exp node, "declare alias"
-
-    node = babelfish_mangling node, current_type
 
     existing_type = current_type.types[node.name]?
     if existing_type
@@ -366,30 +345,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       end
     end
 
-    # *TODO* - move this to `add_def` - to cover all situations in one place?
-    # Onyx babeling
-
-    if node.is_onyx
-      _dbg "- TopLevelVisitor.visit(Def) - '#{node.name}'"
-
-      node.args.each do |arg|
-        _dbg "- TopLevelVisitor.visit(Def) - arg: #{arg.name}, #{arg.restriction}, #{arg.restriction.class}"
-        if restriction = arg.restriction
-
-          # *TODO* mangle only if reaching program–level in type–lookup!
-          babelfish_mangling restriction, current_type
-
-          _dbg "- TopLevelVisitor.visit(Def) - restriction _after_ babeling: #{restriction}, #{arg.restriction}"
-        end
-      end
-
-      if rtype = node.return_type
-        # rtype.tag_onyx node.is_onyx
-        babelfish_mangling rtype, current_type
-      end
-    end
-
-
     primitive_attribute = attributes.try &.find { |attr| attr.name == "Primitive" }
     if primitive_attribute
       process_primitive_attribute(node, primitive_attribute)
@@ -454,11 +409,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
     link_attributes = process_link_attributes
 
-
-    # *TODO* see below current_type|@mod
-    node.name = babelfish_detaint node.name
-
-
     scope = current_type_scope(node)
 
     type = scope.types[node.name]?
@@ -486,8 +436,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   end
 
   def visit(node : CStructOrUnionDef)
-    node.name = babelfish_detaint node.name # babelfish_mangling node.name, current_type
-
     unless node.union?
       attributes = check_valid_attributes node, ValidStructDefAttributes, "struct"
     end
@@ -695,8 +643,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     check_outside_exp node, "declare constant"
     @exp_nest += 1
 
-    target = babelfish_mangling target, current_type
-
     scope = current_type_scope(target)
 
     type = scope.types[target.names.first]?
@@ -787,7 +733,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   end
 
   def visit(node : TypeDeclaration | UninitializedVar)
-    babelfish_mangling node, current_type
     false
   end
 
@@ -980,14 +925,12 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
   def lookup_type_def_name(path : Path)
     if path.names.size == 1 && !path.global?
       scope = current_type
-      path = babelfish_mangling path, scope
       name = path.names.first
     else
       path = path.clone
-      name = babelfish_detaint path.names.pop
+      name = path.names.pop
       scope = lookup_type_def_name_creating_modules path
     end
-
     {scope.as(ModuleType), name}
   end
 

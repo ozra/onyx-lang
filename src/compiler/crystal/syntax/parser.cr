@@ -5404,18 +5404,7 @@ module Crystal
     end
 
     def new_path(names, global = false)
-      if names.any? &.babelfish_croxtainted?
-        names = names.map { |name| babelfish_croxdetaint name }
-        is_onyx = true
-      else
-        is_onyx = false
-      end
-
-      _dbg "crystal-parse: new_path #{names} is_onyx = #{is_onyx}"
-
       ret = Path.new(names, global)
-      ret.is_onyx = is_onyx
-      ret
     end
 
     def end_token?

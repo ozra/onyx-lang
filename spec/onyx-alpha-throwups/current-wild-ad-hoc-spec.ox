@@ -615,8 +615,8 @@ say "facts: {facts}"
 
 MY_CONST = do
    x = 0
-   -- 2.upto(4).each (a, i)\
-   (2..4).each (a, i)\
+   -- 2.upto(4).each-with-index (a, i)\
+   (2..4).each-with-index (a, i)\
       x += a
       say "calculating MY_CONST, {a}, {i}"
    x
@@ -943,8 +943,8 @@ puts "{v}, {w}"
 
 list = [47, 13, 42, 11]
 
-list.each (v, i) ~> say "each: v: {v}, i: {i}"
-list.each_ (v) ~> say "each-value: v: {v}"
+list.each-with-index (v, i) ~> say "each-with-index: v: {v}, i: {i}"
+list.each (v) ~> say "each-with-index-value: v: {v}"
 
 say " x:"
 x = list.each((v) ~> p v).map(~> _1 * 2)
@@ -1001,6 +1001,7 @@ DEBUG–SEPARATOR = 47
 f(y ()->) -> nil
 g(y ()->) -> nil
 g(y ()->) -> nil -- redefines exactly the same
+g(y Fn) -> nil -- redefines exactly the same
 
 --   -- (Seq<Int32>()).flat_map ~>
 f () ->
@@ -1535,49 +1536,49 @@ list.each–with–index ~>
       break
    end
 
-(list.map ~> _1 + "X").each–with–index ~>
+(list.map ~> _1 + "X").each-with-index ~>
    p _1
    break if _2 == 4
 
-list.each–with–index (v, i) ~>
+list.each-with-index (v, i) ~>
    p v
    break if i == 4
 
-(list.map (x) ~> x + "X").each–with–index (x, y) ~>
+(list.map (x) ~> x + "X").each-with-index (x, y) ~>
    p x
    break if y == 4
 
-list.each–with–index ~>
+list.each-with-index ~>
    p _1
    break if _2 == 4
 
-list.each \
+list.each-with-index \
    break if _2 == 1
 
 
 say "auto params using `%n`"
 
-list.each–with–index \
+list.each-with-index \
    p %1
    break if %2 == 4
 
-(list.map \%1.+ "X").each–with–index \
+(list.map \%1.+ "X").each-with-index \
    p %1
    break if %2 == 4
 
-(list.map \.+ "X").each–with–index \
+(list.map \.+ "X").each-with-index \
    p %1
    break if %2 == 4
 
-list.each–with–index (v, i)\
+list.each-with-index (v, i)\
    p v
    break if i == 4
 
-(list.map (x)\ x + "X").each–with–index (x, y)\
+(list.map (x)\ x + "X").each-with-index (x, y)\
    p x
    break if y == 4
 
-list.each–with–index \
+list.each-with-index \
    p %1
    break if %2 == 4
 

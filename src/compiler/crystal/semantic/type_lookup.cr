@@ -108,20 +108,14 @@ class Crystal::Type
     end
 
     def lookup_type_var?(node : Path)
-
-
       _dbg "def lookup_type_var?(node : Path)"
 
-      # *TODO*
+      # Onyx–special - *TODO*
       if node.is_onyx && node.names.size == 1 && node.names.first == "Self"
       # if node.names.size == 1 && node.names.first == "Self"
         _dbg " - TypeLookup#lookup - Self => this type"
         return @self_type
       end
-
-
-      babelfish_mangling node, program
-
 
       # Check if the Path begins with a free variable
       if !node.global? && (free_var = @free_vars.try &.[node.names.first]?)
