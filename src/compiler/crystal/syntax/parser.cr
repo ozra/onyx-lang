@@ -156,6 +156,11 @@ module Crystal
       ifdef !release
         @debug_specific_flag_ = false
       end
+
+      # Intially nil by property declaration above -not in initialize method
+      @block_arg_name = nil
+      @visibility = nil
+
     end
 
     def wants_doc=(wants_doc)
@@ -5371,6 +5376,7 @@ module Crystal
 
           case @token.value
           when :private
+            _dbg_always "crystal-parse: adds visibility wrapper Private"
             visibility = Visibility::Private
             next_token_skip_space
           when :protected

@@ -2336,7 +2336,8 @@ class OnyxParser < OnyxLexer
     name : Path,
     body : Array(ASTNode)?,
     base : ASTNode?,
-    tvars : Array(String)?,
+    type_vars : Array(String)?,
+    splat_index : Int32?,
     pragmas : Array(ASTNode)?,
     doc : String?,
     name_col : Int32
@@ -2356,10 +2357,11 @@ class OnyxParser < OnyxLexer
       ret.name,
       body,
       ret.base,
-      ret.tvars,
+      ret.type_vars,
       includes_pragma?(ret.pragmas, "abstract"),
       struct: false,
-      name_column_number: ret.name_col
+      name_column_number: ret.name_col,
+      splat_index: ret.splat_index
     )
     type_def.doc = ret.doc
     # type_def.location = loc
@@ -2415,7 +2417,7 @@ class OnyxParser < OnyxLexer
     raise "shouldn't happen!" if ret.is_a? Alias
     raise "`extend` takes no pragmas", loc if ret.pragmas
     raise "`extend` takes no base-type", loc if ret.base
-    raise "`extend` takes no type-vars, only type-name", loc if ret.tvars
+    raise "`extend` takes no type-vars, only type-name", loc if ret.type_vars
     # raise "`extend` takes no doc" if ret.doc
     type_def = ExtendTypeDef.new ret.name, (ret.body || Nop.new)
     type_def.location = loc
@@ -2438,7 +2440,7 @@ class OnyxParser < OnyxLexer
     raise "type name can't be \"#{name}\"" unless name.is_a? Path
 
     # Will not be allowed by enum/flags/alias
-    type_vars = parse_type_vars
+    type_vars, splat_index = parse_type_vars
     skip_space
 
     # First allowed pragma position
@@ -2513,7 +2515,7 @@ class OnyxParser < OnyxLexer
 
     # end_location = @token.location
     @type_nest -= 1
-    GenericTypeDef.new name, body, base_type, type_vars, type_pragmas, doc, name_column_number
+    GenericTypeDef.new name, body, base_type, type_vars, splat_index, type_pragmas, doc, name_column_number
   end
 
 
@@ -2572,7 +2574,7 @@ class OnyxParser < OnyxLexer
     name = parse_constish allow_type_vars: false
     skip_space
 
-    type_vars = parse_type_vars
+    type_vars, splat_index = parse_type_vars
     # skip_statement_end
 
     dbg "- parse_trait_def - before parse_nest_start - macro_parse_mode_count = #{@macro_parse_mode_count}"
@@ -2596,7 +2598,7 @@ class OnyxParser < OnyxLexer
     @type_nest -= 1
 
     # *TODO* ModuleDef will do for now
-    module_def = ModuleDef.new name, body, type_vars, name_column_number
+    module_def = ModuleDef.new name, body, type_vars, name_column_number, splat_index: splat_index
     module_def.doc = doc
     module_def.end_location = end_location
     module_def
@@ -2622,7 +2624,7 @@ class OnyxParser < OnyxLexer
       name = terse_named
     end
 
-    type_vars = parse_type_vars
+    type_vars, splat_index = parse_type_vars
 
     nest_kind, dedent_level = parse_nest_start(:generic, mod_indent)
     add_nest :module, dedent_level, name.to_s, (nest_kind == :LINE_NEST), false
@@ -2652,7 +2654,7 @@ class OnyxParser < OnyxLexer
 
     @type_nest -= 1
 
-    module_def = ModuleDef.new name, body, type_vars, name_column_number
+    module_def = ModuleDef.new name, body, type_vars, name_column_number, splat_index: splat_index
     module_def.doc = doc
     module_def.at location
     module_def.at_end end_location
@@ -2980,43 +2982,48 @@ class OnyxParser < OnyxLexer
     rets
   end
 
-
   def parse_type_vars
+    return {nil, nil} if ! generics_delimiter?
+
     type_vars = nil
-    if generics_delimiter?
-      type_vars = [] of String
+    splat_index = nil
+
+    type_vars = [] of String
+
+    next_token_skip_space_or_newline
+
+    index = 0
+    while !generics_end_delimiter?
+      if @token.type == :"..."
+        dbgtail_off!
+        raise "splat type argument already specified", @token if splat_index
+        splat_index = index
+        next_token
+      end
+      type_var_name = check_const
+
+      if type_vars.includes? type_var_name
+        dbgtail_off!
+        raise "duplicated type var name: #{type_var_name}", @token
+      end
+      type_vars.push type_var_name
 
       next_token_skip_space_or_newline
-      while !generics_end_delimiter?
-        type_var_name = check_const
-        unless OnyxParser.free_var_name?(type_var_name)
-          dbgtail_off!
-          raise "type variables can only be single letters optionally followed by a digit", @token
-        end
-
-        if type_vars.includes? type_var_name
-          dbgtail_off!
-          raise "duplicated type var name: #{type_var_name}", @token
-        end
-        type_vars.push type_var_name
-
+      if @token.type == :","
         next_token_skip_space_or_newline
-        if @token.type == :","
-          next_token_skip_space_or_newline
-        end
       end
 
-      if type_vars.empty?
-        dbgtail_off!
-        raise "must specify at least one type var"
-      end
-
-      next_token_skip_space
+      index += 1
     end
-    type_vars
+
+    if type_vars.empty?
+        dbgtail_off!
+      raise "must specify at least one type var"
+    end
+
+    next_token_skip_space
+    {type_vars, splat_index}
   end
-
-
 
   def parse_parenthetical_unknown
     dbg "parse_parenthetical_unknown"
@@ -5298,7 +5305,7 @@ class OnyxParser < OnyxLexer
 
     node = Def.new name, arg_list, body, receiver, pass_on_arg_fragment, return_type, is_macro_def, @yields, is_abstract, splat_index
     node.name_column_number = name_column_number
-    node.visibility = marked_visibility # @visibility
+    node.visibility = marked_visibility
     node.end_location = end_location
 
     # dbg "set node.literal_style to #{name_literal_style}"
@@ -5876,13 +5883,6 @@ class OnyxParser < OnyxLexer
       raise "unexpected token: #{@token}"
     end
   end
-
-  # def set_visibility(node)
-  #   if visibility = @visibility
-  #     node.visibility = visibility
-  #   end
-  #   node
-  # end
 
 
   #              ######    ###   ##     ##      ######

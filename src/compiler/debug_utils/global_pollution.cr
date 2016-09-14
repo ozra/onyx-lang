@@ -29,8 +29,8 @@ ifdef !release
   end
 end
 
-private macro do_puts(*objs)
-  # STDERR.puts({{*objs}})
+macro do_puts(*objs)
+  STDERR.puts({{*objs}})
 end
 
 macro _dbg_on()
