@@ -228,7 +228,8 @@ module Crystal
       if node.expanded
          node.expanded.try &.accept self
       else
-         @str << keyword("extend")
+         # *TODO* this means we need CROX for extend if this should work
+         @str << keyword("ext")
          @str << " "
          @str << node.name.accept self
          if body = node.body
@@ -812,8 +813,6 @@ module Crystal
     end
 
     def visit(node : Path)
-      _dbg "crystal-to_s: #{node.names}, is_onyx: #{node.is_onyx}"
-
       node.names.each_with_index do |name, i|
         @str << "::" if i > 0 || node.global?
         @str << name

@@ -125,6 +125,8 @@ class Crystal::Doc::MarkdownDocRenderer < Markdown::HTMLRenderer
 
   def end_code
     if @inside_code
+
+      # *TODO* call highlighter.js - as a daemon (for performance) for Onyx-highlight
       text = Highlighter.highlight @code_buffer.to_s
       @io << text
     end

@@ -1,8 +1,4 @@
 module Crystal
-  module BabelManagment
-    property? foreign : Bool = false
-  end
-
   # Base class for nodes in the grammar.
   abstract class ASTNode
     # The location where this node starts, or `nil`
@@ -96,10 +92,6 @@ module Crystal
   end
 
   class Nop < ASTNode
-    # def nop?
-    #   true
-    # end
-
     def clone_specific_impl
       Nop.new
     end
@@ -182,14 +174,6 @@ module Crystal
 
     def initialize(@value)
     end
-
-    # def false_literal?
-    #   !value
-    # end
-
-    # def true_literal?
-    #   value
-    # end
 
     def clone_specific_impl
       BoolLiteral.new(@value)
@@ -607,9 +591,6 @@ module Crystal
     property then : ASTNode
     property else : ASTNode
 
-   # *TODO* possibly remove `binary` - diff cr src...
-    property binary : Symbol?
-
     def initialize(@cond, a_then = nil, a_else = nil)
       @then = Expressions.from a_then
       @else = Expressions.from a_else
@@ -622,9 +603,7 @@ module Crystal
     end
 
     def clone_specific_impl
-      a_if = If.new(@cond.clone, @then.clone, @else.clone)
-      a_if.binary = binary
-      a_if
+      If.new(@cond.clone, @then.clone, @else.clone)
     end
 
     def_equals_and_hash @cond, @then, @else
@@ -948,8 +927,6 @@ module Crystal
     property? assigns_special_var = false
     property? abstract : Bool
 
-    # property attributes : Array(Attribute)?
-
     def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil, @double_splat = nil)
       @body = Expressions.from body
     end
@@ -1215,8 +1192,6 @@ module Crystal
   #     const [ '::' const ]*
   #
   class Path < ASTNode
-    include BabelManagment
-
     property names : Array(String)
     property? global : Bool
     property name_size = 0
@@ -1242,12 +1217,10 @@ module Crystal
     def clone_specific_impl
       ident = Path.new(@names.clone, @global)
       ident.name_size = name_size
-      # ident.tried_as_foreign = @tried_as_foreign
-      ident.foreign = @foreign
       ident
     end
 
-    def_equals_and_hash @names, @global, @foreign
+    def_equals_and_hash @names, @global
   end
 
 
@@ -1276,6 +1249,8 @@ module Crystal
     def clone_specific_impl
       ExtendTypeDef.new(@name.clone, @body.clone, @expanded.clone)
     end
+
+    def_equals_and_hash @name, @body, @expanded
   end
 
   # Type definition:
@@ -1826,20 +1801,6 @@ module Crystal
     def_equals_and_hash @name, @union, @body
   end
 
-  #class StructDef < StructOrUnionDef
-  #  property attributes : Array(Attribute)?
-  #
-  #  def clone_specific_impl
-  #    StructDef.new(@name, @body.clone)
-  #  end
-  #end
-  #
-  #class UnionDef < StructOrUnionDef
-  #  def clone_specific_impl
-  #    UnionDef.new(@name, @body.clone)
-  #  end
-  #end
-
   class EnumDef < ASTNode
     property name : Path
     property members : Array(ASTNode)
@@ -1882,8 +1843,6 @@ module Crystal
   end
 
   class Alias < ASTNode
-    include BabelManagment
-
     property name : String
     property value : ASTNode
     property doc : String?

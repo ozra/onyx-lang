@@ -54,8 +54,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       # *TODO* find _similar_ type if misspelled!
     end
 
-    # if type.is_a?(AliasType)
-    # *TODO* should we follow aliases and redef target, or error!?
     type = type.remove_alias
 
     case
@@ -73,9 +71,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     # when CUnionType
     #   node.expanded = UnionDef.new(node.name.clone, node.body)
 
-    # *TODO* should we follow aliases and redef target, or error!?
-    # when AliasType
-    #   raise "can't extend type alias"
     else
       node.raise "don't know how to extend type \"#{name}\" of \"#{type.class}\""
 
@@ -104,9 +99,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
 
   def visit(node : ClassDef, is_type_extend = false)
     check_outside_exp node, "declare class"
-
     scope, name = lookup_type_def_name(node)
-
     _dbg "TopLevelVisitor : visit ClassDef #{scope}, #{name} - after process_type_name"
 
     type = scope.types[name]?
@@ -216,7 +209,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
       type.force_add_subclass
     else
       if node.is_onyx && is_type_extend == false
-        node.raise "#{name} defined more than once. Did you mean to `extend`?"
+        node.raise "#{name} defined more than once. Did you mean to `ext #{name}` / `extend #{name}`?"
       end
     end
 
@@ -412,7 +405,6 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     scope = current_type_scope(node)
 
     type = scope.types[node.name]?
-
     if type
       node.raise "#{node.name} is not a lib" unless type.is_a?(LibType)
     else
@@ -488,7 +480,7 @@ class Crystal::TopLevelVisitor < Crystal::SemanticVisitor
     enum_type = scope.types[name]?
     if enum_type
       if node.is_onyx && is_type_extend == false
-        node.raise "#{name} defined more than once. Did you mean to `extend`?"
+        node.raise "#{name} defined more than once. Did you mean to `ext #{name}` / `extend #{name}`?"
       end
       unless enum_type.is_a?(EnumType)
         node.raise "#{name} is not a enum, it's a #{enum_type.type_desc}"

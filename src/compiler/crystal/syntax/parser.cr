@@ -78,7 +78,6 @@ module Crystal
         @def_vars = [Set(String).new]
       end
 
-      @last_call_has_parentheses = true  # *TODO* re-examine usage
       @temp_token = Token.new
       @unclosed_stack = [] of Unclosed
       @calls_super = false
@@ -135,7 +134,6 @@ module Crystal
         @def_vars = [Set(String).new]
       end
 
-      @last_call_has_parentheses = true
       @unclosed_stack.clear
       @calls_super = false
       @calls_initialize = false

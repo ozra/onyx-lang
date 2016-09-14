@@ -35,7 +35,6 @@ module Crystal
       else
         @dead_code = false
       end
-      nil
     end
 
     def transform(node : Expressions)

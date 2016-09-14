@@ -21,6 +21,7 @@ class Crystal::Doc::Type
     when AliasType
       :alias
     when EnumType
+      # *TODO* :flags if attribute is set
       :enum
     when NoReturnType, VoidType
       :struct
@@ -232,7 +233,6 @@ class Crystal::Doc::Type
   def included_modules
     @included_modules ||= begin
       included_modules = [] of Type
-
       @type.parents.try &.each do |parent|
         if parent.module?
           included_modules << @generator.to_doc_type(parent)

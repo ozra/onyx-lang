@@ -235,25 +235,22 @@ class Crystal::Call
 
     # - - - - - - - - - - - - - - - - - - - -
     # Ugly nil–sugar hack - oh, these ugly hacks ;-)
-    if matches.empty?
-      if nil_sugared?
-        if def_name[-1] == '?'
-          _dbg "nil-hack lookup_matches_in_type - test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}"
-          _dbg "nil-hack lookup_matches_in_type - test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}"
+    if matches.empty? && nil_sugared? && def_name[-1] == '?'
+      _dbg "nil-hack lookup_matches_in_type - test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}"
+      _dbg "nil-hack lookup_matches_in_type - test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}"
 
-          def_name = def_name[0..-2]
-          signature = CallSignature.new(def_name, arg_types, block, named_args_types)
-          # *TODO* signature.def_name = def_name[0..2]
-          # matches = check_tuple_indexer(owner, def_name, args, arg_types)
-          matches = lookup_matches_checking_expansion(owner, signature, search_in_parents)
-        end
-      end
+      def_name = def_name[0..-2]
+      signature = CallSignature.new(def_name, arg_types, block, named_args_types)
+      # *TODO* signature.def_name = def_name[0..2]
+      # matches = check_tuple_indexer(owner, def_name, args, arg_types)
+      matches = lookup_matches_checking_expansion(owner, signature, search_in_parents)
     end
     # - - - - - - - - - - - - - - - - - - - -
 
     # - - - - - - - - - - - - - - - - - - - -
     # Onyx Hardcoded Babelfishing
     if matches.empty?
+      # Should be done for 'deinit' too. Or all babeled funcs
       retry_def_name = case def_name
       when "initialize"   then  "init"
       else                      nil

@@ -183,6 +183,7 @@ abstract class Crystal::SemanticVisitor < Crystal::Visitor
 
   def visit_any(node)
     @exp_nest += 1 if nesting_exp?(node)
+
     true
   end
 

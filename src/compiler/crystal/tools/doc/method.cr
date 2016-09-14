@@ -205,6 +205,8 @@ class Crystal::Doc::Method
     if default_value = arg.default_value
       io << "<span class=\"default-value\">"
       io << " = "
+
+      # *TODO* use highlighter.js as a daemon 
       # io << Highlighter.highlight(default_value.to_s)
       io << default_value.to_oxs
       io << "</span>"

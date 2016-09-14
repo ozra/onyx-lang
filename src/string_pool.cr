@@ -1,3 +1,8 @@
+
+
+# *TMP* *TEMP* just for debugging while testing opts
+require "compiler/debug_utils/global_pollution"
+
 # A string pool is a collection of strings.
 # It allows a runtime to save memory by preserving strings in a pool, allowing to
 # reuse an instance of a common string instead of creating a new one.

@@ -112,7 +112,6 @@ class Crystal::Type
 
       # Onyx–special - *TODO*
       if node.is_onyx && node.names.size == 1 && node.names.first == "Self"
-      # if node.names.size == 1 && node.names.first == "Self"
         _dbg " - TypeLookup#lookup - Self => this type"
         return @self_type
       end

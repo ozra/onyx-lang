@@ -201,11 +201,6 @@ module Crystal
           next
         end
 
-        if def_metadata.def.name == "my_foo"
-          _dbg "- CallSignature#match - compare #{arg_type} and #{arg}"
-          _dbg "- CallSignature#match - compare #{arg_type.class} and #{arg.restriction.class}"
-        end
-
         match_arg_type = arg_type.restrict(arg, context)
         if match_arg_type
           matched_arg_types ||= [] of Type

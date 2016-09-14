@@ -128,23 +128,6 @@ module Crystal
     def initialize
       super(self, self, "main")
 
-      # @symbols = Set(String).new
-      # @global_vars = {} of String => MetaTypeVar
-      # @requires = Set(String).new
-      # @temp_var_counter = 0
-      # @vars = MetaVars.new
-      # @splat_expansions = {} of UInt64 => Type
-      # @initialized_global_vars = Set(String).new
-      # @file_modules = {} of String => FileModule
-      # @unions = {} of Array(UInt64) => Type
-      # @wants_doc = false
-      # @color = true
-      # @after_inference_types = Set(Type).new
-      # @string_pool = SharedCompilationStringPool.get
-      # @class_var_and_const_initializers = [] of ClassVarInitializer | Const
-      # @tempfiles = [] of String
-
-
       # Every crystal program comes with some predefined types that we initialize here,
       # like Object, Value, Reference, etc.
       types = self.types
@@ -267,10 +250,6 @@ module Crystal
 
       types["GC"] = gc = NonGenericModuleType.new self, self, "GC"
       gc.metaclass.as(ModuleType).add_def Def.new("add_finalizer", [Arg.new("object")], Nop.new)
-
-      # @literal_expander = LiteralExpander.new self
-      # @macro_expander = MacroExpander.new self
-      # @nil_var = Var.new("<nil_var>", nil_t)
 
       @stdint = int64
       @archint = int64

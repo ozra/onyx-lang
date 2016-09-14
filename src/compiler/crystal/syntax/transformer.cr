@@ -478,10 +478,6 @@ module Crystal
       node
     end
 
-    # def transform(node : BabelDef)
-    #   node
-    # end
-
     def transform(node : TypeDef)
       node
     end

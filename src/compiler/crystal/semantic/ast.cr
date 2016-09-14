@@ -538,7 +538,6 @@ module Crystal
 
   {% for name in %w(And Or
                    ArrayLiteral HashLiteral RegexLiteral RangeLiteral
-                   NumberLiteral
                    Case StringInterpolation
                    MacroExpression MacroIf MacroFor MultiAssign
                    SizeOf InstanceSizeOf Global Require Select) %}

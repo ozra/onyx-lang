@@ -2,14 +2,14 @@ class Crystal::Doc::Generator
   getter program : Program
 
   @base_dir : String
-  @is_crystal_repo : Bool
+  @is_onyx_repo : Bool
 
   def initialize(@program : Program, @included_dirs : Array(String), @dir = "./.build/docs")
     @base_dir = `pwd`.chomp
     @types = {} of Crystal::Type => Doc::Type
     @repo_name = ""
     compute_repository
-    @is_crystal_repo = @repo_name == "github.com/crystal-lang/crystal"
+    @is_onyx_repo = @repo_name == "github.com/ozra/onyx-lang"
   end
 
   def run
@@ -163,7 +163,7 @@ class Crystal::Doc::Generator
   end
 
   def crystal_builtin?(type)
-    return false unless @is_crystal_repo
+    return false unless @is_onyx_repo
     return false unless type.is_a?(Const) || type.is_a?(NonGenericModuleType)
 
     crystal_type = @program.types["Crystal"]

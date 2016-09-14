@@ -1301,7 +1301,7 @@ module Crystal
       if ! method
         if node.name == "initialize"
           node.name = "init"
-          method = obj_type.lookup_first_def(node.name, false).as(External?)
+          method = obj_type.lookup_first_def(node.name, false)
         end
       end
       # # # # # # # # # # #
