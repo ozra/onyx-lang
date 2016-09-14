@@ -40,7 +40,7 @@ module Crystal
     # Returns a deep copy of this node. Copied nodes retain
     # the location and end location of the original nodes.
     def clone
-      clone = clone_specific_impl
+      clone = clone_without_location
       clone.location = location
       clone.end_location = end_location
       clone.parenthesized = parenthesized
@@ -92,7 +92,7 @@ module Crystal
   end
 
   class Nop < ASTNode
-    def clone_specific_impl
+    def clone_without_location
       Nop.new
     end
 
@@ -146,7 +146,7 @@ module Crystal
       @expressions.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Expressions.new(@expressions.clone)
     end
 
@@ -158,7 +158,7 @@ module Crystal
   #     'nil'
   #
   class NilLiteral < ASTNode
-    def clone_specific_impl
+    def clone_without_location
       NilLiteral.new
     end
 
@@ -175,7 +175,7 @@ module Crystal
     def initialize(@value)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       BoolLiteral.new(@value)
     end
 
@@ -200,7 +200,7 @@ module Crystal
       @value[0] == '+' || @value[0] == '-'
     end
 
-    def clone_specific_impl
+    def clone_without_location
       NumberLiteral.new(@value, @kind) # , @suffix)
     end
 
@@ -218,7 +218,7 @@ module Crystal
     def initialize(@value : Char)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       CharLiteral.new(@value)
     end
 
@@ -231,7 +231,7 @@ module Crystal
     def initialize(@value : String)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       StringLiteral.new(@value)
     end
 
@@ -248,7 +248,7 @@ module Crystal
       @expressions.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       StringInterpolation.new(@expressions.clone)
     end
 
@@ -261,7 +261,7 @@ module Crystal
     def initialize(@value : String)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       SymbolLiteral.new(@value)
     end
 
@@ -290,7 +290,7 @@ module Crystal
       @of.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ArrayLiteral.new(@elements.clone, @of.clone, @name.clone)
     end
 
@@ -317,7 +317,7 @@ module Crystal
       end
     end
 
-    def clone_specific_impl
+    def clone_without_location
       HashLiteral.new(@entries.clone, @of.clone, @name.clone)
     end
 
@@ -338,7 +338,7 @@ module Crystal
       end
     end
 
-    def clone_specific_impl
+    def clone_without_location
       NamedTupleLiteral.new(@entries.clone)
     end
 
@@ -360,7 +360,7 @@ module Crystal
       @to.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       RangeLiteral.new(@from.clone, @to.clone, @exclusive.clone)
     end
 
@@ -378,7 +378,7 @@ module Crystal
       @value.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       RegexLiteral.new(@value.clone, @options)
     end
 
@@ -399,7 +399,7 @@ module Crystal
       elements.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       TupleLiteral.new(elements.clone)
     end
 
@@ -426,7 +426,7 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Var.new(@name, is_nil_sugared: @is_nil_sugared)
     end
 
@@ -457,7 +457,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Block.new(@args.clone, @body.clone, @splat_index)
     end
 
@@ -536,7 +536,7 @@ module Crystal
       @block.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       clone = Call.new(@obj.clone, @name, @args.clone, @block.clone, @block_arg.clone, @named_args.clone, @global, @name_column_number, @has_parentheses, @implicit_construction, @nil_sugared)
       clone.name_size = name_size
       clone.expansion = expansion?
@@ -567,7 +567,7 @@ module Crystal
       @value.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       NamedArgument.new(name, value.clone)
     end
 
@@ -602,7 +602,7 @@ module Crystal
       @else.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       If.new(@cond.clone, @then.clone, @else.clone)
     end
 
@@ -625,7 +625,7 @@ module Crystal
       @else.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Unless.new(@cond.clone, @then.clone, @else.clone)
     end
 
@@ -660,7 +660,7 @@ module Crystal
       @else.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       IfDef.new(@cond.clone, @then.clone, @else.clone)
     end
 
@@ -692,7 +692,7 @@ module Crystal
       @end_location || value.end_location
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Assign.new(@target.clone, @value.clone)
     end
 
@@ -723,7 +723,7 @@ module Crystal
       other.targets == targets && other.values == values
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MultiAssign.new(@targets.clone, @values.clone)
     end
 
@@ -741,7 +741,7 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
+    def clone_without_location
       InstanceVar.new(@name)
     end
 
@@ -759,7 +759,7 @@ module Crystal
       @obj.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ReadInstanceVar.new(@obj.clone, @name)
     end
 
@@ -772,7 +772,7 @@ module Crystal
     def initialize(@name)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ClassVar.new(@name)
     end
 
@@ -790,7 +790,7 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Global.new(@name)
     end
 
@@ -821,7 +821,7 @@ module Crystal
   #     expression '&&' expression
   #
   class And < BinaryOp
-    def clone_specific_impl
+    def clone_without_location
       And.new(@left.clone, @right.clone)
     end
   end
@@ -831,7 +831,7 @@ module Crystal
   #     expression '||' expression
   #
   class Or < BinaryOp
-    def clone_specific_impl
+    def clone_without_location
       Or.new(@left.clone, @right.clone)
     end
   end
@@ -862,7 +862,7 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Arg.new @name, @default_value.clone, @restriction.clone, @external_name.clone, @mutability.clone
     end
 
@@ -884,7 +884,7 @@ module Crystal
       @output.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ProcNotation.new(@inputs.clone, @output.clone)
     end
 
@@ -906,6 +906,7 @@ module Crystal
   #     'end'
   #
   class Def < ASTNode
+    property free_vars : Array(String)?
     property receiver : ASTNode?
     property name : String
     property args : Array(Arg)
@@ -927,7 +928,7 @@ module Crystal
     property? assigns_special_var = false
     property? abstract : Bool
 
-    def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil, @double_splat = nil)
+    def initialize(@name, @args = [] of Arg, body = nil, @receiver = nil, @block_arg = nil, @return_type = nil, @macro_def = false, @yields = nil, @abstract = false, @splat_index = nil, @double_splat = nil, @free_vars = nil)
       @body = Expressions.from body
     end
 
@@ -944,8 +945,8 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
-      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat.clone)
+    def clone_without_location
+      a_def = Def.new(@name, @args.clone, @body.clone, @receiver.clone, @block_arg.clone, @return_type.clone, @macro_def, @yields, @abstract, @splat_index, @double_splat.clone, @free_vars)
       a_def.calls_super = calls_super?
       a_def.calls_initialize = calls_initialize?
       a_def.calls_previous_def = calls_previous_def?
@@ -983,7 +984,7 @@ module Crystal
       name.size
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Macro.new(@name, @args.clone, @body.clone, @block_arg.clone, @splat_index, @double_splat.clone)
     end
 
@@ -1005,31 +1006,31 @@ module Crystal
 
   # Used only for flags
   class Not < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       Not.new(@exp.clone)
     end
   end
 
   class PointerOf < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       PointerOf.new(@exp.clone)
     end
   end
 
   class SizeOf < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       SizeOf.new(@exp.clone)
     end
   end
 
   class InstanceSizeOf < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       InstanceSizeOf.new(@exp.clone)
     end
   end
 
   class Out < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       Out.new(@exp.clone)
     end
   end
@@ -1046,7 +1047,7 @@ module Crystal
       @exp.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       VisibilityModifier.new(@modifier, @exp.clone)
     end
 
@@ -1066,7 +1067,7 @@ module Crystal
       @const.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       IsA.new(@obj.clone, @const.clone, @nil_check)
     end
 
@@ -1084,7 +1085,7 @@ module Crystal
       obj.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       RespondsTo.new(@obj.clone, @name)
     end
 
@@ -1097,7 +1098,7 @@ module Crystal
     def initialize(@string)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Require.new(@string)
     end
 
@@ -1117,7 +1118,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       When.new(@conds.clone, @body.clone)
     end
 
@@ -1137,7 +1138,7 @@ module Crystal
       @else.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Case.new(@cond.clone, @whens.clone, @else.clone)
     end
 
@@ -1161,7 +1162,7 @@ module Crystal
       @else.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Select.new(@whens.clone, @else.clone)
     end
 
@@ -1178,7 +1179,7 @@ module Crystal
       true
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 
@@ -1214,7 +1215,7 @@ module Crystal
       names.size == 1 && names.first == name
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ident = Path.new(@names.clone, @global)
       ident.name_size = name_size
       ident
@@ -1246,7 +1247,7 @@ module Crystal
       @body = Expressions.new body.not_nil!
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ExtendTypeDef.new(@name.clone, @body.clone, @expanded.clone)
     end
 
@@ -1280,7 +1281,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ClassDef.new(@name, @body.clone, @superclass.clone, @type_vars.clone, @abstract, @struct, @name_column_number, @splat_index)
     end
 
@@ -1310,7 +1311,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ModuleDef.new(@name, @body.clone, @type_vars.clone, @name_column_number, @splat_index)
     end
 
@@ -1336,7 +1337,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       While.new(@cond.clone, @body.clone)
     end
 
@@ -1362,7 +1363,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Until.new(@cond.clone, @body.clone)
     end
 
@@ -1395,7 +1396,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       For.new(@value_id, @index_id, @iterable.clone, @stepping.clone, @body.clone)
     end
 
@@ -1420,7 +1421,7 @@ module Crystal
       @named_args.try &.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Generic.new(@name.clone, @type_vars.clone, @named_args.clone)
     end
 
@@ -1459,7 +1460,7 @@ module Crystal
       end
     end
 
-    def clone_specific_impl
+    def clone_without_location
       TypeDeclaration.new(@var.clone, @declared_type.clone, @value.clone, @mutability.clone)
     end
 
@@ -1490,7 +1491,7 @@ module Crystal
       end
     end
 
-    def clone_specific_impl
+    def clone_without_location
       UninitializedVar.new(@var.clone, @declared_type.clone)
     end
 
@@ -1511,7 +1512,7 @@ module Crystal
       @types.try &.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Rescue.new(@body.clone, @types.clone, @name)
     end
 
@@ -1537,7 +1538,7 @@ module Crystal
       @ensure.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ex = ExceptionHandler.new(@body.clone, @rescues.clone, @else.clone, @ensure.clone)
       ex.implicit = implicit
       ex.suffix = suffix
@@ -1557,7 +1558,7 @@ module Crystal
       @def.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ProcLiteral.new(@def.clone)
     end
 
@@ -1577,7 +1578,7 @@ module Crystal
       @args.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ProcPointer.new(@obj.clone, @name, @args.clone)
     end
 
@@ -1594,7 +1595,7 @@ module Crystal
       @types.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Union.new(@types.clone)
     end
 
@@ -1606,7 +1607,7 @@ module Crystal
       true
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Self.new
     end
 
@@ -1633,19 +1634,19 @@ module Crystal
   end
 
   class Return < ControlExpression
-    def clone_specific_impl
+    def clone_without_location
       Return.new(@exp.clone)
     end
   end
 
   class Break < ControlExpression
-    def clone_specific_impl
+    def clone_without_location
       Break.new(@exp.clone)
     end
   end
 
   class Next < ControlExpression
-    def clone_specific_impl
+    def clone_without_location
       Next.new(@exp.clone)
     end
   end
@@ -1662,7 +1663,7 @@ module Crystal
       @exps.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Yield.new(@exps.clone, @scope.clone)
     end
 
@@ -1683,7 +1684,7 @@ module Crystal
       @name.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Include.new(@name)
     end
 
@@ -1704,7 +1705,7 @@ module Crystal
       @name.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Extend.new(@name)
     end
 
@@ -1729,7 +1730,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       LibDef.new(@name, @body.clone, @name_column_number)
     end
 
@@ -1754,7 +1755,7 @@ module Crystal
       @body.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       FunDef.new(@name, @args.clone, @return_type.clone, @varargs, @body.clone, @real_name)
     end
 
@@ -1773,7 +1774,7 @@ module Crystal
       @type_spec.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       TypeDef.new(@name, @type_spec.clone, @name_column_number)
     end
 
@@ -1794,7 +1795,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       CStructOrUnionDef.new(@name, @body.clone, @union)
     end
 
@@ -1816,7 +1817,7 @@ module Crystal
       @base_type.try &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       EnumDef.new(@name, @members.clone, @base_type.clone)
     end
 
@@ -1835,7 +1836,7 @@ module Crystal
       @type_spec.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       ExternalVar.new(@name, @type_spec.clone, @real_name)
     end
 
@@ -1855,7 +1856,7 @@ module Crystal
       @value.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Alias.new(@name, @value.clone)
     end
 
@@ -1872,7 +1873,7 @@ module Crystal
       @name.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Metaclass.new(@name.clone)
     end
 
@@ -1892,7 +1893,7 @@ module Crystal
       @to.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Cast.new(@obj.clone, @to.clone)
     end
 
@@ -1916,7 +1917,7 @@ module Crystal
       @to.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       NilableCast.new(@obj.clone, @to.clone)
     end
 
@@ -1938,7 +1939,7 @@ module Crystal
       @expressions.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       TypeOf.new(@expressions.clone)
     end
 
@@ -1962,7 +1963,7 @@ module Crystal
       @named_args.try &.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Attribute.new(@name, @args.clone, @named_args.clone, @lex_style)
     end
 
@@ -1987,7 +1988,7 @@ module Crystal
       @exp.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MacroExpression.new(@exp.clone, @output)
     end
 
@@ -2001,7 +2002,7 @@ module Crystal
     def initialize(@value : String)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 
@@ -2031,7 +2032,7 @@ module Crystal
       @else.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MacroIf.new(@cond.clone, @then.clone, @else.clone)
     end
 
@@ -2057,7 +2058,7 @@ module Crystal
       @body.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MacroFor.new(@vars.clone, @exp.clone, @body.clone)
     end
 
@@ -2076,7 +2077,7 @@ module Crystal
       @exps.try &.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MacroVar.new(@name, @exps.clone)
     end
 
@@ -2089,7 +2090,7 @@ module Crystal
       true
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Underscore.new
     end
 
@@ -2099,13 +2100,13 @@ module Crystal
   end
 
   class Splat < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       Splat.new(@exp.clone)
     end
   end
 
   class DoubleSplat < UnaryExpression
-    def clone_specific_impl
+    def clone_without_location
       DoubleSplat.new(@exp.clone)
     end
   end
@@ -2116,7 +2117,7 @@ module Crystal
     def initialize(@name : Symbol)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       MagicConstant.new(@name)
     end
 
@@ -2177,7 +2178,7 @@ module Crystal
       @inputs.try &.each &.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Asm.new(@text, @output.clone, @inputs.clone, @clobbers, @volatile, @alignstack, @intel)
     end
 
@@ -2195,7 +2196,7 @@ module Crystal
       @exp.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       AsmOperand.new(@constraint, @exp)
     end
 

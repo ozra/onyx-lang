@@ -113,7 +113,7 @@ describe "Restrictions" do
 
   it "errors on T::Type that's union when used from type restriction" do
     assert_error %(
-      def foo(x : T)
+      def foo(x : T) forall T
         T::Baz
       end
 
@@ -264,7 +264,7 @@ describe "Restrictions" do
       class Bar(X)
       end
 
-      def bar(other : Bar(Y))
+      def bar(other : Bar(Y)) forall Y
         'a'
       end
 
@@ -369,5 +369,16 @@ describe "Restrictions" do
 
       Foo.new { nil.as(Rec)}.t
       )) { types["Rec"].metaclass }
+  end
+
+  it "matches free variable for type variable" do
+    assert_type(%(
+      class Foo(Type)
+        def initialize(x : Type)
+        end
+      end
+
+      Foo.new(1)
+      )) { generic_class "Foo", int32 }
   end
 end

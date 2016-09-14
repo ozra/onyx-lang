@@ -29,6 +29,10 @@ ifdef !release
   end
 end
 
+private macro do_puts(*objs)
+  # STDERR.puts({{*objs}})
+end
+
 macro _dbg_on()
   ifdef !release
     DebuggingData.dbg_on
@@ -52,7 +56,7 @@ end
 macro _dbg(*objs)
   ifdef !release
     if DebuggingData.dbg_output_on?
-      STDERR.puts({{*objs}})
+      do_puts({{*objs}})
     end
   end
 end
@@ -60,13 +64,13 @@ end
 macro _dbg_overview(*objs)
   ifdef !release
     if DebuggingData.dbg_enabled?
-      STDERR.puts({{*objs}})
+      do_puts({{*objs}})
     end
   end
 end
 
 macro _dbg_always(*objs)
-  STDERR.puts({{*objs}})
+  do_puts({{*objs}})
 end
 
 struct Char

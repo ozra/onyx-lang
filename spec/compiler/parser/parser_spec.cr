@@ -265,6 +265,12 @@ describe "Parser" do
   assert_syntax_error "def foo @@var, &block; end", "parentheses are mandatory for def arguments"
   assert_syntax_error "def foo *y; 1; end", "parentheses are mandatory for def arguments"
 
+  it_parses "def foo(x : U) forall U; end", Def.new("foo", args: [Arg.new("x", restriction: "U".path)], free_vars: %w(U))
+  it_parses "def foo(x : U) forall T, U; end", Def.new("foo", args: [Arg.new("x", restriction: "U".path)], free_vars: %w(T U))
+  it_parses "def foo(x : U) : Int32 forall T, U; end", Def.new("foo", args: [Arg.new("x", restriction: "U".path)], return_type: "Int32".path, free_vars: %w(T U))
+  assert_syntax_error "def foo(x : U) forall; end"
+  assert_syntax_error "def foo(x : U) forall U,; end"
+
   it_parses "foo", "foo".call
   it_parses "foo()", "foo".call
   it_parses "foo(1)", "foo".call(1.int32)
@@ -420,6 +426,7 @@ describe "Parser" do
   it_parses "class Foo < Bar; end", ClassDef.new("Foo".path, superclass: "Bar".path)
   it_parses "class Foo(T); end", ClassDef.new("Foo".path, type_vars: ["T"])
   it_parses "class Foo(T1); end", ClassDef.new("Foo".path, type_vars: ["T1"])
+  it_parses "class Foo(Type); end", ClassDef.new("Foo".path, type_vars: ["Type"])
   it_parses "abstract class Foo; end", ClassDef.new("Foo".path, abstract: true)
   it_parses "abstract struct Foo; end", ClassDef.new("Foo".path, abstract: true, struct: true)
 
@@ -1328,9 +1335,6 @@ describe "Parser" do
     "can't change the value of self"
 
   assert_syntax_error "macro foo(x : Int32); end"
-
-  assert_syntax_error "class Foo(Something); end", "type variables can only be single letters"
-  assert_syntax_error "module Foo(Something); end", "type variables can only be single letters"
 
   assert_syntax_error "/foo)/", "invalid regex"
   assert_syntax_error "def =\nend"

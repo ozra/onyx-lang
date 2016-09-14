@@ -40,7 +40,7 @@ module Crystal
     def initialize(@name : String, @type : Type? = nil)
     end
 
-    def clone_specific_impl
+    def clone_without_location
       Primitive.new(@name, @type)
     end
 
@@ -55,7 +55,7 @@ module Crystal
       super("tuple_indexer_known_index")
     end
 
-    def clone_specific_impl
+    def clone_without_location
       TupleIndexer.new(index)
     end
 
@@ -71,7 +71,7 @@ module Crystal
       @type.to_s
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 
@@ -84,7 +84,7 @@ module Crystal
       @mutability = :auto # *TODO* *TEMP* *WORKAROUND*
     end
 
-    def clone_specific_impl
+    def clone_without_location
       arg = previous_def
 
       # An arg's type can sometimes be used as a restriction,
@@ -172,7 +172,7 @@ module Crystal
       {min_size, max_size}
     end
 
-    def clone_specific_impl
+    def clone_without_location
       a_def = previous_def
       a_def.previous = previous
       a_def.raises = raises?
@@ -365,7 +365,7 @@ module Crystal
     # This is set to `true` when the compiler is sure that the condition is falsey
     property? falsey = false
 
-    def clone_specific_impl
+    def clone_without_location
       a_if = previous_def
       a_if.and = and?
       a_if.or = or?
@@ -412,7 +412,7 @@ module Crystal
       name == other.name
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 
@@ -486,7 +486,7 @@ module Crystal
   class Call
     property before_vars : MetaVars?
 
-    def clone_specific_impl
+    def clone_without_location
       cloned = previous_def
 
       # This is needed because this call might have resolved
@@ -636,7 +636,7 @@ module Crystal
       @node.accept visitor
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 
@@ -680,7 +680,7 @@ module Crystal
       @value
     end
 
-    def clone_specific_impl
+    def clone_without_location
       self
     end
 

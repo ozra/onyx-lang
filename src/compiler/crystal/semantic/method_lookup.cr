@@ -63,6 +63,7 @@ module Crystal
           # type lookup for arguments.
           macro_owner = item.def.macro_owner?
           context.defining_type = macro_owner if macro_owner
+          context.def_free_vars = item.def.free_vars
 
           _dbg "test if (matched name) signature match: #{item}"
 
@@ -71,6 +72,7 @@ module Crystal
           _dbg "_after_ test if (matched name) signature match (#{match}): #{item}"
 
           context.defining_type = path_lookup if macro_owner
+          context.def_free_vars = nil
 
           if match
             matches_array ||= [] of Match

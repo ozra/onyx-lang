@@ -1,12 +1,12 @@
 require "object"
 
-ext Any: !~~(other) -> !(this ~~ other)
-ext Any: !~(other) -> !(this ~~ other)
+ext Object: !~~(other) -> !(this ~~ other)
+ext Object: !~(other) -> !(this ~~ other)
 
 
 -- Bool comparison additions
 
-ext Any: ~~(other Bool) -> other is true
+ext Object: ~~(other Bool) -> other is true
 
 -- to Nil - move
 ext Nil: ~~(other Bool) -> other is false

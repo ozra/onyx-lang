@@ -14,7 +14,7 @@ ext Set
    >(other Self) ->  this.proper-superset? other
    >(obj) ->         this.size > 1 && this.includes? obj
 
-ext Any
+ext Object
    <(set Set) ->     set > this
    <=(set Set) ->    set >= this
    >(set Set) ->     false

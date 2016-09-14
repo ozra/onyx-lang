@@ -156,6 +156,11 @@ class Crystal::Doc::Method
       io << "</span>" if links
     end
 
+    if free_vars = @def.free_vars
+      io << " forall "
+      free_vars.join(", ", io)
+    end
+
     io
   end
 

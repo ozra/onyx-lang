@@ -346,6 +346,13 @@ module Crystal
     def restrict(other : Path, context)
       single_name = other.names.size == 1
       if single_name
+        first_name = other.names.first
+        if context.def_free_vars.try(&.includes?(first_name))
+          return context.set_free_var(first_name, self)
+        end
+      end
+
+      if single_name
         owner = context.instantiated_type
 
         # Special case: if we have an *uninstantiated* generic type like Foo(X)
@@ -368,8 +375,11 @@ module Crystal
         return restrict ident_type, context
       end
 
-      if single_name && Parser.free_var_name?(other.names.first)
-        return context.set_free_var(other.names.first, self)
+      if single_name
+        first_name = other.names.first
+        if context.defining_type.type_var?(first_name) || Parser.free_var_name?(first_name)
+          return context.set_free_var(first_name, self)
+        end
       end
 
       if had_ident_type
@@ -822,6 +832,14 @@ module Crystal
     end
 
     def restrict(other : Path, context)
+      single_name = other.names.size == 1
+      if single_name
+        first_name = other.names.first
+        if context.def_free_vars.try(&.includes?(first_name))
+          return context.set_free_var(first_name, self)
+        end
+      end
+
       other_type = context.defining_type.lookup_path other
       if other_type
         if other_type == self
@@ -830,8 +848,9 @@ module Crystal
       else
         single_name = other.names.size == 1
         if single_name
-          if Parser.free_var_name?(other.names.first)
-            return context.set_free_var(other.names.first, self)
+          first_name = other.names.first
+          if context.defining_type.type_var?(first_name) || Parser.free_var_name?(first_name)
+            return context.set_free_var(first_name, self)
           else
             other.raise_undefined_constant(context.defining_type)
           end

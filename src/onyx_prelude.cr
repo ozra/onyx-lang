@@ -82,7 +82,6 @@ ifdef gc_cc47
    require "gc"
 end
 
-require "onyx_type_primitives_layer"
 require "onyx_object_additions"
 require "onyx_set_additions"
 require "onyx_regex_additions"

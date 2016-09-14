@@ -26,6 +26,13 @@ class Crystal::Program
     set.add "darwin" if set.any?(&.starts_with?("macosx"))
     set.add "freebsd" if set.any?(&.starts_with?("freebsd"))
     set.add "i686" if set.any? { |flag| %w(i586 i486 i386).includes?(flag) }
+
+    # *TODO* *TEMP* Onyx debug help
+    # {% if flag?(:typicide) %}
+    ifdef typicide
+      set.add "typicide"
+    end
+    # {% end %}
     set
   end
 end

@@ -125,6 +125,34 @@ module Crystal
     # Default standard output to use in a program, while compiling.
     property stdout : IO = STDOUT
 
+    ifdef typicide
+      _dbg_always "* * typicide is enabled * *"
+      ObjectTypeName = "Any"
+      SymbolTypeName = "Tag"
+      PointerTypeName = "Ptr"
+      TupleTypeName = "Tup"
+      NamedTupleTypeName = "TTup"
+      ClassTypeName = "Kind"
+      ArrayTypeName = "List"
+      StringTypeName = "Str"
+      ProcTypeName = "Fn"
+      HashTypeName = "Map"
+
+    else
+      _dbg_always "* * typicide is disabled * *"
+      ObjectTypeName = "Object"
+      SymbolTypeName = "Symbol"
+      PointerTypeName = "Pointer"
+      TupleTypeName = "Tuple"
+      NamedTupleTypeName = "NamedTuple"
+      ClassTypeName = "Class"
+      ArrayTypeName = "Array"
+      StringTypeName = "String"
+      ProcTypeName = "Proc"
+      HashTypeName = "Hash"
+
+    end
+
     def initialize
       super(self, self, "main")
 
@@ -132,7 +160,7 @@ module Crystal
       # like Object, Value, Reference, etc.
       types = self.types
 
-      types["Any"] = object = @object = NonGenericClassType.new self, self, "Any", nil
+      types[ObjectTypeName] = object = @object = NonGenericClassType.new self, self, ObjectTypeName, nil
       object.allowed_in_generics = false
       object.abstract = true
 
@@ -197,15 +225,15 @@ module Crystal
       end
 
 
-      types["Tag"] = @symbol = SymbolType.new self, self, "Tag", value, 4
-      types["Ptr"] = pointer = @pointer = PointerType.new self, self, "Ptr", value, ["T"]
+      types[SymbolTypeName] = @symbol = SymbolType.new self, self, SymbolTypeName, value, 4
+      types[PointerTypeName] = pointer = @pointer = PointerType.new self, self, PointerTypeName, value, ["T"]
       pointer.struct = true
       pointer.allowed_in_generics = false
 
-      types["Tup"] = tuple = @tuple = TupleType.new self, self, "Tup", value, ["T"]
+      types[TupleTypeName] = tuple = @tuple = TupleType.new self, self, TupleTypeName, value, ["T"]
       tuple.allowed_in_generics = false
 
-      types["TTup"] = named_tuple = @named_tuple = NamedTupleType.new self, self, "TTup", value, ["T"]
+      types[NamedTupleTypeName] = named_tuple = @named_tuple = NamedTupleType.new self, self, NamedTupleTypeName, value, ["T"]
       named_tuple.allowed_in_generics = false
 
       types["StaticArray"] = static_array = @static_array = StaticArrayType.new self, self, "StaticArray", value, ["T", "N"]
@@ -213,12 +241,12 @@ module Crystal
       static_array.declare_instance_var("@buffer", TypeParameter.new(self, static_array, "T"))
       static_array.allowed_in_generics = false
 
-      types["Str"] = string = @string = NonGenericClassType.new self, self, "Str", reference
+      types[StringTypeName] = string = @string = NonGenericClassType.new self, self, StringTypeName, reference
       string.declare_instance_var("@bytesize", int32)
       string.declare_instance_var("@length", int32)
       string.declare_instance_var("@c", uint8)
 
-      types["Kind"] = klass = @class = MetaclassType.new(self, object, value, "Kind")
+      types[ClassTypeName] = klass = @class = MetaclassType.new(self, object, value, ClassTypeName)
       object.metaclass = klass
       klass.metaclass = klass
       klass.allowed_in_generics = false
@@ -226,8 +254,8 @@ module Crystal
       types["Struct"] = struct_t = @struct_t = NonGenericClassType.new self, self, "Struct", value
       abstract_value_type(struct_t)
 
-      types["List"] = @array = GenericClassType.new self, self, "List", reference, ["T"]
-      types["Map"] = @hash_type = GenericClassType.new self, self, "Map", reference, ["K", "V"]
+      types[ArrayTypeName] = @array = GenericClassType.new self, self, ArrayTypeName, reference, ["T"]
+      types[HashTypeName] = @hash_type = GenericClassType.new self, self, HashTypeName, reference, ["K", "V"]
       types["Regex"] = @regex = NonGenericClassType.new self, self, "Regex", reference
       types["Range"] = range = @range = GenericClassType.new self, self, "Range", struct_t, ["B", "E"]
       range.struct = true
@@ -237,7 +265,7 @@ module Crystal
       types["Enum"] = enum_t = @enum = NonGenericClassType.new self, self, "Enum", value
       abstract_value_type(enum_t)
 
-      types["Fn"] = @proc = ProcType.new self, self, "Fn", value, ["T", "R"]
+      types[ProcTypeName] = @proc = ProcType.new self, self, ProcTypeName, value, ["T", "R"]
       types["Union"] = @union = GenericUnionType.new self, self, "Union", value, ["T"]
       types["Crystal"] = @crystal = NonGenericModuleType.new self, self, "Crystal"
 
