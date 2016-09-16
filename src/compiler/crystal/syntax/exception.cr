@@ -112,8 +112,6 @@ module Crystal
       io << "\n"
     end
 
-
-
     def to_s_with_source(source, io)
       append_to_s fetch_source(source), io
     end

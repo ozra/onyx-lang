@@ -87,31 +87,46 @@ def fatal(msg : String)
   LibC.exit(1)
 end
 
+
 # *TODO* make this a more generic macro as part of `Any`(AnyRef/Reference rather) or such
+# then the type will of course be inerted automatically
+# also `with`, `borrow` and `leave` should be on `TheType::Pool.do–the–thing`
 macro reinit_pool(typ, *params)
-   class {{typ}}Pool
-      @@pool = [] of {{typ}}
+  class {{typ}}Pool
+    @@pool = [] of {{typ}}
 
-      def self.borrow({{*params}}) : {{typ}}
-         if @@pool.size > 0
-            obj = @@pool.pop.not_nil!
-            obj.re_init {{*params}}
-            obj.not_nil!
-         else
-            {{typ}}.new {{*params}}
-         end
+    def self.borrow({{*params}}) : {{typ}}
+
+      # *TODO* *TEMP* *DEBUG* onyx
+      ifdef use_this_stuff
+        if @@pool.size > 0
+          obj = @@pool.pop.not_nil!
+          obj.re_init {{*params}}
+          obj.not_nil!
+        else
+          {{typ}}.new {{*params}}
+        end
+      else
+        {{typ}}.new {{*params}}
       end
 
-      def self.with({{*params}}, &block)
-         obj = borrow {{*params}}
-         ret = yield obj
-         leave obj
-         ret
+    end
+
+    def self.with({{*params}}, &block)
+      obj = borrow {{*params}}
+      ret = yield obj
+      leave obj
+      ret
+    end
+
+    def self.leave(obj : {{typ}}) : Nil
+
+      # *TODO* *TEMP* *DEBUG* onyx
+      ifdef use_this_stuff
+        @@pool << obj
       end
 
-      def self.leave(obj : {{typ}}) : Nil
-         @@pool << obj
-         nil
-      end
-   end
+      nil
+    end
+  end
 end

@@ -395,11 +395,6 @@ module Crystal
     end
 
     def guess_type(node : NumberLiteral)
-      # _dbg_on
-      if node.is_onyx
-        _dbg_overview "TypeGuessVisitor.guess_type(#{node}  #{node.class}) ->"
-      end
-
       program.type_from_literal_kind node.kind
     end
 

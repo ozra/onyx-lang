@@ -227,9 +227,9 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, named_args_types, self_type, def_name, search_in_parents)
-    # _dbg_on
     _dbg "lookup_matches_in_type - #{owner} #{def_name}, where arg_types = (#{arg_types})"
     signature = CallSignature.new(def_name, arg_types, block, named_args_types)
+
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
     matches ||= lookup_matches_checking_expansion(owner, signature, search_in_parents)
 
@@ -420,7 +420,6 @@ class Crystal::Call
         end
 
         check_recursive_splat_call match.def, typed_def_args do
-          # _dbg "bubbling_exception do stuff - call MainVisitor on it, etc"
           bubbling_exception do
             visitor = MainVisitor.new(program, typed_def_args, typed_def)
             visitor.yield_vars = yield_vars
@@ -455,7 +454,6 @@ class Crystal::Call
       end
 
       typed_defs << typed_def
-
     end
 
     typed_defs

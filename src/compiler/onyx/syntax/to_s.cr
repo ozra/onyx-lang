@@ -119,7 +119,7 @@ class ToOnyxSVisitor < Visitor
     filename = location.filename
     return true unless filename.is_a?(String)
 
-    @str << "-- <loc:"
+    @str << "--<loc:"
     filename.inspect(@str)
     @str << ","
     @str << location.line_number
@@ -130,7 +130,7 @@ class ToOnyxSVisitor < Visitor
     true
   end
 
-  # *TODO* - missing in CR - verify action
+  # *TODO* - missing in CR - why does it work there?
   def visit(node : Primitive)
     @str << "-- primitive: "
     @str << node.name

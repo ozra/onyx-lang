@@ -65,7 +65,6 @@ class Crystal::Program
       if the_macro.is_onyx
         parser = OnyxParserPool.borrow(generated_source, @program.string_pool, [vars.dup])
         parser.begin_macro_parse_mode
-
         parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
         parser.visibility = node.visibility
         parser.def_nest = 1 if inside_def
@@ -75,7 +74,6 @@ class Crystal::Program
         OnyxParserPool.leave parser
       else
         parser = ParserPool.borrow(generated_source, @program.string_pool, [vars.dup])
-
         parser.filename = VirtualFile.new(the_macro, generated_source, node.location)
         parser.visibility = node.visibility
         parser.def_nest = 1 if inside_def
@@ -84,9 +82,7 @@ class Crystal::Program
         generated_node = yield parser
         ParserPool.leave parser
       end
-
       normalize(generated_node, inside_exp: inside_exp)
-
     rescue ex : Crystal::SyntaxException
       node.raise "macro didn't expand to a valid program, it expanded to:\n\n#{"=" * 80}\n#{"-" * 80}\n#{Crystal.with_line_numbers(generated_source)}\n#{"-" * 80}\n#{ex.to_s_with_source(generated_source)}\n#{"=" * 80}"
     end

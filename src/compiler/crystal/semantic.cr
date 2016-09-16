@@ -21,42 +21,29 @@ class Crystal::Program
   def semantic(node : ASTNode, stats = false) : ASTNode
     node, processor = top_level_semantic(node, stats: stats)
 
-    _dbg_overview "\nSemantic: cvars initializers:\n\n".white
     Crystal.timing("Semantic (cvars initializers)", stats) do
       visit_class_vars_initializers(node)
     end
 
     # Check that class vars without an initializer are nilable,
     # give an error otherwise
-    _dbg_overview "\nSemantic: Check non-nil type scoped variables:\n\n".white
     processor.check_non_nilable_class_vars_without_initializers
 
-    _dbg_overview "\nSemantic: ivars initializers:\n\n".white
     Crystal.timing("Semantic (ivars initializers)", stats) do
       node.accept InstanceVarsInitializerVisitor.new(self)
     end
-
-    _dbg_overview "\nSemantic: main:\n\n".white
     result = Crystal.timing("Semantic (main)", stats) do
       visit_main(node)
     end
-
-    _dbg_overview "\nSemantic: cleanup:\n\n".white
     Crystal.timing("Semantic (cleanup)", stats) do
       cleanup_types
       cleanup_files
     end
-
-    _dbg_overview "\nSemantic: recursive struct check:\n\n".white
     Crystal.timing("Semantic (recursive struct check)", stats) do
       RecursiveStructChecker.new(self).run
     end
-
-    _dbg_overview "\nType-inference stages completed:\n\n".white
     result
   end
-
-
 
   # Processes type declarations and instance/class/global vars
   # types are guessed or followed according to type annotations.
@@ -64,39 +51,32 @@ class Crystal::Program
   # This alone is useful for some tools like doc or hierarchy
   # where a full semantic of the program is not needed.
   def top_level_semantic(node, stats = false)
-    _dbg_overview "\nSemantic: Onyx-specific: program wide pragmas:\n\n".white
     Crystal.timing("Semantic (program wide pragmas)", stats) do
       visit_program_wide_pragmas(node)
     end
-
-    _dbg_overview "\nSemantic: top level:\n\n".white
     new_expansions = Crystal.timing("Semantic (top level)", stats) do
       visitor = TopLevelVisitor.new(self)
       node.accept visitor
       visitor.new_expansions
     end
 
-    # *TODO* might be completely pointess really, simply dive each time...
-    _dbg_overview "\nSemantic: Onyx-specific: lift out type extends:\n\n".white
-    Crystal.timing("Semantic (lift out type extends)", stats) do
-      node.transform LiftOutExtendsTransformer.new
+
+    ifdef use_this_muddafuckin_stuff
+      # *TODO* might be completely pointess really, simply dive each time...
+      Crystal.timing("Semantic (lift out Onyx type extends)", stats) do
+        node.transform LiftOutExtendsTransformer.new
+      end
     end
 
-    _dbg_overview "\nSemantic: new:\n\n".white
     Crystal.timing("Semantic (new)", stats) do
       define_new_methods(new_expansions)
     end
-
-    _dbg_overview "\nSemantic: type declarations:\n\n".white
     node, processor = Crystal.timing("Semantic (type declarations)", stats) do
       TypeDeclarationProcessor.new(self).process(node)
     end
-
-    _dbg_overview "\nSemantic: abstract def check:\n\n".white
     Crystal.timing("Semantic (abstract def check)", stats) do
       AbstractDefChecker.new(self).run
     end
-
     {node, processor}
   end
 

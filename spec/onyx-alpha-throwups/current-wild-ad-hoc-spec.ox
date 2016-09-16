@@ -1666,6 +1666,29 @@ for val[ix] in {"c", "b", "a"} -- by -1
 for val[ix] in ["c", "b", "a"] -- by 2
    say "{val}, {ix}"
 
+
+
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+--
+-- *TODO*
+--
+-- add tests for
+--  splat type params
+--  named type params
+--  long type param names
+
+
+-- Where clause for func-heads etc.
+--
+-- foo(x Tee, y Too, z) ->
+--    where
+--       Tee < Foo                  -- type var - matches and propagates type to first matched
+--       Too = Bar | (Zoo & Qwo)  -- type alias - restricts each time individually
+--       z Tee
+
+
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 trait TheTrait

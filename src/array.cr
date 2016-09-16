@@ -330,7 +330,7 @@ class Array(T)
   # ary.set_unsafe(0, 5)
   # p ary # => [5,2,3]
   #
-  # ary.set_unsafe(3, 5) # => Most likely CRASH!
+  # ary.set_unsafe(3, 5) # => Most likely CRASH! You've been duly warned!
   # ```
   @[AlwaysInline]
   def set_unsafe(index : Int, value : T)

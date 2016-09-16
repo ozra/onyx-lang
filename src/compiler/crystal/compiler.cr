@@ -59,6 +59,7 @@ module Crystal
     # Maximum number of LLVM modules that are compiled in parallel
     property n_threads = 8
     property n_concurrent = 1000
+    # *TODO* add ram limit too - or auto-sensing low-ram condition (then await before continuing)
 
     # Default prelude file to use. This ends up adding a
     # `require "prelude"` (or whatever name is set here) to

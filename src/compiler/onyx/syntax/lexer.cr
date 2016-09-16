@@ -5,7 +5,7 @@ require "./number_verification_utils"
 ContinuationTokens = [
   :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :".^.", :"**", :"<<",
   :"<", :"<=", :"==", :"!=", :"=~", :">>", :">=", :"<=>", :"||", :"&&",
-  :"===" # :">", - has to be handles contextually - can be generic delimiter
+  :"===" # :">", - has to be handled contextually - can be generic delimiter
 ]
 
 macro mnc?(*chars)
@@ -3030,6 +3030,11 @@ module Crystal
       skip_space_or_newline
     end
 
+    def next_token_skip_space_or_line_breaks
+      next_token
+      skip_space_or_line_breaks
+    end
+
     # def next_token_skip_space_newline_or_indent
     #   next_token
     #   skip_space_newline_or_indent
@@ -3184,6 +3189,12 @@ module Crystal
 
     def skip_space_or_newline
       while (@token.type == :SPACE || @token.type == :NEWLINE)
+        next_token
+      end
+    end
+
+    def skip_space_or_line_breaks
+      while (@token.type == :SPACE || @token.type == :NEWLINE || @token.type == :INDENT)
         next_token
       end
     end

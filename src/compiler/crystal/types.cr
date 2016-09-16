@@ -575,7 +575,7 @@ module Crystal
     def append_full_name(io)
       unless namespace.is_a?(Program)
         namespace.to_s_with_options(io, generic_args: false)
-        io << "::"
+        io << "::" # *TODO* this is used in to_s for macros ALSO! -- Onyx don't use '::'
       end
       io << @name
     end

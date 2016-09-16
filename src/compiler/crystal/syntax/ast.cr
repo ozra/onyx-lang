@@ -1964,7 +1964,7 @@ module Crystal
     end
 
     def clone_without_location
-      Attribute.new(@name, @args.clone, @named_args.clone, @lex_style)
+      Attribute.new(name, @args.clone, @named_args.clone, @lex_style)
     end
 
     def self.any?(attributes, name)

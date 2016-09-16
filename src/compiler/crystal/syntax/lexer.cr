@@ -59,6 +59,7 @@ module Crystal
 
       @delimiter_state_stack.clear
       @macro_curly_count = 0
+      @tmp_buf.clear
     end
 
     def filename=(filename)

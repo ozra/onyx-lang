@@ -4367,7 +4367,7 @@ module Crystal
         next_token
       end
 
-      const = new_path(names, global).at(location)
+      const = Path.new(names, global).at(location)
       const.end_location = end_location
 
       token_location = @token.location
@@ -5070,8 +5070,10 @@ module Crystal
         next_token_skip_space_or_newline
         case @token.type
         when :IDENT, :CONST
+          
           # real_name = @token.value.to_s
           real_name = @token.raw.to_s # ONYX–INOP  *TODO* re-validate
+
           next_token_skip_space_or_newline
         when :DELIMITER_START
           real_name = parse_string_without_interpolation("fun name")
@@ -5424,10 +5426,6 @@ module Crystal
       node.end_location = token_end_location
       next_token
       node
-    end
-
-    def new_path(names, global = false)
-      ret = Path.new(names, global)
     end
 
     def end_token?

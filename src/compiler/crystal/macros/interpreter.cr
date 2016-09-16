@@ -113,16 +113,9 @@ module Crystal
         # retaining the original node's location, so error messages
         # are shown in the block instead of in the generated macro source
         is_yield = node.exp.is_a?(Yield) && !@last.is_a?(Nop)
-
-        if @lang == :onyx
-          @str << " try " if is_yield
-          @last.to_s(@str, emit_loc_pragma: is_yield, lang: @lang)
-          @str << " end " if is_yield
-        else
-          @str << " begin " if is_yield
-          @last.to_s(@str, emit_loc_pragma: is_yield, lang: @lang)
-          @str << " end " if is_yield
-        end
+        @str << ((@lang == :onyx) ? " try " : " begin ") if is_yield
+        @last.to_s(@str, emit_loc_pragma: is_yield, lang: @lang)
+        @str << " end " if is_yield
       end
 
       false

@@ -275,47 +275,34 @@ module Crystal
       end
     end
 
+    # Rename Onyx pragmas to Crystal Attribute where appropriate
     # Remove pragmas used at parsing stage
     def transform(node : Attribute) : ASTNode
-
-      # *TODO*/160707 - re-evaluate this - dead code??
-      # *TODO* when macros are fixed
       # return node unless node.is_onyx
 
-      if ["!int_literal", "!real_literal"].includes? node.name
-        Nop.new
-      else
-        node.name =
-        case node.name.downcase.gsub(/_/, "")
-        when "link"
-          "Link"
-
-        when "pure"
-          "TODO_take_care_of_this!" # *TODO*
-        when "flatten"
-          "TODO_flatten_is_not_in_llvm_arsenal" # *TODO*
-        when "inline"
-          "AlwaysInline"
-        when "noinline"
-          "NoInline"
-        when "raises"
-          "Raises"
-        when "returnstwice"
-          "ReturnsTwice"
-        when "naked"
-          "Naked"
-
-        when "threadbound"
-          "ThreadLocal"
-        when "programbound"
-          "TODO_This_should_just_be_noped" # *TODO*
-
-        else
-          node.name
-        end
-
-        node
+      if {"!int_literal", "!real_literal"}.includes? node.name
+        return Nop.new
       end
+
+      node.name = case node.name.downcase.gsub(/_/, "")
+      when "link" then          "Link"
+      when "inline" then        "AlwaysInline"
+      when "noinline" then      "NoInline"
+      when "raises" then        "Raises"
+      when "returnstwice" then  "ReturnsTwice"
+      when "naked" then         "Naked"
+
+      when "threadbound" then   "ThreadLocal"
+      when "programbound" then  "TODO_This_should_just_be_noped" # *TODO*
+
+      when "embed" then         "TODO__embed__is_not_done_by_far!!!"  # *TODO*
+      when "pure" then          "TODO__pure__is_not_done_by_far!!!"  # *TODO*
+      when "flatten" then       "TODO__flatten__is_not_in_llvm_arsenal!!!"  # *TODO*
+
+      else                      node.name
+      end
+
+      node
     end
 
     # Check if the right hand side is dead code

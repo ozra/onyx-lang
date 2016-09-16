@@ -125,7 +125,6 @@ module Crystal
       end
 
       hash_type_name = node.is_onyx ? "Map" : "Hash"
-
       generic = Generic.new(Path.global(hash_type_name), type_vars).at(node)
       constructor = Call.new(generic, "new").at(node)
 

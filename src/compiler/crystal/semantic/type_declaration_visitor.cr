@@ -147,8 +147,6 @@ class Crystal::TypeDeclarationVisitor < Crystal::SemanticVisitor
   end
 
   def visit(node : TypeDeclaration)
-    _dbg "TypeDeclarationVisitor.visit(#{node} TypeDeclaration) ->"
-
     case var = node.var
     when Var
       if @in_c_struct_or_union

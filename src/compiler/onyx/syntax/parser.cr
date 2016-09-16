@@ -1692,33 +1692,33 @@ class OnyxParser < OnyxLexer
     when :IDFR
       parse_var_or_call global: true
     when :CONST
-      parse_constish_after_colons(location, true, true, true)
+      parse_constish_after_dotting(
+        location,
+        global: true,
+        allow_type_vars: true,
+        allow_call_parsing: true,
+        allow_nilable: true
+      )
     else
       unexpected_token "while parsing identifer or global call"
     end
   end
 
-  def parse_constish(allow_type_vars = true, allow_call_parsing = false)
+
+  # *TODO* google uses - set allow_nilable to false where appropriate
+  def parse_constish(allow_type_vars = true, allow_call_parsing = false, allow_nilable = true)
     location = @token.location
 
     dbg "parse_constish"
 
-    # *TODO* clean up global<>is_global
     global = false
 
     case @token.type
-
     when :"$", :"Program"
       if current_char == '.'
-        next_token_skip_space
-        is_global = true
-      else
-        is_global = false
-      end
-
-      if is_global
+        next_token_skip_space # skip '$'
+        next_token_skip_space_or_newline # skip '.'
         global = true
-        next_token_skip_space_or_newline
       end
 
     when :UNDERSCORE
@@ -1726,23 +1726,17 @@ class OnyxParser < OnyxLexer
     end
 
     check :CONST
-    parse_constish_after_colons(location, global, allow_type_vars, allow_call_parsing)
+    parse_constish_after_dotting(location, global, allow_type_vars, allow_call_parsing, allow_nilable)
 
   end
 
-  def parse_constish_after_colons(location, global, allow_type_vars, allow_call_parsing)
-    dbg "parse_constish_after_colons ->"
+  def parse_constish_after_dotting(location, global, allow_type_vars, allow_call_parsing, allow_nilable)
+    # Crystal name: "parse_constish_after_colons"
+    dbg "parse_constish_after_dotting ->"
 
     start_line = location.line_number
     start_column = location.column_number
     name_indent = @indent
-
-
-    # *TODO* Where the fuck to get this in (to also handle Self(x, y), etc.)
-    # if const? :Self
-    #   return Self.new
-    # end
-
 
     names = [] of String
     names << check_const # @token.value.to_s
@@ -1751,15 +1745,13 @@ class OnyxParser < OnyxLexer
     next_token
 
     while tok? :"."
-      dbg "- parse_constish_after_colons - got `::` or `.`"
-
       if 'A' <= current_char <= 'Z'  # next is const
-        dbg "- parse_constish_after_colons - next is constish: `#{current_char}"
+        dbg "- parse_constish_after_dotting - next is constish: `#{current_char}"
         next_token_skip_space_or_newline
         names << check_const
 
       else # possible identifier, T() or T arg, juxtaposition call
-        dbg "- parse_constish_after_colons - next is NOT constish: `#{current_char}"
+        dbg "- parse_constish_after_dotting - next is NOT constish: `#{current_char}"
         break
       end
 
@@ -1777,22 +1769,41 @@ class OnyxParser < OnyxLexer
 
     if allow_type_vars && generics_delimiter?
       generic_end = tok?(:"<") ? :">" : :"›"
-      next_token_skip_space
+      next_token_skip_space_or_line_breaks
 
-      types = parse_types allow_primitives: true
-      if types.empty?
-        dbgtail_off!
-        raise "must specify at least one type var"
+      if named_tuple_key? || tok? :DELIMITER_START
+        types = [] of ASTNode
+        named_args = parse_type_named_args(generic_end)
+      else
+        types = parse_types allow_primitives: true, allow_splat: true
+        if types.empty?
+          raise "must specify at least one type var"
+        end
+        named_args = nil
       end
 
-      raise "expected `#{generic_end}` ending type params" if !tok? generic_end
-      const = Generic.new(const, types).at(location)
+      next_token if tok? :","  # lenient to trailing commas
+
+      skip_space_or_line_breaks
+
+      raise "expected `#{generic_end}` to end type parameters" if !tok? generic_end
+      const = Generic.new(const, types, named_args).at(location)
       const.end_location = token_end_location
+
       next_token
     end
 
+    if allow_nilable
+      while tok? :"?"
+        const = Generic.new(Path.global("Union").at(const), [
+          const, Path.global("Nil").at(const),
+        ] of ASTNode)
+        next_token
+      end
+    end
+
     if allow_call_parsing
-      dbg "- parse_constish_after_colons - check if juxtaposition call style on constish"
+      dbg "- parse_constish_after_dotting - check if juxtaposition call style on constish"
       case
       when tok? :"(", :INDENT
         # *TODO* look ahead for "continuation tokens" on the next active line!
@@ -1815,7 +1826,7 @@ class OnyxParser < OnyxLexer
 
     const
   ensure
-    dbgtail "/parse_constish_after_colons"
+    dbgtail "/parse_constish_after_dotting"
   end
 
   def parse_constish_type_new_call_sugar(idfr, curr_indent)
@@ -6751,6 +6762,38 @@ class OnyxParser < OnyxLexer
     dbg "/parse_qualifer_and_type"
 
     {mutability, storage, type}
+  end
+
+  def parse_type_named_args(closing_token)
+    named_args = [] of NamedArgument
+
+    while ! tok? closing_token
+      if named_tuple_key?
+        name = @token.value.to_s
+        next_token
+      elsif string_literal_start?
+        name = parse_string_without_interpolation("named argument")
+      else
+        raise "expected '#{closing_token}' or named argument, not #{@token}", @token
+      end
+
+      if named_args.any? { |arg| arg.name == name }
+        raise "duplicated key: #{name}", @token
+      end
+
+      check :":"
+      next_token_skip_space_or_line_breaks
+
+      type = parse_single_type(allow_commas: false)
+      skip_space_or_line_breaks
+
+      named_args << NamedArgument.new(name, type)
+      if tok? :","
+        next_token_skip_space_or_line_breaks
+      end
+    end
+
+    named_args
   end
 
   def parse_types(allow_primitives = false, allow_commas = true, allow_splat = false)

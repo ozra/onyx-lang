@@ -24,6 +24,10 @@ module Crystal
   end
 
   def self.timing(label, stats)
+    ifdef !release
+      stats = true  # eases debugging
+    end
+
     if stats
       print "%-34s" % "#{label}:"
       time = Time.now

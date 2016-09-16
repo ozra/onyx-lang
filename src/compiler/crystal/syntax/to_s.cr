@@ -228,13 +228,8 @@ module Crystal
       if node.expanded
          node.expanded.try &.accept self
       else
-         # *TODO* this means we need CROX for extend if this should work
-         @str << keyword("ext")
-         @str << " "
-         @str << node.name.accept self
-         if body = node.body
-            accept_with_indent body
-         end
+         # It _shall_ be expanded if reaching crystal macro
+        raise "to_s: ExtendTypeDef - Shouldn't possibly happen for Crystal code!"
       end
     end
 
@@ -543,7 +538,7 @@ module Crystal
     # Double check. Otherwise it would go straight for crystal generation.
     # (Crystal macros _must_ have nodes genned as crystal–code!)
     def visit(node : For)
-      raise "Shouldn't possibly happen for Crystal code!"
+      raise "to_s: For - Shouldn't possibly happen for Crystal code!"
     end
 
     def visit(node : While)

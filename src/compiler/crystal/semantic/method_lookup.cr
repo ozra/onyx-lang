@@ -108,7 +108,6 @@ module Crystal
       _dbg "MatchesLookup.lookup_matches_with_modules signature: #{signature}"
 
       matches = lookup_matches_without_parents(signature, owner, path_lookup, matches_array)
-
       return matches unless matches.empty?
 
       is_new = owner.metaclass? && signature.name == "new"
