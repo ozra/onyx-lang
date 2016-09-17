@@ -157,7 +157,7 @@ module Crystal
   end
 
   class MethodTraceException < Exception
-    def initialize(@owner : Type?, @trace : Array(ASTNode), @nil_reason : NilReason?)
+    def initialize(@owner : Type?, @trace : Array(ASTNode), @nil_reason : NilReason?, @show : Bool)
       super(nil)
     end
 
@@ -174,15 +174,31 @@ module Crystal
 
     def append_to_s(source, io)
       has_trace = @trace.any?(&.location)
+      nil_reason = @nil_reason
+
+      if !@show
+        if nil_reason
+          print_nil_reason(nil_reason, io)
+          if has_trace || nil_reason.try(&.nodes)
+            io.puts
+            io.puts
+          end
+        end
+        if has_trace || nil_reason.try(&.nodes)
+          io.print "Rerun with --error-trace to show a complete error trace."
+        end
+        return
+      end
+
       if has_trace
         io.puts ("=" * 80)
-        io << "\n#{@owner} trace:"
+        io.puts
+        io << "#{@owner} trace:"
         @trace.each do |node|
           print_with_location node, io
         end
       end
 
-      nil_reason = @nil_reason
       return unless nil_reason
 
       if has_trace
@@ -192,18 +208,22 @@ module Crystal
       io.puts ("=" * 80)
       io.puts
 
+      print_nil_reason(nil_reason, io)
+
+      if nil_reason_nodes = nil_reason.nodes
+        nil_reason_nodes.each do |node|
+          print_with_location node, io
+        end
+      end
+    end
+
+    def print_nil_reason(nil_reason, io)
       io << colorize("Error: ").bold
       case nil_reason.reason
       when :used_before_initialized
         io << colorize("instance variable '#{nil_reason.name}' was used before it was initialized in one of the 'initialize' methods, rendering it nilable").bold
       when :used_self_before_initialized
         io << colorize("'self' was used before initializing instance variable '#{nil_reason.name}', rendering it nilable").bold
-      end
-
-      if nil_reason_nodes = nil_reason.nodes
-        nil_reason_nodes.each do |node|
-          print_with_location node, io
-        end
       end
     end
 

@@ -125,6 +125,9 @@ module Crystal
     # Default standard output to use in a program, while compiling.
     property stdout : IO = STDOUT
 
+    # Whether to show error trace
+    property? show_error_trace = false
+
     ifdef typicide
       _dbg_always "* * typicide is enabled * *"
       ObjectTypeName = "Any"

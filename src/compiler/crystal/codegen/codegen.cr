@@ -1040,6 +1040,8 @@ module Crystal
     def visit(node : Var)
       var = context.vars[node.name]?
       if var
+        return unreachable if var.type.no_return?
+
         # Special variables always have an extra pointer
         already_loaded = (node.special_var? ? false : var.already_loaded)
         @last = downcast var.pointer, node.type, var.type, already_loaded
@@ -1228,9 +1230,7 @@ module Crystal
     end
 
     def declare_var(var)
-      return if var.no_returns?
-
-      context.vars[var.name] ||= LLVMVar.new(alloca(llvm_type(var.type), var.name), var.type)
+      context.vars[var.name] ||= LLVMVar.new(var.no_returns? ? llvm_nil : alloca(llvm_type(var.type), var.name), var.type)
     end
 
     def declare_lib_var(name, type, thread_local)
