@@ -365,10 +365,12 @@ USAGE
     config = setup_compiler "parse", no_codegen: true
 
     format = config.try(&.output_format) || ""
-    if format != "ast"
-      STDERR.puts "Sorry, parse and dump ast is all I know how to do! ('onyx parse --ast ...')"
+    if ! {"ast", "ast-terse"}.includes? format
+      STDERR.puts "Sorry, 'parse' and then dump '--ast' or '--ast-terse' is all I know how to do! ('onyx parse --ast ...')"
       exit 1
     end
+
+    _dbg "dump format is #{format}"
 
     config.try &.sources.each do |source|
       # code = File.read source.filename
@@ -380,7 +382,7 @@ USAGE
       parser.filename = source.filename
       parser.wants_doc = true
       node = parser.parse
-      node.dump_std
+      node.dump_std(format == "ast-terse")
     end
   end
 
@@ -497,6 +499,11 @@ USAGE
 
     option_parser = OptionParser.parse(options) do |opts|
       opts.banner = "Usage: onyx #{command} [options] [programfile] [--] [arguments]\n\nOptions:"
+
+      opts.on("--ast-terse", "Dump terse AST to .onyx cache directory") do
+        no_codegen = true
+        output_format = "ast-terse"
+      end
 
       opts.on("--ast", "Dump AST to .onyx cache directory") do
         no_codegen = true
