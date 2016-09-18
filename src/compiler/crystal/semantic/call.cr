@@ -39,6 +39,7 @@ class Crystal::Call
   end
 
   def recalculate
+    _dbg "Call(#{@obj}.#{name}):recalculate -> ".yellow
     obj = @obj
     obj_type = obj.type? if obj
 
@@ -103,8 +104,10 @@ class Crystal::Call
 
   def lookup_matches
     if args.any? { |arg| arg.is_a?(Splat) || arg.is_a?(DoubleSplat) }
+      _dbg "Call(#{@obj}.#{name}):lookup_matches -> with_splat"
       lookup_matches_with_splat
     else
+      _dbg "Call(#{@obj}.#{name}):lookup_matches -> without_splat"
       arg_types = args.map(&.type)
       named_args_types = NamedArgumentType.from_args(named_args)
       lookup_matches_without_splat arg_types, named_args_types
@@ -161,14 +164,17 @@ class Crystal::Call
 
   def lookup_matches_without_splat(arg_types, named_args_types)
     if obj = @obj
+      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for obj == #{@obj}:#{name}"
       lookup_matches_in(obj.type, arg_types, named_args_types)
     elsif name == "super"
       lookup_super_matches(arg_types, named_args_types)
     elsif name == "previous_def"
       lookup_previous_def_matches(arg_types, named_args_types)
     elsif with_scope = @with_scope
+      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for with_scope == #{@with_scope}:#{name}"
       lookup_matches_with_scope_in with_scope, arg_types, named_args_types
     else
+      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for most general case: scope == #{scope}:#{name}"
       lookup_matches_in scope, arg_types, named_args_types
     end
   end
@@ -227,7 +233,7 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, named_args_types, self_type, def_name, search_in_parents)
-    _dbg "lookup_matches_in_type - #{owner} #{def_name}, where arg_types = (#{arg_types})"
+    _dbg "Call(#{@obj}.#{name}):lookup_matches_in_type -> #{owner}:#{def_name}, where arg_types = (#{arg_types})".white
     signature = CallSignature.new(def_name, arg_types, block, named_args_types)
 
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
@@ -236,8 +242,8 @@ class Crystal::Call
     # - - - - - - - - - - - - - - - - - - - -
     # Ugly nil–sugar hack - oh, these ugly hacks ;-)
     if matches.empty? && nil_sugared? && def_name[-1] == '?'
-      _dbg "nil-hack lookup_matches_in_type - test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}"
-      _dbg "nil-hack lookup_matches_in_type - test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}"
+      _dbg " - Call(#{@obj}.#{name}):lookup_matches_in_type - nil-chaining-hack: test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}".red
+      _dbg " - Call(#{@obj}.#{name}):lookup_matches_in_type - nil-chaining-hack: test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}".red
 
       def_name = def_name[0..-2]
       signature = CallSignature.new(def_name, arg_types, block, named_args_types)
@@ -248,23 +254,24 @@ class Crystal::Call
     # - - - - - - - - - - - - - - - - - - - -
 
     # - - - - - - - - - - - - - - - - - - - -
-    # Onyx Hardcoded Babelfishing
-    if matches.empty?
-      # Should be done for 'deinit' too. Or all babeled funcs
-      retry_def_name = case def_name
-      when "initialize"   then  "init"
-      else                      nil
-      end
+    # Try without for a while
+    # # Onyx Hardcoded Babelfishing
+    # if matches.empty?
+    #   # Should be done for 'deinit' too. Or all babeled funcs
+    #   retry_def_name = case def_name
+    #   when "initialize"   then  "init"
+    #   else                      nil
+    #   end
 
-      _dbg "- lookup_matches_in_type - Matches are empty - is it bable-init-licious-special? #{def_name} -> #{retry_def_name}"
+    #   _dbg "- lookup_matches_in_type - Matches are empty - is it bable-init-licious-special? #{def_name} -> #{retry_def_name}"
 
-      if retry_def_name
-        def_name = retry_def_name
-        signature = CallSignature.new(def_name, arg_types, block, named_args_types)
-        # matches = check_tuple_indexer(owner, def_name, args, arg_types)
-        matches = lookup_matches_checking_expansion(owner, signature, search_in_parents)
-      end
-    end
+    #   if retry_def_name
+    #     def_name = retry_def_name
+    #     signature = CallSignature.new(retry_def_name, arg_types, block, named_args_types)
+    #     # matches = check_tuple_indexer(owner, def_name, args, arg_types)
+    #     matches = lookup_matches_checking_expansion(owner, signature, search_in_parents)
+    #   end
+    # end
     # - - - - - - - - - - - - - - - - - - - -
 
 
@@ -314,10 +321,10 @@ class Crystal::Call
     # If this call is an expansion (because of default or named args) we must
     # resolve the call in the type that defined the original method, without
     # triggering a virtual lookup. But the context of lookup must be preseved.
-    _dbg "lookup_matches_checking_expansion #{signature}"
+    _dbg "Call(#{@obj}.#{name}):lookup_matches_checking_expansion -> #{signature}"
 
     if expansion?
-      _dbg "lookup_matches_checking_expansion - is_expansion!"
+      _dbg "- Call(#{@obj}.#{name}):lookup_matches_checking_expansion - is_expansion!"
       matches = bubbling_exception do
         target = parent_visitor.typed_def.original_owner
         if search_in_parents
@@ -332,13 +339,13 @@ class Crystal::Call
       end
       matches
     else
-      _dbg "lookup_matches_checking_expansion - else"
+      _dbg "- Call(#{@obj}.#{name}):lookup_matches_checking_expansion - else"
       bubbling_exception { lookup_matches_with_signature(owner, signature, search_in_parents) }
     end
   end
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
-    _dbg "lookup_matches_with_signature Program #{signature}"
+    _dbg "Call(#{@obj}.#{name}):lookup_matches_with_signature -> Program #{signature}"
 
     location = self.location
     if location && (filename = location.original_filename)
@@ -360,7 +367,7 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner, signature, search_in_parents)
-    _dbg "lookup_matches_with_signature Any #{signature}"
+    _dbg "Call(#{@obj}.#{name}):lookup_matches_with_signature -> Any #{signature}"
 
     if search_in_parents
       owner.lookup_matches signature
@@ -447,10 +454,10 @@ class Crystal::Call
             end
           end
         end
-      else
-        if match.def.is_onyx
-          # _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
-        end
+      # else
+      #   if match.def.is_onyx
+      #     _dbg "got cached - no need for prepare_typed_def_with_args for #{match.def}"
+      #   end
       end
 
       typed_defs << typed_def

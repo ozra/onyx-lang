@@ -21,7 +21,7 @@ class StylizeOnyxVisitor < Visitor
     @style_parser = StyleParseVisitor.new conf, source
 
     # Conf
-    @indent_string = "  "
+    @indent_string = "    "
     # @indent_string = "«««" # debug
     @fake_fluid_tabs = true
 

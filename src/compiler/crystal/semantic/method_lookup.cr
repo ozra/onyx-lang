@@ -49,10 +49,19 @@ module Crystal
     end
 
     def lookup_matches_without_parents(signature, owner = self, path_lookup = self, matches_array = nil)
-      _dbg "lookup_matches_without_parents, signature = #{signature}"
+      _dbg_will {
+        if self.responds_to? :full_name
+          type_dbg_idfr = "#{self.type_desc}: #{self.full_name}"
+        else
+          type_dbg_idfr = "#{self.type_desc}"
+        end
+        _dbg "MatchesLookup..lookup_matches_without_parents -> self = #{self} / #{type_dbg_idfr}, signature = #{signature}"
+      }
 
       if defs = self.defs.try &.[signature.name]?
         context = MatchContext.new(owner, path_lookup)
+
+        _dbg "- MatchesLookup..lookup_matches_without_parents - #{type_dbg_idfr} has #{defs.size} methods named #{signature.name}"
 
         defs.each do |item|
           next if item.def.abstract?
@@ -65,11 +74,11 @@ module Crystal
           context.defining_type = macro_owner if macro_owner
           context.def_free_vars = item.def.free_vars
 
-          _dbg "test if (matched name) signature match: #{item}"
+          # _dbg " - lookup_matches_without_parents - test if the signature match: #{item}"
 
           match = signature.match(item, context)
 
-          _dbg "_after_ test if (matched name) signature match (#{match}): #{item}"
+          _dbg "- MatchesLookup..lookup_matches_without_parents - _after_ test if the signature match: `#{match}`"
 
           context.defining_type = path_lookup if macro_owner
           context.def_free_vars = nil
@@ -105,7 +114,7 @@ module Crystal
     end
 
     def lookup_matches_with_modules(signature, owner = self, path_lookup = self, matches_array = nil)
-      _dbg "MatchesLookup.lookup_matches_with_modules signature: #{signature}"
+      _dbg "MatchesLookup..lookup_matches_with_modules -> signature: #{signature}"
 
       matches = lookup_matches_without_parents(signature, owner, path_lookup, matches_array)
       return matches unless matches.empty?
@@ -138,7 +147,7 @@ module Crystal
 
   struct CallSignature
     def match(def_metadata, context)
-      _dbg "CallSignature#match for #{def_metadata.def.name}"
+      _dbg "CallSignature..match -> method \"#{def_metadata.def.name.white}\""
 
       signature = self
 
@@ -193,7 +202,7 @@ module Crystal
         splat_arg_types = [] of Type
       end
 
-      _dbg "- CallSignature#match - compare args to match-check def".white
+      _dbg "- CallSignature..match - #{def_metadata.def.name} - compare args"
 
       a_def.match(arg_types) do |arg, arg_index, arg_type, arg_type_index|
         # Don't match argument against splat restriction
@@ -212,7 +221,7 @@ module Crystal
         end
       end
 
-      _dbg "_after_ compare args to match-check def"
+      _dbg "- CallSignature..match - #{def_metadata.def.name} - compare args"
 
       # Match splat arguments against splat restriction
       if splat_arg_types && splat_restriction.is_a?(Splat)
