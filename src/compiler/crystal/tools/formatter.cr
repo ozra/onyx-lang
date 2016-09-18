@@ -2768,14 +2768,28 @@ module Crystal
     def remove_to_skip(node, to_skip)
       if to_skip > 0
         body = node.body
+        if body.is_a?(ExceptionHandler) && body.implicit
+          node = body
+          body = body.body
+        end
+
         if body.is_a?(Expressions)
           body.expressions = body.expressions[to_skip..-1]
           if body.expressions.empty?
-            node.body = Nop.new
+            set_body(node, Nop.new)
           end
         else
-          node.body = Nop.new
+          set_body(node, Nop.new)
         end
+      end
+    end
+
+    def set_body(node, body)
+      case node
+      when Def
+        node.body = body
+      when ExceptionHandler
+        node.body = body
       end
     end
 
