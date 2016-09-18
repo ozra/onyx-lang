@@ -1,7 +1,23 @@
-## X - (2016-05-xx) ##
+## pending - (2016-09-...) ##
+
+
+## 0.191.12 - (2016-09-19) ##
+
+* New syntax for external name specification in args `foo(outer => inner SomeType = some-value) ->`.
+* Added named tuples syntax.
+* Doc-generation prettier and Onyx-friendlier rendering and pretty-urls.
+* The complex type-name babeling system is eliminated and replaced with dead simple solution. Much easier to maintain. Much more efficient.
+* Improved AST-dump and terse AST-dump for easier compiler hacking and debugging.
+* Some bugs squashed
+* Some refactorings and clean ups
+* Fixed bug with type-inference for results of constant number indexed tuples
+* More small stuff, forgotten during summer...
+
+
+## 0.106.1 - (2016-05-11) ##
 
 * Optimized compilation further. About 600% vs "initial". 20% lower RAM use.
-* 
+
 
 ## 0.106.0 - (2016-05-09) ##
 
