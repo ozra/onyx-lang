@@ -3,25 +3,31 @@
 ifdef !dont_reform_types
    -- -- _replacing babeling_ by staying on Onyx naming ball court side -- --
    ifdef typicide
+
+      -- Crystal compatibility aliases:
+
       type Object = Any
       type Class = Kind
-
       type Symbol = Tag
       type Pointer = Ptr
-
       type Array = List
-      type Li = List
-
-      type Tuple = Tup
-
       type NamedTuple = TTup
-      type TaggedTuple = TTup
-
       type Hash = Map
-
       type Proc = Fn
 
+      -- Full name alias for String
       type String = Str
+
+      -- Full name alias for Tup
+      type Tuple = Tup
+
+      -- Short alias that is natural to use in everyday code
+      type Li = List
+      -- type Li<T> = List<T>
+
+      -- Full name alias for TTup
+      type TaggedTuple = TTup
+      -- type TaggedTuple<..:T> = TTup<..:T>
 
    -- -- The pre babeling way, staying on Crystal naming ball court side -- --
    else

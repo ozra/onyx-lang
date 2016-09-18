@@ -26,25 +26,25 @@ class Object
   # For example, this code:
   #
   # ```
-  # case value
-  # when x
-  #   # something when x
-  # when y
-  #   # something when y
+  # switch value
+  #   x
+  #     -- something when x
+  #   y
+  #     -- something when y
   # end
   # ```
   #
   # Is equivalent to this code:
   #
   # ```
-  # if x === value
-  #   # something when x
-  # elsif y === value
-  #   # something when y
+  # if x ~~ value
+  #   -- something when x
+  # elif y ~~ value
+  #   -- something when y
   # end
   # ```
   #
-  # Object simply implements `===` by invoking `==`, but subclasses
+  # Object simply implements ~~` by invoking `==`, but subtypes
   # (notably Regex) can override it to provide meaningful case-equality semantics.
   def ===(other)
     self == other
@@ -62,14 +62,14 @@ class Object
   #
   # This method must have the property that `a == b` implies `a.hash == b.hash`.
   #
-  # The hash value is used along with `==` by the `Hash` class to determine if two objects
+  # The hash value is used along with `==` by the `Hash` type to determine if two objects
   # reference the same hash key.
   abstract def hash
 
   # Returns a string representation of this object.
   #
   # Descendants must usually **not** override this method. Instead,
-  # they must override `to_s(io)`, which must append to the given
+  # they must override `to-s(io)`, which must append to the given
   # IO object.
   def to_s
     String.build do |io|
@@ -81,12 +81,12 @@ class Object
   # to the given IO object.
   #
   # An object must never append itself to the io argument,
-  # as this will in turn call `to_s(io)` on it.
+  # as this will in turn call `to-s(io)` on it.
   abstract def to_s(io : IO)
 
   # Returns a `String` representation of this object.
   #
-  # Similar to `to_s`, but usually returns more information about
+  # Similar to `to-s`, but usually returns more information about
   # this object.
   #
   # Classes must usually **not** override this method. Instead,
@@ -101,7 +101,7 @@ class Object
   # Appends a string representation of this object
   # to the given IO object.
   #
-  # Similar to `to_s(io)`, but usually appends more information
+  # Similar to `to-s(io)`, but usually appends more information
   # about this object.
   def inspect(io : IO)
     to_s io
@@ -113,10 +113,11 @@ class Object
   # in order to perform operations on intermediate results within the chain.
   #
   # ```
-  # (1..10).tap { |x| puts "original: #{x.inspect}" }
-  #        .to_a.tap { |x| puts "array: #{x.inspect}" }
-  #             .select { |x| x % 2 == 0 }.tap { |x| puts "evens: #{x.inspect}" }
-  #                                       .map { |x| x*x }.tap { |x| puts "squares: #{x.inspect}" }
+  # (1..10).tap(\x\ puts "original: {x.inspect}")
+  #        .to-a.tap(\x\ puts "array: {x.inspect}")
+  #        .select(\x\ x % 2 is 0).tap(\x\ puts "evens: {x.inspect}")
+  #        .map(\x\ x*x)
+  #        .tap(\x\ puts "squares: #{x.inspect}")
   # ```
   def tap
     yield self
@@ -129,9 +130,18 @@ class Object
   # perform operations only when the value is not nil.
   #
   # ```
-  # # First program argument in downcase, or nil
+  # -- First program argument in downcase, or nil
   # ARGV[0]?.try &.downcase
   # ```
+  #
+  # There is also syntax sugar in the language for this.
+  #
+  #
+  # ```
+  # -- First program argument in downcase, or nil
+  # ARGV[0]?downcase
+  # ```
+  # Which epands internally to the exact same code as above.
   def try
     yield self
   end
@@ -145,7 +155,7 @@ class Object
   #
   # ```
   # str = "hello"
-  # str.itself.object_id == str.object_id # => true
+  # str.itself.object-id == str.object-id # => true
   # ```
   def itself
     self
@@ -164,10 +174,13 @@ class Object
 
   # Defines getter methods for each of the given arguments.
   #
+  # Note!!! This is not good practise in Onyx, instead use pragmas `'get` and
+  # `'set` on properties!
+  #
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   getter name
   # end
   # ```
@@ -175,17 +188,15 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def name
-  #     @name
-  #   end
+  # type Person
+  #   name() -> @name
   # end
   # ```
   #
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   getter :name, "age"
   # end
   # ```
@@ -194,18 +205,18 @@ class Object
   # is declared with that type.
   #
   # ```
-  # class Person
-  #   getter name : String
+  # type Person
+  #   getter name 'String
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String
+  # type Person
+  #   @name String
   #
-  #   def name : String
+  #   name() -> String
   #     @name
   #   end
   # end
@@ -214,7 +225,7 @@ class Object
   # The type declaration can also include an initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   getter name : String = "John Doe"
   # end
   # ```
@@ -222,10 +233,10 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String = "John Doe"
+  # type Person
+  #   @name String = "John Doe"
   #
-  #   def name : String
+  #   name() -> String
   #     @name
   #   end
   # end
@@ -235,7 +246,7 @@ class Object
   # instance variable must be easily inferrable from the initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   getter name = "John Doe"
   # end
   # ```
@@ -243,10 +254,10 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @name = "John Doe"
   #
-  #   def name : String
+  #   name() -> String
   #     @name
   #   end
   # end
@@ -257,17 +268,17 @@ class Object
   # the block's contents:
   #
   # ```
-  # class Person
-  #   getter(birth_date) { Time.now }
+  # type Person
+  #   getter birth-date, \\ Time.now
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def birth_date
-  #     @birth_date ||= Time.now
+  # type Person
+  #   birth-date() ->
+  #     @birth-date ||= Time.now
   #   end
   # end
   # ```
@@ -318,7 +329,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   getter! name
   # end
   # ```
@@ -326,21 +337,16 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def name?
-  #     @name
-  #   end
-  #
-  #   def name
-  #     @name.not_nil!
-  #   end
+  # type Person
+  #   name?() -> @name
+  #   name() -> @name.not-nil!
   # end
   # ```
   #
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   getter! :name, "age"
   # end
   # ```
@@ -349,24 +355,19 @@ class Object
   # is declared with that type, as nilable.
   #
   # ```
-  # class Person
-  #   getter! name : String
+  # type Person
+  #   getter! name 'String
   # end
   # ```
   #
   # is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String?
+  # type Person
+  #   @name String?
   #
-  #   def name?
-  #     @name
-  #   end
-  #
-  #   def name
-  #     @name.not_nil!
-  #   end
+  #   name?() -> @name
+  #   name() -> @name.not-nil!
   # end
   # ```
   macro getter!(*names)
@@ -391,7 +392,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   getter? happy
   # end
   # ```
@@ -399,17 +400,15 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def happy?
-  #     @happy
-  #   end
+  # type Person
+  #   happy?() -> @happy
   # end
   # ```
   #
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   getter? :happy, "famous"
   # end
   # ```
@@ -418,18 +417,18 @@ class Object
   # is declared with that type.
   #
   # ```
-  # class Person
-  #   getter? happy : Bool
+  # type Person
+  #   getter? happy 'Bool
   # end
   # ```
   #
   # is the same as writing:
   #
   # ```
-  # class Person
-  #   @happy : Bool
+  # type Person
+  #   @happy Bool
   #
-  #   def happy? : Bool
+  #   happy?() -> Bool
   #     @happy
   #   end
   # end
@@ -438,18 +437,18 @@ class Object
   # The type declaration can also include an initial value:
   #
   # ```
-  # class Person
-  #   getter? happy : Bool = true
+  # type Person
+  #   getter? happy 'Bool = true
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @happy : Bool = true
+  # type Person
+  #   @happy Bool = true
   #
-  #   def happy? : Bool
+  #   happy?() -> Bool
   #     @happy
   #   end
   # end
@@ -459,7 +458,7 @@ class Object
   # instance variable must be easily inferrable from the initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   getter? happy = true
   # end
   # ```
@@ -467,12 +466,10 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @happy = true
   #
-  #   def happy?
-  #     @happy
-  #   end
+  #   happy?() -> @happy
   # end
   # ```
   macro getter?(*names)
@@ -502,7 +499,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   setter name
   # end
   # ```
@@ -510,16 +507,15 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def name=(@name)
-  #   end
+  # type Person
+  #   name=(@name) ->
   # end
   # ```
   #
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   setter :name, "age"
   # end
   # ```
@@ -528,38 +524,36 @@ class Object
   # is declared with that type.
   #
   # ```
-  # class Person
-  #   setter name : String
+  # type Person
+  #   setter name 'String
   # end
   # ```
   #
   # is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String
+  # type Person
+  #   @name String
   #
-  #   def name=(@name : String)
-  #   end
+  #   name=(@name String) ->
   # end
   # ```
   #
   # The type declaration can also include an initial value:
   #
   # ```
-  # class Person
-  #   setter name : String = "John Doe"
+  # type Person
+  #   setter name 'String = "John Doe"
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String = "John Doe"
+  # type Person
+  #   @name String = "John Doe"
   #
-  #   def name=(@name : String)
-  #   end
+  #   name=(@name String) ->
   # end
   # ```
   #
@@ -567,7 +561,7 @@ class Object
   # instance variable must be easily inferrable from the initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   setter name = "John Doe"
   # end
   # ```
@@ -575,11 +569,10 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @name = "John Doe"
   #
-  #   def name=(@name)
-  #   end
+  #   name=(@name) ->
   # end
   # ```
   macro setter(*names)
@@ -606,7 +599,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   property name
   # end
   # ```
@@ -614,20 +607,16 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def name=(@name)
-  #   end
-  #
-  #   def name
-  #     @name
-  #   end
+  # type Person
+  #   name=(@name) ->
+  #   name() -> @name
   # end
   # ```
   #
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   property :name, "age"
   # end
   # ```
@@ -636,46 +625,38 @@ class Object
   # is declared with that type.
   #
   # ```
-  # class Person
-  #   property name : String
+  # type Person
+  #   property name 'String
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String
+  # type Person
+  #   @name String
   #
-  #   def name=(@name)
-  #   end
-  #
-  #   def name
-  #     @name
-  #   end
+  #   name=(@name) ->
+  #   name() -> @name
   # end
   # ```
   #
   # The type declaration can also include an initial value:
   #
   # ```
-  # class Person
-  #   property name : String = "John Doe"
+  # type Person
+  #   property name 'String = "John Doe"
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   @name : String = "John Doe"
+  # type Person
+  #   @name String = "John Doe"
   #
-  #   def name=(@name : String)
-  #   end
-  #
-  #   def name
-  #     @name
-  #   end
+  #   name=(@name : String) ->
+  #   name() -> @name
   # end
   # ```
   #
@@ -683,7 +664,7 @@ class Object
   # instance variable must be easily inferrable from the initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   property name = "John Doe"
   # end
   # ```
@@ -691,15 +672,11 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @name = "John Doe"
   #
-  #   def name=(@name : String)
-  #   end
-  #
-  #   def name
-  #     @name
-  #   end
+  #   name=(@name : String) ->
+  #   name() -> @name
   # end
   # ```
   #
@@ -708,21 +685,17 @@ class Object
   # the block's contents:
   #
   # ```
-  # class Person
-  #   property(birth_date) { Time.now }
+  # type Person
+  #   property(birth-date) { Time.now }
   # end
   # ```
   #
   # Is the same as writing:
   #
   # ```
-  # class Person
-  #   def birth_date
-  #     @birth_date ||= Time.now
-  #   end
-  #
-  #   def birth_date=(@birth_date)
-  #   end
+  # type Person
+  #   birth-date() -> @birth-date ||= Time.now
+  #   birth-date=(@birth-date) ->
   # end
   # ```
   macro property(*names, &block)
@@ -783,7 +756,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   property! name
   # end
   # ```
@@ -791,7 +764,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   def name=(@name)
   #   end
   #
@@ -800,7 +773,7 @@ class Object
   #   end
   #
   #   def name
-  #     @name.not_nil!
+  #     @name.not-nil!
   #   end
   # end
   # ```
@@ -808,7 +781,7 @@ class Object
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   property! :name, "age"
   # end
   # ```
@@ -817,7 +790,7 @@ class Object
   # is declared with that type, as nilable.
   #
   # ```
-  # class Person
+  # type Person
   #   property! name : String
   # end
   # ```
@@ -825,7 +798,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @name : String?
   #
   #   def name=(@name)
@@ -836,7 +809,7 @@ class Object
   #   end
   #
   #   def name
-  #     @name.not_nil!
+  #     @name.not-nil!
   #   end
   # end
   # ```
@@ -859,7 +832,7 @@ class Object
   # Writing:
   #
   # ```
-  # class Person
+  # type Person
   #   property? happy
   # end
   # ```
@@ -867,7 +840,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   def happy=(@happy)
   #   end
   #
@@ -880,7 +853,7 @@ class Object
   # The arguments can be string literals, symbol literals or plain names:
   #
   # ```
-  # class Person
+  # type Person
   #   property? :happy, "famous"
   # end
   # ```
@@ -889,7 +862,7 @@ class Object
   # is declared with that type.
   #
   # ```
-  # class Person
+  # type Person
   #   property? happy : Bool
   # end
   # ```
@@ -897,7 +870,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @happy : Bool
   #
   #   def happy=(@happy)
@@ -908,7 +881,7 @@ class Object
   #   end
   #
   #   def happy
-  #     @happy.not_nil!
+  #     @happy.not-nil!
   #   end
   # end
   # ```
@@ -916,7 +889,7 @@ class Object
   # The type declaration can also include an initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   property? happy : Bool = true
   # end
   # ```
@@ -924,7 +897,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @happy : Bool = true
   #
   #   def happy=(@happy : Bool)
@@ -940,7 +913,7 @@ class Object
   # instance variable must be easily inferrable from the initial value:
   #
   # ```
-  # class Person
+  # type Person
   #   property? happy = true
   # end
   # ```
@@ -948,7 +921,7 @@ class Object
   # Is the same as writing:
   #
   # ```
-  # class Person
+  # type Person
   #   @happy = true
   #
   #   def happy=(@happy)
@@ -996,7 +969,7 @@ class Object
   # when no captured blocks are involved.
   #
   # ```
-  # class StringWrapper
+  # type StringWrapper
   #   def initialize(@string : String)
   #   end
   #
@@ -1028,12 +1001,12 @@ class Object
   # Defines a `hash` method computed from the given fields.
   #
   # ```
-  # class Person
+  # type Person
   #   def initialize(@name, @age)
   #   end
   #
   #   # Define a hash method based on @name and @age
-  #   def_hash @name, @age
+  #   def-hash @name, @age
   # end
   # ```
   macro def_hash(*fields)
@@ -1055,12 +1028,12 @@ class Object
   # The generated `==` method has a self restriction.
   #
   # ```
-  # class Person
+  # type Person
   #   def initialize(@name, @age)
   #   end
   #
   #   # Define a `==` method that compares @name and @age
-  #   def_equals @name, @age
+  #   def-equals @name, @age
   # end
   # ```
   macro def_equals(*fields)
@@ -1077,13 +1050,13 @@ class Object
   # The generated `==` method has a self restriction.
   #
   # ```
-  # class Person
+  # type Person
   #   def initialize(@name, @age)
   #   end
   #
   #   # Define a hash method based on @name and @age
   #   # Define a `==` method that compares @name and @age
-  #   def_equals_and_hash @name, @age
+  #   def-equals-and-hash @name, @age
   # end
   # ```
   macro def_equals_and_hash(*fields)
@@ -1094,11 +1067,11 @@ class Object
   # Forwards missing methods to delegate.
   #
   # ```
-  # class StringWrapper
+  # type StringWrapper
   #   def initialize(@string)
   #   end
   #
-  #   forward_missing_to @string
+  #   forward-missing-to @string
   # end
   #
   # wrapper = StringWrapper.new "HELLO"
