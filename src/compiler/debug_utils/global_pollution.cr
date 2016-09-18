@@ -6,6 +6,7 @@ ifdef !release
   class DebuggingData
     @@dbg_output_on = false
     @@dbg_enabled = true
+    @@dbgindent = 0
 
     def self.dbg_enabled=(v : Bool)
       @@dbg_enabled = v
@@ -26,11 +27,36 @@ ifdef !release
     def self.dbg_output_on?
       @@dbg_output_on
     end
+
+    def self.dbgindent=(v)
+      @@dbgindent = v
+    end
+
+    def self.dbgindent
+      @@dbgindent
+    end
   end
 end
 
-macro do_puts(*objs)
-  STDERR.puts({{*objs}})
+macro __do_dbg_puts(*objs)
+  __do_dbg_print({{*objs}})
+  __low_level_print "\n"
+end
+
+DEBUG_INDENT_LIMIT = 16
+
+macro __do_dbg_print(*objs)
+  ifdef !release
+    __low_level_print (" " * {DebuggingData.dbgindent, DEBUG_INDENT_LIMIT}.min)
+    __low_level_print DebuggingData.dbgindent.to_s + ": "
+    {% for o in objs %}
+      __low_level_print {{o}}.to_s
+    {% end %}
+  end
+end
+
+macro __low_level_print(*objs)
+  STDERR.print({{*objs}})
 end
 
 macro _dbg_on()
@@ -56,7 +82,7 @@ end
 macro _dbg(*objs)
   ifdef !release
     if DebuggingData.dbg_output_on?
-      do_puts({{*objs}})
+      __do_dbg_puts({{*objs}})
     end
   end
 end
@@ -64,13 +90,25 @@ end
 macro _dbg_overview(*objs)
   ifdef !release
     if DebuggingData.dbg_enabled?
-      do_puts({{*objs}})
+      __do_dbg_puts({{*objs}})
     end
   end
 end
 
 macro _dbg_always(*objs)
-  do_puts({{*objs}})
+  STDERR.puts({{*objs}})
+end
+
+macro _dbginc
+  ifdef !release
+    DebuggingData.dbgindent += 1
+  end
+end
+
+macro _dbgdec
+  ifdef !release
+    DebuggingData.dbgindent -= 1
+  end
 end
 
 struct Char

@@ -200,6 +200,10 @@ module Crystal
       @value[0] == '+' || @value[0] == '-'
     end
 
+    def integer?
+      {:i32, :i64, :int, :u32, :u64, :i8, :u8, :i16, :u16}.includes? kind
+    end
+
     def clone_without_location
       NumberLiteral.new(@value, @kind) # , @suffix)
     end

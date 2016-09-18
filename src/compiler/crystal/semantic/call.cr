@@ -39,7 +39,8 @@ class Crystal::Call
   end
 
   def recalculate
-    _dbg "Call(#{@obj}.#{name}):recalculate -> ".yellow
+    _dbg "Call(\"#{@obj}.#{name}\"):recalculate -> ".yellow
+    _dbginc
     obj = @obj
     obj_type = obj.type? if obj
 
@@ -75,11 +76,13 @@ class Crystal::Call
       replace_block_arg_with_block(block_arg)
     end
 
+    # _dbg "- Call(\"#{@obj}.#{name}\"):recalculate - lookup_matches".blue
     matches = lookup_matches
 
     # If @target_defs is set here it means there was a recalculation
     # fired as a result of a recalculation. We keep the last one.
 
+    # _dbg "- Call(\"#{@obj}.#{name}\"):recalculate - return if target_defs".blue
     return if @target_defs
 
     @target_defs = matches
@@ -87,6 +90,7 @@ class Crystal::Call
     bind_to matches if matches
     bind_to block.break if block
 
+    # _dbg "- Call(\"#{@obj}.#{name}\"):recalculate - if parent_visitor && matches (== #{(@parent_visitor && matches) != nil})".blue
     if (parent_visitor = @parent_visitor) && matches
       if parent_visitor.typed_def? && matches.any?(&.raises?)
         @raises = true
@@ -100,14 +104,17 @@ class Crystal::Call
         end
       end
     end
+
+  ensure # for debug
+    _dbgdec
   end
 
   def lookup_matches
     if args.any? { |arg| arg.is_a?(Splat) || arg.is_a?(DoubleSplat) }
-      _dbg "Call(#{@obj}.#{name}):lookup_matches -> with_splat"
+      # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches -> with_splat"
       lookup_matches_with_splat
     else
-      _dbg "Call(#{@obj}.#{name}):lookup_matches -> without_splat"
+      # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches -> without_splat"
       arg_types = args.map(&.type)
       named_args_types = NamedArgumentType.from_args(named_args)
       lookup_matches_without_splat arg_types, named_args_types
@@ -164,38 +171,47 @@ class Crystal::Call
 
   def lookup_matches_without_splat(arg_types, named_args_types)
     if obj = @obj
-      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for obj == #{@obj}:#{name}"
+      # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_without_splat -> for obj == #{@obj}:#{name}"
       lookup_matches_in(obj.type, arg_types, named_args_types)
     elsif name == "super"
       lookup_super_matches(arg_types, named_args_types)
     elsif name == "previous_def"
       lookup_previous_def_matches(arg_types, named_args_types)
     elsif with_scope = @with_scope
-      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for with_scope == #{@with_scope}:#{name}"
+      # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_without_splat -> for with_scope == #{@with_scope}:#{name}"
       lookup_matches_with_scope_in with_scope, arg_types, named_args_types
     else
-      _dbg "Call(#{@obj}.#{name}):lookup_matches_without_splat -> for most general case: scope == #{scope}:#{name}"
+      # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_without_splat -> for most general case: scope == #{scope}:#{name}"
       lookup_matches_in scope, arg_types, named_args_types
     end
   end
 
   def lookup_matches_in(owner : AliasType, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('AliasType...) ->"
     lookup_matches_in(owner.remove_alias, arg_types, named_args_types, search_in_parents: search_in_parents)
   end
 
   def lookup_matches_in(owner : UnionType, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('UnionType...) ->"
+    # _dbginc
     owner.union_types.flat_map { |type| lookup_matches_in(type, arg_types, named_args_types, search_in_parents: search_in_parents) }
+
+  ensure
+    # _dbgdec
   end
 
   def lookup_matches_in(owner : Program, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('Program...) ->"
     lookup_matches_in_type(owner, arg_types, named_args_types, self_type, def_name, search_in_parents)
   end
 
   def lookup_matches_in(owner : FileModule, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('FileModule...) ->"
     lookup_matches_in program, arg_types, named_args_types, search_in_parents: search_in_parents
   end
 
   def lookup_matches_in(owner : NonGenericModuleType | GenericModuleInstanceType | GenericType, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('(Various|Different)...) ->"
     attach_subclass_observer owner
 
     including_types = owner.including_types
@@ -211,6 +227,7 @@ class Crystal::Call
   end
 
   def lookup_matches_in(owner : Type, arg_types, named_args_types, self_type = nil, def_name = self.name, search_in_parents = true)
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in('Type...) ->"
     lookup_matches_in_type(owner, arg_types, named_args_types, self_type, def_name, search_in_parents)
   end
 
@@ -233,7 +250,8 @@ class Crystal::Call
   end
 
   def lookup_matches_in_type(owner, arg_types, named_args_types, self_type, def_name, search_in_parents)
-    _dbg "Call(#{@obj}.#{name}):lookup_matches_in_type -> #{owner}:#{def_name}, where arg_types = (#{arg_types})".white
+    _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_in_type -> #{owner}:#{def_name}(#{arg_types})".white
+    # _dbginc
     signature = CallSignature.new(def_name, arg_types, block, named_args_types)
 
     matches = check_tuple_indexer(owner, def_name, args, arg_types)
@@ -242,8 +260,8 @@ class Crystal::Call
     # - - - - - - - - - - - - - - - - - - - -
     # Ugly nil–sugar hack - oh, these ugly hacks ;-)
     if matches.empty? && nil_sugared? && def_name[-1] == '?'
-      _dbg " - Call(#{@obj}.#{name}):lookup_matches_in_type - nil-chaining-hack: test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}".red
-      _dbg " - Call(#{@obj}.#{name}):lookup_matches_in_type - nil-chaining-hack: test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}".red
+      # _dbg " - Call(\"#{@obj}.#{name}\"):lookup_matches_in_type - nil-chaining-hack: test @obj '#{@obj}' (#{@obj.class}) without qmark, nil_sugared = #{nil_sugared?}".red
+      # _dbg " - Call(\"#{@obj}.#{name}\"):lookup_matches_in_type - nil-chaining-hack: test def_name '#{def_name}' (#{def_name.class}) without qmark => #{def_name[0..-2]}".red
 
       def_name = def_name[0..-2]
       signature = CallSignature.new(def_name, arg_types, block, named_args_types)
@@ -315,16 +333,19 @@ class Crystal::Call
     end
 
     instantiate matches, owner, self_type, named_args_types
+
+  ensure # for debug
+    # _dbgdec
   end
 
   def lookup_matches_checking_expansion(owner, signature, search_in_parents = true)
     # If this call is an expansion (because of default or named args) we must
     # resolve the call in the type that defined the original method, without
     # triggering a virtual lookup. But the context of lookup must be preseved.
-    _dbg "Call(#{@obj}.#{name}):lookup_matches_checking_expansion -> #{signature}"
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_checking_expansion -> #{signature}"
 
     if expansion?
-      _dbg "- Call(#{@obj}.#{name}):lookup_matches_checking_expansion - is_expansion!"
+      # _dbg "- Call(\"#{@obj}.#{name}\"):lookup_matches_checking_expansion - is_expansion!"
       matches = bubbling_exception do
         target = parent_visitor.typed_def.original_owner
         if search_in_parents
@@ -339,13 +360,13 @@ class Crystal::Call
       end
       matches
     else
-      _dbg "- Call(#{@obj}.#{name}):lookup_matches_checking_expansion - else"
+      # _dbg "- Call(\"#{@obj}.#{name}\"):lookup_matches_checking_expansion - else"
       bubbling_exception { lookup_matches_with_signature(owner, signature, search_in_parents) }
     end
   end
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
-    _dbg "Call(#{@obj}.#{name}):lookup_matches_with_signature -> Program #{signature}"
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Program #{signature}"
 
     location = self.location
     if location && (filename = location.original_filename)
@@ -367,7 +388,7 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner, signature, search_in_parents)
-    _dbg "Call(#{@obj}.#{name}):lookup_matches_with_signature -> Any #{signature}"
+    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Any #{signature}"
 
     if search_in_parents
       owner.lookup_matches signature
@@ -485,7 +506,11 @@ class Crystal::Call
   end
 
   def check_tuple_indexer(owner, def_name, args, arg_types)
+    # _dbg "Call(\"#{@obj}.#{name}\"):check_tuple_indexer -> owner = #{owner}"
+
     return unless args.size == 1
+
+    # _dbg "- Call(\"#{@obj}.#{name}\"):check_tuple_indexer - check def_name is `[]`|`[]?`"
 
     case def_name
     when "[]"
@@ -497,26 +522,33 @@ class Crystal::Call
     end
 
     if owner.is_a?(TupleInstanceType)
+      # _dbg "- Call(\"#{@obj}.#{name}\"):check_tuple_indexer - it's a TupleInstanceType"
       # Check tuple indexer
       tuple_indexer_helper(args, arg_types, owner, owner, nilable) do |instance_type, index|
         instance_type.tuple_indexer(index)
       end
     elsif owner.metaclass? && (instance_type = owner.instance_type).is_a?(TupleInstanceType)
+      # _dbg "- Call(\"#{@obj}.#{name}\"):check_tuple_indexer - it's a tuple metaclass indexer"
       # Check tuple metaclass indexer
       tuple_indexer_helper(args, arg_types, owner, instance_type, nilable) do |instance_type, index|
         instance_type.tuple_metaclass_indexer(index)
       end
     elsif owner.is_a?(NamedTupleInstanceType)
+      # _dbg "- Call(\"#{@obj}.#{name}\"):check_tuple_indexer - it's a NamedTupleInstanceType"
       # Check named tuple inexer
       named_tuple_indexer_helper(args, arg_types, owner, owner, nilable) do |instance_type, index|
         instance_type.tuple_indexer(index)
       end
+
+    else # debug only
+      # _dbg "- Call(\"#{@obj}.#{name}\"):check_tuple_indexer - it's not a tupleish thing we know"
     end
   end
 
   def tuple_indexer_helper(args, arg_types, owner, instance_type, nilable)
+    # _dbg "Call(\"#{@obj}.#{name}\"):tuple_indexer_helper -> args = #{args}"
     arg = args.first
-    if arg.is_a?(NumberLiteral) && arg.kind == :i32
+    if arg.is_a?(NumberLiteral) && arg.integer? # (arg.kind == :i32 || arg.kind == :i64)
       index = arg.value.to_i
       in_bounds = (0 <= index < instance_type.size)
       if nilable || in_bounds
