@@ -1,4 +1,5 @@
 
+# *TODO* *FIXME* crashable code:
 ifdef enable_to_deliberately_crash_and_find_the_reason
   class Crystal::ASTNode
     def tag_onyx(val = true, visited = [] of ASTNode) : Nil
