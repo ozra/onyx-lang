@@ -366,7 +366,7 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner : Program, signature, search_in_parents)
-    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Program #{signature}"
+    _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Program #{signature}"
 
     location = self.location
     if location && (filename = location.original_filename)
@@ -388,7 +388,7 @@ class Crystal::Call
   end
 
   def lookup_matches_with_signature(owner, signature, search_in_parents)
-    # _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Any #{signature}"
+    _dbg "Call(\"#{@obj}.#{name}\"):lookup_matches_with_signature -> Any #{signature}"
 
     if search_in_parents
       owner.lookup_matches signature

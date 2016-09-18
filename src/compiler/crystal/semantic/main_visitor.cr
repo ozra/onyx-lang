@@ -1293,7 +1293,7 @@ module Crystal
 
     # Fill function literal argument types for C functions
     def check_lib_call(node, obj_type)
-      _dbg "check_lib_call #{node.name}"
+      # _dbg "check_lib_call #{node.name}"
 
       return unless obj_type.is_a?(LibType)
 
