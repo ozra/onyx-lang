@@ -1050,7 +1050,7 @@ match n
 
 
 
-char = %"a"
+char = _"a"
 say "char: {char} ({ typeof(char) })"
 
 straight-str = %s<no {interpolation\t here}\n\tOk!>

@@ -15,7 +15,7 @@ module Crystal
     end
 
     def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil) : ASTNode
-      _dbg "crystal-parse: new_numeric_literal -> #{value} '#{suffix}'"
+      _dbg "common-parse: new_numeric_literal -> #{value} '#{suffix}'"
 
       # *TODO* maybe add for unspeced too!?
       suffix ||= "default"

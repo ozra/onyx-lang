@@ -1,5 +1,7 @@
 ## pending - (2016-09-...) ##
 
+* Change Char-literal syntax to `_"x"` (less symbolic noise)
+
 
 ## 0.191.12 - (2016-09-19) ##
 

@@ -552,44 +552,6 @@ module Crystal
             raise "expected an autoparam `%n`, where `n` is 1 - 9"
           end
 
-        when '"'
-          line = @line_number
-          column = @column_number
-          @token.type = :CHAR
-          case char1 = nextch
-          when '\\'
-            case char2 = nextch
-            when 'b'
-              @token.value = '\b'
-            when 'e'
-              @token.value = '\e'
-            when 'f'
-              @token.value = '\f'
-            when 'n'
-              @token.value = '\n'
-            when 'r'
-              @token.value = '\r'
-            when 't'
-              @token.value = '\t'
-            when 'v'
-              @token.value = '\v'
-            when 'u'
-              value = consume_char_unicode_escape
-              @token.value = value.chr
-            when '0', '1', '2', '3', '4', '5', '6', '7'
-              char_value = consume_octal_escape(char2)
-              @token.value = char_value.chr
-            else
-              @token.value = char2
-            end
-          else
-            @token.value = char1
-          end
-          if nextch != '"'
-            raise "unterminated char literal, use double quotes for strings", line, column
-          end
-          nextch
-
         when 'i'
           case peekch
           when '(', '{', '[', '<'
@@ -599,6 +561,7 @@ module Crystal
           else
             @token.type = :"%"
           end
+
         when 'r'
           case nextch
           when '(', '[', '{', '<'
@@ -626,6 +589,7 @@ module Crystal
           else
             raise "unknown %x char"
           end
+
         when 'w'
           case peekch
           when '(', '{', '[', '<'
@@ -635,8 +599,10 @@ module Crystal
           else
             @token.type = :"%"
           end
+
         when '}'
           toktype_then_nextch :"%}"
+
         else
           @token.type = :"%"
         end
@@ -1672,6 +1638,7 @@ module Crystal
           return keyword_else_idfr(:yield, start)
         end
         scan_idfr(start)
+
       when '_'
         case nextch
         when '_'
@@ -1707,6 +1674,44 @@ module Crystal
               end
             end
           end
+        when '"'
+          line = @line_number
+          column = @column_number
+          @token.type = :CHAR
+          case char1 = nextch
+          when '\\'
+            case char2 = nextch
+            when 'b'
+              @token.value = '\b'
+            when 'e'
+              @token.value = '\e'
+            when 'f'
+              @token.value = '\f'
+            when 'n'
+              @token.value = '\n'
+            when 'r'
+              @token.value = '\r'
+            when 't'
+              @token.value = '\t'
+            when 'v'
+              @token.value = '\v'
+            when 'u'
+              value = consume_char_unicode_escape
+              @token.value = value.chr
+            when '0', '1', '2', '3', '4', '5', '6', '7'
+              char_value = consume_octal_escape(char2)
+              @token.value = char_value.chr
+            else
+              @token.value = char2
+            end
+          else
+            @token.value = char1
+          end
+          if nextch != '"'
+            raise "unterminated char literal, use double quotes for strings", line, column
+          end
+          nextch
+          return @token
         else
           unless idfr_part?(curch)
             @token.type = :UNDERSCORE
