@@ -1723,23 +1723,7 @@ module Crystal
       else
         if 'A' <= curch <= 'Z'
           start = cur_pos
-
-
-          # *TODO* Int, Real, Class should be removed again
-
           case curch
-          when 'C'
-            if mnc?('l','a','s','s')
-              return check_const_or_token(:Class, start)
-            end
-          # when 'I'
-          #   if mnc?('n','t')
-          #     return check_const_or_token(:Int, start)
-          #   end
-          # when 'R'
-          #   if mnc?('e','a','l')
-          #     return check_const_or_token(:Real, start)
-          #   end
           when 'S'
             if mnc?('e','l','f')
               if peekch == '?'
