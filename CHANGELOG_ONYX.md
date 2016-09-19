@@ -3,6 +3,7 @@
 * Change Char-literal syntax to `_"x"` (less symbolic noise)
 * Fix missed case for "hard-tuple-indexing"
 * Code cleanups
+* Re-introduce I32, F64, etc. type aliases
 
 
 ## 0.191.12 - (2016-09-19) ##
