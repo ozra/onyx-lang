@@ -21,15 +21,15 @@ class Object
 
   # Case equality.
   #
-  # The `===` method is used in a `case ... when ... end` expression.
+  # The ~~` method is used in a `switch|branch ... case ... end` expression.
   #
   # For example, this code:
   #
   # ```
   # switch value
-  #   x
+  #   case x
   #     -- something when x
-  #   y
+  #   case y
   #     -- something when y
   # end
   # ```
@@ -117,7 +117,7 @@ class Object
   #        .to-a.tap(\x\ puts "array: {x.inspect}")
   #        .select(\x\ x % 2 is 0).tap(\x\ puts "evens: {x.inspect}")
   #        .map(\x\ x*x)
-  #        .tap(\x\ puts "squares: #{x.inspect}")
+  #        .tap(\x\ puts "squares: {x.inspect}")
   # ```
   def tap
     yield self
@@ -155,7 +155,7 @@ class Object
   #
   # ```
   # str = "hello"
-  # str.itself.object-id == str.object-id # => true
+  # str.itself.object-id == str.object-id   --> true
   # ```
   def itself
     self
@@ -197,7 +197,7 @@ class Object
   #
   # ```
   # type Person
-  #   getter :name, "age"
+  #   getter #name, "age"
   # end
   # ```
   #
@@ -226,7 +226,7 @@ class Object
   #
   # ```
   # type Person
-  #   getter name : String = "John Doe"
+  #   getter name 'String = "John Doe"
   # end
   # ```
   #
@@ -347,7 +347,7 @@ class Object
   #
   # ```
   # type Person
-  #   getter! :name, "age"
+  #   getter! #name, "age"
   # end
   # ```
   #
@@ -409,7 +409,7 @@ class Object
   #
   # ```
   # type Person
-  #   getter? :happy, "famous"
+  #   getter? #happy, "famous"
   # end
   # ```
   #
@@ -516,7 +516,7 @@ class Object
   #
   # ```
   # type Person
-  #   setter :name, "age"
+  #   setter #name, "age"
   # end
   # ```
   #
@@ -617,7 +617,7 @@ class Object
   #
   # ```
   # type Person
-  #   property :name, "age"
+  #   property #name, "age"
   # end
   # ```
   #
@@ -655,7 +655,7 @@ class Object
   # type Person
   #   @name String = "John Doe"
   #
-  #   name=(@name : String) ->
+  #   name=(@name String) ->
   #   name() -> @name
   # end
   # ```
@@ -675,7 +675,7 @@ class Object
   # type Person
   #   @name = "John Doe"
   #
-  #   name=(@name : String) ->
+  #   name=(@name String) ->
   #   name() -> @name
   # end
   # ```
@@ -686,7 +686,7 @@ class Object
   #
   # ```
   # type Person
-  #   property(birth-date) { Time.now }
+  #   property birth-date, \\ Time.now
   # end
   # ```
   #
@@ -765,16 +765,11 @@ class Object
   #
   # ```
   # type Person
-  #   def name=(@name)
-  #   end
+  #   name=(@name) ->
   #
-  #   def name?
-  #     @name
-  #   end
+  #   name?() -> @name
   #
-  #   def name
-  #     @name.not-nil!
-  #   end
+  #   name() -> @name.not-nil!
   # end
   # ```
   #
@@ -782,7 +777,7 @@ class Object
   #
   # ```
   # type Person
-  #   property! :name, "age"
+  #   property! #name, "age"
   # end
   # ```
   #
@@ -791,7 +786,7 @@ class Object
   #
   # ```
   # type Person
-  #   property! name : String
+  #   property! name 'String
   # end
   # ```
   #
@@ -799,18 +794,13 @@ class Object
   #
   # ```
   # type Person
-  #   @name : String?
+  #   @name String?
   #
-  #   def name=(@name)
-  #   end
+  #   name=(@name) ->
   #
-  #   def name?
-  #     @name
-  #   end
+  #   name?() -> @name
   #
-  #   def name
-  #     @name.not-nil!
-  #   end
+  #   name() -> @name.not-nil!
   # end
   # ```
   macro property!(*names)
@@ -841,12 +831,9 @@ class Object
   #
   # ```
   # type Person
-  #   def happy=(@happy)
-  #   end
+  #   happy=(@happy) ->
   #
-  #   def happy?
-  #     @happy
-  #   end
+  #   happy?() -> @happy
   # end
   # ```
   #
@@ -854,7 +841,7 @@ class Object
   #
   # ```
   # type Person
-  #   property? :happy, "famous"
+  #   property? #happy, "famous"
   # end
   # ```
   #
@@ -863,7 +850,7 @@ class Object
   #
   # ```
   # type Person
-  #   property? happy : Bool
+  #   property? happy 'Bool
   # end
   # ```
   #
@@ -871,18 +858,13 @@ class Object
   #
   # ```
   # type Person
-  #   @happy : Bool
+  #   @happy Bool
   #
-  #   def happy=(@happy)
-  #   end
+  #   happy=(@happy) ->
   #
-  #   def happy?
-  #     @happy
-  #   end
+  #   happy?() -> @happy
   #
-  #   def happy
-  #     @happy.not-nil!
-  #   end
+  #   happy() -> @happy.not-nil!
   # end
   # ```
   #
@@ -890,7 +872,7 @@ class Object
   #
   # ```
   # type Person
-  #   property? happy : Bool = true
+  #   property? happy 'Bool = true
   # end
   # ```
   #
@@ -898,14 +880,12 @@ class Object
   #
   # ```
   # type Person
-  #   @happy : Bool = true
+  #   @happy 'Bool = true
   #
-  #   def happy=(@happy : Bool)
-  #   end
+  #   happy=(@happy 'Bool) ->
   #
-  #   def happy? : Bool
+  #   happy?() -> Bool
   #     @happy
-  #   end
   # end
   # ```
   #
@@ -924,7 +904,7 @@ class Object
   # type Person
   #   @happy = true
   #
-  #   def happy=(@happy)
+  #   happy=(@happy) ->
   #   end
   #
   #   def happy?
@@ -966,23 +946,22 @@ class Object
   # Delegate *methods* to *to*.
   #
   # Note that due to current language limitations this is only useful
-  # when no captured blocks are involved.
+  # when no fragments in parameters are involved.
   #
   # ```
   # type StringWrapper
-  #   def initialize(@string : String)
-  #   end
+  #   init(@string String) ->
   #
   #   delegate downcase, to: @string
   #   delegate gsub, to: @string
   #   delegate empty?, capitalize, to: @string
   # end
   #
-  # wrapper = StringWrapper.new "HELLO"
-  # wrapper.downcase       # => "hello"
-  # wrapper.gsub(/E/, "A") # => "HALLO"
-  # wrapper.empty?         # => false
-  # wrapper.capitalize     # => "Hello"
+  # wrapper = StringWrapper "HELLO"
+  # wrapper.downcase           --> "hello"
+  # wrapper.gsub(/E/, "A")     --> "HALLO"
+  # wrapper.empty?             --> false
+  # wrapper.capitalize         --> "Hello"
   # ```
   macro delegate(*methods, to object)
     {% for method in methods %}
@@ -1002,10 +981,9 @@ class Object
   #
   # ```
   # type Person
-  #   def initialize(@name, @age)
-  #   end
+  #   init(@name, @age) ->
   #
-  #   # Define a hash method based on @name and @age
+  #   -- Define a hash method based on @name and @age
   #   def-hash @name, @age
   # end
   # ```
@@ -1029,10 +1007,9 @@ class Object
   #
   # ```
   # type Person
-  #   def initialize(@name, @age)
-  #   end
+  #   init(@name, @age) ->
   #
-  #   # Define a `==` method that compares @name and @age
+  #   -- Define a `==` method that compares @name and @age
   #   def-equals @name, @age
   # end
   # ```
@@ -1051,11 +1028,10 @@ class Object
   #
   # ```
   # type Person
-  #   def initialize(@name, @age)
-  #   end
+  #   init(@name, @age) ->
   #
-  #   # Define a hash method based on @name and @age
-  #   # Define a `==` method that compares @name and @age
+  #   -- Define a hash method based on @name and @age
+  #   -- Define a `==` method that compares @name and @age
   #   def-equals-and-hash @name, @age
   # end
   # ```
@@ -1068,15 +1044,14 @@ class Object
   #
   # ```
   # type StringWrapper
-  #   def initialize(@string)
-  #   end
+  #   init(@string) ->
   #
   #   forward-missing-to @string
   # end
   #
-  # wrapper = StringWrapper.new "HELLO"
-  # wrapper.downcase       # => "hello"
-  # wrapper.gsub(/E/, "A") # => "HALLO"
+  # wrapper = StringWrapper "HELLO"
+  # wrapper.downcase           --> "hello"
+  # wrapper.gsub(/E/, "A")     --> "HALLO"
   # ```
   macro forward_missing_to(delegate)
     macro method_missing(call)
