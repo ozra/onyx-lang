@@ -201,7 +201,8 @@ module Crystal
     end
 
     def integer?
-      {:i32, :i64, :int, :u32, :u64, :i8, :u8, :i16, :u16}.includes? kind
+      {:i32, :i64, :int, :unspec_int,
+       :u32, :u64, :i8, :u8, :i16, :u16}.includes? kind
     end
 
     def clone_without_location
