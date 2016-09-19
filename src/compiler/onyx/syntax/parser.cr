@@ -5289,27 +5289,6 @@ class OnyxParser < OnyxLexer
       end
     end
 
-    if returns_nothing
-      if body.is_a? Expressions # *TODO* should be `nop` - or nothing at all if Nothing/Void gets introduced
-        dbg "It's a returns_nothing callable and body.last == #{body.last}"
-
-        if body.last && body.last.is_a? NilLiteral
-          dbg "Already got a 'nil'"
-        else
-          dbg "it's not 'nil'"
-          body.expressions.push NilLiteral.new
-        end
-
-      elsif body.is_a? NilLiteral
-        # do nothing
-
-      elsif body.is_a? ASTNode
-        body = Expressions.from [body, NilLiteral.new]
-      end
-    else
-      dbg "returns_nothing == #{returns_nothing}, typeof(body) == #{typeof(body)}, #{body.class}, of Expressions? == #{body.is_a? Expressions}"
-    end
-
     @def_nest -= 1
     @doc_enabled = @wants_doc
     pop_scope

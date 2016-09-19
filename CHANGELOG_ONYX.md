@@ -4,6 +4,7 @@
 * Fix missed case for "hard-tuple-indexing"
 * Code cleanups
 * Re-introduce I32, F64, etc. type aliases
+* Removed "nil-ensurer" for `->!` functions, since Crystal has implemented similar code as of late.
 
 
 ## 0.191.12 - (2016-09-19) ##
