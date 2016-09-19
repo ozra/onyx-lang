@@ -5,6 +5,8 @@
 * Code cleanups
 * Re-introduce I32, F64, etc. type aliases
 * Removed "nil-ensurer" for `->!` functions, since Crystal has implemented similar code as of late.
+* Refined terser "backslash fragment syntax", aka "The Cigar Walk Fragment Syntax": `x.map \v\ v + 2`, etc. Both previous syntaxes are still in - for now.
+
 
 
 ## 0.191.12 - (2016-09-19) ##

@@ -751,6 +751,10 @@ blk = Blk(4, (x)\
    say "in blk init fragment: {x}"
 )
 
+blk2 = Blk(4, \x\
+   say "in blk init fragment: {x}"
+)
+
 blk2 = Blk 7, \
    say "in blk2 init fragment: { %1 }"
 
@@ -937,7 +941,7 @@ w = list.map (x) ~> "{x} 47"
 i = list.map (x) ~> "{x} 13"
 -- i = list.map (x) ~> => "{x} 13"  -- *TODO* SHOULD ERR for good form!
 
-j = list.map \ "{_1} 13"
+j = list.map \\ "{_1} 13"
 
 puts "{v}, {w}"
 
@@ -958,6 +962,27 @@ say " v:"
 v = ( ( list.each((v) ~> p v) ).map \.* 2 )
 say " w:"
 w = ( ( list.each((v) ~> p v) ).map(~.* 2))
+say " pw:"
+
+pw = (list.each ~>p _1).map \.* 2
+
+
+p "Some fragment usage again, with \\...\\ syntax"
+
+say " x:"
+x = list.each(\v\ p v).map(\\_1 * 2)
+say " y:"
+y = ( list.each(\v\ p v) ).map \\
+   _1 * 2
+say " z:"
+z = list.each(\v\ p v).map \
+   _1 * 2
+say " u:"
+u = list.each(\v\ p v).map \\ _1 * 2
+say " v:"
+v = ( ( list.each(\v\ p v) ).map \.* 2 )
+say " w:"
+w = ( ( list.each(\v\ p v) ).map(\.* 2))
 say " pw:"
 
 pw = (list.each ~>p _1).map \.* 2
@@ -1562,7 +1587,7 @@ list.each-with-index \
    p %1
    break if %2 == 4
 
-(list.map \%1.+ "X").each-with-index \
+(list.map \\%1.+ "X").each-with-index \
    p %1
    break if %2 == 4
 
@@ -1617,8 +1642,8 @@ failing-fragment = true
 list.each \
    say("implicit nest {_1.to-s}")
 
-list.each \ say("implicit nest {_1.to-s}")
-list.each \say("implicit nest {_1.to-s}")
+list.each \\ say("implicit nest {_1.to-s}")
+list.each \\say("implicit nest {_1.to-s}")
 
 for val in list
    say val

@@ -3370,9 +3370,50 @@ class OnyxParser < OnyxLexer
     if tok? :"~.", :"\\."
       return parse_oneletter_fragment
 
-    elsif tok? :"~>", :"\\"
+    elsif tok? :"~>"
       dbg "parse_fragment - auto-paramed arrow"
       auto_parametrization = true
+      next_token_skip_space
+
+    elsif tok? :"\\"
+      next_token_skip_space
+
+      if tok? :INDENT, :NEWLINE, :DEDENT
+        auto_parametrization = true
+        # don't skip...
+
+      elsif tok? :"\\"
+        auto_parametrization = true
+        next_token_skip_space
+
+      else
+        while ! tok? :"\\"
+          case @token.type
+          when :IDFR
+            arg_name = @token.value.to_s
+
+          when :UNDERSCORE
+            arg_name = "_"
+
+          else
+            dbgtail_off!
+            raise "expecting fragment argument name, not #{@token.type}", @token
+          end
+
+          var = Var.new(arg_name).at(@token.location)
+          fragment_auto_params << var
+
+          next_token_skip_space_or_newline
+          if tok? :",", :";" # these are PARAMS so semis allowed.
+            next_token_skip_space_or_newline
+          end
+        end
+
+        dbg "parse_fragment - done parsing fragment parameters"
+
+        raise "expected `\\`" if !tok? :"\\"
+        next_token_skip_space
+      end
 
     elsif @token.type == :"("
       begin
@@ -3404,6 +3445,7 @@ class OnyxParser < OnyxLexer
 
         next_token_skip_space
         raise "expected `~>` or `\\`" if !tok? :"~>", :"\\"
+        next_token_skip_space
 
       rescue e
         dbg "parse_fragment - rescue e: #{e.message}".red
@@ -3415,9 +3457,6 @@ class OnyxParser < OnyxLexer
       dbgtail_off!
       raise "parse_fragment - Expected fragment start!"
     end
-
-    #next_token_skip_statement_end
-    next_token_skip_space
 
     push_scope
 
