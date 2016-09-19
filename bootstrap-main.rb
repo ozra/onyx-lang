@@ -305,6 +305,7 @@ def main!
 		rescue
 			puts "  Nope, it's buggered.", "", "== PROCESS FAILED =="
 			puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include the logfile at #{$logfile}."
+			puts "\nUse `cat #{$logfile}`, `less #{$logfile}` - or whatever - to investigate yourself!\n"
  			raise GracefulFailure
 		end
 	}]
@@ -328,6 +329,7 @@ def main!
 	rescue StandardError => e
 		puts "***EXCEPTION: " + e.summarise, e.backtrace.map { |line| "  " + line }, "", "== PROCESS FAILED =="
 		puts "Please create an issue at https://github.com/ozra/onyx-lang/issues, and include the logfile at #{$logfile}."
+		puts "\nUse `cat #{$logfile}`, `less #{$logfile}` - or whatever - to investigate yourself!\n"
 		abort
 	ensure
 		rm_rf $tempdir if Dir.exist? $tempdir

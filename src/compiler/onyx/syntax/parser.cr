@@ -1402,14 +1402,13 @@ class OnyxParser < OnyxLexer
 
 
 
-  #           ###   ########  #######  ##    ## ####  ######
-  #          ## ##    ##   ##    ## ###  ###  ##  ##   ##
-  #          ##  ##    ##   ##    ## #### ####  ##  ##
-  #         ##    ##   ##   ##    ## ## ### ##  ##  ##
-  #         #########   ##   ##    ## ##    ##  ##  ##
-  #         ##    ##   ##   ##    ## ##    ##  ##  ##   ##
-  #         ##    ##   ##    #######  ##    ## ####  ######
-
+                 ###    ########  #######  ##     ## ####  ######
+                ## ##      ##    ##     ## ###   ###  ##  ##    ##
+               ##   ##     ##    ##     ## #### ####  ##  ##
+              ##     ##    ##    ##     ## ## ### ##  ##  ##
+              #########    ##    ##     ## ##     ##  ##  ##
+              ##     ##    ##    ##     ## ##     ##  ##  ##    ##
+              ##     ##    ##     #######  ##     ## ####  ######
   def parse_atomic
     dbg "parse_atomic"
     location = @token.location
@@ -1432,7 +1431,7 @@ class OnyxParser < OnyxLexer
       return Expressions.new pragmas
     end
 
-    possible_func_def_context = FuncDefPreTokens.contains?(prev_token_type)
+    possible_func_def_context = FuncDefPreTokens.includes?(prev_token_type)
 
     if possible_func_def_context && possible_func_def?
       dbg "- parse_expression_and_suffix - tries pre-emptive def parse".white
@@ -1440,7 +1439,8 @@ class OnyxParser < OnyxLexer
       ret = try_parse_def
       return ret.as ASTNode if ret
 
-      dbg "- parse_expression_and_suffix - after pre-emptive def parse, tries expr".white
+      dbg "- parse_expression_and_suffix - after pre-emptive def parse, tries
+            expr".white
       # atomic = parse_expression_statement
       # return atomic
     end
