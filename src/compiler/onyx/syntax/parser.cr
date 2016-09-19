@@ -410,7 +410,7 @@ class OnyxParser < OnyxLexer
 
         # Suffic Pragmas?
         elsif pragmas?
-          pragmas = parse_pragma_grouping
+          pragmas = parse_possible_pragma_grouping
           # *TODO* use the maddafaggas
 
         elsif end_token? || tok? :INDENT
@@ -1413,34 +1413,26 @@ class OnyxParser < OnyxLexer
   def parse_atomic
     dbg "parse_atomic"
     location = @token.location
-    atomic = parse_atomic_aux
+    atomic = parse_atomic__main
     atomic.location ||= location
     atomic
   ensure
     dbgtail "/parse_atomic"
   end
 
-  def parse_atomic_aux
-    dbg "parse_atomic_aux"
+  FuncDefPreTokens = {:NEWLINE, :DEDENT, :INDENT, :ACTUAL_BOF, :SPACE, :":",
+                      :"=>"}
 
-    # *TODO* pragmas are now simply a token, the alternatives has been removed
-    # clean up code on this basis! (simply use token matching)
+  def parse_atomic__main
+    dbg "parse_atomic__main"
+
     if pragmas?
-      pragmas = parse_pragma_cluster
-      dbg "Got pragma in parse_atomic_aux - apply to next item! #{pragmas}"
+      pragmas = parse_possible_pragma_cluster
+      dbg "Got pragma in parse_atomic__main - apply to next item! #{pragmas}"
       return Expressions.new pragmas
     end
 
-
-    possible_func_def_context = (
-      prev_token_type == :NEWLINE ||
-      prev_token_type == :DEDENT ||
-      prev_token_type == :INDENT ||
-      prev_token_type == :ACTUAL_BOF ||
-      prev_token_type == :SPACE ||
-      prev_token_type == :":" ||
-      prev_token_type == :"=>"
-    )
+    possible_func_def_context = FuncDefPreTokens.contains?(prev_token_type)
 
     if possible_func_def_context && possible_func_def?
       dbg "- parse_expression_and_suffix - tries pre-emptive def parse".white
@@ -1452,7 +1444,6 @@ class OnyxParser < OnyxLexer
       # atomic = parse_expression_statement
       # return atomic
     end
-
 
     ret = case @token.type
     when :"("  then parse_parenthetical_unknown
@@ -1658,7 +1649,7 @@ class OnyxParser < OnyxLexer
     end
 
   ensure
-    dbgtail "/parse_atomic_aux"
+    dbgtail "/parse_atomic__main"
     ret
   end
 
@@ -1883,12 +1874,12 @@ class OnyxParser < OnyxLexer
   # The correct receiver also gets the pragmas associated immediately too!
   # (nodes are only for source generation, the info is connected directly)
 
-  def parse_pragma_cluster() : Array(ASTNode)
-    dbg "parse_pragma_cluster_style1 ->"
+  def parse_possible_pragma_cluster() : Array(ASTNode)
+    dbg "parse_possible_pragma_cluster_style1 ->"
     pragmas = [] of ASTNode
 
     while pragmas?
-      pragmas.concat parse_pragma_grouping
+      pragmas.concat parse_possible_pragma_grouping
       skip_space_or_newline
     end
 
@@ -1898,8 +1889,8 @@ class OnyxParser < OnyxLexer
     pragmas
   end
 
-  def parse_pragma_grouping() : Array(ASTNode)
-    dbg "parse_pragma_grouping_style1 ->"
+  def parse_possible_pragma_grouping() : Array(ASTNode)
+    dbg "parse_possible_pragma_grouping_style1 ->"
     pragmas = [] of ASTNode
 
     while pragmas?
@@ -2455,7 +2446,7 @@ class OnyxParser < OnyxLexer
     skip_space
 
     # First allowed pragma position
-    type_pragmas = parse_pragma_grouping if pragmas?
+    type_pragmas = parse_possible_pragma_grouping if pragmas?
     skip_space
 
     case @token.type
@@ -2464,7 +2455,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space_or_newline
       # Second allowed pragma position
       dbg "- parse_general_type_def - check for pragmas"
-      type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+      type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
       dbg "- parse_general_type_def - parse aliased type"
       base_type = parse_type false
       is_alias = true
@@ -2474,7 +2465,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space_or_newline
       # Second allowed pragma position
       dbg "- parse_general_type_def - check for pragmas"
-      type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+      type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
       dbg "- parse_general_type_def - parse base_type"
       base_type = parse_type false
 
@@ -2487,7 +2478,7 @@ class OnyxParser < OnyxLexer
     dbg "- parse_general_type_def - after parse base type"
 
     # Third allowed pragma position
-    type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping) if pragmas?
+    type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
 
     # If it's an alias, we're done - return it
     if is_alias
@@ -2688,8 +2679,7 @@ class OnyxParser < OnyxLexer
     members = [] of ASTNode
 
     if pragmas?
-      # *TODO* use the pragmas
-      pragmas = parse_pragma_cluster
+      pragmas = parse_possible_pragma_cluster
       dbg "Got PRIMARY pragmas in type-def root level - apply to the type defined. #{pragmas}"
     end
 
@@ -2705,7 +2695,7 @@ class OnyxParser < OnyxLexer
       # *TODO* moved this check down to "else" and re–structure this as case again!
       when pragmas? # when :PRAGMA
         # *TODO* use the pragmas
-        pragmas = parse_pragma_grouping
+        pragmas = parse_possible_pragma_grouping
         dbg "Got pragma in type-def root level - apply to next item! #{pragmas}"
 
       when tok? :IDFR # when :IDFR
@@ -2948,7 +2938,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_typedef_body_var_or_const() - check for pragmas"
     return rets unless pragmas? # tok? :PRAGMA
 
-    pragmas = parse_pragma_grouping
+    pragmas = parse_possible_pragma_grouping
     dbg "found pragmas #{pragmas}"
 
     if var.is_a? ClassVar
@@ -2958,9 +2948,13 @@ class OnyxParser < OnyxLexer
       naked_name = name[1..-1]
     end
 
+    # *TODO* - this should be done in transformation!
+    # "After-parse"-AST should represent the syntactic elements _exactly_ for
+    # straightforward re-generation of source
     pragmas.select! do |pragma|
       raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
 
+      # *TODO* get! set! get?
       case pragma.name
       when "get"
         rets << Def.new(
@@ -5280,7 +5274,7 @@ class OnyxParser < OnyxLexer
       # parse possible "first of body" pragmas
       if pragmas? # tok? :PRAGMA
         dbg "got body primary pragmas"
-        pragmas = parse_pragma_cluster
+        pragmas = parse_possible_pragma_cluster
         # *TODO* use the pragmas
         if handle_nest_end false
           body = Nop.new
@@ -7924,11 +7918,7 @@ class OnyxParser < OnyxLexer
     skip_space
 
     dbg "check for def suffix-pragmas"
-    if pragmas? # tok? :PRAGMA
-      pragmas = parse_pragma_grouping
-    else
-      pragmas = [] of ASTNode
-    end
+    pragmas = parse_possible_pragma_grouping
 
     # We allow ordinary nest-start-token also. After suffix-pragmas it looks clearer
     next_token_skip_space if nest_start_token?
