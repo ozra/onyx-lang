@@ -1076,7 +1076,9 @@ match n
 
 
 char = _"a"
+char2 = %"b"
 say "char: {char} ({ typeof(char) })"
+say "char 2: {char2} ({ typeof(char2) })"
 
 straight-str = %s<no {interpolation\t here}\n\tOk!>
 say "straight-str: {straight-str} ({ typeof(straight-str) })"

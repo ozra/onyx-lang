@@ -540,6 +540,9 @@ module Crystal
         when '(', '[', '{', '<'
           delimited_pair :string, curch, closing_char, start
 
+        when '"'
+          return scan_char
+
         when ':'
           here = scan_heredoc_delimiter
           dbg_lex "heredoc idfr found: '#{here}'"
@@ -1675,43 +1678,7 @@ module Crystal
             end
           end
         when '"'
-          line = @line_number
-          column = @column_number
-          @token.type = :CHAR
-          case char1 = nextch
-          when '\\'
-            case char2 = nextch
-            when 'b'
-              @token.value = '\b'
-            when 'e'
-              @token.value = '\e'
-            when 'f'
-              @token.value = '\f'
-            when 'n'
-              @token.value = '\n'
-            when 'r'
-              @token.value = '\r'
-            when 't'
-              @token.value = '\t'
-            when 'v'
-              @token.value = '\v'
-            when 'u'
-              value = consume_char_unicode_escape
-              @token.value = value.chr
-            when '0', '1', '2', '3', '4', '5', '6', '7'
-              char_value = consume_octal_escape(char2)
-              @token.value = char_value.chr
-            else
-              @token.value = char2
-            end
-          else
-            @token.value = char1
-          end
-          if nextch != '"'
-            raise "unterminated char literal, use double quotes for strings", line, column
-          end
-          nextch
-          return @token
+          return scan_char
         else
           unless idfr_part?(curch)
             @token.type = :UNDERSCORE
@@ -1782,6 +1749,50 @@ module Crystal
               "' : '" + @token.value.to_s + "'").blue
     end
 
+    def scan_char
+      line = @line_number
+      column = @column_number - 1
+
+      if current_char != '"'
+        raise "scan_char called wrongly. cur-char should be '\"'", line, column
+      end
+
+      @token.type = :CHAR
+      case char1 = nextch
+      when '\\'
+        case char2 = nextch
+        when 'b'
+          @token.value = '\b'
+        when 'e'
+          @token.value = '\e'
+        when 'f'
+          @token.value = '\f'
+        when 'n'
+          @token.value = '\n'
+        when 'r'
+          @token.value = '\r'
+        when 't'
+          @token.value = '\t'
+        when 'v'
+          @token.value = '\v'
+        when 'u'
+          value = consume_char_unicode_escape
+          @token.value = value.chr
+        when '0', '1', '2', '3', '4', '5', '6', '7'
+          char_value = consume_octal_escape(char2)
+          @token.value = char_value.chr
+        else
+          @token.value = char2
+        end
+      else
+        @token.value = char1
+      end
+      if nextch != '"'
+        raise "unterminated char literal, use double quotes for strings", line, column
+      end
+      nextch
+      return @token
+    end
 
     def token_end_location
       @token_end_location ||= Location.new(@filename, @line_number, @column_number - 1)
