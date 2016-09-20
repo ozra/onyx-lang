@@ -1769,8 +1769,8 @@ say "Bar.get-foo = {Bar.get-foo}"
 say "declare a Foo type"
 
 --| The "normal" Foo which is expressed with arrow function syntax
-type Foo<S1> < Bar
-   mixin AnotherTrait<S1>
+type Foo<LongGenericPar> < Bar
+   mixin AnotherTrait<LongGenericPar>
 
    -- "free" notation at member declaration
    @foo–x Int64 = 47_i64  'get 'set
@@ -1794,11 +1794,11 @@ type Foo<S1> < Bar
    @bar–w       = 47  'get
 
    ifdef x86_64
-    init(a S1) ->
+    init(a LongGenericPar) ->
        @foo–a = a
        @a-t-val = a
    else
-    init(b S1) ->
+    init(b LongGenericPar) ->
        @foo–a = b
        @a-t-val = a
    end
@@ -1846,11 +1846,11 @@ type Foo<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}" 'pure
 
-   fn–b(a S1, b Intp) -> -- fdsa
+   fn–b(a LongGenericPar, b Intp) -> -- fdsa
       "b: {a}, {b}"
 
-   -- fn–c*(a, b S1) -> S1 'redef 'inline
-   fn–c*(a, b S1) S1 -> 'redef 'inline
+   -- fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
+   fn–c*(a, b LongGenericPar) LongGenericPar -> 'redef 'inline
       "c: {a}, {b}"
 
    end -- end–def
@@ -1866,12 +1866,12 @@ type Foo<S1> < Bar
       fn–e
    end
 
-   fn–d2(a S1, b Intp) ->
+   fn–d2(a LongGenericPar, b Intp) ->
       @foo–a = a
       @foo–b = b
       fn–e
 
-   -- fn–d3(a S1, b T) ->
+   -- fn–d3(a LongGenericPar, b T) ->
    --    @foo–a = a
    --    c 'T
    --    c = b
@@ -1893,9 +1893,9 @@ end -- end–type
 -- pure funcs to Program for instance
 
 --| A Foo type in style 2 (non-arrow function defs)
---| <S1> is primary variable type
-type FooStyle2<S1> < Bar
-   mixin AnotherTrait<S1>
+--| <LongGenericPar> is primary variable type
+type FooStyle2<LongGenericPar> < Bar
+   mixin AnotherTrait<LongGenericPar>
 
    -- "free" notation at member declaration
    @foo–x Int64 = 47_i64  'get 'set
@@ -1918,13 +1918,13 @@ type FooStyle2<S1> < Bar
 
    --| Initialize with primary variable type
    ifdef x86_64
-      -- init(a S1)
-      init(a S1) ->
+      -- init(a LongGenericPar)
+      init(a LongGenericPar) ->
          @foo–a = a
          @a-t-val = b
    else
-      -- init(b S1)
-      init(b S1) ->
+      -- init(b LongGenericPar)
+      init(b LongGenericPar) ->
          @foo–a = b
          @a-t-val = b
    end
@@ -1971,12 +1971,12 @@ type FooStyle2<S1> < Bar
 
    fn–a(a, b) -> "a: {a}, {b}"
 
-   -- fn–b(a S1, b Intp) -- fdsa
-   fn–b(a S1, b Intp) -> -- fdsa
+   -- fn–b(a LongGenericPar, b Intp) -- fdsa
+   fn–b(a LongGenericPar, b Intp) -> -- fdsa
       "b: {a}, {b}"
 
-   -- fn–c*(a, b S1) -> S1 'redef 'inline
-   fn–c*(a, b S1) S1 -> 'redef 'inline
+   -- fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
+   fn–c*(a, b LongGenericPar) LongGenericPar -> 'redef 'inline
       "c: {a}, {b}"
    end -- end–def
    -- end fn–c
@@ -1991,8 +1991,8 @@ type FooStyle2<S1> < Bar
       fn–e
    end
 
-   -- fn–d2(a S1, b Intp)
-   fn–d2(a S1, b Intp) ->
+   -- fn–d2(a LongGenericPar, b Intp)
+   fn–d2(a LongGenericPar, b Intp) ->
       @foo–a = a
       @foo–b = b
       fn–e

@@ -1,12 +1,13 @@
 ## pending - (2016-09-...) ##
 
 * ~~Change~~ Add char-literal syntax `_"x"` (less symbolic noise), for evaluation.
-* Fix missed case for "hard-tuple-indexing"
+* Fix missed case for "hard-tuple-indexing" type inference
 * Code cleanups
 * Re-introduce I32, F64, etc. type aliases
 * Removed "nil-ensurer" for `->!` functions, since Crystal has implemented similar code as of late.
 * Refined terser "backslash fragment syntax", aka "The Cigar Walk Fragment Syntax": `x.map \v\ v + 2`, etc. Both previous syntaxes are still in - for now.
 * Touched up the `make boostrap` a bit more. It should now install onyx simply on any _debian derivative_. Unfortunately no other OSes are supported in the installer _yet_. Please be a doll and help out!
+* Give up the restriction of one-letter generic parameter names. Long type-var names now allowed.
 
 
 ## 0.191.12 - (2016-09-19) ##
@@ -25,6 +26,7 @@
 ## 0.106.1 - (2016-05-11) ##
 
 * Optimized compilation further. About 600% vs "initial". 20% lower RAM use.
+* TIME FOR SUMMER BREAK ;-)
 
 
 ## 0.106.0 - (2016-05-09) ##

@@ -8469,15 +8469,6 @@ class OnyxParser < OnyxLexer
     ret
   end
 
-  # def add_instance_var(name)
-  #   return if @in_macro_expression
-  #   @instance_vars.try &.add name
-  # end
-
-  def self.free_var_name?(name)
-    name.size == 1 || (name.size == 2 && name[1].digit?)
-  end
-
 
   # *TODO* order data in alphabetical order!
   # token+position state backing/restoring (stacked via function–call scopes)
