@@ -287,28 +287,21 @@ tag–hash–2 = {
       "Kappo",
       "Nugetto"
    ]
-   #tuple1: <
-      "47",
-      13,
-      3.1415
-      "yep"
-      #Boo
-   >
-   #tuple2: ‹
+   #tuple1: ‹
       "47",
       13,
       3.1415
       "yep"
       #Boo
    ›
-   #tuple3: <[
+   #tuple2: <[
       "47",
       13,
       3.1415
       "yep"
       #Boo
    ]>
-   #tuple4: (
+   #tuple3: (
       "47",
       13,
       3.1415
@@ -322,11 +315,8 @@ say "tag–hash–2 value is {tag–hash–2}"
 
 
 
-tuple1a = <13, 32, 47, 2>
-tuple2a = <"foo", 1, {1, 2, 3}, 4>
-
-tuple1b = (13, 32, 47, 2)
-tuple2b = ("foo", 1, {1, 2, 3})
+tuple1a = (13, 32, 47, 2)
+tuple2a = ("foo", 1, {1, 2, 3})
 
 -- tuple1c = 〈13, 32, 47, 2〉
 -- tuple2c = 〈"foo", 1, {1, 2, 3}〉

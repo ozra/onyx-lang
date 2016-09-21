@@ -755,21 +755,7 @@ class OnyxParser < OnyxLexer
 
 
   parse_operator :or, :and, "Or.new left, right", ":\"||\", :or"
-  parse_operator :and, :possible_angular_tuple, "And.new left, right", ":\"&&\", :and"
-
-  def parse_possible_angular_tuple
-    # dbg "parse_possible_angular_tuple ->".yellow
-    # dbg "- parse_possible_angular_tuple - ret if not '<'".cyan
-    return parse_equality unless tok?(:"<")
-
-    dbg "- parse_possible_angular_tuple - ret if spaced ' < '".cyan
-    return parse_equality if surrounded_by_space?
-
-    return parse_tuple_literal :">"
-    # try_parse parse_tuple_literal, parse_equality
-  end
-
-
+  parse_operator :and, :equality, "And.new left, right", ":\"&&\", :and"
   parse_operator :equality, :cmp, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"<\", :\"<=\", :\">\", :\">=\", :\"<=>\""
   parse_operator :cmp, :logical_or, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"==\", :is, :\"!=\", :isnt, :\"=~\", :\".~.=\", :\"~~\", :\"!~~\", :\"!~\""
   parse_operator :logical_or, :logical_and, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\".|.\", :\".^.\""
@@ -6296,10 +6282,6 @@ class OnyxParser < OnyxLexer
     when :"*", :"..." # *TODO* verify - was :"*" - so it doesn't clash with `range–til`
       dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '*' or '...'"
       return true if current_char.whitespace?
-
-    when :"<"
-      dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '<' check if it's a tuple or it's the operator"
-      return surrounded_by_space? # test_parse parse_tuple_literal
 
     else
       dbg "- parse_call_args_spaced_any_non_call_hints? - token.type 'other' - return true"
