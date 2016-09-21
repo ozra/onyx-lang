@@ -140,6 +140,7 @@ module Crystal
       StringTypeName = "Str"
       ProcTypeName = "Fn"
       HashTypeName = "Map"
+      FluidRockName = "LavaFlow" # LiqRok # "FlowSten" "RockFlow" # "FluidRock"
 
     else
       _dbg_always "* * typicide is disabled * *"
@@ -153,6 +154,7 @@ module Crystal
       StringTypeName = "String"
       ProcTypeName = "Proc"
       HashTypeName = "Hash"
+      FluidRockName = "Crystal"
 
     end
 
@@ -270,7 +272,7 @@ module Crystal
 
       types[ProcTypeName] = @proc = ProcType.new self, self, ProcTypeName, value, ["T", "R"]
       types["Union"] = @union = GenericUnionType.new self, self, "Union", value, ["T"]
-      types["Crystal"] = @crystal = NonGenericModuleType.new self, self, "Crystal"
+      types[FluidRockName] = @crystal = NonGenericModuleType.new self, self, FluidRockName
 
       types["ARGC_UNSAFE"] = @argc = argc_unsafe = Const.new self, self, "ARGC_UNSAFE", Primitive.new("argc", int32)
       types["ARGV_UNSAFE"] = @argv = argv_unsafe = Const.new self, self, "ARGV_UNSAFE", Primitive.new("argv", pointer_of(pointer_of(uint8)))

@@ -5,6 +5,7 @@ ifdef !dont_reform_types
    ifdef typicide
 
       -- Crystal compatibility aliases:
+      -- The aliased types are hard coded into the compiler
 
       type Object = Any
       type Class = Kind
@@ -29,8 +30,15 @@ ifdef !dont_reform_types
       type TaggedTuple = TTup
       -- type TaggedTuple<..:T> = TTup<..:T>
 
+      type Crystal = LavaFlow
+
+
    -- -- The pre babeling way, staying on Crystal naming ball court side -- --
    else
+      -- Onyx compat aliases for when `typicide_disabled` or
+      -- `all_deviations_disabled`
+      -- The aliased types are hard coded into the compiler
+
       type Any = Object 'official-name
       type Kind = Class 'official-name
 
@@ -50,6 +58,9 @@ ifdef !dont_reform_types
       type Fn = Proc 'official-name
 
       type Str = String
+
+      type LavaFlow = Crystal
+
    end
 end
 -- {% end %}

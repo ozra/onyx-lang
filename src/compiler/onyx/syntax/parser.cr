@@ -8,7 +8,6 @@ require "../../debug_utils/ast_dump"
 require "./parser_scopes_and_nesting"
 require "./ast_onyx_tagger"
 
-#  module Onyx
 module Crystal
 
 class WrongParsePathException < SyntaxException
