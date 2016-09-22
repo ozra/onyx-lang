@@ -29,8 +29,12 @@ class Crystal::Program
 
     # *TODO* *TEMP* Onyx debug help
     # {% if flag?(:typicide) %}
-    ifdef typicide
-      set.add "typicide"
+    ifdef disable_ox_typarchy
+      set.add "disable_ox_typarchy"
+    end
+
+    ifdef disable_ox_libspicing
+      set.add "disable_ox_libspicing"
     end
     # {% end %}
     set

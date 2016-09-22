@@ -5,8 +5,14 @@ SOURCES := $(shell find src -name '*.cr')
 SPEC_SOURCES := $(shell find spec -name '*.cr') $(shell find spec -name '*.ox')
 FLAGS := $(if $(release),--release )$(if $(stats),--stats )$(if $(threads),--threads $(threads) )$(if $(debug),-d )
 EXPORTS := $(if $(release),,CRYSTAL_CONFIG_PATH=`pwd`/src)
-# EXPORTS := CRYSTAL_CONFIG_PATH=`pwd`/src
-DEFINES := $(if $(typicide),--define typicide,)
+
+ifdef disable_all_oxides
+	disable_ox_typarchy = 1
+	disable_ox_libspicing = 1
+endif
+
+DEFINES := $(if $(disable_ox_typarchy),-D disable_ox_typarchy,)
+DEFINES := $(DEFINES) $(if $(disable_ox_libspicing),-D disable_ox_libspicing,)
 
 SHELL = bash
 LLVM_CONFIG_FINDER := command -v llvm-config-3.8 || command -v llvm-config38 || (command -v llvm-config > /dev/null && (case "$(llvm-config --version)" in 3.8*) command -v llvm-config;; *) false;; esac)) || command -v llvm-config-3.6 || command -v llvm-config36 || command -v llvm-config-3.5 || command -v llvm-config35 || command -v llvm-config

@@ -9,6 +9,7 @@
 * Touched up the `make boostrap` a bit more. It should now install onyx simply on any _debian derivative_. Unfortunately no other OSes are supported in the installer _yet_. Please be a doll and help out!
 * Give up the restriction of one-letter generic parameter names. Long type-var names now allowed.
 * Finally removed the awkwardly ruled angular tuple syntax (`tup = <1, 2, 3>`)
+* Build-time flags used for Onyx-compiler dev for easy dissection in the event of future compatibility problems with crystal lib.
 
 
 ## 0.191.12 - (2016-09-19) ##

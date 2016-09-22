@@ -1,7 +1,8 @@
 require "object"
 require "set"
 
--- ifdef add_onyx_set_additions
+ifdef !disable_ox_libspicing below
+
 ext Set
    <(other Self) ->  this.proper-subset? other
    <(obj) ->         false
@@ -20,5 +21,3 @@ ext Any
    <=(set Set) ->    set >= this
    >(set Set) ->     false
    >=(set Set) ->    false
-
--- end

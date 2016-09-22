@@ -128,8 +128,8 @@ module Crystal
     # Whether to show error trace
     property? show_error_trace = false
 
-    ifdef typicide
-      _dbg_always "* * typicide is enabled * *"
+    ifdef !disable_ox_typarchy
+      _dbg_always "* * ox_typarchy is enabled * *"
       ObjectTypeName = "Any"
       SymbolTypeName = "Tag"
       PointerTypeName = "Ptr"
@@ -143,7 +143,7 @@ module Crystal
       FluidRockName = "LavaFlow" # LiqRok # "FlowSten" "RockFlow" # "FluidRock"
 
     else
-      _dbg_always "* * typicide is disabled * *"
+      _dbg_always "* * ox_typarchy is disabled * *"
       ObjectTypeName = "Object"
       SymbolTypeName = "Symbol"
       PointerTypeName = "Pointer"

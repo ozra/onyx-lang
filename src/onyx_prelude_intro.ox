@@ -1,69 +1,68 @@
 
 
-ifdef !dont_reform_types
-   -- -- _replacing babeling_ by staying on Onyx naming ball court side -- --
-   ifdef typicide
+ifdef !disable_ox_libspicing below
 
-      -- Crystal compatibility aliases:
-      -- The aliased types are hard coded into the compiler
+-- -- _replacing babeling_ by staying on Onyx naming ball court side -- --
+ifdef !disable_ox_typarchy
 
-      type Object = Any
-      type Class = Kind
-      type Symbol = Tag
-      type Pointer = Ptr
-      type Array = List
-      type NamedTuple = TTup
-      type Hash = Map
-      type Proc = Fn
+   -- Crystal compatibility aliases:
+   -- The aliased types are hard coded into the compiler
 
-      -- Full name alias for String
-      type String = Str
+   type Object = Any
+   type Class = Kind
+   type Symbol = Tag
+   type Pointer = Ptr
+   type Array = List
+   type NamedTuple = TTup
+   type Hash = Map
+   type Proc = Fn
 
-      -- Full name alias for Tup
-      type Tuple = Tup
+   -- Full name alias for String
+   type String = Str
 
-      -- Short alias that is natural to use in everyday code
-      type Li = List
-      -- type Li<T> = List<T>
+   -- Full name alias for Tup
+   type Tuple = Tup
 
-      -- Full name alias for TTup
-      type TaggedTuple = TTup
-      -- type TaggedTuple<..:T> = TTup<..:T>
+   -- Short alias that is natural to use in everyday code
+   type Li = List
+   -- type Li<T> = List<T>
 
-      type Crystal = LavaFlow
+   -- Full name alias for TTup
+   type TaggedTuple = TTup
+   -- type TaggedTuple<..:T> = TTup<..:T>
+
+   type Crystal = LavaFlow
 
 
-   -- -- The pre babeling way, staying on Crystal naming ball court side -- --
-   else
-      -- Onyx compat aliases for when `typicide_disabled` or
-      -- `all_deviations_disabled`
-      -- The aliased types are hard coded into the compiler
+-- -- The pre babeling way, staying on Crystal naming ball court side -- --
+else
+   -- Onyx compat aliases for when `typicide_disabled` or
+   -- `all_deviations_disabled`
+   -- The aliased types are hard coded into the compiler
 
-      type Any = Object 'official-name
-      type Kind = Class 'official-name
+   type Any = Object 'official-name
+   type Kind = Class 'official-name
 
-      type Tag = Symbol 'official-name
-      type Ptr = Pointer
+   type Tag = Symbol 'official-name
+   type Ptr = Pointer
 
-      type List = Array 'official-name
-      type Li = List
+   type List = Array 'official-name
+   type Li = List
 
-      type Tup = Tuple
+   type Tup = Tuple
 
-      type TaggedTuple = NamedTuple  'official-name
-      type TTup = NamedTuple
+   type TaggedTuple = NamedTuple  'official-name
+   type TTup = NamedTuple
 
-      type Map = Hash 'official-name
+   type Map = Hash 'official-name
 
-      type Fn = Proc 'official-name
+   type Fn = Proc 'official-name
 
-      type Str = String
+   type Str = String
 
-      type LavaFlow = Crystal
+   type LavaFlow = Crystal
 
-   end
 end
--- {% end %}
 
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
