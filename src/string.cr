@@ -249,7 +249,7 @@ class String
   def self.new(capacity : Int)
     check_capacity_in_bounds(capacity)
 
-    str = GC.malloc_atomic((capacity + HEADER_SIZE + 1).to_u32).as(UInt8*)
+    str = GC.malloc_atomic(capacity.to_u32 + HEADER_SIZE + 1).as(UInt8*)
     buffer = str.as(String).to_unsafe
     bytesize, size = yield buffer
     str_header = str.as({Int32, Int32, Int32}*)
@@ -3265,8 +3265,7 @@ class String
     end
   end
 
-  # :nodoc:
-  class CharIterator
+  private class CharIterator
     include Iterator(Char)
 
     @reader : Char::Reader
@@ -3298,8 +3297,7 @@ class String
     end
   end
 
-  # :nodoc:
-  class LineIterator
+  private class LineIterator
     include Iterator(String)
 
     @string : String

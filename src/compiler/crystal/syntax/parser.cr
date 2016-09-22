@@ -1659,7 +1659,7 @@ module Crystal
       end
       skip_statement_end
 
-      body = parse_expressions
+      body = push_visbility { parse_expressions }
 
       end_location = token_end_location
       check_ident :end
@@ -1730,7 +1730,7 @@ module Crystal
       type_vars, splat_index = parse_type_vars
       skip_statement_end
 
-      body = parse_expressions
+      body = push_visbility { parse_expressions }
 
       end_location = token_end_location
       check_ident :end
@@ -4964,7 +4964,7 @@ module Crystal
       name_column_number = @token.column_number
       next_token_skip_statement_end
 
-      body = parse_lib_body_expressions
+      body = push_visbility { parse_lib_body_expressions }
 
       check_ident :end
       next_token_skip_space
@@ -5583,6 +5583,14 @@ module Crystal
 
       name = name.to_s
       name == "self" || @def_vars.last.includes?(name)
+    end
+
+    def push_visbility
+      old_visibility = @visibility
+      @visibility = nil
+      value = yield
+      @visibility = old_visibility
+      value
     end
 
     def self.free_var_name?(name)

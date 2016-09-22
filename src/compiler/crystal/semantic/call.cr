@@ -855,7 +855,9 @@ class Crystal::Call
         fun_args = [] of Arg
       end
 
-      if output.is_a?(ASTNode) && !output.is_a?(Underscore)
+      if match.def.free_var?(output)
+        # Nothing, output is a free variable
+      elsif output.is_a?(ASTNode) && !output.is_a?(Underscore)
         output_type = lookup_node_type?(match.context, output)
         if output_type
           output_type = program.nil if output_type.void?
@@ -915,7 +917,7 @@ class Crystal::Call
         end
       else
         if output
-          if output.is_a?(ASTNode) && !output.is_a?(Underscore)
+          if !match.def.free_var?(output) && output.is_a?(ASTNode) && !output.is_a?(Underscore)
             output_type = lookup_node_type(match.context, output).virtual_type
             output_type = program.nil if output_type.void?
             block.type = output_type
@@ -944,7 +946,7 @@ class Crystal::Call
       # and we delay it if possible.
       if output
         if !block.type?
-          if output.is_a?(ASTNode) && !output.is_a?(Underscore)
+          if !match.def.free_var?(output) && output.is_a?(ASTNode) && !output.is_a?(Underscore)
             begin
               block_type = lookup_node_type(match.context, output).virtual_type
               block_type = program.nil if block_type.void?
