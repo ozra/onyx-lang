@@ -10,18 +10,22 @@ require "./ast_onyx_tagger"
 
 module Crystal
 
-class WrongParsePathException < SyntaxException
-end
+# Make the code easier to follow by using Onyx names for certain nodes
+alias Fragment = Block
+alias Lambda = ProcLiteral
+alias TagLiteral = SymbolLiteral
 
 macro raise_wrong_parse_path(msg = "Wrong parse path")
   dbgtail_off!
   ::raise WrongParsePathException.new({{msg}}, @token.line_number, @token.column_number, @token.filename, nil)
 end
 
+class WrongParsePathException < SyntaxException
+end
+
 class CallSyntaxException < SyntaxException
 end
 
-alias TagLiteral = SymbolLiteral
 
 MACRO_INDENT_FLAG = -99
 
@@ -3346,7 +3350,7 @@ class OnyxParser < OnyxLexer
 
     pop_scope
 
-    ProcLiteral.new(Def.new("->", args, body, return_type: return_type)).at_end(end_location)
+    Lambda.new(Def.new("->", args, body, return_type: return_type)).at_end(end_location)
   end
 
   def parse_lambda_arg
@@ -3379,7 +3383,7 @@ class OnyxParser < OnyxLexer
   end
 
 
-  def parse_fragment : Block
+  def parse_fragment : Fragment
     dbg "parse_fragment ->"
 
     fragment_auto_params = [] of Var
@@ -3534,7 +3538,7 @@ class OnyxParser < OnyxLexer
 
     end_location = token_end_location
 
-    Block.new(fragment_auto_params, fragment_body).at_end(end_location)
+    Fragment.new(fragment_auto_params, fragment_body).at_end(end_location)
   end
 
 
@@ -6069,7 +6073,7 @@ class OnyxParser < OnyxLexer
 
   record CallArgs,
     args : Array(ASTNode)?,
-    fragment : Block?,
+    fragment : Fragment?,
     # pass_on_arg_fragment : ASTNode?,
     named_args : Array(NamedArgument)?,
     # stopped_on_do_after_space : Bool,
@@ -6144,7 +6148,7 @@ class OnyxParser < OnyxLexer
         if @token.type != :")"
           arg = parse_call_arg
 
-          if arg.is_a? Block
+          if arg.is_a? Fragment
             fragment = arg
             dbg "parse_call_args_parenthesized after fragment arg - check for ')'"
 
@@ -6202,7 +6206,7 @@ class OnyxParser < OnyxLexer
       unless nest_start_token? || tok?(:NEWLINE, :";", :EOF, :")") || end_token?
         arg = parse_call_arg
 
-        if arg.is_a? Block
+        if arg.is_a? Fragment
           fragment = arg
           dbg "parse_call_args_spaced after fragment arg - check for ')'"
 
@@ -6333,7 +6337,7 @@ class OnyxParser < OnyxLexer
       if !tok?(:DEDENT) # , :";", :EOF, :")") || end_token?
         arg = parse_call_arg
 
-        if arg.is_a? Block
+        if arg.is_a? Fragment
           fragment = arg
           dbg "parse_call_args_indented after fragment arg - check for ')'"
 
@@ -6599,7 +6603,7 @@ class OnyxParser < OnyxLexer
       end
     end
 
-    Block.new([Var.new(implicit_param_name)], call).at(location)
+    Fragment.new([Var.new(implicit_param_name)], call).at(location)
   end
 
   def add_magic_param(name)
