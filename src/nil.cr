@@ -97,9 +97,17 @@ struct Nil
     self
   end
 
-  # Raises an exception. See `Object#not_nil!`.
-  def not_nil!
-    raise "Nil assertion failed"
+  ifdef release
+    # Raises an exception. See `Object#not_nil!`.
+    def not_nil!
+      raise "Nil assertion failed"
+    end
+  else
+    # :nodoc: Raises an exception implicitly grabbing (file, line) params added 
+    # for *DEBUG* TEMP* *TODO*
+    def not_nil!(file = __FILE__, line = __LINE__)
+      raise "Nil assertion failed at #{file}:#{line}"
+    end
   end
 
   def clone
