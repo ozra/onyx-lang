@@ -4,54 +4,56 @@ require "./lexer"
 
 require "../../debug_utils/global_pollution"
 
+
+# *TODO* Move!
+module Crystal::CommonParserMethods
+  def new_numeric_literal(token : Token)
+    new_numeric_literal token.value.to_s, token.number_kind, token.number_suffix
+  end
+
+  def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil) : ASTNode
+    _dbg "common-parse: new_numeric_literal -> #{value} '#{suffix}'"
+
+    # *TODO* maybe add for unspeced too!?
+    suffix ||= "default"
+
+    return NumberLiteral.new(value, kind) if kind != :user_suffix
+
+    if /[.eE]/ =~ value
+      new_kind = :unspec_real
+      suffix_prefix_type = "reallit__"
+    else
+      new_kind = :unspec_int
+      suffix_prefix_type = "intlit__"
+    end
+
+    # ifdef !release
+    #   @debug_specific_flag_ = true
+    # end
+
+    return Call.new(
+      nil,
+      get_str("_suffix_", suffix_prefix_type, suffix),
+      [ NumberLiteral.new(value, new_kind) ] of ASTNode,
+      nil,
+      nil,
+      nil,
+      false,
+      0,
+      has_parentheses: true,
+      implicit_construction: true,
+      nil_sugared: false
+    )
+
+  ensure
+     _dbg "crystal-parse: /new_numeric_literal"
+  end
+end
+
+
 module Crystal
 
   reinit_pool Parser, a, b, c
-
-  # *TODO* Move!
-  module CommonParserMethods
-    def new_numeric_literal(token : Token)
-      new_numeric_literal token.value.to_s, token.number_kind, token.number_suffix
-    end
-
-    def new_numeric_literal(value : String, kind : Symbol = :int, suffix : String? = nil) : ASTNode
-      _dbg "common-parse: new_numeric_literal -> #{value} '#{suffix}'"
-
-      # *TODO* maybe add for unspeced too!?
-      suffix ||= "default"
-
-      return NumberLiteral.new(value, kind) if kind != :user_suffix
-
-      if /[.eE]/ =~ value
-        new_kind = :unspec_real
-        suffix_prefix_type = "reallit__"
-      else
-        new_kind = :unspec_int
-        suffix_prefix_type = "intlit__"
-      end
-
-      # ifdef !release
-      #   @debug_specific_flag_ = true
-      # end
-
-      return Call.new(
-        nil,
-        get_str("_suffix_", suffix_prefix_type, suffix),
-        [ NumberLiteral.new(value, new_kind) ] of ASTNode,
-        nil,
-        nil,
-        nil,
-        false,
-        0,
-        has_parentheses: true,
-        implicit_construction: true,
-        nil_sugared: false
-      )
-
-    ensure
-       _dbg "crystal-parse: /new_numeric_literal"
-    end
-  end
 
   class Parser < Lexer
     include CommonParserMethods

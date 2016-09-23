@@ -47,6 +47,105 @@ end -- dpp
   -- *TODO* above end, if no comment after, makes one line-no disappear
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+say "Function / Lambda Return Type Syntax"
+
+One = 1; Two = 2; Three = 3; Four = 4; Five = 5; Six = 6
+
+foo-01() -> Int
+   One
+
+foo-02() ->
+   Two
+
+foo-03() -> Int: Three
+foo-04() ->: Four
+foo-05() ->; Five
+foo-06() -> return Six
+
+foo-07() -> Int
+   7
+
+foo-08() ->
+   8
+
+foo-09() -> Int then 9
+foo-10() -> Int do 10
+foo-11() -> Int => 11
+foo-12() -> Int: 12
+
+foo-13() -> 13
+foo-14() ->: 14
+
+-- foo-err-01() -> One  -- should error
+-- foo-err-02() -> Int; 1  -- should error
+
+foo-nil-01() ->! say "ok"
+foo-nil-02() -> Nil: say "ok"
+
+
+
+-- BODY = EXPR+
+-- NEST = `;` | `:` | `=>` | INDENT
+-- TYPE_AND_BODY = ( TYPE_LIKE? NEST_BODY )
+-- NON_TYPE_BODY = BODY  | where BODY.size > 1 or BODY.0 != TYPE_LIKE
+-- LAMBDA = `(` ARGS* `)` `->` ( (TYPE NEST BODY) | NON_TYPE_BODY)
+
+fn-01 = () -> 1
+fn-02 = () ->; 2
+fn-03 = () -> Int: 3
+fn-04 = () -> Int: Four
+fn-05 = () ->: Five
+fn-06 = () ->; Six
+
+say "Function Definition Head Variations - Func Def"
+say foo-01
+say foo-02
+say foo-03
+say foo-04
+say foo-05
+say foo-06
+say foo-07
+say foo-08
+say foo-09
+say foo-10
+say foo-11
+say foo-12
+say foo-13
+say foo-14
+
+-- foo-err-01
+-- foo-err-02
+
+say foo-nil-01
+say foo-nil-02
+
+say "Lambda Definition Variations"
+say fn-01()
+say fn-02()
+say fn-03()
+say fn-04()
+say fn-05()
+say fn-06()
+
+-- Loose ideas:
+--
+-- Where clause for func-heads etc.
+--
+-- foo(x Tee, y Too, z, u) ->
+--    where
+--       Tee < Foo                       -- type var - matches and propagates type to first matched
+--       type Too = Bar | (Zoo & Qwo)    -- type alias - restricts each time individually
+--       z Tee
+--       u = 47
+--
+-- foo( ...parameters... ) ->
+--    where parameters are
+--       Tee < Foo                       -- type var - matches and propagates type to first matched
+--       type Too = Bar | (Zoo & Qwo)    -- type alias - restricts each time individually
+--       z Tee
+--       u = 47
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 say "Lambda Type as value"
 
@@ -1187,7 +1286,7 @@ DEBUG–SEPARATOR
 -- -#pure -#private
 -- # private
 -- zoo*(a; b; ...c 'Intp) -> Str  'pure  # *TODO* variation two (type after arrow)
-zoo*(a; b; ...c 'Intp) Str ->  'pure
+zoo*(a; b; ...c 'Intp) -> Str  'pure
    if true:
       i = 1
 
@@ -1261,7 +1360,8 @@ end
 
 qwo2(a ^Intp, b 'Intp) -> end
 
-qwo3(a 'Intp, b mut Intp) -> Str -- Str
+-- qwo3(a 'Intp, b mut Intp) -> Str -- Str  -- should fail - *TODO* error message points to +3 cols
+qwo3(a 'Intp, b mut Intp) -> Str => "foo" -- Str
 
 qwo4(a Intp; b Intp) ->
 end
@@ -1270,7 +1370,8 @@ qwo2 1, 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
-foo-list = List<List<List<String>>> 1
+foo-list = Li<Li<Li<Str>>> 1
+say foo–list
 
 n = 4747 >> 3
 n >>= 1
@@ -1684,28 +1785,6 @@ for val[ix] in ["c", "b", "a"] -- by 2
    say "{val}, {ix}"
 
 
-
-
--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
-
---
--- *TODO*
---
--- add tests for
---  splat type params
---  named type params
---  long type param names
-
-
--- Where clause for func-heads etc.
---
--- foo(x Tee, y Too, z) ->
---    where
---       Tee < Foo                  -- type var - matches and propagates type to first matched
---       Too = Bar | (Zoo & Qwo)  -- type alias - restricts each time individually
---       z Tee
-
-
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
 trait TheTrait
@@ -1758,6 +1837,16 @@ say "Bar.get-foo = {Bar.get-foo}"
 
 say "declare a Foo type"
 
+
+
+--
+-- *TODO*
+--
+-- add tests for
+--  splat type params
+--  named type params
+
+
 --| The "normal" Foo which is expressed with arrow function syntax
 type Foo<LongGenericPar> < Bar
    mixin AnotherTrait<LongGenericPar>
@@ -1807,8 +1896,9 @@ type Foo<LongGenericPar> < Bar
    'pure
    fn–1aa(x) -> nil  -- 'public   -- should this be legal? - looks very confusing!
    'pure
-   fn–1ab(x) Nil -> nil  'pure -- 'public   -- should this be legal? - looks very confusing!
-   -- fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   -- fn–1ab(x) -> Nil; nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   fn–1ab(x) -> Nil: nil  'pure -- 'public   -- should this be legal? - looks very confusing!
+   fn–1abb(x) -> Nil
 
    'inline 'pure
    fn–1ba*(x) ->! nil
@@ -1840,7 +1930,7 @@ type Foo<LongGenericPar> < Bar
       "b: {a}, {b}"
 
    -- fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
-   fn–c*(a, b LongGenericPar) LongGenericPar -> 'redef 'inline
+   fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
       "c: {a}, {b}"
 
    end -- end–def
@@ -1928,7 +2018,7 @@ type FooStyle2<LongGenericPar> < Bar
    --| Do some 1aa action!
    'pure
    fn–1aa(x) -> 'pure;  nil   -- should this be legal? - looks very confusing!
-   fn–1ab(x) Nil -> 'pure:  nil   -- should this be legal? - looks very confusing!
+   fn–1ab(x) -> Nil 'pure:  nil   -- should this be legal? - looks very confusing!
    -- fn–1ab(x) -> Nil 'pure:  nil   -- should this be legal? - looks very confusing!
 
    -- (private ) ~>inline
@@ -1966,7 +2056,7 @@ type FooStyle2<LongGenericPar> < Bar
       "b: {a}, {b}"
 
    -- fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
-   fn–c*(a, b LongGenericPar) LongGenericPar -> 'redef 'inline
+   fn–c*(a, b LongGenericPar) -> LongGenericPar 'redef 'inline
       "c: {a}, {b}"
    end -- end–def
    -- end fn–c
@@ -2166,15 +2256,15 @@ api MyLibGmp
    -- add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
    -- set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
 
-   init = __gmpz_init(x MpzP) Void
-   init_set_si = __gmpz_init_set_si(rop MpzP, op Long) Void
-   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<UInt8>, base Int) Void
+   init = __gmpz_init(x MpzP) -> Void
+   init_set_si = __gmpz_init_set_si(rop MpzP, op Long) -> Void
+   init_set_str = __gmpz_init_set_str(rop Ptr<Mpz>, str Ptr<UInt8>, base Int) -> Void
 
-   get_si = __gmpz_get_si(op MpzP) Long
-   get_str = __gmpz_get_str(str Ptr<UInt8>, base Int, op MpzP) Ptr<UInt8>
+   get_si = __gmpz_get_si(op MpzP) -> Long
+   get_str = __gmpz_get_str(str Ptr<UInt8>, base Int, op MpzP) -> Ptr<UInt8>
 
-   add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) Void
-   set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) Void
+   add = __gmpz_add(rop MpzP, op1 MpzP, op2 MpzP) -> Void
+   set-memory-functions = __gmp_set_memory_functions(malloc '(SizeT)->Ptr<Void>, realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>, free '(Ptr<Void>,SizeT)->Void ) -> Void
    -- set-memory-functions-2 = __gmp_set_memory_functions(
    --                               malloc '(SizeT)->Ptr<Void>,
    --                               realloc '(Ptr<Void>,SizeT,SizeT)->Ptr<Void>,
@@ -2318,7 +2408,7 @@ extend RestFoo
 
 ext RestFoo
    -- rest-foo() -> Bool 'redef
-   rest-foo() Bool -> 'redef
+   rest-foo() -> Bool 'redef
       false
 
 xx = 47

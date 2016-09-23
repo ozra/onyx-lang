@@ -1693,12 +1693,12 @@ module Crystal
           case curch
           when 'S'
             if mnc?('e','l','f')
-              if peekch == '?'
-                nextch
-                return check_const_or_token(:Self?, start)
-              else
+              # if peekch == '?'  # parse as it's own generic token
+              #   nextch
+              #   return check_const_or_token(:Self?, start)
+              # else
                 return check_const_or_token(:Self, start)
-              end
+              # end
             end
           when 'T'
             if mnc?('y','p','e')

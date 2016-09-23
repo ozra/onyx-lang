@@ -222,7 +222,7 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  def unsignificantify_newline
+  def unsignificantify_newline!
     if @significant_newline && @one_line_nest == 0
       @significant_newline = false
     end
@@ -409,7 +409,7 @@ class OnyxParser < OnyxLexer
 
         # Suffic Pragmas?
         elsif pragmas?
-          pragmas = parse_possible_pragma_grouping
+          pragmas = parse_pragma_grouping?
           # *TODO* use the maddafaggas
 
         elsif end_token? || tok? :INDENT
@@ -519,7 +519,7 @@ class OnyxParser < OnyxLexer
             pop_scope if needs_new_scope
             add_var atomic
 
-            dbg "creates Assign"
+            dbg "creates Assign to atomic #{atomic}, with value #{value}"
             prev_atomic = atomic
             atomic = Assign.new(atomic, value).at(location)
             atomic.doc = doc
@@ -865,10 +865,6 @@ class OnyxParser < OnyxLexer
       case @token.type
       when :SPACE
         next_token
-      # when :"\""
-      #   # *TODO* string–literal–type–creation
-      #   # etc. user implemented (?)
-      #   raise "Specific literal - not implemented yet"
 
       when :IDFR
         case
@@ -1411,7 +1407,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_atomic__main"
 
     if pragmas?
-      pragmas = parse_possible_pragma_cluster
+      pragmas = parse_pragma_cluster?
       dbg "Got pragma in parse_atomic__main - apply to next item! #{pragmas}"
       return Expressions.new pragmas
     end
@@ -1859,12 +1855,12 @@ class OnyxParser < OnyxLexer
   # The correct receiver also gets the pragmas associated immediately too!
   # (nodes are only for source generation, the info is connected directly)
 
-  def parse_possible_pragma_cluster() : Array(ASTNode)
-    dbg "parse_possible_pragma_cluster_style1 ->"
+  def parse_pragma_cluster?() : Array(ASTNode)
+    dbg "parse_pragma_cluster?_style1 ->"
     pragmas = [] of ASTNode
 
     while pragmas?
-      pragmas.concat parse_possible_pragma_grouping
+      pragmas.concat parse_pragma_grouping?
       skip_space_or_newline
     end
 
@@ -1874,8 +1870,8 @@ class OnyxParser < OnyxLexer
     pragmas
   end
 
-  def parse_possible_pragma_grouping() : Array(ASTNode)
-    dbg "parse_possible_pragma_grouping_style1 ->"
+  def parse_pragma_grouping?() : Array(ASTNode)
+    dbg "parse_pragma_grouping?_style1 ->"
     pragmas = [] of ASTNode
 
     while pragmas?
@@ -2431,7 +2427,7 @@ class OnyxParser < OnyxLexer
     skip_space
 
     # First allowed pragma position
-    type_pragmas = parse_possible_pragma_grouping if pragmas?
+    type_pragmas = parse_pragma_grouping? if pragmas?
     skip_space
 
     case @token.type
@@ -2440,7 +2436,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space_or_newline
       # Second allowed pragma position
       dbg "- parse_general_type_def - check for pragmas"
-      type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
+      type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping?) if pragmas?
       dbg "- parse_general_type_def - parse aliased type"
       base_type = parse_type false
       is_alias = true
@@ -2450,7 +2446,7 @@ class OnyxParser < OnyxLexer
       next_token_skip_space_or_newline
       # Second allowed pragma position
       dbg "- parse_general_type_def - check for pragmas"
-      type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
+      type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping?) if pragmas?
       dbg "- parse_general_type_def - parse base_type"
       base_type = parse_type false
 
@@ -2463,7 +2459,7 @@ class OnyxParser < OnyxLexer
     dbg "- parse_general_type_def - after parse base type"
 
     # Third allowed pragma position
-    type_pragmas = lenient_concat(type_pragmas, parse_possible_pragma_grouping) if pragmas?
+    type_pragmas = lenient_concat(type_pragmas, parse_pragma_grouping?) if pragmas?
 
     # If it's an alias, we're done - return it
     if is_alias
@@ -2517,7 +2513,7 @@ class OnyxParser < OnyxLexer
     name = parse_constish allow_type_vars: false
     skip_space
 
-    if tok? :CONST, :"'" # most likely a type! *TODO* next_is_type?
+    if next_might_be_type?
       base_type = parse_single_type
     end
 
@@ -2664,7 +2660,7 @@ class OnyxParser < OnyxLexer
     members = [] of ASTNode
 
     if pragmas?
-      pragmas = parse_possible_pragma_cluster
+      pragmas = parse_pragma_cluster?
       dbg "Got PRIMARY pragmas in type-def root level - apply to the type defined. #{pragmas}"
     end
 
@@ -2680,7 +2676,7 @@ class OnyxParser < OnyxLexer
       # *TODO* moved this check down to "else" and re–structure this as case again!
       when pragmas? # when :PRAGMA
         # *TODO* use the pragmas
-        pragmas = parse_possible_pragma_grouping
+        pragmas = parse_pragma_grouping?
         dbg "Got pragma in type-def root level - apply to next item! #{pragmas}"
 
       when tok? :IDFR # when :IDFR
@@ -2854,7 +2850,7 @@ class OnyxParser < OnyxLexer
       @wants_regex = false
       next_token_skip_space
 
-      if next_is_type? require_explicit: false
+      if next_might_be_type? require_explicit: false
         dbg "found type declaration"
         # *TODO* we must take care of the type qualifiers
         mutability, storage, var_type = parse_qualifer_and_type
@@ -2923,7 +2919,7 @@ class OnyxParser < OnyxLexer
     dbg "parse_typedef_body_var_or_const() - check for pragmas"
     return rets unless pragmas? # tok? :PRAGMA
 
-    pragmas = parse_possible_pragma_grouping
+    pragmas = parse_pragma_grouping?
     dbg "found pragmas #{pragmas}"
 
     if var.is_a? ClassVar
@@ -3015,8 +3011,56 @@ class OnyxParser < OnyxLexer
     {type_vars, splat_index}
   end
 
+
+  def heuristic_scan_parenthetical_unknown
+    # Extremely simple, but rather effective heuristic to guess which
+    # parenthetical construct is the most likely, and thus worth trying first.
+    dbg "heuristic_scan_parenthetical_unknown -> current_pos = #{current_pos}"
+
+    scanner = @reader.dup
+    # raise "heuristic_scan_parenthetical_unknown should be called _on_ token '('" if scanner.current_char != '('
+    raise "heuristic_scan_parenthetical_unknown should be called _on_ token '('" if ! tok? :"("
+
+    parens = 1  # we're already past the first paren in lex–stream
+    start_pos = scanner.pos
+
+    # give up heuristics at 70 chars
+    # bus–size - 1, so we don't have to check for end for peek–aheads
+    stop = {scanner.string.bytesize - 1, start_pos + 70}.min
+
+    while scanner.pos < stop
+      case scanner.current_char
+      when '('
+        parens += 1
+      when ')'
+        parens -= 1
+        break if parens == 0
+      end
+      scanner.next_char
+    end
+
+    dbg "- heuristic_scan_parenthetical_unknown - after loop: #{parens} == 0 ?"
+
+    return {0, :failed_heuristic} if parens != 0
+
+    while scanner.current_char == ' '
+      scanner.next_char
+    end
+
+    case scanner.current_char
+    when '-' then return {scanner.pos, :"->"} if nextch == '>'
+    when '~' then return {scanner.pos, :"~>"} if nextch == '>'
+    when '\\' then return {scanner.pos, :"\\"} if nextch == '>'
+    end
+
+    return {scanner.pos, :balanced_pars}
+
+  ensure
+    dbg "/heuristic_scan_parenthetical_unknown - current_pos = #{current_pos}"
+  end
+
   def parse_parenthetical_unknown
-    dbg "parse_parenthetical_unknown"
+    dbg "parse_parenthetical_unknown".white
 
     # *TODO* Should check lambda–TYPE and union–TYPE also!
 
@@ -3080,12 +3124,14 @@ class OnyxParser < OnyxLexer
     # of a tuple can be an expression.
 
 
+    heuristic_end_pos, heuristic_hint = heuristic_scan_parenthetical_unknown
 
+    dbg "heuristic_scan_parenthetical_unknown says: #{heuristic_hint} with end_pos #{heuristic_end_pos}".white
 
     begin
       dbg "parse_parenthetical_unknown - TRY parse_fragment".magenta
       ret = parse_fragment
-      dbg "parse_parenthetical_unknown - parse_parenthesized_expression try worked".magenta
+      dbg "parse_parenthetical_unknown - parse_fragment try worked".magenta
 
     rescue e : WrongParsePathException
       restore_full backed
@@ -3125,22 +3171,20 @@ class OnyxParser < OnyxLexer
           end
         end
       else
-        dbg "parse_parenthetical_unknown - else after par-expr worked".magenta
+        dbg "parse_parenthetical_unknown - after successful par-expr-group".magenta
 
         skip_space
 
         # It's a lambda even though an expression could be parsed - REDO!
         if tok? :"->"
-          dbg "parse_parenthetical_unknown - got PAR_EXPR - but it is a lambda anyway: re-parse".magenta
+          dbg "parse_parenthetical_unknown - although PAR_EXPR_GROUP - it must be a lambda anyway: re-parse".magenta
           restore_full backed
           return parse_lambda
 
-        # *TODO* - YES IT CAN! If it is fragment with errors in it!
-        # Can't happen here, since we try it first
-        # elsif tok? :"~>"
-        #   dbg "parse_parenthetical_unknown - got PAR_EXPR - but it is a soft-lambda anyway: re-parse".magenta
-        #   restore_tok backed
-        #   return parse_fragment
+        elsif tok? :"~>", :"\\"
+          dbg "parse_parenthetical_unknown - although PAR_EXPR_GROUP - it must be a fragment anyway: re-parse".magenta
+          restore_full backed
+          return parse_fragment
 
         elsif ret == nil
           dbgtail_off!
@@ -3151,14 +3195,11 @@ class OnyxParser < OnyxLexer
         end
       end
     end
+
+    _dbg "stat: parse_parenthetical_unknown gave hint `#{heuristic_hint}` and actual ret `#{ret}`".blue
+
     return ret
   end
-
-  # def heuristic_scan_parenthetical_unknown
-  #   backed_pos = @current_pos
-  #   # *TODO* - this will allow for much better error messages (and faster
-  #   # parsing for most cases)
-  # end
 
   def parse_parenthesized_expression
     dbg "parse_parenthesized_expression"
@@ -3276,10 +3317,13 @@ class OnyxParser < OnyxLexer
     end
 
     next_token_skip_space_or_newline
+    raise "Expected `->` while parsing lambda. Got #{@token}" if ! tok? :"->"
 
     end_location = nil
 
-    nest_kind, callable_kind, returns_nothing, _ = parse_def_nest_start
+    # *TODO* return_type for lambdas?
+    nest_kind, return_type, suffix_pragmas = parse_def_nest_transition
+
     add_nest :lambda, lambda_indent, "", (nest_kind == :LINE_NEST), false
     # *TODO* use callable_kind and set on Def–node
 
@@ -3302,9 +3346,7 @@ class OnyxParser < OnyxLexer
 
     pop_scope
 
-    # next_token_skip_space
-
-    ProcLiteral.new(Def.new("->", args, body)).at_end(end_location)
+    ProcLiteral.new(Def.new("->", args, body, return_type: return_type)).at_end(end_location)
   end
 
   def parse_lambda_arg
@@ -3390,7 +3432,7 @@ class OnyxParser < OnyxLexer
 
         dbg "parse_fragment - done parsing fragment parameters"
 
-        raise "expected `\\`" if !tok? :"\\"
+        raise "expected `\\\\`" if !tok? :"\\"
         next_token_skip_space
       end
 
@@ -3422,8 +3464,10 @@ class OnyxParser < OnyxLexer
 
         dbg "parse_fragment - done parsing fragment parameters"
 
+        raise "expected `)`" if !tok? :")"
         next_token_skip_space
-        raise "expected `~>` or `\\`" if !tok? :"~>", :"\\"
+
+        raise "expected `\\\\` or `~>`" if !tok? :"\\", :"~>"
         next_token_skip_space
 
       rescue e
@@ -5135,9 +5179,9 @@ class OnyxParser < OnyxLexer
       index = 0
       splat_index = nil
 
-      dbg "Got with parens arg_list"
       next_token_skip_space_or_newline
 
+      # Parse formal parameters
       while @token.type != :")"
         dbg "!=)"
         extras = parse_param(
@@ -5179,68 +5223,25 @@ class OnyxParser < OnyxLexer
       end
       next_token_skip_space
 
+      raise "Expected `->`, got #{@token}" if ! tok? :"->"
 
-      # The part below should be cleaned up
-      #
-      # my–func(a, b Int) -> do–shit
-      # my–func(a, b Int) ->! do–shit
-      # my–func(a, b Int) Foo -> do–shit
-      # my–func(a, b Int) -> \n
-      # my–func(a, b Int) -> Foo: do–shit
-
-      if @token.type != :"->"
-        dbg "No ->, type?"
-        # next_token_skip_space
-        if @token.type != :"NEWLINE" # *TODO* we don't accept newline here
-          dbg "Tries TYPE PARSE"
-          return_type = parse_single_type
-          end_location = return_type.end_location
-        else
-          dbg "GOT NEWLINE"
-          return_type = nil
-        end
-        dbg "tok:" + @token.to_s
-
-        if @token.type != :"->" # this is checked in parse_nest_start too!!
-          unexpected_token "expected '->' or return type"
-        end
-        dbg "Got ->"
-        # Done with header..
-
-      else
-        return_type = nil  # *TODO* *CRYSTAL-BUG* - error report - remove this and it fucks up in `raise "Callable...`
-        dbg "Got -> - so no return type given"
-      end
-
+    # The "possibly wrong parse path" exception catch
     rescue e
       dbg "parse_def_helper failed in func-header section - probably not func".red
       Crystal.raise_wrong_parse_path
     end
 
+
     end_location = token_end_location
 
-    dbg "body time".white
+    dbg "- parse_def_helper - body time".white
 
-    nest_kind, callable_kind, returns_nothing, suffix_pragmas = parse_def_nest_start
-    # *TODO* use callable_kind and set on Def–node
-    # *TODO* use add_def_nest!
+    nest_kind, return_type, suffix_pragmas = parse_def_nest_transition
     add_nest (is_macro_def ? :macro : :def), def_indent, name.to_s, (nest_kind == :LINE_NEST), false
 
-    pragmas = [] of ASTNode
-    pragmas.concat suffix_pragmas
+    pragmas = suffix_pragmas || [] of ASTNode
 
-    dbg "found pragmas for def: #{pragmas}"
-
-    if returns_nothing
-      if return_type
-        # *NOTE* wrong position on error message!
-        dbgtail_off!
-        raise "Callable declared with both return type (\"#{return_type}\") ) and \"returns nothing\"-notation. Which is it?", end_location
-      else
-        return_type = Path.global("Nil") # *TODO* Nothing / Void if it gets introduced
-      end
-    end
-
+    dbg "found pragmas for def?: #{pragmas}"
 
     if nest_kind == :NIL_NEST
       dbg "got nil block"
@@ -5259,8 +5260,10 @@ class OnyxParser < OnyxLexer
       # parse possible "first of body" pragmas
       if pragmas? # tok? :PRAGMA
         dbg "got body primary pragmas"
-        pragmas = parse_possible_pragma_cluster
+        pragmas = parse_pragma_cluster?
+
         # *TODO* use the pragmas
+
         if handle_nest_end false
           body = Nop.new
         end
@@ -6268,10 +6271,6 @@ class OnyxParser < OnyxLexer
       dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '+/-' - current_char == '#{current_char}'"
       return true if check_plus_and_minus && current_char.whitespace?
 
-    # when :"{"
-    #   dbg "- parse_call_args_spaced_any_non_call_hints? - token.type '{'"
-    #   return true unless allow_curly # *TODO* *9* search allow_curly
-
     # *TODO* free the operators again, check for type–ish after?
     # Though... they should never occur here without idfr before! *9*
     when :"'", :"~", :"^"
@@ -6646,13 +6645,13 @@ class OnyxParser < OnyxLexer
     tok? :">", :"›" # *TODO* unicode–alternatives not definite!
   end
 
-  def next_is_type?(require_explicit = false) : Bool
+  def next_might_be_type?(require_explicit = false) : Bool
     if require_explicit
       next_is_any_type_modifier_prefix?
     else
-      tok?(:CONST, :"*", :"(") ||
-        next_is_any_type_modifier_prefix? ||
-        kwd?(:typeof) || kwd?(:typedecl) || kwd?(:auto)
+      tok?(:CONST, :Self, :"*", :"(") ||
+        kwd?(:ctype) || kwd?(:auto) ||
+        next_is_any_type_modifier_prefix?
     end
   end
 
@@ -6701,7 +6700,7 @@ class OnyxParser < OnyxLexer
     @wants_regex = false
     next_token_skip_space
 
-    if next_is_type?(require_explicit: false)
+    if next_might_be_type?(require_explicit: false)
       decl = parse_var_type_declaration var, true
 
       # *TODO* this should be done for non type–declared too preferably
@@ -6814,6 +6813,20 @@ class OnyxParser < OnyxLexer
     end
   end
 
+  def parse_type?(allow_primitives, allow_commas = true, allow_splat = false)
+    return nil unless next_might_be_type?
+
+    backed = backup_full
+    begin
+      return_type = parse_type(allow_primitives, allow_commas, allow_splat)
+      return return_type
+    rescue
+      restore_full backed
+    end
+
+    return nil
+  end
+
   def parse_type(allow_primitives, allow_commas = true, allow_splat = false)
     location = @token.location
 
@@ -6856,9 +6869,9 @@ class OnyxParser < OnyxLexer
 
     dbg "parse_type_lambdatype_or_grouping - before ')' check"
 
-    raise "expected `)` ending the lambda param types, not #{@token}" unless tok? :")"
+    raise "expected `)` ending the lambda param types, got #{@token}" unless tok? :")"
     next_token_skip_space
-    raise "expected `->` beacon after the lambda params, not #{@token}" unless tok? :"->"
+    raise "expected `->` beacon after the lambda params, got #{@token}" unless tok? :"->"
     next_token_skip_space
 
     case @token.type
@@ -6909,6 +6922,11 @@ class OnyxParser < OnyxLexer
 
   def parse_typeunit_with_suffix(allow_primitives) : ASTNode
     dbg "parse_typeunit_with_suffix"
+
+
+    # *TODO* *NOW*
+    # :Self? could just use :Self -> :"?" (parse_type_suffix)
+
 
     if const? :Self?
       dbg "was 'Self?'"
@@ -6996,7 +7014,7 @@ class OnyxParser < OnyxLexer
       #   next_token_skip_space
       when :"."
         next_token
-        check_idfr :type  # *TODO* `oftype` | `curtype` | `typenow` (vs `typedecl`/`decltype`) or similar
+        check_idfr :itype  # *TODO* `oftype` | `curtype` | `typenow` (vs `typedecl`/`decltype`) or similar
         type = Metaclass.new(type)
         next_token_skip_space
       else
@@ -7405,6 +7423,7 @@ class OnyxParser < OnyxLexer
 
     doc = @token.doc
     indent_level = @indent
+    location = @token.location
 
     push_fresh_scope if require_body
 
@@ -7473,22 +7492,17 @@ class OnyxParser < OnyxLexer
       end
     end
 
+    raise "expected `)` ending the func param types, got #{@token}" unless tok? :")"
     next_token_skip_space
 
-    dbg "- parse_fun_def - before return type check".red
+    raise "expected `->` before finally a return type, got #{@token}" unless tok? :"->"
 
-    if ! tok? :NEWLINE, :DEDENT, :"->"
-    #   next_token_skip_space_or_newline
-      return_type = parse_single_type
-    end
+    nest_kind, return_type, pragmas = parse_def_nest_transition(require_body)
+
+    raise "Must declare return type for c-funcs", location unless return_type
 
     if require_body
-      nest_kind, callable_kind, returns_nothing, suffix_pragmas =
-        parse_def_nest_start
-
-      # *TODO* suffix_pragmas
-
-      add_nest :def, indent_level, name.to_s, (nest_kind == :LINE_NEST), false
+      add_nest :cfun, indent_level, name.to_s, (nest_kind == :LINE_NEST), false
 
       if nest_kind == :NIL_NEST
         body = Nop.new
@@ -7499,7 +7513,7 @@ class OnyxParser < OnyxLexer
       end
     else
       # *TODO* how does this play with subsequent nest_ends?
-      skip_statement_end
+      # skip_statement_end
       body = nil
     end
 
@@ -7850,11 +7864,8 @@ class OnyxParser < OnyxLexer
     value
   end
 
-  def parse_def_nest_start() : {Symbol, Symbol, Bool, Array(ASTNode)}
-    # *TODO* we don't pass the syntax used, so a stylizer would have to look
-    # at the source via "location"
-
-    dbg "parse_def_nest_start"
+  def parse_def_nest_transition(require_bodying = true) : {Symbol, ASTNode?, Array(ASTNode)}
+    dbg "parse_def_nest_transition"
 
     if !tok?(:"->")
       Crystal.raise_wrong_parse_path "unexpected token. Expected `->`, or a variation of it"
@@ -7864,69 +7875,62 @@ class OnyxParser < OnyxLexer
 
     next_token
 
-    dbg "check for callable variations"
+    nest_transition_clear = true
 
-    # *TODO* these variations look like shit - ditch. replace with pragmas and
-    # grouping pragmas
-    case
-    when tok? :"@"
-      callable_type = :strict_method
-      next_token_skip_space
-
-    when tok? :">"
-      callable_type = :pure_callable
-      next_token_skip_space
-    # when tok? :")", :"}"
-    #   callable_type = :fragment
-    #   next_token_skip_space
-    else
-      callable_type = :standard_callable
-    end
-
-
-
+    # Check if short–notation Nil return type
     if tok? :"!"
-      dbg "got returns-nothing modifier!"
-
-      returns_nothing = true
+      return_type = Path.global("Nil")
       next_token_skip_space
-
     else
-      dbg "expl or auto return type"
-      returns_nothing = false
+      # Check if we've got a return type
+      skip_space
+      if return_type = parse_type?(allow_primitives: false)
+        nest_transition_clear = false
+      end
+      # end_location = return_type.end_location
     end
-
-    skip_space
 
     dbg "check for def suffix-pragmas"
-    pragmas = parse_possible_pragma_grouping
+    pragmas = parse_pragma_grouping?
 
-    # We allow ordinary nest-start-token also. After suffix-pragmas it looks clearer
-    next_token_skip_space if nest_start_token?
+    if nest_start_token?
+      next_token_skip_space
+      nest_transition_clear = true
+    end
 
     # Handle one–line vs multi–line vs nil–nest etc.
     nest_kind = case
-    when tok? :INDENT
-      dbg "parse_def_nest_start - :INDENT"
-      next_token
-      unsignificantify_newline
-      :NEST
+      when tok? :INDENT
+        dbg "parse_def_nest_transition - :INDENT"
+        next_token
+        unsignificantify_newline!
+        :NEST
 
-    when tok?(:DEDENT, :NEWLINE, :END)
-      dbg "parse_def_nest_start - :DEDENT, :NEWLINE, :END"
-      :NIL_NEST
+      when tok?(:DEDENT, :NEWLINE, :END)
+        dbg "parse_def_nest_transition - :DEDENT, :NEWLINE, :END"
 
-    else
-      dbg "parse_def_nest_start - explicit_starter"
-      @one_line_nest += 1
-      @significant_newline = true
-      :LINE_NEST
+        if return_type && require_bodying && !(return_type.is_a?(Path) && return_type.names.first == "Nil")
+          raise "Function definition with explicit return type but no body. [7933]", @token
+        end
+        :NIL_NEST
 
-    end
+      else
+        dbg "parse_def_nest_transition - one-liner"
 
-    {nest_kind, callable_type, returns_nothing, pragmas}
+        if !nest_transition_clear
+          raise "Function definition with explicit return type but no body starter token. [7941]", @token
+        end
+
+        @one_line_nest += 1
+        @significant_newline = true
+        :LINE_NEST
+      end
+
+    {nest_kind, return_type, pragmas}
 
   end
+
+
 
   def parse_nest_start(kind : Symbol, indent : Int32) : {Symbol, Int32} #  = :generic
     dbg "parse_nest_start ->".yellow
@@ -7981,7 +7985,7 @@ class OnyxParser < OnyxLexer
     when tok? :INDENT
       dbg "parse_nest_start - :INDENT"
       next_token
-      unsignificantify_newline
+      unsignificantify_newline!
       {:NEST, dedent_level}
 
     when tok?(:DEDENT, :END)
@@ -7993,7 +7997,7 @@ class OnyxParser < OnyxLexer
       if dedent_level == -1
         dbg "parse_nest_start - :NEWLINE when begins-block"
         next_token
-        unsignificantify_newline
+        unsignificantify_newline!
         {:NEST, dedent_level}
       else
         dbg "parse_nest_start - :NEWLINE when regular block"
@@ -8136,24 +8140,24 @@ class OnyxParser < OnyxLexer
     when tok? :","
       dbg "handle_one_line_nest_end COMMA ','"
       handle_definite_nest_end_
-      unsignificantify_newline
+      unsignificantify_newline!
       return true
 
     when tok? :")"
       dbg "handle_one_line_nest_end LPAREN ')'"
       handle_definite_nest_end_
-      unsignificantify_newline
+      unsignificantify_newline!
       return true
 
     when tok? :NEWLINE
       dbg "handle_one_line_nest_end NEWLINE"
       handle_definite_nest_end_
-      unsignificantify_newline
+      unsignificantify_newline!
       return true
 
     when tok? :DEDENT
       dbg "handle_one_line_nest_end DEDENT"
-      unsignificantify_newline
+      unsignificantify_newline!
       return handle_definite_nest_end_
 
     else
@@ -8297,7 +8301,7 @@ class OnyxParser < OnyxLexer
       @one_line_nest -= 1
     end
 
-    unsignificantify_newline
+    unsignificantify_newline!
 
     dbg ">> POPPED NEST >> ".red + tmp_dbg_nest_kind.quot.yellow + ":" + tmp_dbg_nest_indent.yellow + " on " + indent.to_s.yellow
     dbg @nesting_stack.dbgstack.red

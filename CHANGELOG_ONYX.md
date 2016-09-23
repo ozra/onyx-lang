@@ -10,6 +10,7 @@
 * Give up the restriction of one-letter generic parameter names. Long type-var names now allowed.
 * Finally removed the awkwardly ruled angular tuple syntax (`tup = <1, 2, 3>`)
 * Build-time flags used for Onyx-compiler dev for easy dissection in the event of future compatibility problems with crystal lib.
+* Changed function def syntax: return type goes _after_ arrow, according to the RFC-suggestion.
 
 
 ## 0.191.12 - (2016-09-19) ##
