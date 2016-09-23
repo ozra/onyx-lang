@@ -170,6 +170,7 @@ say "suffix true" if true
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
+-- nil-sugar,  nil-chaining
 say "Nil-sugar"
 
 -- type Kwattro  - *TODO* improve error message!
