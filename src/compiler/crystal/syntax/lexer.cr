@@ -665,8 +665,8 @@ module Crystal
               # Nothing to do
             end
             @token.type = class_var ? :CLASS_VAR : :INSTANCE_VAR
-            tmp = string_range_from_pool(start)
-            @token.value = get_str canonicalize_identifier tmp
+            tmp = get_str string_range_from_pool(start)
+            @token.value = tmp
             @token.raw = tmp
           else
             unknown_token
@@ -701,8 +701,8 @@ module Crystal
               # Nothing to do
             end
             @token.type = :GLOBAL
-            tmp = string_range_from_pool(start)
-            @token.value = get_str canonicalize_identifier tmp
+            tmp = get_str string_range_from_pool(start)
+            @token.value = tmp
             @token.raw = tmp
           else
             unknown_token
@@ -1234,37 +1234,10 @@ module Crystal
         next_char
       end
       @token.type = :IDENT
-      str = string_range_from_pool(start)
-      @token.value = get_str canonicalize_identifier str
+      str = get_str string_range_from_pool(start)
+      @token.value = str
       @token.raw = str
       @token
-    end
-
-    # *TODO* this can be removed - since it was only here for idfrsLikeThis - which is moooot! (was in a direct–converted example: solve such individually!)
-    def canonicalize_identifier(idfr_str)
-      # do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
-
-      ret = (begin
-        @tmp_buf.clear
-        idfr_str.each_char_with_index do |chr, i|
-          if chr == '-'
-            @tmp_buf << '_'
-
-          elsif chr == '–'
-            @tmp_buf << '_'
-
-          # *TODO* _ONLY_ of onyxify and translate–humps set!!!
-          # elsif do_hump_magic && ('A' <= chr <= 'Z')
-          #   str << '_'
-          #   str << chr.downcase
-
-          else
-            @tmp_buf << chr
-          end
-        end
-        @tmp_buf.to_slice
-      end)
-      ret
     end
 
     def next_char_and_symbol(value)
