@@ -31,7 +31,7 @@ ifdef !disable_ox_typarchy
    type TaggedTuple = TTup
    -- type TaggedTuple<..:T> = TTup<..:T>
 
-   type Crystal = LavaFlow
+   -- type Crystal = LavaFlow
 
 
 -- -- The pre babeling way, staying on Crystal naming ball court side -- --
@@ -60,7 +60,7 @@ else
 
    type Str = String
 
-   type LavaFlow = Crystal
+   -- type LavaFlow = Crystal
 
 end
 

@@ -1,33 +1,120 @@
-module Crystal::NumberVerificationUtils
+module Crystal::CommonParserMethods
+  def new_numeric_literal(token : Token)
+    new_numeric_literal token.value.to_s, token.number_kind, token.number_suffix
+  end
+
+  def new_numeric_literal(
+    value : String,
+    kind : Symbol = :int,
+    suffix : String? = nil
+  ) : ASTNode
+    _dbg "common-parse: new_numeric_literal -> #{value} '#{suffix}'"
+
+    # *TODO* maybe add for unspeced too!?
+    suffix ||= "default"
+
+    if kind != :user_suffix
+      return NumberLiteral.new(value, kind)
+    end
+
+    if /[.eE]/ =~ value
+      new_kind = :implicit_real
+      suffix_prefix_type = "reallit__"
+    else
+      new_kind = :implicit_int
+      suffix_prefix_type = "intlit__"
+    end
+
+    # ifdef !release
+    #   @debug_specific_flag_ = true
+    # end
+
+    return Call.new(
+      nil,
+      get_str("_suffix_", suffix_prefix_type, suffix),
+      [ NumberLiteral.new(value, new_kind) ] of ASTNode,
+      nil,
+      nil,
+      nil,
+      false,
+      0,
+      has_parentheses: true,
+      implicit_construction: true,
+      nil_sugared: false
+    )
+
+  ensure
+     _dbg "crystal-parse: /new_numeric_literal"
+  end
+end
+
+module Crystal::NumberCompileUtils
   extend self
+
+  ImplicitKinds = {
+    :int,
+    :real,
+    :implicit_int,
+    :implicit_num,
+    :implicit_real
+  }
+
+  IntegerKinds = {
+    :i32,
+    :i64,
+
+    :int,
+    :implicit_int,
+
+    :u32,
+    :u64,
+
+    :i8,
+    :u8,
+
+    :i16,
+    :u16
+  }
+
+  # *TODO* all reference lists should be as Symbols
+  # Only the SuffixStringToKind should be String => Token
 
   IntrinsicIntegerSuffixes = Set{
     "i8", "i16", "i32", "i64",
     "u8", "u16", "u32", "u64",
+
     "int", "nat", "uint",
+
     "archint", "archnat", "archuint",
   }
 
   IntrinsicNonRealSuffixes = Set{
     "i8", "i16", "i32", "i64",
     "u8", "u16", "u32", "u64",
+
     "int", "nat", "uint",
+
     "archint", "archnat", "archuint",
+
     "str"
   }
 
   IntrinsicSuffixesToKind = {
     # The following recursive ugliness is for Crox–to_s
-    "unspec" => :unspec,
-    "unspec_int" => :unspec_int,
-    "unspec_real" => :unspec_real,
+    "implicit_num" => :implicit_num,
+    "implicit_int" => :implicit_int,
+    "implicit_real" => :implicit_real,
 
     "i8" => :i8, "i16" => :i16, "i32" => :i32, "i64" => :i64,
     "u8" => :u8, "u16" => :u16, "u32" => :u32, "u64" => :u64,
     "f32" => :f32, "f64" => :f64,
+
     "f" => :f32, "d" => :f64,
+
     "int" => :int, "nat" => :nat, "uint" => :uint,
+
     "archint" => :archint, "archnat" => :archnat, "archuint" => :archuint,
+
     "nat" => :nat,   # *TODO*
     "real" => :real,
     "big" => :big,    # *TODO*
@@ -48,7 +135,13 @@ module Crystal::NumberVerificationUtils
     return int_value <= {{type}}::MAX
   end
 
-  def integer_literal_fits_in_size?(string_value, kind : Symbol, num_size, start : Int32, is_negative : Bool)
+  def integer_literal_fits_in_size?(
+    string_value : String,
+    kind : Symbol,
+    num_size : Int32,
+    start : Int32,
+    is_negative : Bool
+  )
     case kind
     when :i8  then inline_int_fits_in_size_check Int8, to_u8, 3
     when :u8  then inline_uint_fits_in_size_check UInt8, 3
@@ -62,12 +155,22 @@ module Crystal::NumberVerificationUtils
     end
   end
 
-  def deduce_integer_kind(string_value, kind : Symbol, num_size, start : Int32, is_negative : Bool, allow_implicit_bigint : Bool)
+  def deduce_integer_kind(
+    string_value : String,
+    kind : Symbol,
+    num_size : Int32,
+    start : Int32,
+    is_negative : Bool,
+    allow_implicit_bigint : Bool
+  )
     return :i32 if num_size < 10
 
-    if !value_fits_in_u64? string_value, is_negative, num_size, start
-      return :unspec unless allow_implicit_bigint
-      return :big
+    if !value_fits_in_u64?(string_value, is_negative, num_size, start)
+      if allow_implicit_bigint
+        return :big
+      else
+        return :implicit_num
+      end
     end
 
     int_value = absolute_integer_value(string_value, is_negative)

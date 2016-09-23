@@ -140,7 +140,7 @@ module Crystal
       StringTypeName = "Str"
       ProcTypeName = "Fn"
       HashTypeName = "Map"
-      FluidRockName = "LavaFlow" # LiqRok # "FlowSten" "RockFlow" # "FluidRock"
+      FluidRockName = "Crystal" # "LavaFlow" # LiqRok # "FlowSten" "RockFlow" # "FluidRock"
 
     else
       _dbg_always "* * ox_typarchy is disabled * *"
@@ -526,40 +526,40 @@ module Crystal
       case kind
 
       # *TODO* *TEMP*
-      when :unspec_int       then  stdint
-      when :unspec_real      then  stdreal
+      when :implicit_int  then  stdint
+      when :implicit_real then  stdreal
 
-      when :int       then  stdint
-      when :nat       then  stdnat
-      when :uint      then  stduint
-      when :real      then  stdreal
+      when :int           then  stdint
+      when :nat           then  stdnat
+      when :uint          then  stduint
+      when :real          then  stdreal
 
-      when :archint   then  archint
-      when :archnat   then  archnat
-      when :archuint  then  archuint
-      when :archreal  then  archreal
+      when :archint       then  archint
+      when :archnat       then  archnat
+      when :archuint      then  archuint
+      when :archreal      then  archreal
 
-      when :i8        then  int8
-      when :i16       then  int16
-      when :i32       then  int32
-      when :i64       then  int64
-      when :u8        then  uint8
-      when :u16       then  uint16
-      when :u32       then  uint32
-      when :u64       then  uint64
-      when :f32       then  float32
-      when :f64       then  float64
-      else            raise "Invalid node kind: #{kind}"
+      when :i8            then  int8
+      when :i16           then  int16
+      when :i32           then  int32
+      when :i64           then  int64
+      when :u8            then  uint8
+      when :u16           then  uint16
+      when :u32           then  uint32
+      when :u64           then  uint64
+      when :f32           then  float32
+      when :f64           then  float64
+      else                raise "Invalid node kind: #{kind}"
       end
     end
 
-    def terminal_number_kind(kind)
+    def concrete_number_kind(kind)
       case kind
-      when :unspec_int  then  terminal_number_kind :int
-      when :unspec_real then  terminal_number_kind :real
-      when :int         then  (stdint == int32 ? :i32 : :i64) # *TODO* think about if a more elegant solution should be used
-      when :real        then  (stdreal == float32 ? :f32 : :f64) # *TODO* think about if a more elegant solution should be used
-      else              kind
+      when :implicit_int  then  concrete_number_kind :int
+      when :implicit_real then  concrete_number_kind :real
+      when :int           then  (stdint == int32 ? :i32 : :i64) # *TODO* think about if a more elegant solution should be used
+      when :real          then  (stdreal == float32 ? :f32 : :f64) # *TODO* think about if a more elegant solution should be used
+      else                kind
       end
     end
 

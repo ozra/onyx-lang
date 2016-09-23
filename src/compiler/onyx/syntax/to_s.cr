@@ -145,7 +145,7 @@ class ToOnyxSVisitor < Visitor
 
   def visit(node : NumberLiteral)
     @str << node.value
-    if node.kind != :int && !node.kind.to_s.starts_with? "unspec_" # != :i32 && node.kind != :f64
+    if node.needs_suffix_for_s?
       @str << "_" # *TEMP* *DEBUG*
       @str << node.kind.to_s
     end

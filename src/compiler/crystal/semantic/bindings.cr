@@ -73,19 +73,21 @@ module Crystal
       @type
     end
 
-    def bind_to(node : ASTNode)
+    def bind_to(node : ASTNode) : Nil
       bind(node) do |dependencies|
         dependencies.push node
+        # _dbg "e: #{self.to_s}(#{self.object_id}): +dependencies = #{dependencies.try &.size}"
         node.add_observer self
         node
       end
     end
 
-    def bind_to(nodes : Array)
+    def bind_to(nodes : Array) : Nil
       return if nodes.empty?
 
       bind do |dependencies|
         dependencies.concat nodes
+        # _dbg "f: #{self.to_s}(#{self.object_id}): ++dependencies = #{dependencies.try &.size}"
         nodes.each &.add_observer self
         nodes.first
       end
@@ -118,32 +120,36 @@ module Crystal
       propagate
     end
 
-    def unbind_all
-      @dependencies.try &.each &.remove_observer(self)
-      @dependencies = nil
-    end
+    # def unbind_all
+    #   @dependencies.try &.each &.remove_observer(self)
+    #   @dependencies = nil
+    # end
 
     def unbind_from(nodes : Nil)
       # Nothing to do
     end
 
-    def unbind_from(node : ASTNode)
+    def unbind_from(node : ASTNode) : Nil
       @dependencies.try &.reject! &.same?(node)
+      # _dbg "a: #{self.to_s}(#{self.object_id}): -dependencies = #{dependencies.try &.size}"
       node.remove_observer self
     end
 
-    def unbind_from(nodes : Array(ASTNode))
+    def unbind_from(nodes : Array(ASTNode)) : Nil
       @dependencies.try &.reject! { |dep| nodes.any? &.same?(dep) }
+      # _dbg "b: #{self.to_s}(#{self.object_id}): --dependencies = #{dependencies.try &.size}"
       nodes.each &.remove_observer self
     end
 
-    def add_observer(observer)
+    def add_observer(observer) : Nil
       observers = @observers ||= [] of ASTNode
       observers.push observer
+      # _dbg "c: #{self.to_s}(#{self.object_id}): +observers = #{observers.try &.size}"
     end
 
-    def remove_observer(observer)
+    def remove_observer(observer) : Nil
       @observers.try &.reject! &.same?(observer)
+      # _dbg "d: #{self.to_s}(#{self.object_id}): -observers = #{observers.try &.size}"
     end
 
     def set_enclosing_call(enclosing_call)

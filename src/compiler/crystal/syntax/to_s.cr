@@ -56,28 +56,10 @@ module Crystal
 
     def visit(node : NumberLiteral)
       @str << node.value
-      # if needs_suffix?(node)
-      @str << "§§"  # "Crox–syntax" for macros sake
-      @str << node.kind.to_s
-      # end
-    end
-
-    def needs_suffix?(node : NumberLiteral)
-      case node.kind
-      when :i32
-        return false
-      when :f64
-        # If there's no '.' nor 'e', for example in `1_f64`,
-        # we need to include it (#3315)
-        node.value.each_char do |char|
-          case char
-          when '.', 'e'
-            return false
-          end
-        end
+      if node.needs_suffix_for_s?
+        @str << "§§"  # "Crox–syntax" for macros sake
+        @str << node.kind.to_s
       end
-
-      true
     end
 
     def visit(node : CharLiteral)

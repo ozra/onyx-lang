@@ -409,6 +409,8 @@ module Crystal
     end
 
     def to_number
+      # *TODO* - program is obviously _not_ available here.
+      #           @program.concrete_number_kind node.kind
       case @kind
       when :i8  then @value.to_i8
       when :i16 then @value.to_i16

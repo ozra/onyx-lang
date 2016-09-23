@@ -2933,9 +2933,15 @@ class OnyxParser < OnyxLexer
       naked_name = name[1..-1]
     end
 
+
     # *TODO* - this should be done in transformation!
     # "After-parse"-AST should represent the syntactic elements _exactly_ for
     # straightforward re-generation of source
+
+    # This means we can also implement this for crystal by _de facto_ overruling
+    # getter, setter - WHEN in typdefs - thus bypassing macro–system on crystal
+    # side too! (better error messages when utilizing FILE, LINE at least!)
+
     pragmas.select! do |pragma|
       raise "Non pragma in pragma list!? #{pragma}" unless pragma.is_a? Attribute
 

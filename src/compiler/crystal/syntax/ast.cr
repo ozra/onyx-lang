@@ -201,8 +201,33 @@ module Crystal
     end
 
     def integer?
-      {:i32, :i64, :int, :unspec_int,
-       :u32, :u64, :i8, :u8, :i16, :u16}.includes? kind
+      Crystal::NumberCompileUtils::IntegerKinds.includes? kind
+    end
+
+    def explicit_suffix?
+      ! Crystal::NumberCompileUtils::ImplicitKinds.includes?(kind)
+    end
+
+    def needs_suffix_for_s?
+      if explicit_suffix? && kind != :i32 # *TODO* we should not have int32 until at codegen OR because "reverse–inferred"
+        # _dbg "needs_suffix_for_s: #{kind.class}:`#{kind}` says 'yes'"
+        return true
+      end
+      # case kind
+      # when :i32
+      #   return false
+      # when :f64
+      #   # If there's no '.' nor 'e', for example in `1_f64`,
+      #   # we need to include it (#3315)
+      #   value.each_char do |char|
+      #     case char
+      #     when '.', 'e'
+      #       return false
+      #     end
+      #   end
+      # end
+
+      false
     end
 
     def clone_without_location

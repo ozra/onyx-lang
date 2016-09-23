@@ -371,7 +371,7 @@ module Crystal
     end
 
     def visit(node : NumberLiteral)
-      case @program.terminal_number_kind node.kind
+      case @program.concrete_number_kind node.kind
       when :i8
         @last = int8(node.value.to_i8)
       when :u8

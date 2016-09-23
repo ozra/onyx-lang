@@ -60,8 +60,7 @@ class StylizeOnyxVisitor < Visitor
 
   def visit(node : NumberLiteral)
     @str << node.value
-    # if node.kind != :i32 && node.kind != :f64
-    if node.kind != :int && !node.kind.to_s.starts_with? "unspec_"
+    if node.needs_suffix_for_s?
       @str << "_"
       @str << node.kind.to_s
     end

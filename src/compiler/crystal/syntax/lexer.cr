@@ -1,6 +1,6 @@
 require "./token"
 require "../exception"
-require "../../onyx/syntax/number_verification_utils"
+require "../../onyx/syntax/number_compile_utils"
 require "string_pool"
 
 module Crystal
@@ -1240,6 +1240,7 @@ module Crystal
       @token
     end
 
+    # *TODO* this can be removed - since it was only here for idfrsLikeThis - which is moooot! (was in a direct–converted example: solve such individually!)
     def canonicalize_identifier(idfr_str)
       # do_hump_magic = idfr_str.size > 0 && !('A' <= idfr_str[0] <= 'Z')
 
@@ -1432,10 +1433,10 @@ module Crystal
 
       if start == current_pos
         suffix = nil
-        kind = :unspec
+        kind = :implicit_num
       else
         suffix = string_range(start, current_pos).gsub(/[-–]/, '_')
-        kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
+        kind = NumberCompileUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
         _dbg "crystal-lex: scanned suffix '#{suffix}'"
       end
 

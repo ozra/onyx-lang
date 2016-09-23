@@ -1,6 +1,6 @@
 require "../../crystal/syntax/token"
 require "../../crystal/exception"
-require "./number_verification_utils"
+require "./number_compile_utils"
 
 ContinuationTokens = [
   :".", :",", :"+", :"-", :"*", :"/", :"%", :".|.", :".&.", :".^.", :"**", :"<<",
@@ -2148,10 +2148,10 @@ module Crystal
 
       if start == cur_pos
         suffix = nil
-        kind = :unspec
+        kind = :implicit_num
       else
         suffix = get_str string_range(start, cur_pos).gsub(/[-–]/, '_')
-        kind = NumberVerificationUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
+        kind = NumberCompileUtils::IntrinsicSuffixesToKind[suffix]? || :user_suffix
       end
 
       {suffix, kind}
@@ -2191,8 +2191,8 @@ module Crystal
 
       string_value = string_range(start, cur_pos).delete('_')
       suffix, kind = scan_number_suffix
-      if kind == :unspec
-        kind = is_real ? :unspec_real : :unspec_int
+      if kind == :implicit_num
+        kind = is_real ? :implicit_real : :implicit_int
       end
       {string_value, suffix, kind}
     end
@@ -2254,14 +2254,14 @@ module Crystal
       name_size = string_value.size - (is_negative ? 1 : 0)
       suffix, kind = scan_number_suffix
 
-      if kind == :unspec
-        kind = NumberVerificationUtils.deduce_integer_kind string_value, kind, name_size, start, is_negative, false
+      if kind == :implicit_num
+        kind = NumberCompileUtils.deduce_integer_kind string_value, kind, name_size, start, is_negative, false
 
-      elsif NumberVerificationUtils::IntrinsicIntegerSuffixes.includes? suffix
-        NumberVerificationUtils.integer_literal_fits_in_size? string_value, kind, name_size, start, is_negative
+      elsif NumberCompileUtils::IntrinsicIntegerSuffixes.includes? suffix
+        NumberCompileUtils.integer_literal_fits_in_size? string_value, kind, name_size, start, is_negative
 
-      elsif !NumberVerificationUtils::IntrinsicNonRealSuffixes.includes? suffix
-        raise "Only intrinsic non-real suffixes (#{NumberVerificationUtils::IntrinsicNonRealSuffixes.to_a.join(", ")}) can be used with alternative base numbers!", @token, (cur_pos - start)
+      elsif !NumberCompileUtils::IntrinsicNonRealSuffixes.includes? suffix
+        raise "Only intrinsic non-real suffixes (#{NumberCompileUtils::IntrinsicNonRealSuffixes.to_a.join(", ")}) can be used with alternative base numbers!", @token, (cur_pos - start)
       end
 
       first_byte = @reader.string.byte_at(start)
