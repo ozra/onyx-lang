@@ -47,11 +47,13 @@ DEBUG_INDENT_LIMIT = 16
 
 macro __do_dbg_print(*objs)
   ifdef !release
-    __low_level_print (" " * {DebuggingData.dbgindent, DEBUG_INDENT_LIMIT}.min)
-    __low_level_print DebuggingData.dbgindent.to_s + ": "
-    {% for o in objs %}
-      __low_level_print {{o}}.to_s
-    {% end %}
+    begin
+      __low_level_print (" " * {DebuggingData.dbgindent, DEBUG_INDENT_LIMIT}.min)
+      __low_level_print DebuggingData.dbgindent.to_s + ": "
+      {% for o in objs %}
+        __low_level_print {{o}}.to_s
+      {% end %}
+    end
   end
 end
 
