@@ -700,7 +700,7 @@ class OnyxParser < OnyxLexer
             return left
           end
 
-          scan_next_as_continuation
+          scan_next_as_continuation!
           ensure_not_void_value left, location
 
           method = @token.type.to_s
@@ -741,7 +741,7 @@ class OnyxParser < OnyxLexer
           # ensure that operatorish behaviour is followed for the
           # alphanumeric operator aliases too
           if foometh != method
-            scan_next_as_continuation
+            scan_next_as_continuation!
           end
 
           slash_is_regex!
@@ -6209,7 +6209,7 @@ class OnyxParser < OnyxLexer
 
         if @token.type == :","
           dbg "got ',' skips space + newline as continuation"
-          scan_next_as_continuation
+          scan_next_as_continuation!
           slash_is_regex!
           next_token_skip_space_or_newline
 
@@ -6269,7 +6269,7 @@ class OnyxParser < OnyxLexer
 
       if @token.type == :","
         dbg "got ',' skips space + newline as continuation"
-        scan_next_as_continuation
+        scan_next_as_continuation!
         slash_is_regex!
         next_token_skip_space_or_newline
 
@@ -6405,7 +6405,7 @@ class OnyxParser < OnyxLexer
       elsif tok?(:",", :NEWLINE) || tok?(:DEDENT) || @indent > call_indent_level
         dbg "- parse_call_args_indented - got ','|'\\n'|DEDENT - go for next arg".red
 
-        # scan_next_as_continuation
+        # scan_next_as_continuation!
         slash_is_regex!
 
         skip_tokens :SPACE, :NEWLINE, :DEDENT, :","
@@ -8442,8 +8442,8 @@ class OnyxParser < OnyxLexer
     surrounded_by_space? && tok?(tokens)
   end
 
-  def scan_next_as_continuation
-    dbg "sets scan_next_as_continuation"
+  def scan_next_as_continuation!
+    dbg "sets scan_next_as_continuation!"
     @next_token_continuation_state = :CONTINUATION
   end
 
