@@ -1316,10 +1316,6 @@ module Crystal
           end
         when 's'
           case nextch
-          when '_'
-            if mnc?('a','?')
-              return keyword_else_idfr(:is_a?, start)
-            end
           when 'n'
             if mnc?('t')
               return toktype_else_idfr(:isnt, "", start)
