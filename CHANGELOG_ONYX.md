@@ -12,6 +12,7 @@
 * Build-time flags used for Onyx-compiler dev for easy dissection in the event of future compatibility problems with crystal lib.
 * Changed function def syntax: return type goes _after_ arrow, according to the RFC-suggestion.
 * Removed archaic identifier-mangling in crystal lexer
+* `in` / `in?` operator. As usual, many variants to begin with: `x in y`, `x in? y`, any of them goes in the following combos too: `x not in y`, `x is in y`, `x isnt in y`. Only reasonable to keep really is `not in`, of the modifying variants.
 
 
 ## 0.191.12 - (2016-09-19) ##
