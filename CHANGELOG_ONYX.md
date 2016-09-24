@@ -1,4 +1,4 @@
-## pending - (2016-09-...) ##
+## 0.192.21 - (2016-09-24) ##
 
 * ~~Change~~ Add char-literal syntax `_"x"` (less symbolic noise), for evaluation.
 * Fix missed case for "hard-tuple-indexing" type inference
