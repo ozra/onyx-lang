@@ -265,7 +265,7 @@ do-tup(x Tup) -> x
 good-ole-set = {47, "Hey", 3}
 
 say typeof(good-ole-set)
-say good-ole-set.class
+say good-ole-set.i-type
 
 
 -- OTHER SYNTAX ALTERNATIVES
@@ -277,21 +277,21 @@ say good-ole-set.class
 say "<\{...\}> NAMED TUPLE SYNTAX"
 
 ntup = <{forty: 47, thirteen: 13, yo: "yo"}>
-say ntup, typeof(ntup), ntup.class
+say ntup, typeof(ntup), ntup.i-type
 
 -- is allowed for named also, currently:
 ntup = <[forty: 47, thirteen: 13, yo: "yo"]>
-say ntup, typeof(ntup), ntup.class
+say ntup, typeof(ntup), ntup.i-type
 
 ntup = ‹forty: 47, thirteen: 13, yo: "yo"›
-say ntup, typeof(ntup), ntup.class
+say ntup, typeof(ntup), ntup.i-type
 
 ntup = (forty: 47, thirteen: 13, yo: "yo")
-say ntup, typeof(ntup), ntup.class
+say ntup, typeof(ntup), ntup.i-type
 
 -- Parenthesized namedtuple shouldn't require trailing comma
 ntup = (forty: 47)
-say ntup, typeof(ntup), ntup.class
+say ntup, typeof(ntup), ntup.i-type
 
 
 say "<[...]> TUPLE SYNTAX"
@@ -540,7 +540,7 @@ dpp 1 .. 2
 
 fun-a(x) -> say "fun-a says: '{x}' and '{x[String]}'"
 fun-a {String => String}
-say ({String => String}).class
+say ({String => String}).i-type
 say typeof({String => String})
 
 fun-b(x) -> say "fun-b says: '{x}' and '{x.first}'"
@@ -573,8 +573,8 @@ if !the-function a: 1, b: 2: say "-" else: "the-function says no!"
 
 
 my-foo(x, y, opts Map<Str, Str|Int64|Nil>) ->
-   say "csx { opts:magic_port?.class }"
-   say "csx { opts:x?.class }"
+   say "csx { opts:magic_port?.i-type }"
+   say "csx { opts:x?.i-type }"
    say "csx { typeof(opts:x?) }"
    -- host = opts:host_name as Str? || "default_host"
    -- magic-port = opts:magic_port as Int64? || 47
@@ -608,7 +608,7 @@ end
 say Xoo.get-count     --> 0
 foox = Xoo.my-new
 barx = Xoo.my-new
-say foox.class
+say foox.i-type
 say Xoo.get-count     --> 2
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
@@ -936,7 +936,7 @@ fun-with-various-local-vars(a Int32|Int64|Real = 0) ->!
    -- -- zar8 '*= 1
    -- -- zar9 'auto = 1
 
-   -- pp zar2.class, zar4.class, zar3.class
+   -- pp zar2.i-type, zar4.i-type, zar3.i-type
    -- -- May currently crash - all values are undefined becaused they're alloca'd
    -- -- when typed currently. They should _not_ be. ONLY typed for TySys!
    -- -- pp zar2, zar4, zar3
@@ -1585,7 +1585,7 @@ c = (a ~Intp, b 'Str, c 'Intp) -> a.to–s + b + c.to–s
 p b.call "23.5a Closured Lambda says", 0, true, 0.42
 p b "23.5b Closured Lambda says", 1, true, 0.47
 
-pp typeof(b), b.class
+pp typeof(b), b.i-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 
@@ -1625,11 +1625,11 @@ end
 
 list = [#abra, #baba, #cadabra]
 
-say "the tag list ({list.class}): {list}"
+say "the tag list ({list.i-type}): {list}"
 
 list = ["foo", "yaa", "qwö"]
 
-say "the str list ({list.class}): {list}"
+say "the str list ({list.i-type}): {list}"
 
 
 --- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- ---
@@ -2204,7 +2204,7 @@ say bar()
 -- say bar.fn-1i(1)  -- should make fn-1i fail because it has mismatching return type
 
 say typeof(foo)
-say foo.class
+say foo.i-type
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 

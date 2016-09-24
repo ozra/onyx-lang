@@ -1,3 +1,8 @@
+## ongoing... - (2016-09-??) ##
+
+* now use `x.i-type`, `x.inst-type`, `x.rtype` or any of the other trial variations for getting the current run-time type instead of `x.class`
+
+
 ## 0.192.21 - (2016-09-24) ##
 
 * ~~Change~~ Add char-literal syntax `_"x"` (less symbolic noise), for evaluation.
