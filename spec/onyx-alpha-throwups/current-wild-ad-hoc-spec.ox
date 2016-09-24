@@ -1625,11 +1625,28 @@ end
 
 list = [#abra, #baba, #cadabra]
 
-say "the list ({list.class}): {list}"
+say "the tag list ({list.class}): {list}"
 
 list = ["foo", "yaa", "qwö"]
 
-say "the 2nd list ({list.class}): {list}"
+say "the str list ({list.class}): {list}"
+
+
+--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- ---
+say "`in`/`in?` operator"
+
+say "foo" in list is true
+say 47 in list is true
+say "foo" in? list is true
+say 47 in? list is true
+say "foo" isnt in list is true
+say 47 not in list is true
+say "foo" is in? list is true
+say 47 is in list is true
+
+
+--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- ---
+say "Iterating and fragments"
 
 -- single line fragment style #2
 y = list.each((v) ~> p v).map ~.* 2
@@ -1661,7 +1678,7 @@ list.each–with–index ~>
 
 list.each-with-index (v, i) ~>
    p v
-   break if i == 4
+   if i == 4 => break
 
 (list.map (x) ~> x + "X").each-with-index (x, y) ~>
    p x
@@ -1669,7 +1686,7 @@ list.each-with-index (v, i) ~>
 
 list.each-with-index ~>
    p _1
-   break if _2 == 4
+   if _2 is 4 then break
 
 list.each-with-index \
    break if _2 == 1
@@ -1679,7 +1696,7 @@ say "auto params using `%n`"
 
 list.each-with-index \
    p %1
-   break if %2 == 4
+   break if %2 is 4
 
 (list.map \\%1.+ "X").each-with-index \
    p %1

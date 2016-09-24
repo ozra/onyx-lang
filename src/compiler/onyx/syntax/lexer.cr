@@ -1305,6 +1305,8 @@ module Crystal
               if mnc?('t','a','n','c','e','_','s','i','z','e','o','f')
                 return keyword_else_idfr(:instance_sizeof, start)
               end
+            when '?'
+              return keyword_else_idfr(:in?, start)
             end
           else
             nextch

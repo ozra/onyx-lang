@@ -805,7 +805,45 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  parse_operator :mul_or_div, :prefix, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"*\", :\"/\", :\"%\""
+  parse_operator :mul_or_div, :op_in, "Call.new left, method, [right] of ASTNode, name_column_number: method_column_number", ":\"*\", :\"/\", :\"%\""
+
+  def parse_op_in
+    location = @token.location
+    left = parse_prefix
+
+    dbg "parse_op_in ->"
+
+    while true
+
+      # *TODO* - this logic would be wanted to be the same for:
+      #   `of?`, `impl?`
+      # `x is in y`, `x isnt in y`, `x not in y`
+      if tok? :not, :isnt, :is
+        prefix_location = location
+        infix_op_negated = ! kwd? :is
+        backed = backup_full
+        next_token_skip_space
+        location = @token.location
+      else
+        infix_op_negated = false
+      end
+
+      if ! kwd? :in, :in?
+        dbg "- parse_op_in - only got #{backed}, and not `in?` - returns left"
+        restore_full backed if backed
+        return left
+      end
+
+      method_column_number = @token.column_number
+      next_token_skip_space
+
+      right = parse_prefix
+
+      left = Call.new(right, "includes?", [left] of ASTNode, name_column_number: method_column_number).at(location).at_end(right)
+      # left = Call.new(left, "in?", [right] of ASTNode, name_column_number: method_column_number).at(location).at_end(right)
+      left = Not.new(left).at(prefix_location) if infix_op_negated
+    end
+  end
 
   def parse_prefix
     column_number = @token.column_number
