@@ -6971,17 +6971,7 @@ class OnyxParser < OnyxLexer
   def parse_typeunit_with_suffix(allow_primitives) : ASTNode
     dbg "parse_typeunit_with_suffix"
 
-
-    # *TODO* *NOW*
-    # :Self? could just use :Self -> :"?" (parse_type_suffix)
-
-
-    if const? :Self?
-      dbg "was 'Self?'"
-      type = Union.new([Self.new, Path.global("Nil")] of ASTNode)
-      next_token_skip_space
-
-    elsif const? :Self
+    if const? :Self
       dbg "was 'Self'"
       type = Self.new
       next_token_skip_space
