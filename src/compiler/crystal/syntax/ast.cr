@@ -1,3 +1,5 @@
+require "../../debug_utils/debug_statistics"
+
 module Crystal
   # Base class for nodes in the grammar.
   abstract class ASTNode
@@ -1619,6 +1621,9 @@ module Crystal
     property types : Array(ASTNode)
 
     def initialize(@types)
+      _dbg_will do
+        DbgStatistics.total_unions_allocated_inc
+      end
     end
 
     def accept_children(visitor)

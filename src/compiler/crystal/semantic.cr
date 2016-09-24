@@ -2,6 +2,7 @@ require "./program"
 require "./syntax/ast"
 require "./syntax/visitor"
 require "./semantic/*"
+require "../debug_utils/ast_stats_analysis"
 
 # The overall algorithm for semantic analysis of a program is:
 # - top level: declare clases, modules, macros, defs and other top-level stuff
@@ -19,6 +20,13 @@ class Crystal::Program
   # that's typed. In the process types and methods are defined in
   # this program.
   def semantic(node : ASTNode, stats = false) : ASTNode
+
+    _dbg_will do
+      nc = DbgASTNodeCounter.new log_each: false
+      node.accept nc
+      pre_count = nc.node_count
+    end
+
     node, processor = top_level_semantic(node, stats: stats)
 
     Crystal.timing("Semantic (cvars initializers)", stats) do
@@ -32,6 +40,7 @@ class Crystal::Program
     Crystal.timing("Semantic (ivars initializers)", stats) do
       node.accept InstanceVarsInitializerVisitor.new(self)
     end
+
     result = Crystal.timing("Semantic (main)", stats) do
       visit_main(node)
     end
@@ -42,6 +51,21 @@ class Crystal::Program
     Crystal.timing("Semantic (recursive struct check)", stats) do
       RecursiveStructChecker.new(self).run
     end
+
+    _dbg_will do
+      nc = DbgASTNodeCounter.new
+      result.accept nc
+      _dbg "AST STATISTICS".white
+      _dbg "Node pre inferent count AST: #{pre_count}".yellow
+      _dbg "Node count in final AST: #{nc.node_count}".yellow
+      _dbg "Total deps in final AST: #{nc.bind_deps_total}".yellow
+      _dbg "Total observers in final AST: #{nc.bind_observers_total}".yellow
+      _dbg ""
+      _dbg "total_unions_allocated: #{DbgStatistics.total_unions_allocated}".yellow
+      _dbg "total_types_allocated #{DbgStatistics.total_types_allocated}".yellow
+
+    end
+
     result
   end
 

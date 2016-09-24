@@ -4,6 +4,7 @@
 require "../crystal/**"
 require "../onyx/**"
 
+
 macro dump_prop(name)
   io << "\n" << "  " * (depth+1) << {{name.stringify}}[1..-1].cyan << ": "
 

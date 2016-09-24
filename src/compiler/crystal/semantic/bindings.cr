@@ -5,6 +5,14 @@ module Crystal
     property observers : Array(ASTNode)?
     property enclosing_call : Call?
 
+    # *TODO*
+    # _dbg_will do
+    #   property total_observers_added = 0
+    #   property total_observers_removed = 0
+    #   property total_dependencies_added = 0
+    #   property total_dependencies_removed = 0
+    # end
+
     @dirty = false
 
     @type : Type?

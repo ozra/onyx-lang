@@ -1,4 +1,5 @@
 require "./syntax/ast"
+require "../debug_utils/debug_statistics"
 
 module Crystal
   # Abstract base class of all types
@@ -7,6 +8,9 @@ module Crystal
     getter program
 
     def initialize(@program : Program)
+      _dbg_will do
+        DbgStatistics.total_types_allocated_inc
+      end
     end
 
     # Returns any doc comments associated to this type.

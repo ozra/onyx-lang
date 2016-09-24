@@ -46,7 +46,7 @@ end
 DEBUG_INDENT_LIMIT = 16
 
 macro __do_dbg_print(*objs)
-  ifdef !release
+  ifdef !release && ox_verbose_debug
     begin
       __low_level_print (" " * {DebuggingData.dbgindent, DEBUG_INDENT_LIMIT}.min)
       __low_level_print DebuggingData.dbgindent.to_s + ": "
@@ -74,7 +74,7 @@ macro _dbg_off()
 end
 
 macro _dbg_will(&block)
-  ifdef !release
+  ifdef !release && ox_verbose_debug
     if DebuggingData.dbg_output_on?
       {{block.body}}
     end
@@ -82,7 +82,15 @@ macro _dbg_will(&block)
 end
 
 macro _dbg(*objs)
-  ifdef !release
+  ifdef !release && ox_verbose_debug
+    if DebuggingData.dbg_output_on?
+      __do_dbg_puts({{*objs}})
+    end
+  end
+end
+
+macro _dbg_log(*objs)
+  ifdef !release # logged in normal verbosity level
     if DebuggingData.dbg_output_on?
       __do_dbg_puts({{*objs}})
     end
@@ -90,7 +98,7 @@ macro _dbg(*objs)
 end
 
 macro _dbg_overview(*objs)
-  ifdef !release
+  ifdef !release  # logged in normal verbosity level
     if DebuggingData.dbg_enabled?
       __do_dbg_puts({{*objs}})
     end
@@ -113,12 +121,14 @@ macro _dbgdec
   end
 end
 
+
+# --- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- ---
+
 struct Char
   def ord_gt?(v)
     ord > v
   end
 end
-
 
 # *TODO* move from here
 def fatal(msg : String)
@@ -126,7 +136,6 @@ def fatal(msg : String)
   CallStack.print_backtrace
   LibC.exit(1)
 end
-
 
 # *TODO* make this a more generic macro as part of `Any`(AnyRef/Reference rather) or such
 # then the type will of course be inerted automatically

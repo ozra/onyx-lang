@@ -131,7 +131,7 @@ module Crystal
 
       check :EOF
 
-      ifdef !release
+      _dbg_will do
          if @debug_specific_flag_
             _dbg_on
             _dbg "crystal specific parse debug:".white
@@ -5334,7 +5334,6 @@ module Crystal
 
           case @token.value
           when :private
-            _dbg_always "crystal-parse: adds visibility wrapper Private"
             visibility = Visibility::Private
             next_token_skip_space
           when :protected
