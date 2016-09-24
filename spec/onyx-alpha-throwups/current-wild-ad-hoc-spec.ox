@@ -581,6 +581,15 @@ my-foo(x, y, opts Map<Str, Str|Int64|Nil>) ->
    -- p x, y, host, magic-port
 end
 
+
+Mod: mod-foo() -> say "I'm in Mod"
+
+alias ModAlias = Mod
+
+ModAlias:
+   mod-foo
+
+
 type Droogs = Map  -- test multi-level alias resolution
 
 my-foo 1, 2, Droogs<Str, Str|Int64|Nil>{

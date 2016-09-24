@@ -1,6 +1,7 @@
 ## ongoing... - (2016-09-??) ##
 
-* now use `x.i-type`, `x.inst-type`, `x.rtype` or any of the other trial variations for getting the current run-time type instead of `x.class`
+* Now use `x.i-type`, `x.inst-type`, `x.rtype` or any of the other trial variations for getting the current run-time type instead of `x.class`
+* Keyword `alias` re-introduced. `type Foo = Bar` is good, but a bit off for module aliases.
 
 
 ## 0.192.21 - (2016-09-24) ##

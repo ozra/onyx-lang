@@ -1579,6 +1579,10 @@ class OnyxParser < OnyxLexer
       when :ifdef then parse_ifdef
       when :unless then parse_unless
 
+      when :alias
+        check_not_inside_def("can't define alias inside def") do
+          parse_alias
+        end
       when :type
         check_not_inside_def("can't define type inside def") do
           parse_type_def
@@ -7565,7 +7569,6 @@ class OnyxParser < OnyxLexer
     dbgtail "/parse_fun_def".red
   end
 
-  # *TODO* just used by C-Lib now
   def parse_alias
     doc = @token.doc
 
@@ -7576,11 +7579,10 @@ class OnyxParser < OnyxLexer
     next_token_skip_space_or_newline
 
     value = parse_single_type
-    # end_location = token_end_location
 
     skip_space
 
-    alias_node = Alias.new(name, value) #.at_end(end_location)
+    alias_node = Alias.new(name, value)
     alias_node.doc = doc
     alias_node
   end
