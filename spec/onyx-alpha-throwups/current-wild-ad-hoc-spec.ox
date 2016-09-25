@@ -186,7 +186,6 @@ say maybe-nil.must!
 -- say is-nil.its!
 -- say is-nil.must!
 
-
 -- nil-sugar,  nil-chaining
 say "Nil-call-chain-sugar"
 
@@ -726,6 +725,16 @@ say type–decl(facts, "blargh", 1)
 
 facts .|.= SomeFacts.PearLover
 say "facts: {facts}"
+
+--- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- ---
+say "Some Type Reasoning".yellow
+
+pp dtype 47 || "a"
+pp d-type 47 || "a"
+pp c–type 47 || "a"
+pp c_type 47 || "a"
+pp d–type(47 || "a")
+pp d–type(facts)
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
 

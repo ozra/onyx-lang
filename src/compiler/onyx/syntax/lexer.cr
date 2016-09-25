@@ -1038,17 +1038,14 @@ module Crystal
           if mnc?('s','e')
             return keyword_else_idfr(:case, start)
           end
-          scan_idfr(start)
         when 'f'
           if mnc?('u','n')
             return keyword_else_idfr(:cfun, start)
           end
-          scan_idfr(start)
         when 'l'
           if mnc?('a','s','s')
             return keyword_else_idfr(:class, start)
           end
-          scan_idfr(start)
         when 'o'
           if mnc?('n')
             case nextch
@@ -1060,18 +1057,31 @@ module Crystal
               return keyword_else_idfr(:cond, start)
             end
           end
-          scan_idfr(start)
-        else
-          scan_idfr(start)
+        when 't'
+          if mnc?('y','p','e')
+            return keyword_else_idfr(:typedecl, start)
+          end
+        when '-', '_', '–'
+          if mnc?('t', 'y','p','e')
+            return keyword_else_idfr(:typedecl, start)
+          end
         end
+        scan_idfr(start)
       when 'd'
         case nextch
         when 'e'
           if mnc?('f')
-            # p "Got 'def', check if not ident"
             return keyword_else_idfr(:def, start)
           end
         when 'o' then return keyword_else_idfr(:do, start)
+        when 't'
+          if mnc?('y','p','e')
+            return keyword_else_idfr(:typedecl, start)
+          end
+        when '-', '_', '–'
+          if mnc?('t', 'y','p','e')
+            return keyword_else_idfr(:typedecl, start)
+          end
         end
         scan_idfr(start)
       when 'e'
