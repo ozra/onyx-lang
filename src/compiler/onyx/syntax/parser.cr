@@ -1109,8 +1109,11 @@ class OnyxParser < OnyxLexer
     elsif @token.value == :implements?
       return parse_implements(atomic).at(location)
 
-    elsif @token.value == :none?
-      return parse_none?(atomic).at(location)
+    elsif @token.value == :nil?
+      return parse_nil_or_is(atomic, false).at(location)
+
+    elsif @token.value == :is?
+      return parse_nil_or_is(atomic, true).at(location)
 
     # `x.=y 47`  => `x= x.y 47`
     # *TODO* - await decision on syntax: `x.=y` | `x=.y`
@@ -1411,7 +1414,7 @@ class OnyxParser < OnyxLexer
     end
   end
 
-  def parse_none?(atomic)
+  def parse_nil_or_is(atomic, is_variant = false)
     next_token
 
     if @token.type == :"("
@@ -1420,7 +1423,9 @@ class OnyxParser < OnyxLexer
       next_token_skip_space
     end
 
-    IsA.new(atomic, Path.global("Nil"), nil_check: true)
+    ret = IsA.new(atomic, Path.global("Nil"), nil_check: true)
+    ret = Not.new(ret) if ! is_variant
+    ret
   end
 
 
@@ -5978,9 +5983,13 @@ class OnyxParser < OnyxLexer
       obj = Var.new("self").at(location)
       return parse_implements(obj)
 
-    when :none?
+    when :nil?
       obj = Var.new("self").at(location)
-      return parse_none?(obj)
+      return parse_nil_or_is(obj, false)
+
+    when :is?
+      obj = Var.new("self").at(location)
+      return parse_nil_or_is(obj, true)
     end
 
     name = @token.value.to_s
@@ -6593,8 +6602,12 @@ class OnyxParser < OnyxLexer
       call = parse_implements(obj).at(location)
       call = parse_atomic_suffix_special(call, location)
 
-    elsif @token.value == :none?
-      call = parse_none?(obj).at(location)
+    elsif @token.value == :nil?
+      call = parse_nil_or_is(obj, false).at(location)
+      call = parse_atomic_suffix_special(call, location)
+
+    elsif @token.value == :is?
+      call = parse_nil_or_is(obj, true).at(location)
       call = parse_atomic_suffix_special(call, location)
 
     elsif @token.type == :"["

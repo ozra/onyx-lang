@@ -169,9 +169,26 @@ say if true ? "ternary true" : "ternary false"
 say "suffix true" if true
 
 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+say "Basic Nil Reasoning"
+
+maybe-nil = 5 or nil
+is-nil = nil and 5 or 5 and nil
+
+pp say maybe-nil.nil?
+pp say maybe-nil.is?
+pp say is-nil.nil?
+pp say is-nil.is?
+
+say maybe-nil.is!
+say maybe-nil.its!
+say maybe-nil.must!
+-- say is-nil.is!
+-- say is-nil.its!
+-- say is-nil.must!
+
 
 -- nil-sugar,  nil-chaining
-say "Nil-sugar"
+say "Nil-call-chain-sugar"
 
 -- type Kwattro  - *TODO* improve error message!
 

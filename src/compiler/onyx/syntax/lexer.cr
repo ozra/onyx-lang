@@ -1322,7 +1322,13 @@ module Crystal
             end
           else
             set_pos cur_pos - 1
-            return toktype_else_idfr(:is, "", start)
+            if peekch == '?'
+              nextch
+              return keyword_else_idfr(:is?, start)
+            else
+              # *TODO* should use keyword here too!
+              return toktype_else_idfr(:is, "", start)
+            end
           end
         end
         scan_idfr(start)
@@ -1378,19 +1384,19 @@ module Crystal
         when 'i'
           case nextch
           when 'l'
-            # if peek_next_char == '?'
-            #   next_char
-            #   return keyword_else_idfr(:nil?, start)
-            # else
+            if peek_next_char == '?'
+              next_char
+              return keyword_else_idfr(:nil?, start)
+            else
               return keyword_else_idfr(:nil, start)
-            # end
+            end
           end
         when 'o'
           case nextch
-          when 'n'
-            if mnc?('e', '?')
-              return keyword_else_idfr(:none?, start)
-            end
+          # when 'n'
+          #   if mnc?('e', '?')
+          #     return keyword_else_idfr(:none?, start)
+          #   end
           when 't'
             return toktype_else_idfr(:not, "", start)
           end

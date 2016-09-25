@@ -1,6 +1,7 @@
 ## ongoing... - (2016-09-??) ##
 
 * Now use `x.i-type`, `x.inst-type`, `x.rtype` or any of the other trial variations for getting the current run-time type instead of `x.class`
+* nil reasoning alternatives: `x.nil?` ("is it nil?"), `x.is?` ("is it non-nil?"), `x.is!`, `x.its!`, `x.must!` for try-out for "use value, unless nil: then throw"
 * Keyword `alias` re-introduced. `type Foo = Bar` is good, but a bit off for module aliases.
 
 
